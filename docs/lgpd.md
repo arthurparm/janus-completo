@@ -70,3 +70,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-24)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O `backend/app/interfaces/daemon/daemon.py` arquiva comandos de voz diretos em logs através do `logger.info("log_info", message=f"Command received: {command}")`. Isso representa captura de dados de natureza biométrica comportamental que são arquivados em logs de sistema (`janus.log`), quebrando o princípio de minimização da LGPD sem nenhum PII scrubbing prévio antes da gravação.
+- **Estado Global Compartilhado em Ferramentas de Produtividade (Vazamento In-Memory):** As listas na `backend/app/core/tools/productivity_tools.py` que armazenam `_notes` e `_calendar_events` permanecem expostas em estado global e memória volátil, de forma que informações de um usuário (`user_id`) possam ser acessadas entre requests concorrentes se uma vulnerabilidade for explorada na camada de sessão. Falta isolamento de contexto e controle de acesso estrito (AuthZ).
+- **Metadados de Email Sensíveis não Ofuscados (Logging):** Na função `send_email` (`backend/app/core/tools/productivity_tools.py`), metadados potencialmente sensíveis e rastreáveis a pessoas (como remetente `user_id`, destinatário `to` e o `subject`) continuam sendo passados de forma não ofuscada (limpos) para os loggers da aplicação, falhando no mascaramento preventivo de PII.
+- **Capturas de Tela sem Consentimento ou Minimização (Windows Agent):** A API exposta pelo Windows Agent continua sujeita a chamadas de `/screenshot` (mesmo se limitada à interface loopback) e não possui camada de consentimento (`OPT_IN`) prévio ou desfoque preventivo (blur) das janelas do SO em dados bancários/privados.
+
+### Próximos Passos
+1. **Mascarar Textos do Daemon:** Importar e utilizar o componente `redact_pii_text_only` (de `app.core.memory.security`) sobre os comandos no `daemon.py` antes de os passar ao logger e à saída stdout.
+2. **Refatorar Estado Global:** Passar a responsabilidade de manter as listas `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB, aplicando cache isolado por usuário e limiares de AuthZ.
+3. **Mascarar Logs de Produtividade:** Interceptar e aplicar ofuscação de PII aos dados submetidos pelo sender, receiver e assunto nas funções de envio de email.
+4. **Consentimento e Redação Visual:** Requerer `OPT_IN` local persistente no `windows_agent.py` e adicionar auditoria em cada chamada que resulta em uma captura de tela local.

@@ -836,3 +836,69 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Atualizar dependência pygments (CVE-2026-4539) e pacotes npm vulneráveis
+- **Problema atual:** `pip-audit` apontou a CVE-2026-4539 de vulnerabilidade ReDoS em manipulações `AdlLexer` no backend. `npm audit` apontou 17 pacotes com vulnerabilidades (incluindo dependências do core Angular, tar, e dompurify) que afetam a camada SPA.
+- **Solução proposta:** Fazer upgrade das bibliotecas via poetry update e `npm audit fix` para suas versões minor ou major seguras.
+- **Impacto esperado:** Prevenção contra vetores Denial of Service (ReDoS no server) e exploração via injeção/XSS na interface (Frontend).
+- **Riscos:** Quebra de builds se existirem break-changes nas bibliotecas front/back.
+- **Dependências:** Validação de QA pós-upgrade.
+- **Prioridade:** P0
+- **Esforço:** M
+- **Dono:** Frontend / Backend / Security
+- **Status:** aberto
+
+### [SG-038] Potencial SQL Injection em dedupe_service.py (Bandit B608)
+- **Problema atual:** Uso de f-strings ou formatações baseadas em strings para construção de queries dinâmicas, o que burla a segurança do ORM.
+- **Solução proposta:** Substituir por queries parametrizadas seguras.
+- **Impacto esperado:** Prevenção de injeções SQL.
+- **Riscos:** Regressão na lógica do serviço.
+- **Dependências:** Validação na suíte de testes do DB.
+- **Prioridade:** P1
+- **Esforço:** S
+- **Dono:** Backend
+- **Status:** aberto
+
+### [SG-039] Permissões Frouxas em Abertura de URL (SSRF/File Read)
+- **Problema atual:** O message broker e os agent tools abrem URLs sem restringir o esquema a `http` ou `https`, permitindo manipulações como `file://`.
+- **Solução proposta:** Validar explicitamente o esquema da URL antes da requisição na urllib.
+- **Impacto esperado:** Mitigação de vulnerabilidades de SSRF.
+- **Riscos:** Nenhum identificado se devidamente implementado.
+- **Dependências:** Suíte de testes da API.
+- **Prioridade:** P1
+- **Esforço:** S
+- **Dono:** Backend
+- **Status:** aberto
+
+### [SG-040] Vazamento de PII em logs de Ferramentas de Produtividade
+- **Problema atual:** Remetentes, destinatários e assuntos de email sendo logados abertamente em modo informativo no `send_email`.
+- **Solução proposta:** Interceptar com `redact_pii_text_only` ou ofuscar parâmetros nos logs.
+- **Impacto esperado:** Conformidade LGPD por minimização de logs de email (PII).
+- **Riscos:** Dificuldade em debugar fluxos de envio.
+- **Dependências:** Ajustes nos scripts de extração de log.
+- **Prioridade:** P0
+- **Esforço:** S
+- **Dono:** Backend / Security
+- **Status:** aberto
+
+### [SG-041] Vazamento Biométrico/Comportamental em Daemon
+- **Problema atual:** Comandos vocais transcritos diretamente sem sanitização no `daemon.py`.
+- **Solução proposta:** Aplicar scrubber (`redact_pii_text_only`) antes de gravar `logger.info("Command received: ...")`.
+- **Impacto esperado:** Minimização do risco à privacidade conforme LGPD.
+- **Riscos:** Impactar debug do Daemon.
+- **Dependências:** Atualizações no componente de auditoria.
+- **Prioridade:** P1
+- **Esforço:** S
+- **Dono:** Backend
+- **Status:** aberto
+
+### [SG-042] Risco de Vazamento In-Memory em Ferramentas de Produtividade
+- **Problema atual:** Notas e eventos de calendário retidos no estado global (`_notes`, `_calendar_events`) de forma não-persistente e sem isolamento (AuthZ) entre execuções concorrentes.
+- **Solução proposta:** Mover o estado volátil para cache no banco de dados isolado por ID de usuário e expurgo.
+- **Impacto esperado:** Isolamento transacional da memória transitória de usuários (PII).
+- **Riscos:** Necessidade de alteração arquitetural nas tools.
+- **Dependências:** Postgres / Redis.
+- **Prioridade:** P1
+- **Esforço:** M
+- **Dono:** Backend
+- **Status:** aberto

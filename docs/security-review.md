@@ -216,3 +216,20 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-24)
+
+### Lacunas e Impacto
+- **Dependências Vulneráveis (Frontend):** O `npm audit` identificou 17 pacotes vulneráveis, incluindo problemas de severidade alta/crítica no ecossistema `@angular/*`, `tar`, `dompurify`, e `@hono/node-server`. Pode expor a aplicação SPA a vulnerabilidades como XSS (via dompurify), ataques de injeção ou Denial of Service.
+- **Dependências Vulneráveis (Backend):** O `pip-audit` apontou CVE-2026-4539 na dependência `pygments` associada à complexidade de Expressão Regular (ReDoS) em manipulações locais, o que pode exaurir recursos no parse de linguagens no backend.
+- **SQL Injection em Query Builder Dinâmico:** O script `backend/app/services/dedupe_service.py` utiliza formatações baseadas em string/f-strings que abrem vetores de injeção (Bandit B608) em múltiplas linhas, o que burla a segurança da camada ORM.
+- **Criação Insegura de Arquivo Temporário:** O componente `backend/app/core/memory/log_aware_reflector.py` grava logs forçadamente em `/tmp/janus.log` (Bandit B108), configurando um risco clássico de TOCTOU (Time-of-Check to Time-of-Use) ou symlink attacks se a máquina for de múltiplos usuários.
+- **Permissões Frouxas de Abertura de URL:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py` abrem URLs de permissões frouxas que aceitam esquemas customizados (`file://`), resultando num vetor potencial de SSRF ou File Read local.
+- **Sandboxing Incompleto (exec()):** O core de execução de Python Sandbox no `backend/app/core/infrastructure/python_sandbox.py` faz uso de `exec()` sem garantias perfeitas se um atacante ou LLM mal-intencionado escapar dos decorators e context managers.
+
+### Próximos Passos
+- Executar `npm audit fix` para atualizar as vulnerabilidades Frontend e aplicar fixes manuais aos pacotes não resolvidos (`tar`, `@angular/*`, `dompurify`).
+- Elevar a versão do pacote `pygments` (via poetry ou requirements) para contornar a vulnerabilidade CVE-2026-4539 detectada.
+- Modificar queries no `dedupe_service.py` para utilizar parâmetros preenchidos pela lib ou statements parametrizados no SQLAlchemy.
+- Substituir o path de logs hardcoded no `/tmp` por `tempfile.NamedTemporaryFile` para garantir uso exclusivo seguro do OS.
+- Restringir explicitamente os esquemas de URL a `http://` e `https://` antes de injetar nas bibliotecas built-in `urllib` nas classes Broker e Agent Tools.
