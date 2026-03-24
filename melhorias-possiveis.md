@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-018] Timeouts em Scripts e Ferramentas de QA
+- Problema atual: Testes assíncronos não contêm timeouts implícitos ou limites de execução explícitos (ex: `test_debate_system.py`), correndo risco de travamento em CI/CD se as APIs engasgarem.
+- Solucao proposta: Aplicar globalmente `asyncio.wait_for(task, timeout=X)` ou a diretiva do pytest-timeout para testes de tooling autônomos.
+- Impacto esperado: Previne travamento de pipeline ou consumo indevido de recursos.
+- Riscos: Timeout muito baixo pode gerar falsos positivos em redes instáveis.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: Dev Team
+- Status: aberta
+
+### [SG-043] Vazamento de Logs em Standard Output (QA e Tooling)
+- Problema atual: Ferramentas e testes, como `tooling/test_debate_system.py` expõem os conteúdos processados integralmente usando prints (`print(code[:100])`), sem o devido processo de `redact_pii_text_only`.
+- Solucao proposta: Aplicar filtros de logging para outputs em shell ou unificar em loggers que já mascaram PII na pipeline global.
+- Impacto esperado: Menor risco de exposição de PII/Dados Confidenciais nas pipelines e consoles.
+- Riscos: Redução de legibilidade no trace de debug.
+- Dependencias: Módulo `security.py`.
+- Prioridade: P1
+- Esforco: S
+- Dono: AppSec
+- Status: aberta
+
+### [SG-044] Integridade de Scripts Powershell Ausente
+- Problema atual: Scripts de provisionamento em host/tooling (`secure-tailscale-setup.ps1`, `seed-repro-scenarios.ps1`) operam invocando shells interativos e Bypass de políticas de execução nativas. Se o arquivo for alterado silenciosamente, o admin executa comandos com elevação de privilégio sob premissa de confiabilidade.
+- Solucao proposta: Assinatura dos scripts `.ps1` (Code Signing) ou ao menos validação prévia de SHA256 em CI, além de rodar em escopo restrito de ExecutionPolicy (RemoteSigned ou AllSigned).
+- Impacto esperado: Redução massiva do risco de Local Privilege Escalation (LPE) via envenenamento de script.
+- Riscos: Interrupções esporádicas de dev-experience até o certificado/key ser distribuído à equipe.
+- Dependencias: PKI interna ou Certificate Authority.
+- Prioridade: P1
+- Esforco: M
+- Dono: SRE / AppSec
+- Status: aberta

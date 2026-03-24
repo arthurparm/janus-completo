@@ -113,3 +113,22 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-24)
+
+### 11. Potencial Risco de LGPD e Timeout Oculto em Scripts de Ferramentas
+**Descrição:** Verificou-se que scripts na camada de ferramentas de QA/teste contêm práticas que não se adequam a cenários de uso isolados em produção, especialmente o uso direto de `print()` expondo o output interno de execuções. Além disso, `test_debate_system.py` carece de restrições de timeout global, o que poderia levar a indisponibilidade. O uso indiscriminado de `print` com dados de IA ou de histórico (`state_update['code'][:100]`) é considerado risco de PII por expor contextos.
+**Evidências:**
+- `tooling/test_debate_system.py`: Ausência de PII redaction para o histórico retornado pelos nós do LangGraph (`print(f"Preview: {state_update['code'][:100]}...")`). Uso de `asyncio.run(main())` sem um wrap de `asyncio.wait_for()`.
+
+**Próximos passos:**
+- Adicionar issue OQ-018 no `melhorias-possiveis.md` para tratar timeouts de QA/Ferramentas.
+- Adicionar issue SG-043 referente a vazamentos de logs de output (stdout) nos testes e tooling para compliance LGPD.
+
+### 12. Risco de Segurança em Scripts PowerShell Autônomos (Fragilidade de Ambiente)
+**Descrição:** Os scripts adicionados recentemente para monitoramento do Tailscale (`secure-tailscale-setup.ps1`) rodam um shell interativo com `ExecutionPolicy Bypass` de maneira oculta (`-WindowStyle Hidden`). Scripts que emitem comandos diretamente a binários do sistema sem hash-pinning nem verificações criptográficas prévias representam vetores de ataque se adulterados localmente (Local Privilege Escalation, Command Injection).
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Inicializa processos secundários invocando a si mesmos com `-ExecutionPolicy Bypass`. Cria relatórios de estado e planos de resposta salvos livremente no file system sem restrições de diretório ou checagens de permissão de escrita, podendo resultar em falhas ou sobrescrita maliciosa.
+
+**Próximos passos:**
+- Documentar no backlog (SG-044) a necessidade de estabelecer verificação de integridade (Code Signing ou verificação de SHA256) antes da execução de automações PowerShell em endpoints.

@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-02-23T21:08:03.188218+00:00",
+    "generated_at": "2026-03-24T21:25:17.453855+00:00",
     "source": "api_inventory_fallback",
     "openapi_url": "http://localhost:8000/openapi.json",
     "inputs": {
@@ -9,12 +9,12 @@
     }
   },
   "statistics": {
-    "total_endpoints": 226,
+    "total_endpoints": 232,
     "by_method": {
       "DELETE": 6,
-      "GET": 123,
+      "GET": 128,
       "PATCH": 2,
-      "POST": 92,
+      "POST": 93,
       "PUT": 3
     },
     "by_module": {
@@ -40,7 +40,7 @@
         "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
       "Auto Analysis": {
         "total": 1,
@@ -52,10 +52,10 @@
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
       "AutonomyHistory": {
-        "total": 3,
+        "total": 4,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 0
@@ -64,7 +64,7 @@
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 4
+        "in_tests": 5
       },
       "Collaboration": {
         "total": 11,
@@ -139,7 +139,7 @@
         "in_tests": 1
       },
       "Observability": {
-        "total": 22,
+        "total": 24,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 1
@@ -193,7 +193,7 @@
         "in_tests": 0
       },
       "Tasks": {
-        "total": 6,
+        "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 0
@@ -205,7 +205,7 @@
         "in_tests": 3
       },
       "unknown": {
-        "total": 4,
+        "total": 5,
         "smoke_pass": 1,
         "smoke_fail": 0,
         "in_tests": 1
@@ -224,7 +224,7 @@
       }
     },
     "smoke_results_loaded": 6,
-    "test_path_refs": 54
+    "test_path_refs": 59
   },
   "endpoints": [
     {
@@ -280,7 +280,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -456,7 +456,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -497,6 +497,17 @@
       "module": "AutonomyHistory",
       "summary": "Obtém uma execução específica",
       "operation_id": "get_run_api_v1_autonomy_history_runs__run_id__get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/history/runs/{run_id}/enqueues",
+      "module": "AutonomyHistory",
+      "summary": "Lista enqueues de uma execução de autonomia",
+      "operation_id": "list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -566,7 +577,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "DELETE",
@@ -1725,6 +1736,17 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/observability/anomalies/predictive",
+      "module": "Observability",
+      "summary": "Deteccao preditiva de anomalias (latencia, erro e filas)",
+      "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/observability/audit/events",
       "module": "Observability",
       "summary": "Lista eventos de auditoria",
@@ -1938,6 +1960,17 @@
       "module": "Observability",
       "summary": "Dashboard de pipeline por request_id",
       "operation_id": "request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/slo/domains",
+      "module": "Observability",
+      "summary": "SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
+      "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -2439,6 +2472,28 @@
       "referenced_in_tests": false
     },
     {
+      "method": "POST",
+      "path": "/api/v1/tasks/outbox/reconcile",
+      "module": "Tasks",
+      "summary": "Reencaminha eventos do outbox para reconciliação",
+      "operation_id": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/outbox/stats",
+      "module": "Tasks",
+      "summary": "Retorna estatísticas do outbox transacional",
+      "operation_id": "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
       "method": "GET",
       "path": "/api/v1/tasks/queue/{queue_name}",
       "module": "Tasks",
@@ -2686,6 +2741,17 @@
       "module": "unknown",
       "summary": "Add Generative Memory",
       "operation_id": "add_generative_memory_api_v1_memory_generative_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/preferences",
+      "module": "unknown",
+      "summary": "Get User Preferences",
+      "operation_id": "get_user_preferences_api_v1_memory_preferences_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
