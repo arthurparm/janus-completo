@@ -836,3 +836,91 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [ARQ-011] Refatoração de God Objects e Componentes Hiper-Acoplados
+- Problema atual: Classes e serviços como `backend/app/services/observability_service.py` (~1200 linhas) e componentes no frontend (`frontend/src/app/services/backend-api.service.ts` com ~1638 linhas e `frontend/src/app/features/conversations/conversations.ts` com ~1700 linhas) centralizam múltiplas lógicas de negócio (saúde, métricas, auditoria, anomalias) e precisam ser decompostos em serviços específicos por domínio.
+- Solucao proposta: Aplicar princípios SOLID (Single Responsibility) quebrando as classes e extraindo a lógica de UI do frontend para uma Store.
+- Impacto esperado: Maior manutenibilidade, redução de regressões e código mais testável.
+- Riscos: Refatorações grandes podem quebrar contratos implícitos e fluxos já estabilizados.
+- Dependencias: Frontend Store/State management, Injeção de Dependências.
+- Prioridade: P1
+- Esforco: L
+- Dono: a definir
+- Status: aberto
+
+### [SG-037] Práticas inseguras e Injeções em Parsings Genéricos e Auth Bypass
+- Problema atual: Análise Bandit aponta uso do `random` inseguro (B311) e parser com `eval` ao invés de `ast.literal_eval` em `auto_analysis.py` e `faulty_tools.py`. Também há bypass de autenticação via header `X-User-Id` em `auth.py` devido a `AUTH_TRUST_X_USER_ID_HEADER=True` padrão e necessidade de ofuscação (`redact_pii_text_only`) para evitar logs com PII em texto claro.
+- Solucao proposta: Substituir `random` por `secrets`, usar `ast.literal_eval`, forçar o default de `AUTH_TRUST_X_USER_ID_HEADER` para `False` em `config.py` e aplicar a função de redação nos logs globais.
+- Impacto esperado: Aumento significativo na segurança contra Spoofing de Identidade e Code Injection, e conformidade com LGPD.
+- Riscos: Falsa rejeição de identificação de usuários em setups de teste onde headers eram forjados por conveniência.
+- Dependencias: app.config
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Possível vazamento de Token no fluxo de Reset Local
+- Problema atual: O `LocalResetResponse` em `backend/app/api/v1/endpoints/auth.py` se mal configurado (`AUTH_RESET_RETURN_TOKEN=True`) pode retornar o token na resposta de reset, apresentando risco de Account Takeover.
+- Solucao proposta: Remover o suporte a `AUTH_RESET_RETURN_TOKEN=True` ou garantir validação estrita baseada no contexto seguro (Local LAN AP).
+- Impacto esperado: Evitar vazamento de credenciais via API response.
+- Riscos: Nenhum no estado atual onde o default é False.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Bypass de Autenticação em Endpoints de Execução
+- Problema atual: Endpoints `/execute` em `agent.py` e `/assistant/execute` em `assistant.py` carecem de verificação adequada de AuthZ, permitindo acessos indevidos aos pipelines de execução.
+- Solucao proposta: Implementar e forçar decoradores `Depends(get_current_user)` nas rotas.
+- Impacto esperado: Bloqueio de execuções de agents por atores não autorizados.
+- Riscos: Quebra de automações internas que chamavam as rotas sem token.
+- Dependencias: Camada de AuthN.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Lógica Destrutiva e Perigosa de Purge no Banco de Dados
+- Problema atual: O arquivo `admin_graph.py` expõe lógica de expurgo (DB purge) que, se acessada ou chamada indevidamente, pode causar perda irreversível de dados críticos do grafo.
+- Solucao proposta: Remover o endpoint da API externa e proteger a rotina por mecanismos de linha de comando CLI estritamente autenticados com duplo check (soft delete).
+- Impacto esperado: Prevenção de incidentes de deleção em massa (Mass Deletion).
+- Riscos: Limita facilidades do admin para limpar dados rápidos em QA.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-017] Fragilidade em Atualizações de Configuração em Memória
+- Problema atual: Configurações modificadas através do `admin_config.py` são mantidas in-memory, tornando-se frágeis e voláteis e perdidas entre reboots (In-memory configuration updates).
+- Solucao proposta: Persistir atualizações do `admin_config.py` no banco de dados, arquivo seguro ou Key-Value store (Redis) e propagar via Message Broker.
+- Impacto esperado: Persistência e resiliência nas configurações dinâmicas de ambiente.
+- Riscos: Adiciona latência na recuperação de configs se não cacheadas.
+- Dependencias: Cache/DB integration.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Criação Insegura de Arquivos Temporários em Testes (Bandit B108)
+- Problema atual: O arquivo `test_logging_config_legacy_normalization.py` cria arquivos temporários de forma insegura, o que pode abrir portas para symlink attacks ou TOCTOU durante as execuções da CI.
+- Solucao proposta: Refatorar para usar o pacote `tempfile` de forma padrão e segura.
+- Impacto esperado: Remover avisos de vulnerabilidade do Bandit B108.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] URL Openings Inseguros e Falta de Timeout (Bandit B310 e B113)
+- Problema atual: Arquivos como `eval_technical_qa.py` e `run_repo_smoke_test.py` usam strings dinâmicas de URL para chamadas inseguras sem validar esquemas. Além disso, falhas de B113 revelam falta de explícito `timeout` em scripts de verificação.
+- Solucao proposta: Fixar os esquemas (`http`/`https`) antes de realizar os requests. Adicionar `timeout=10` global em chamadas da biblioteca `requests`.
+- Impacto esperado: Melhora estabilidade da CI/CD evitando hangs e previne file scheme requests.
+- Riscos: Requisições demoradas legítimas em scripts QA podem falhar se timeout for muito agressivo.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto

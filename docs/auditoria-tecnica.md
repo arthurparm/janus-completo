@@ -3,6 +3,39 @@
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
 
+## Achados do dia (2026-03-24)
+
+### 11. Refatoração de God Objects e Componentes Hiper-Acoplados (Arquitetura)
+**Descrição:** Observou-se que múltiplas lógicas de negócio estão centralizadas em classes e componentes monolíticos (God Objects). Isso quebra princípios de Single Responsibility (SRP) e dificulta a testabilidade.
+**Evidências:**
+- `backend/app/services/observability_service.py` (~1200 linhas)
+- `frontend/src/app/services/backend-api.service.ts` (~1638 linhas)
+- `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas)
+**Próximos passos:**
+- Decompor esses arquivos em serviços focados por domínio específico e mover a lógica de estado do frontend para uma Store (State Management).
+- O débito técnico foi registrado na issue ARQ-011.
+
+### 12. Práticas inseguras e Auth Bypass (Segurança/LGPD)
+**Descrição:** Múltiplas vulnerabilidades identificadas via análises dinâmicas e estáticas, incluindo injeções inseguras, Auth bypass, vazamento de PII e tokens no fluxo de resets, além de lógicas de manipulação perigosa de banco de dados.
+**Evidências:**
+- **Injeções e Práticas Inseguras (B311/B102):** `auto_analysis.py` (uso do `random` inseguro) e `faulty_tools.py` (parser com `eval`).
+- **Auth Bypass:** `auth.py` (bypass do header `X-User-Id` com `AUTH_TRUST_X_USER_ID_HEADER=True`), `agent.py` (`/execute`) e `assistant.py` (`/assistant/execute`).
+- **PII Leakage:** Necessidade de aplicação de `redact_pii_text_only`.
+- **Token Leakage:** O `LocalResetResponse` em `auth.py` pode retornar token se mal configurado (`AUTH_RESET_RETURN_TOKEN=True`).
+- **Destructive Logic:** O `admin_graph.py` expõe lógica de deleção em massa.
+**Próximos passos:**
+- Substituir usos do `random` pelo módulo `secrets`, e aplicar `ast.literal_eval`. Forçar validações AuthZ nos endpoints com bypass, além de isolar operações do `admin_graph.py` com CLI protegidas e forçar default settings seguros (`AUTH_TRUST_X_USER_ID_HEADER=False`).
+- Débitos de segurança foram rastreados em SG-037, SG-038, SG-039 e SG-040.
+
+### 13. Vulnerabilidades em Ferramentas e Testes - SAST (Segurança/Infraestrutura)
+**Descrição:** Verificou-se a presença de manipulações falhas em scripts de infraestrutura, incluindo atualizações in-memory que se perdem no reboot, criação falha de diretórios em testes e URLs abertas de forma indiscriminada.
+**Evidências:**
+- **In-memory Configuration:** Configurações mantidas em memória por `admin_config.py` são perdidas no restart.
+- **Temporários e B310/B113:** Criação insegura de arquivos (B108) em `test_logging_config_legacy_normalization.py` e chamadas desprotegidas em `eval_technical_qa.py` e `run_repo_smoke_test.py` com falhas de timeout.
+**Próximos passos:**
+- Adicionar validações explícitas de schemas (http/https), incluir `timeout` nas requisições, utilizar biblioteca `tempfile` e persistir alterações de configuração usando cache durável.
+- Rastreados em SG-041, SG-042 e OQ-017.
+
 ## Achados do dia
 
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)
