@@ -12,18 +12,18 @@ status: ativo
 Listar os workers nomeados do sistema.
 
 ## Responsabilidades
-- Facilitar entendimento do plano assíncrono.
+- Facilitar entendimento do plano assincrono.
 
 ## Entradas
 - `backend/app/core/workers/*.py`
 
-## Saídas
-- Índice de workers.
+## Saidas
+- Indice de workers.
 
-## Dependências
+## Dependencias
 - [[02 - Backend/Autonomia e Workers]]
 
-## Workers
+## Workers por modulo
 - `agent_tasks_worker`
 - `async_consolidation_worker`
 - `auto_scaler`
@@ -49,7 +49,7 @@ Listar os workers nomeados do sistema.
 - `sandbox_agent_worker`
 - `thinker_agent_worker`
 
-## Workers/tarefas observados em runtime
+## Tarefas que o orquestrador sobe
 - `memory_maintenance`
 - `knowledge_consolidation`
 - `document_ingestion`
@@ -58,6 +58,7 @@ Listar os workers nomeados do sistema.
 - `reflexion`
 - `meta_agent`
 - `failure_consumer`
+- `auto_scaler`
 - `auto_healer`
 - `router`
 - `code_agent`
@@ -66,16 +67,19 @@ Listar os workers nomeados do sistema.
 - `sandbox_agent`
 - `thinker_agent`
 - `distillation`
-- `google_productivity`
+- `google_productivity` quando `ENABLE_GOOGLE_PRODUCTIVITY_WORKER=true`
 - `debate_proponent`
 - `debate_critic`
 - `codex_worker`
 
 ## Leitura operacional
-- O runtime expõe nomes de tarefas orquestradas, que nem sempre coincidem 1:1 com o nome do arquivo Python.
+- Os nomes de runtime nao batem 1:1 com os nomes de arquivo.
+- `AutonomyLoop` nao faz parte desta lista: ele e uma task interna de `AutonomyService`, nao um worker do orquestrador.
+- `google_productivity` pode aparecer como handle desativado quando a flag estiver desligada.
 - Use esta nota junto com [[02 - Backend/Autonomia e Workers]] e `/api/v1/workers/status`.
 
 ## Arquivos-fonte
+- `backend/app/core/workers/orchestrator.py`
 - `backend/app/core/workers/*.py`
 
 ## Fluxos relacionados

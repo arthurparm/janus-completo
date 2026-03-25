@@ -8,60 +8,232 @@ status: ativo
 
 # Autonomia e Workers
 
-## Objetivo
-Explicar o plano de execução contínua do Janus.
+## Leitura arquitetural correta
+O backend separa autonomia em quatro blocos:
 
-## Responsabilidades
-- Cobrir AutonomyLoop, metas, políticas e workers.
-- Diferenciar request síncrona de execução assíncrona.
+1. `AutonomyService`: loop de controle, lease, run history e enqueue do Parlamento.
+2. `GoalManager`: CRUD de metas e transicoes de status.
+3. `PolicyEngine` + `planner`: governanca declarativa e geracao/refino de plano.
+4. `AutonomyAdminService`: backlog tecnico, self-study, memoria de codigo e auditoria admin.
 
-## Entradas
-- Configuração de autonomia.
-- Planos de ação.
-- Filas e jobs agendados.
+O ponto mais importante: o `AutonomyLoop` atual nao e um executor local de tools. O `execution_mode` aceito e somente `enqueue_router`.
 
-## Saídas
-- Execução contínua e governada de ações.
-- Atualização de metas e aprendizagem operacional.
+## Componentes principais
+### `AutonomyService`
+Responsabilidades reais:
 
-## Dependências
-- [[02 - Backend/Kernel e Startup]]
-- [[02 - Backend/Segurança e Infra]]
-- [[04 - Fluxos End-to-End/Autonomia]]
+- manter configuracao em memoria (`AutonomyConfig`);
+- adquirir e renovar runtime lock;
+- restaurar ou criar `AutonomyRun`;
+- contar ciclos e registrar `AutonomyStep`;
+- escolher a meta atual;
+- montar o plano;
+- escolher um passo do plano;
+- enfileirar `TaskState` para o `router`.
 
-## Leitura operacional
-- `/autonomy/start` valida plano, allowlist e blocklist antes de ligar o loop.
-- `GoalManager` sustenta CRUD de metas.
-- O sistema possui workers explícitos para roteamento, consolidação, reflexão, code, sandbox e treinamento.
-- Scheduler inicializa jobs default no boot.
+### `GoalManager`
+Responsabilidades reais:
 
-## Workers relevantes
-- `router_worker`
-- `agent_tasks_worker`
-- `knowledge_consolidator_worker`
-- `document_ingestion_worker`
-- `reflexion_worker`
+- persistir goals em SQL;
+- espelhar em Firestore se habilitado;
+- registrar transicoes em `autonomy_goal_transitions`;
+- expor `get_next_goal()` ordenado por prioridade e antiguidade.
+
+### `PolicyEngine`
+Capacidades implementadas:
+
+- risco por permission level (`conservative|balanced|aggressive`);
+- allowlist/blocklist de tools;
+- capability allowlist;
+- scope allowlist por tags `scope:*`;
+- allowlist e blocklist de comandos sensiveis;
+- deteccao de prompt injection;
+- simulacao de destrutividade;
+- quota por numero de acoes e tempo de ciclo.
+
+Cobertura real no fluxo de autonomia:
+
+- forte no caminho HTTP de planos manuais;
+- parcial no planner;
+- ausente como gate final antes do enqueue do passo escolhido.
+
+### `planner`
+Implementa um ciclo Reflexion:
+
+1. draft
+2. critique
+3. refine
+4. fallback seguro
+
+Ele gera um array de passos, mas a validacao interna e limitada a existencia da tool, formato de `args`, blocklist e metadados opcionais.
+
+### `AutonomyAdminService`
+Nao faz parte do loop principal, mas e parte importante do dominio:
+
+- sincroniza backlog tecnico em metas;
+- executa self-study incremental/full;
+- atualiza memoria vetorial e SelfMemory no grafo;
+- responde code QA administrativo com citacoes.
+
+## O que roda em cada contexto
+### Durante o request HTTP
+- validar payloads de `/autonomy`
+- alterar config em memoria
+- CRUD de goals
+- iniciar/parar o loop
+- consultar historico
+
+### Em background dentro do processo da API
+- `AutonomyService._run_loop()` via `asyncio.create_task`
+- `startup_self_study_check()` via `asyncio.create_task`
+- triggers de self-study apos meta concluida
+
+### Em workers/filas
+- `router_worker` consome o `TaskState` gerado pelo loop
+- demais agentes do Parlamento executam o trabalho real
+- knowledge distillation e consolidacao sao side-effects do roteamento
+
+### No startup do app
+- `Kernel` injeta `autonomy_service`, `goal_manager` e `autonomy_admin_service` em `app.state`
+- `start_all_workers()` sobe consumers do orquestrador se a flag permitir
+- `startup_self_study_check()` roda sem bloquear o boot
+
+## Runtime lock
+O lease de autonomia e uma protecao cross-instance em banco:
+
+- tabela: `autonomy_loop_leases`
+- unidade de disputa: `scope_key`
+- dono: `owner_id`
+- heartbeat: renovado a cada ciclo
+- expiracao: TTL = `max(30, interval_seconds * 3)`
+
+Escopos possiveis:
+
+- `global`
+- `user:<user_id>`
+- `project:<project_id>`
+- `user:<user_id>:project:<project_id>`
+
+Na pratica, o lock protege a subida simultanea do loop no mesmo escopo, nao a execucao interna de cada agente/worker.
+
+## Plano e politica: contrato real
+### Plano manual
+Plano manual e o mais governado:
+
+- passa por allowlist/blocklist do request/config atual;
+- exige tool registrada;
+- valida `args_schema` quando a tool declara schema.
+
+### Plano gerado pelo planner
+Plano gerado automaticamente e menos governado:
+
+- respeita `blocklist`;
+- tenta respeitar parte do `risk_profile`;
+- nao chama `PolicyEngine.validate_tool_call()`;
+- nao valida `args_schema`;
+- nao garante que o `selected_step` final seja o unico tool permitido pela politica.
+
+### Policy update
+`PUT /policy` atualiza apenas estado em memoria do service.
+
+Impactos:
+
+- a politica nova vale para futuros ciclos do service atual;
+- a run SQL nao e regravada;
+- o plano que ja estava em memoria nao e revalidado;
+- o modo `enqueue_router` continua sem gate de policy no ponto final de publish.
+
+## Metas e fechamento de ciclo
+### Origem
+- `POST /autonomy/goals`
+- `AutonomyAdminService.sync_backlog()`
+
+### Selecionar
+- sempre a primeira `pending` por `priority asc, created_at asc`
+
+### Progredir
+- `pending -> in_progress` quando o loop seleciona a meta
+- `in_progress -> pending` se o publish do enqueue falhar
+
+### Finalizar
+- via `PATCH /goals/{id}/status`
+- ou automaticamente quando um `TaskState` autonomo terminal volta ao `router`
+
+Mapeamento do hook automatico:
+
+- `TaskState.completed` => goal `completed`
+- `TaskState.failed|blocked|cancelled` => goal `failed`
+
+## Workers relevantes para autonomia
+O `AutonomyLoop` nao aparece em `WORKER_NAMES`; ele e uma task propria do service. O que o orquestrador sobe e o ecossistema que consome o trabalho enfileirado.
+
+### Essenciais para o fluxo atual
+- `router`
+- `code_agent`
+- `professor_agent`
+- `sandbox_agent`
+- `red_team_agent`
+- `thinker_agent`
+- `distillation`
+
+### Sobem via `start_all_workers()`
+- `memory_maintenance`
+- `knowledge_consolidation`
+- `document_ingestion`
+- `agent_tasks`
+- `neural_training`
+- `reflexion`
+- `meta_agent`
+- `failure_consumer`
+- `auto_scaler`
+- `auto_healer`
+- `router`
+- `code_agent`
+- `red_team_agent`
+- `professor_agent`
+- `sandbox_agent`
+- `thinker_agent`
+- `distillation`
+- `google_productivity` quando `ENABLE_GOOGLE_PRODUCTIVITY_WORKER=true`
+- `debate_proponent`
+- `debate_critic`
 - `codex_worker`
-- `sandbox_agent_worker`
-- `life_cycle_worker`
-- `neural_training_worker`
 
-## Workers rastreados em runtime
-- Na validação do PC TESTE, `/api/v1/workers/status` reportou 21 tarefas rastreadas.
-- Além dos módulos de worker por arquivo, o runtime expõe tarefas compostas ou operacionais como `memory_maintenance`, `failure_consumer` e `auto_healer`.
-- O inventário de código e o inventário de runtime devem ser lidos juntos.
+## Persistencia operacional
+Tabelas principais do dominio:
+
+- `autonomy_runs`
+- `autonomy_steps`
+- `autonomy_enqueue_ledger`
+- `autonomy_goals`
+- `autonomy_goal_transitions`
+- `autonomy_self_study_runs`
+- `autonomy_self_study_files`
+- `autonomy_self_study_state`
+- `autonomy_loop_leases`
+
+## Riscos e lacunas reais
+- O loop nao consome `max_actions_per_cycle` como quota de passos executados; hoje ele so escolhe um passo e enfileira.
+- `PolicyEngine` e mais poderoso do que o caminho real do `AutonomyLoop`.
+- A autonomia depende do `router` para fechamento automatico de goals; sem esse retorno a meta pode ficar presa em `in_progress`.
+- O caminho de lease perdido nao chama o mesmo cleanup de `stop()`, o que pode deixar rastros operacionais inconsistentes.
+- `AutonomyAdminService.run_self_study()` nao usa lock proprio; startup, trigger manual e trigger por meta podem sobrepor execucoes.
 
 ## Arquivos-fonte
-- `backend/app/api/v1/endpoints/autonomy.py`
 - `backend/app/services/autonomy_service.py`
+- `backend/app/services/autonomy_admin_service.py`
+- `backend/app/services/collaboration_service.py`
 - `backend/app/core/autonomy/goal_manager.py`
+- `backend/app/core/autonomy/policy_engine.py`
+- `backend/app/core/autonomy/planner.py`
+- `backend/app/core/autonomy/taskstate_status.py`
+- `backend/app/services/autonomy_lock_service.py`
 - `backend/app/core/workers/orchestrator.py`
-- `backend/app/core/workers/*.py`
+- `backend/app/core/workers/router_worker.py`
+- `backend/app/core/kernel.py`
+- `backend/app/main.py`
 
 ## Fluxos relacionados
+- [[04 - Fluxos End-to-End/Autonomia]]
 - [[07 - Glossário e Inventários/Inventário de Workers]]
-- [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]]
-
-## Riscos/Lacunas
-- A execução autônoma depende de políticas corretas e lock runtime para evitar concorrência indesejada.
-- Nem todo worker tem visibilidade equivalente no frontend.
+- [[06 - Qualidade e Testes/Lacunas e Riscos]]
