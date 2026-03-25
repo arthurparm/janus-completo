@@ -57,7 +57,7 @@ numpy = ">=1.26.0,<2.0.0"
 # Security
 cryptography = "46.0.5"
 psycopg2-binary = "*"
-asyncpg = "*"
+asyncpg = "0.31.0"
 psycopg = { extras = ["binary"], version = "*" }
 pgvector = "*"
 sqlalchemy = ">=2.0.0"
