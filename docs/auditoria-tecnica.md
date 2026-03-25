@@ -113,3 +113,18 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-25)
+
+### 11. Cobertura de API e Testes Locais com Falhas (QA/Tooling)
+**Descrição:** Observou-se que a geração do relatório de API coverage e extração do inventário (`tooling/extract_api_inventory.py`, `tooling/generate_api_coverage_report.py`) falham em ambientes sem o backend totalmente em execução ou sem as dependências listadas instaladas. Adicionalmente, `npm audit` reportou vulnerabilidades no frontend.
+**Evidências:**
+- Erro `ConnectionRefusedError: [Errno 111] Connection refused` ao executar `extract_api_inventory.py` quando o backend não está levantado.
+- Execução do `generate_api_coverage_report.py` indicou cobertura de 11.64% e 205 endpoints não cobertos (`outputs/qa/api_coverage_report.md`).
+- Frontend: `npm audit` mostrou 17 vulnerabilidades (1 moderate, 16 high).
+
+**Próximos passos:**
+- Documentar falhas e dependências no README de tooling.
+- Melhorar a resiliência do extrator de inventário usando fastapi `TestClient` para geração offline se necessário.
+- Aplicar correção de dependências do frontend (via `npm audit fix`).
+- Adicionar itens relacionados à infra de testes no `melhorias-possiveis.md`.

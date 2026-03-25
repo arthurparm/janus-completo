@@ -836,3 +836,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [DX-014] Resiliência na Geração de Inventário de API
+- Problema atual: O script `tooling/extract_api_inventory.py` depende de chamadas HTTP para `localhost:8000`, falhando em ambientes CI/CD onde o backend não está efetivamente em execução (causando `ConnectionRefusedError`).
+- Solucao proposta: Modificar o script ou o processo de geração para utilizar `fastapi.testclient` ou chamar diretamente a função que exporta o schema OpenAPI do backend sem depender da porta TCP aberta.
+- Impacto esperado: Geração de relatórios independente de runtime externo, facilitando pipelines de CI e uso de scripts de infraestrutura.
+- Riscos: Nenhum além do esforço de reescrever o fluxo de extração.
+- Dependencias: Scripts de automação `tooling/`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-018] Aumentar a Cobertura de Testes da API
+- Problema atual: O relatório atual de cobertura gerado por `generate_api_coverage_report.py` indica apenas 11.64% de endpoints cobertos (205 de 232).
+- Solucao proposta: Identificar os endpoints mais críticos (RAG, Meta-Agent, Chat, Auth) não cobertos e criar testes unitários/e2e para atingir no mínimo 50% de cobertura.
+- Impacto esperado: Maior segurança e estabilidade, e identificação precoce de regressões em endpoints centrais.
+- Riscos: Overhead temporário e lentidão em pipelines caso os testes exijam integrações reais.
+- Dependencias: Ferramentas de CI.
+- Prioridade: P1
+- Esforco: L
+- Dono: a definir
+- Status: ideia

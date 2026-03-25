@@ -1,25 +1,25 @@
 # API Coverage Report (OQ-011)
 
-- Generated at: `2026-02-23T21:08:03.155511+00:00`
-- Source matrix mode: `api_inventory_fallback`
-- Source matrix generated at: `2026-02-23T21:05:41.317111+00:00`
+- Generated at: `2026-03-25T21:18:42.759790+00:00`
+- Source matrix mode: `openapi_live`
+- Source matrix generated at: `2026-03-25T21:18:30.000402+00:00`
 
 ## Summary
 
-- Total endpoints: `226`
-- Covered endpoints: `24`
-- Uncovered endpoints: `202`
-- Coverage percent: `10.62%`
+- Total endpoints: `232`
+- Covered endpoints: `27`
+- Uncovered endpoints: `205`
+- Coverage percent: `11.64%`
 - Runtime validated endpoints: `6`
 - Runtime failed endpoints: `0`
-- Test referenced endpoints (no runtime smoke): `18`
+- Test referenced endpoints (no runtime smoke): `21`
 
 ## Target Tracking
 
 - Expected endpoints (target): `229`
-- Observed endpoints: `226`
-- Target met: `False`
-- Endpoint gap: `3`
+- Observed endpoints: `232`
+- Target met: `True`
+- Endpoint gap: `0`
 
 ## Coverage By Module
 
@@ -28,11 +28,11 @@
 | Admin | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
 | Agent | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
 | Assistant | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
-| Auth | 8 | 0 | 8 | 0 | 0 | 0 | 0.0% |
+| Auth | 8 | 1 | 7 | 0 | 0 | 1 | 12.5% |
 | Auto Analysis | 1 | 0 | 1 | 0 | 0 | 0 | 0.0% |
-| Autonomy | 11 | 0 | 11 | 0 | 0 | 0 | 0.0% |
-| AutonomyHistory | 3 | 0 | 3 | 0 | 0 | 0 | 0.0% |
-| Chat | 11 | 4 | 7 | 0 | 0 | 4 | 36.36% |
+| Autonomy | 11 | 1 | 10 | 0 | 0 | 1 | 9.09% |
+| AutonomyHistory | 4 | 0 | 4 | 0 | 0 | 0 | 0.0% |
+| Chat | 11 | 5 | 6 | 0 | 0 | 5 | 45.45% |
 | Collaboration | 11 | 0 | 11 | 0 | 0 | 0 | 0.0% |
 | Collaboration - Workspace | 5 | 0 | 5 | 0 | 0 | 0 | 0.0% |
 | Consents | 3 | 0 | 3 | 0 | 0 | 0 | 0.0% |
@@ -45,7 +45,7 @@
 | Learning | 12 | 0 | 12 | 0 | 0 | 0 | 0.0% |
 | LLM | 12 | 0 | 12 | 0 | 0 | 0 | 0.0% |
 | Meta-Agent | 6 | 1 | 5 | 0 | 0 | 1 | 16.67% |
-| Observability | 22 | 1 | 21 | 0 | 0 | 1 | 4.55% |
+| Observability | 24 | 1 | 23 | 0 | 0 | 1 | 4.17% |
 | Optimization | 6 | 0 | 6 | 0 | 0 | 0 | 0.0% |
 | PendingActions | 5 | 0 | 5 | 0 | 0 | 0 | 0.0% |
 | Productivity | 11 | 3 | 8 | 0 | 0 | 3 | 27.27% |
@@ -54,9 +54,9 @@
 | Reflexion | 5 | 1 | 4 | 0 | 0 | 1 | 20.0% |
 | Sandbox | 3 | 0 | 3 | 0 | 0 | 0 | 0.0% |
 | System | 5 | 3 | 2 | 3 | 0 | 0 | 60.0% |
-| Tasks | 6 | 0 | 6 | 0 | 0 | 0 | 0.0% |
+| Tasks | 8 | 0 | 8 | 0 | 0 | 0 | 0.0% |
 | Tools | 8 | 3 | 5 | 0 | 0 | 3 | 37.5% |
-| unknown | 4 | 1 | 3 | 1 | 0 | 0 | 25.0% |
+| unknown | 5 | 1 | 4 | 1 | 0 | 0 | 20.0% |
 | Users | 6 | 2 | 4 | 0 | 0 | 2 | 33.33% |
 | Workers | 3 | 1 | 2 | 0 | 0 | 1 | 33.33% |
 
@@ -72,7 +72,6 @@
 | POST | `/api/v1/agent/execute` | Agent | agent_execute_api_v1_agent_execute_post |
 | POST | `/api/v1/assistant/execute` | Assistant | assistant_execute_api_v1_assistant_execute_post |
 | POST | `/api/v1/auth/firebase/exchange` | Auth | firebase_exchange_api_v1_auth_firebase_exchange_post |
-| POST | `/api/v1/auth/local/login` | Auth | local_login_api_v1_auth_local_login_post |
 | GET | `/api/v1/auth/local/me` | Auth | local_me_api_v1_auth_local_me_get |
 | POST | `/api/v1/auth/local/register` | Auth | local_register_api_v1_auth_local_register_post |
 | POST | `/api/v1/auth/local/request-reset` | Auth | local_request_reset_api_v1_auth_local_request_reset_post |
@@ -88,14 +87,13 @@
 | GET | `/api/v1/autonomy/plan` | Autonomy | get_autonomy_plan_api_v1_autonomy_plan_get |
 | PUT | `/api/v1/autonomy/plan` | Autonomy | update_autonomy_plan_api_v1_autonomy_plan_put |
 | PUT | `/api/v1/autonomy/policy` | Autonomy | update_policy_api_v1_autonomy_policy_put |
-| POST | `/api/v1/autonomy/start` | Autonomy | start_autonomy_api_v1_autonomy_start_post |
 | GET | `/api/v1/autonomy/status` | Autonomy | autonomy_status_api_v1_autonomy_status_get |
 | POST | `/api/v1/autonomy/stop` | Autonomy | stop_autonomy_api_v1_autonomy_stop_post |
 | GET | `/api/v1/autonomy/history/runs` | AutonomyHistory | list_runs_api_v1_autonomy_history_runs_get |
 | GET | `/api/v1/autonomy/history/runs/{run_id}` | AutonomyHistory | get_run_api_v1_autonomy_history_runs__run_id__get |
+| GET | `/api/v1/autonomy/history/runs/{run_id}/enqueues` | AutonomyHistory | list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get |
 | GET | `/api/v1/autonomy/history/runs/{run_id}/steps` | AutonomyHistory | list_steps_api_v1_autonomy_history_runs__run_id__steps_get |
 | GET | `/api/v1/chat/conversations` | Chat | list_conversations_api_v1_chat_conversations_get |
-| GET | `/api/v1/chat/stream/{conversation_id}` | Chat | stream_message_api_v1_chat_stream__conversation_id__get |
 | GET | `/api/v1/chat/{conversation_id}/events` | Chat | stream_agent_events_api_v1_chat__conversation_id__events_get |
 | GET | `/api/v1/chat/{conversation_id}/history` | Chat | chat_history_api_v1_chat__conversation_id__history_get |
 | GET | `/api/v1/chat/{conversation_id}/history/paginated` | Chat | chat_history_paginated_api_v1_chat__conversation_id__history_paginated_get |
@@ -196,6 +194,7 @@
 | POST | `/api/v1/meta-agent/heartbeat/stop` | Meta-Agent | stop_heartbeat_api_v1_meta_agent_heartbeat_stop_post |
 | GET | `/api/v1/meta-agent/report/latest` | Meta-Agent | get_latest_report_api_v1_meta_agent_report_latest_get |
 | GET | `/api/v1/observability/activity/user` | Observability | user_activity_api_v1_observability_activity_user_get |
+| GET | `/api/v1/observability/anomalies/predictive` | Observability | predictive_anomalies_api_v1_observability_anomalies_predictive_get |
 | GET | `/api/v1/observability/audit/export` | Observability | export_audit_events_api_v1_observability_audit_export_get |
 | GET | `/api/v1/observability/errors/taxonomy` | Observability | error_taxonomy_api_v1_observability_errors_taxonomy_get |
 | GET | `/api/v1/observability/graph/audit` | Observability | graph_audit_api_v1_observability_graph_audit_get |
@@ -215,8 +214,9 @@
 | POST | `/api/v1/observability/poison-pills/release` | Observability | release_from_quarantine_api_v1_observability_poison_pills_release_post |
 | GET | `/api/v1/observability/poison-pills/stats` | Observability | get_poison_pill_stats_api_v1_observability_poison_pills_stats_get |
 | GET | `/api/v1/observability/requests/{request_id}/dashboard` | Observability | request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get |
+| GET | `/api/v1/observability/slo/domains` | Observability | domain_slo_report_api_v1_observability_slo_domains_get |
 | GET | `/api/v1/observability/user_summary` | Observability | user_summary_api_v1_observability_user_summary_get |
 | POST | `/api/v1/optimization/analyze` | Optimization | analyze_system_api_v1_optimization_analyze_post |
 | GET | `/api/v1/optimization/health` | Optimization | get_system_health_api_v1_optimization_health_get |
 
-_Truncated: 52 additional uncovered endpoints not shown._
+_Truncated: 55 additional uncovered endpoints not shown._
