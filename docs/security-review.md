@@ -216,3 +216,26 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-25)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit`, sendo 18 pacotes no total, incluindo:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker` (Alta)
+  - `@hono/node-server`, `hono` (Alta)
+  - `express-rate-limit`, `flatted`, `immutable`, `picomatch`, `tar` (Alta)
+  - `dompurify` (Moderada)
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. Vulnerabilidade de ineficiência de Regex no Backend
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta (CVE-2026-4539)
+- **Descrição:** O pacote `pygments` (versão 2.19.2) possui uma falha (CVE-2026-4539) no `AdlLexer` (arquivo `pygments/lexers/archetype.py`), que resulta em complexidade ineficiente de expressões regulares (ReDoS).
+- **Ação Recomendada:** Atualizar a versão da dependência `pygments` para uma versão superior via `poetry update pygments`.

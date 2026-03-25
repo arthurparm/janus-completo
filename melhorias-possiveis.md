@@ -836,3 +836,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-043] Vulnerabilidade Ineficiência de Regex em Pygments (CVE-2026-4539)
+- Problema atual: A dependência `pygments` (versão 2.19.2) possui uma falha (CVE-2026-4539) em `AdlLexer`, resultando em complexidade ineficiente de expressões regulares (ReDoS).
+- Solucao proposta: Atualizar a versão do `pygments` via `poetry update pygments` no backend.
+- Impacto esperado: Correção da vulnerabilidade ReDoS que pode afetar a disponibilidade caso parses lexicais ocorram com carga arbitrária.
+- Riscos: Quebra de compatibilidade em highlighting de documentação se houver major bumps inesperados.
+- Dependencias: Testes da pipeline backend.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

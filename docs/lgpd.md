@@ -70,3 +70,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-25)
+
+### Lacunas e Impacto
+- Nenhuma nova rota ou módulo de captura de dados sensíveis foi identificada na última janela de alterações, sendo os deltas focados em componentes de Interface e Observabilidade do frontend (como `system-status-widget` e UI components). No entanto, os riscos listados em dias anteriores permanecem críticos sem mitigação, tais quais:
+  - **Metadados de Email Sensíveis não Ofuscados:** em `send_email` no `productivity_tools.py`.
+  - **Estado Global Compartilhado em Ferramentas de Produtividade:** Globais de calendário e notas expostas a múltiplos users/threads.
+  - **Captura de Áudio Sensível sem Minimização:** no `daemon.py`.
+  - **Captura de Tela Indiscriminada e sem Autorização:** no `windows_agent.py`.
+
+### Próximos Passos
+1. **Refatorar Estado Global:** Como prioritário, substituir as listas globais no `productivity_tools.py` (`_notes` e `_calendar_events`) para um banco/cache em memória por request ou `user_id`.
+2. **Aplicar Máscaras a Logs:** Aplicar ativamente a função `redact_pii_text_only` aos logs do envio de email (destinatário, assunto) e na transcrição do áudio no `daemon.py`.
+3. **Implantar Mecanismos de Redação no Agent Windows:** Inserir autenticação para os endpoints e blur/redaction visual em áreas passíveis de senhas ou emails.
