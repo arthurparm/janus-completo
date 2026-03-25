@@ -9,59 +9,122 @@ status: ativo
 # Guards Interceptors e Estado
 
 ## Objetivo
-Explicar os mecanismos transversais do frontend.
+Explicar os mecanismos transversais do frontend que moldam autenticacao, navegacao protegida e comportamento HTTP global.
 
 ## Responsabilidades
-- Cobrir auth state.
-- Cobrir guards e interceptors.
-- Apontar shared UI/state relevantes.
+- Mapear os interceptors efetivamente registrados.
+- Registrar o papel dos guards no ciclo de navegacao.
+- Ligar estado de auth e protecao de rotas.
 
 ## Entradas
 - `core/auth`
 - `core/guards`
 - `core/interceptors`
-- `core/state`
+- `app.config.ts`
+- `app.routes.ts`
 
-## Saídas
-- Mapa de comportamento transversal da UI.
+## Saidas
+- Mapa de runtime da camada transversal do frontend.
 
-## Dependências
-- [[03 - Frontend/Shell e Navegação]]
-- [[04 - Fluxos End-to-End/Login e Identidade]]
+## Dependencias
 - [[03 - Frontend/Auth Sessão Guards e Roles]]
+- [[04 - Fluxos End-to-End/Login e Identidade]]
+- [[03 - Frontend/Shell e Navegação]]
 
-## Componentes
-- `AuthService`: inicializa sessao a partir do token local e resolve `/auth/local/me`.
-- `AuthGuard`, `RoleGuard`, `PermissionGuard`, `NoAuthGuard`, `SystemReadyGuard`.
-- Interceptors:
-  - `auth.interceptor`
-  - `base-url.interceptor`
-  - `error-logger.interceptor`
-  - `error-mapping.interceptor`
-  - `http.interceptor` existe no codigo, mas nao esta registrado no `provideHttpClient()` atual
-- Estado global:
-  - `global-state.store`
-  - serviços de loading e notifications
+## Cadeia HTTP ativa
+- `baseUrlInterceptor`
+- `authInterceptor`
+- `errorLoggerInterceptor`
+- `errorMappingInterceptor`
 
-## Leitura real de auth transversal
-- A cadeia HTTP ativa do app e `baseUrlInterceptor -> authInterceptor -> errorLoggerInterceptor -> errorMappingInterceptor`.
-- `auth.interceptor` e a unica peca ativa que adiciona credenciais automaticamente nas requests.
-- `http.interceptor.ts` contem classes de loading, timeout, retry e `401`, mas esse arquivo nao participa da configuracao atual do Angular.
-- `AuthGuard` e `RoleGuard` esperam `authReady`, entao a decisao de rota aguarda a tentativa de restauracao via `/auth/local/me`.
-- `PermissionGuard` nao espera `authReady`; se passar a ser usado, seu comportamento inicial precisa ser revisado.
-- O estado de admin no frontend depende de `user.roles` e do computed `isAdmin` do `AuthService`.
+Ordem real:
+- `baseUrlInterceptor -> authInterceptor -> errorLoggerInterceptor -> errorMappingInterceptor`
+
+## O que cada interceptor faz
+
+### `baseUrlInterceptor`
+- Prefixa requests relativas com `API_BASE_URL`.
+- Mantem URLs absolutas inalteradas.
+- Evita double-prefix quando a URL ja veio com base normalizada.
+- Nao prefixa assets e alguns endpoints especiais como `/healthz`.
+
+### `authInterceptor`
+- Le token de `localStorage` ou `sessionStorage`.
+- Injeta `Authorization: Bearer <token>` quando a request ainda nao tem esse header.
+- Tenta injetar `X-User-Id` a partir do token.
+- Nao falha requests anonimas; apenas atua quando o token esta disponivel.
+
+### `errorLoggerInterceptor`
+- Registra erros para observabilidade do cliente.
+
+### `errorMappingInterceptor`
+- Mapeia indisponibilidade/offline e erros HTTP para mensagens mais controladas na UI.
+- Nao reconstroi sessao e nao executa logout.
+
+## Interceptors presentes no codigo, mas fora do runtime
+- `frontend/src/app/core/interceptors/http.interceptor.ts` define classes para loading, timeout, retry e resposta a `401`.
+- Esse arquivo nao esta registrado em `provideHttpClient()`.
+- Portanto, qualquer leitura do fluxo que dependa dele esta incorreta para o runtime atual.
+
+## Guards disponiveis
+- `AuthGuard`
+- `RoleGuard`
+- `PermissionGuard`
+- `NoAuthGuard`
+- `SystemReadyGuard`
+
+## Guards realmente no fluxo principal
+
+### `AuthGuard`
+- Protege as rotas privadas principais.
+- Espera `authReady` antes de decidir.
+- Faz redirecionamento para `/login` com `returnUrl` quando a sessao nao existe.
+
+### `RoleGuard`
+- Complementa `AuthGuard` em rotas administrativas.
+- Hoje participa apenas de `admin/autonomia`.
+- Espera `authReady` e depende de `user.roles`.
+
+## Guards existentes, mas marginais ao fluxo atual
+
+### `PermissionGuard`
+- Implementa controle por permissoes.
+- Usa semantica AND.
+- Nao esta ligado a nenhuma rota atual.
+- Nao espera `authReady`.
+
+### `NoAuthGuard`
+- Serviria para barrar acesso de usuario autenticado a telas publicas.
+- Hoje nao esta ligado a `/login` ou `/registro`.
+
+### `SystemReadyGuard`
+- No estado atual, seu criterio de prontidao e apenas `isAuthenticated$`.
+- Isso nao representa prontidao real de sistema.
+
+## Estado transversal relacionado a auth
+- `AuthService` e a fonte de verdade da sessao em memoria.
+- `authReady` controla quando os guards podem decidir sem race condition.
+- `isAuthenticated` controla acesso a rotas.
+- `user` carrega `roles` e `permissions` vindos do backend.
+
+## Leitura correta do runtime
+- O frontend nao mantem uma sessao stateful no servidor.
+- O comportamento transversal de autenticacao depende de token local + `/auth/local/me`.
+- A protecao de rota aguarda a tentativa de bootstrap antes de redirecionar.
+- O redirecionamento global por `401` que existe em outros arquivos nao participa do runtime real.
 
 ## Arquivos-fonte
 - `frontend/src/app/core/auth/auth.service.ts`
 - `frontend/src/app/core/guards/auth.guard.ts`
 - `frontend/src/app/core/interceptors/*.ts`
-- `frontend/src/app/core/state/global-state.store.ts`
+- `frontend/src/app/app.config.ts`
+- `frontend/src/app/app.routes.ts`
 
 ## Fluxos relacionados
 - [[03 - Frontend/Auth Sessão Guards e Roles]]
 - [[04 - Fluxos End-to-End/Login e Identidade]]
 - [[04 - Fluxos End-to-End/Conversa e Chat]]
 
-## Riscos/Lacunas
-- Parte dos guards parece preparada para cenarios mais amplos do que as rotas atuais.
-- Existe codigo de interceptor HTTP para `401` que nao e executado no runtime atual, o que pode induzir leitura errada do fluxo de sessao.
+## Riscos e lacunas
+- Existe codigo transversal de HTTP que nao esta ativo e pode induzir interpretacao errada.
+- `PermissionGuard` pode ter comportamento prematuro se passar a ser usado antes de adaptar a espera por `authReady`.

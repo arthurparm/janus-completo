@@ -43,6 +43,17 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
    - qualquer outro terminal (`failed`, `blocked`, `cancelled`) vira goal `failed`.
 9. Se a meta terminou com sucesso, o sistema tenta disparar `run_self_study(mode="incremental")`.
 
+## Nomes logicos do fluxo vs nomes observados em runtime
+- O `AutonomyLoop` publica para o Parlamento usando `next_agent_role`, nao usando `WORKER_NAMES`.
+- Mapeamentos relevantes:
+  - `thinker` -> fila `janus.tasks.agent.thinker` -> worker observado `thinker_agent`
+  - `coder` -> fila `janus.tasks.agent.coder` -> worker observado `code_agent`
+  - `red_team` -> fila `janus.tasks.agent.red_team` -> worker observado `red_team_agent`
+  - `professor` -> fila `janus.tasks.agent.professor` -> worker observado `professor_agent`
+  - `sandbox` -> fila `janus.tasks.agent.sandbox` -> worker observado `sandbox_agent`
+  - `knowledge_consolidator` -> fila `janus.knowledge.consolidation` -> worker observado `knowledge_consolidation`
+- Isso explica por que o vocabulário de `/api/v1/workers/status` não coincide com o vocabulário do plano ou do `TaskState`.
+
 ## Contratos HTTP principais
 ### `POST /api/v1/autonomy/start`
 - Sincrono no request.
@@ -195,6 +206,26 @@ Isso permite ver se a instancia atual segura o lease ou apenas enxerga outro own
 ### Agendado/no boot
 - `startup_self_study_check()` e agendado no startup do app, de forma nao bloqueante
 - os workers do orquestrador sobem no startup apenas se `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`
+- o `Kernel` ja sobe `knowledge_consolidation`, `document_ingestion` e `neural_training` antes disso
+- quando o orquestrador tambem sobe no startup, essas filas podem ficar com dois consumers no mesmo processo
+
+## Filas side-effect do fluxo
+- `router_worker`
+  - publica `knowledge_consolidation` em paralelo quando o `TaskState` termina com conhecimento aproveitavel
+  - publica `knowledge_distillation` em paralelo quando o `TaskState` termina com sucesso
+- `reflexion_worker`
+  - publica `janus.failure.detected` quando o ciclo falha ou fica abaixo do limiar
+- `meta_agent_worker`
+  - consome `janus.failure.detected` e dispara `janus.meta_agent.cycle`
+
+## Papéis que o fluxo consegue publicar mas não têm consumer iniciado no conjunto analisado
+- `blue_team`
+  - usado pelo `router_worker` como escape de loop quando detecta repetição de `red_team`
+  - o `CollaborationService` publica em `janus.tasks.agent.blue_team`
+  - não há worker correspondente em `backend/app/core/workers/*`
+- `security_judge`
+  - o `CollaborationService` publica em `janus.tasks.agent.security_judge`
+  - não há worker correspondente em `backend/app/core/workers/*`
 
 ### Protegido por politica hoje
 - validacao HTTP de planos manuais
@@ -227,6 +258,8 @@ APIs de historico:
 - O fechamento automatico da meta depende do `TaskState` terminal voltar ao `router` com `meta.autonomy.goal_id`.
 - O patch manual para `completed` sempre agenda self-study, mesmo quando a meta ja estava `completed`.
 - O caminho de perda de lease encerra o loop, mas nao passa pelo mesmo cleanup de `stop()`.
+- O fluxo de autonomia consegue publicar para `blue_team` e `security_judge`, mas o conjunto de workers iniciado pelo runtime analisado não cobre esses papéis.
+- O operador que olha só `/api/v1/workers/status` não enxerga cardinalidade real de consumers nas filas da autonomia.
 
 ## Arquivos-fonte
 - `backend/app/api/v1/endpoints/autonomy.py`

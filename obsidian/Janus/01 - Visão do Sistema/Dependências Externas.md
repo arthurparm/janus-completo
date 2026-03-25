@@ -33,11 +33,24 @@ Consolidar os recursos externos realmente necessários para memória, conhecimen
 
 ## Dependências estruturais
 ### Postgres
-- Sustenta dados operacionais SQL e parte do repositório de chat.
-- Não é a base principal de memória/RAG.
+- Sustenta a fonte de verdade transacional do backend.
+- Domínios observados:
+  - identidade, consentimento, auditoria e OAuth
+  - sessões e mensagens do chat
+  - prompts, agent config e optimization history
+  - pending actions, outbox e quotas diárias de tools
+  - runs, steps, goals, leases e estado de self-study da autonomia
+  - `document_manifests` e `knowledge_spaces`
+- Também sustenta persistência do estado do `graph_orchestrator` via `AsyncPostgresSaver`.
+- Não é a base principal de memória/RAG, mas sem ele o plano de controle do produto quebra.
 
 ### Redis
-- Suporte infra e coordenação.
+- Suporte infra e coordenação efêmera.
+- Funções observadas:
+  - rate limit HTTP com Lua token bucket
+  - Pub/Sub de hot-reload de configuração
+  - contabilidade de spend LLM por provider/tenant/objetivo
+  - quotas temporárias por janela deslizante para tools
 - Não é a base principal de memória/conhecimento.
 
 ### RabbitMQ
@@ -67,7 +80,16 @@ Consolidar os recursos externos realmente necessários para memória, conhecimen
   - `Experience` no grafo
   - `File`, `CodeFile`, `Function`, `CodeFunction`, `Class`, `CodeClass`
   - `SelfMemory`
+  - raiz e projeção estrutural de `KnowledgeSpace`, `Work`, `Section`, `Concept` e `Entity`
   - consultas estruturais de código e auditoria do autoestudo
+
+## Mapa por domínio
+- Chat transacional -> Postgres
+- Contexto de chat e citações documentais -> Qdrant
+- Knowledge space -> Postgres + Qdrant + Neo4j
+- Autonomia operacional -> Postgres
+- Self-study -> Postgres + Qdrant + Neo4j
+- Governança de tráfego/custo -> Redis
 
 ## Dependências contextuais
 ### Provedor de embeddings
@@ -97,6 +119,16 @@ Consolidar os recursos externos realmente necessários para memória, conhecimen
 - Dependência opcional por feature flag.
 
 ## Impacto de falha por dependência
+### Postgres falha
+- O boot do `janus-api` deixa de ficar saudável no deploy atual.
+- Chat persistido, identidade, autonomia, manifests, knowledge spaces, outbox e quotas diárias deixam de ter fonte de verdade.
+- O `graph_orchestrator` pode degradar para `MemorySaver`, mas isso não substitui a perda do SQL do produto.
+
+### Redis falha
+- O backend pode continuar servindo requests, dependendo do modo fail-open/fail-closed.
+- Rate limit, hot-reload distribuído e quotas temporárias/spend perdem consistência.
+- Dados persistidos em Postgres, Qdrant e Neo4j não desaparecem.
+
 ### Qdrant falha
 - `MemoryCore` entra em comportamento degradado/offline.
 - O recall do chat via `RAGService.retrieve_context()` deixa de enriquecer o prompt.
@@ -143,3 +175,4 @@ Consolidar os recursos externos realmente necessários para memória, conhecimen
 ## Riscos/Lacunas
 - O sistema aparenta tolerar parte das falhas degradando silenciosamente para vazio/no-op, o que reduz previsibilidade operacional.
 - Qdrant e Neo4j não são intercambiáveis no código atual; cada um sustenta um subconjunto diferente do comportamento cognitivo.
+- Postgres também não é intercambiável com eles: ele segura o plano transacional e o estado de controle, não o plano semântico.

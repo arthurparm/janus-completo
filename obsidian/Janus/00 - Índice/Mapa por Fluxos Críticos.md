@@ -39,6 +39,11 @@ Agrupar o sistema pelo que ele faz ponta a ponta.
 - Documentos, memória e recuperação: [[04 - Fluxos End-to-End/Documentos Conhecimento e Memória]]
 - Tooling, criação dinâmica e sandbox: [[04 - Fluxos End-to-End/Ferramentas e Sandbox]]
 
+Leitura recomendada:
+- Comece por `Conversa e Chat` para ver a jornada principal da UI.
+- Abra `Documentos Conhecimento e Memória` em seguida para entender por que anexos mudam o branch dominante da conversa.
+- Use `LLM Routing e Prompts` e `Serviços de Integração` para fechar as divergências REST x SSE.
+
 ## Arquivos-fonte
 - `frontend/src/app/app.routes.ts`
 - `frontend/src/app/features/conversations/conversations.ts`

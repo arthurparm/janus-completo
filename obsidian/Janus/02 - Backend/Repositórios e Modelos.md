@@ -26,25 +26,66 @@ Registrar a base de persistência e os tipos de dados explícitos do backend.
 - [[02 - Backend/Kernel e Startup]]
 - [[07 - Glossário e Inventários/Inventário de Entidades]]
 
-## Repositórios centrais
-- Chat: `chat_repository`, `chat_repository_sql`
-- Conhecimento: `knowledge_repository`, `knowledge_space_repository`
-- Memória: `memory_repository`
-- Autonomia: `autonomy_*`, `task_repository`, `pending_action_repository`
-- Observabilidade: `observability_repository`
-- Ferramentas: `tool_repository`, `tool_usage_repository`, `sandbox_repository`
-- Documentos e prompts: `document_manifest_repository`, `prompt_repository`
-- Usuário e consentimento: `user_repository`, `consent_repository`
+## Repositórios centrais por backend
+### Postgres
+- Chat e identidade:
+  - `chat_repository_sql`
+  - `user_repository`
+  - `consent_repository`
+- Configuração e otimização:
+  - `prompt_repository`
+  - `agent_config_repository`
+  - `optimization_repository`
+- Autonomia e execução:
+  - `autonomy_repository`
+  - `autonomy_goal_repository`
+  - `autonomy_admin_repository`
+  - `autonomy_lock_repository`
+  - `pending_action_repository`
+  - `outbox_repository`
+- Documentos e spaces:
+  - `document_manifest_repository`
+  - `knowledge_space_repository`
+- Governança e métricas:
+  - `tool_usage_repository`
+  - `ab_experiment_repository`
+  - `deployment_repository`
+  - parte de `observability_repository`
 
-## Modelos centrais
-- `autonomy_models`
-- `document_models`
-- `knowledge`
-- `knowledge_space_models`
-- `pending_action_models`
-- `quarantine_models`
-- `tool_usage_models`
-- `user_models`
+### Neo4j
+- `knowledge_repository`
+- parte de `observability_repository`
+
+### Qdrant
+- `memory_repository` como porta lógica sobre `MemoryCore`
+- serviços de memória/documento usam `db/vector_store.py` diretamente mais do que repositórios dedicados
+
+### RabbitMQ / broker
+- `task_repository`
+
+### Processo / fallback local
+- `chat_repository` usa arquivo JSON e atua como alternativa local/fallback, não como persistência principal do deploy
+- `learning_repository`, `agent_repository`, `tool_repository`, `context_repository`, `sandbox_repository`, `collaboration_repository` e parte de `llm_repository`/`reflexion_repository` não são bancos transacionais centrais do runtime
+
+## Modelos SQL que formam a fonte de verdade transacional
+- Identidade e chat:
+  - `user_models`
+  - tabelas: `users`, `profiles`, `roles`, `user_roles`, `sessions`, `messages`, `user_privacy_consents`, `audit_events`, `oauth_tokens`
+- Configuração:
+  - `config_models`
+  - tabelas: `prompts`, `agent_configurations`, `optimization_history`
+- Autonomia:
+  - `autonomy_models`
+  - tabelas: `autonomy_runs`, `autonomy_steps`, `autonomy_goals`, `autonomy_goal_transitions`, `autonomy_sprints`, `autonomy_sprint_types`, `autonomy_task_evidence`, `autonomy_self_study_runs`, `autonomy_self_study_files`, `autonomy_self_study_state`, `autonomy_enqueue_ledger`, `autonomy_loop_leases`
+- Execução e integração:
+  - `pending_action_models`
+  - `outbox_models`
+  - `tool_usage_models`
+  - `document_models`
+  - `knowledge_space_models`
+  - `quarantine_models`
+  - `ab_experiment_models`
+  - `ab_assignment_models`
 
 ## Arquivos-fonte
 - `backend/app/repositories/*.py`
@@ -58,3 +99,4 @@ Registrar a base de persistência e os tipos de dados explícitos do backend.
 ## Riscos/Lacunas
 - Há persistência híbrida entre SQL, grafo, vetorial e fila.
 - O significado de algumas entidades depende mais do serviço que do modelo isolado.
+- `KnowledgeSpace` e ingestão documental são domínios compostos: o repositório SQL sozinho não descreve o comportamento real sem considerar Qdrant e Neo4j.

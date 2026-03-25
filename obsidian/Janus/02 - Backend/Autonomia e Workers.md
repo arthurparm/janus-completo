@@ -92,6 +92,7 @@ Nao faz parte do loop principal, mas e parte importante do dominio:
 - `router_worker` consome o `TaskState` gerado pelo loop
 - demais agentes do Parlamento executam o trabalho real
 - knowledge distillation e consolidacao sao side-effects do roteamento
+- o publish sai de `next_agent_role` no `CollaborationService`, nao do nome observado pelo endpoint de workers
 
 ### No startup do app
 - `Kernel` injeta `autonomy_service`, `goal_manager` e `autonomy_admin_service` em `app.state`
@@ -176,6 +177,15 @@ O `AutonomyLoop` nao aparece em `WORKER_NAMES`; ele e uma task propria do servic
 - `thinker_agent`
 - `distillation`
 
+### Nomes logicos usados para publicar
+- `router` -> `janus.tasks.router`
+- `thinker` -> `janus.tasks.agent.thinker` -> nome observado `thinker_agent`
+- `coder` -> `janus.tasks.agent.coder` -> nome observado `code_agent`
+- `red_team` -> `janus.tasks.agent.red_team` -> nome observado `red_team_agent`
+- `professor` -> `janus.tasks.agent.professor` -> nome observado `professor_agent`
+- `sandbox` -> `janus.tasks.agent.sandbox` -> nome observado `sandbox_agent`
+- `knowledge_consolidator` e aliases (`knowledge`, `consolidator`, `librarian`, `memory`) -> `janus.knowledge.consolidation` -> nome observado `knowledge_consolidation`
+
 ### Sobem via `start_all_workers()`
 - `memory_maintenance`
 - `knowledge_consolidation`
@@ -199,6 +209,29 @@ O `AutonomyLoop` nao aparece em `WORKER_NAMES`; ele e uma task propria do servic
 - `debate_critic`
 - `codex_worker`
 
+### Side-effects do `router_worker`
+- em sucesso, o router side-publishes `knowledge_consolidation` para `janus.knowledge.consolidation` quando detecta payload com conteudo de conhecimento
+- em sucesso, o router side-publishes `knowledge_distillation` para `janus.knowledge.distillation`
+- esses publishes sao paralelos ao roteamento principal do `TaskState`
+
+### Papéis publicaveis sem worker correspondente
+- `blue_team`
+  - o `router_worker` usa `blue_team` como escape para loops repetidos de `red_team`
+  - o `CollaborationService` publica em `janus.tasks.agent.blue_team`
+  - nenhum worker em `backend/app/core/workers/*` e nenhum nome em `WORKER_NAMES` consomem essa fila
+- `security_judge`
+  - o `CollaborationService` publica em `janus.tasks.agent.security_judge`
+  - nenhum worker em `backend/app/core/workers/*` e nenhum nome em `WORKER_NAMES` consomem essa fila
+
+### Gap observado entre codigo e runtime
+- `Kernel._start_background_processes()` sempre sobe consumers de:
+  - `janus.knowledge.consolidation`
+  - `janus.document.ingestion`
+  - `janus.neural.training`
+- `main.py` tambem pode subir esses mesmos consumers via `start_all_workers()` quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`
+- no PC TESTE, em 25 de marco de 2026, as filas `janus.knowledge.consolidation`, `janus.document.ingestion` e `janus.neural.training` estavam com `consumers=2`
+- `/api/v1/workers/status` mostrava apenas um nome por worker orquestrado e nao expunha essa duplicacao
+
 ## Persistencia operacional
 Tabelas principais do dominio:
 
@@ -212,12 +245,45 @@ Tabelas principais do dominio:
 - `autonomy_self_study_state`
 - `autonomy_loop_leases`
 
+## Persistência por banco no domínio de autonomia
+### Postgres
+- é a fonte de verdade de runs, steps, goals, transições, evidence, self-study state e lease cross-instance
+- também registra o ledger de enqueue e permite reconstruir histórico operacional
+
+### Qdrant
+- recebe experiências de `self_study` como `code_summary` em `janus_episodic_memory`
+- recebe espelhos e material vetorial usado por code QA administrativo e busca híbrida
+
+### Neo4j
+- recebe `Experience` de self-study
+- recebe `SelfMemory` e suas relações com arquivos e símbolos
+- sustenta a parte estrutural do code QA administrativo
+
+### RabbitMQ
+- transporta o trabalho publicado pelo loop para o `router` e demais workers
+
+### Redis
+- não é persistência de autonomia
+- pode influenciar quotas temporárias e governança de tools no ecossistema ao redor, mas não guarda o estado do loop
+
+## Impacto de falha por banco no domínio
+- Postgres falha:
+  - o loop perde runs, steps, goals, leases e capacidade de coordenação durável
+- RabbitMQ falha:
+  - o loop ainda pode selecionar metas, mas o trabalho deixa de sair do processo via enqueue
+- Qdrant falha:
+  - self-study deixa de persistir memória vetorial e code recall híbrido degrada
+- Neo4j falha:
+  - self-memory e code graph deixam de ser atualizados; o domínio continua parcialmente vivo só com SQL
+
 ## Riscos e lacunas reais
 - O loop nao consome `max_actions_per_cycle` como quota de passos executados; hoje ele so escolhe um passo e enfileira.
 - `PolicyEngine` e mais poderoso do que o caminho real do `AutonomyLoop`.
 - A autonomia depende do `router` para fechamento automatico de goals; sem esse retorno a meta pode ficar presa em `in_progress`.
 - O caminho de lease perdido nao chama o mesmo cleanup de `stop()`, o que pode deixar rastros operacionais inconsistentes.
 - `AutonomyAdminService.run_self_study()` nao usa lock proprio; startup, trigger manual e trigger por meta podem sobrepor execucoes.
+- O fluxo consegue publicar para `blue_team` e `security_judge`, mas o conjunto de workers iniciado pelo orquestrador nao cobre esses papeis.
+- Ler apenas `/api/v1/workers/status` nao basta para inferir quantos consumers reais existem nas filas da autonomia.
 
 ## Arquivos-fonte
 - `backend/app/services/autonomy_service.py`

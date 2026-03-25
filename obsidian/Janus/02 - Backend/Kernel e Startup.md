@@ -60,6 +60,20 @@ Documentar como o backend monta o runtime a partir de `FastAPI`, `lifespan` e `K
 - Serviços de lógica: `LLMService(self.llm_repo, self.prompt_service)`, `AssistantService(self.llm_service)`, `GoalManager(self.memory_service)`, `AutonomyService(...)`, `PromptBuilderService(self.prompt_service)`, `ToolExecutorService()`, `RAGService(self.chat_repo, self.llm_service, self.memory_service)` e `ChatService(...)`.
 - Componentes auxiliares construídos no mesmo grafo, mas não publicados em `app.state` por `main.py`: `config_service`, `chat_event_logger`, `prompt_builder_service`, `prompt_service`, `tool_executor`, `rag_service`, `scheduler`, `monitor` e `voice_manager`.
 
+## Dependências por store dentro do `Kernel`
+- Postgres:
+  - base de `db`, `ChatRepositorySQL`, `PromptRepository`, `OutboxRepository`, `DocumentManifestRepository` e todos os repositórios SQL de autonomia/usuário
+- Redis:
+  - inicializado em `_init_infrastructure()`, mas usado principalmente por middleware e serviços de coordenação, não como repositório de domínio central do `Kernel`
+- Qdrant:
+  - entra via `initialize_memory_db()` e `MemoryRepository(memory_db)`
+  - depois é consumido por `MemoryService`, `RAGService`, serviços de documentos e fluxos de memória específica por usuário
+- Neo4j:
+  - entra via `initialize_graph_db()` e `KnowledgeRepository(graph_db)`
+  - depois é consumido por `KnowledgeService` e fluxos administrativos/estruturais
+- RabbitMQ:
+  - entra via `initialize_broker()` e `TaskRepository(broker)` e sustenta workers/outbox
+
 ## Publicação em `app.state`
 - Publicados sempre após `kernel.startup()`: `graph_db`, `memory_db`, `broker`, `agent_manager`, `agent_service`, `memory_service`, `knowledge_service`, `task_service`, `context_service`, `sandbox_service`, `reflexion_service`, `tool_service`, `collaboration_service`, `document_service`, `observability_service`, `optimization_service`, `autonomy_service`, `llm_service`, `chat_service`, `assistant_service`, `outbox_service`, `goal_manager` e `workers`.
 - Publicados condicionalmente: `autonomy_admin_service` se a construção local não falhar, `system_user_id` se `ensure_system_user()` retornar um identificador, e `orchestrator_workers` somente quando os workers gerenciados pelo orquestrador são iniciados.
@@ -68,14 +82,40 @@ Documentar como o backend monta o runtime a partir de `FastAPI`, `lifespan` e `K
 ## Background processes
 - Iniciados dentro do `Kernel`: `monitor.check_all_components()`, `monitor.start_monitoring(interval_seconds=30)`, `config_service.start()`, `knowledge_consolidator.start(limit=10, min_score=0.0)`, `DataHarvester.start()`, `LifeCycleWorker.start()`, `OutboxService.start(interval_seconds=5)`, `start_consolidation_worker()`, `start_document_ingestion_worker()`, `start_neural_training_worker()`, `initialize_default_jobs(self.scheduler)` e `self.scheduler.start()`.
 - `kernel.workers` rastreia apenas `knowledge_consolidator`, `data_harvester`, `life_cycle_worker` e `outbox_service` quando presente. Os handles assíncronos `_consolidation_consumer_task`, `_document_ingestion_consumer_task` e `_neural_training_task` ficam fora dessa lista.
+- O scheduler padrão registra cinco jobs:
+  - `meta_agent_analysis` a cada 300 s
+  - `memory_health_check` a cada 600 s
+  - `daily_cleanup` diariamente às 03:00
+  - `audit_retention_cleanup` em intervalo configurável por `AUDIT_PURGE_INTERVAL_SECONDS`
+  - `update_gemini_quotas` a cada 3600 s
 - `AUTO_INDEX_ON_STARTUP` e o warm-up de pool LLM são disparados com `asyncio.create_task()` e não são armazenados para join/cancel explícito.
 - Fora do `Kernel`, o `lifespan` também gerencia `init_graph()`, workers do orquestrador em `app.state.orchestrator_workers` e o `startup_self_study_check()` assíncrono.
+- O `lifespan` pode duplicar consumers já iniciados pelo `Kernel`: `start_all_workers()` sobe de novo `knowledge_consolidation`, `document_ingestion` e `neural_training` quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`.
+- No PC TESTE, em 25 de marco de 2026, isso apareceu como `consumers=2` para `janus.knowledge.consolidation`, `janus.document.ingestion` e `janus.neural.training`.
+
+## Persistência tocada por esses processos de fundo
+- `knowledge_consolidator`:
+  - lê Qdrant
+  - grava Neo4j
+  - atualiza metadata de consolidação no próprio Qdrant
+- `document_ingestion_worker`:
+  - lê arquivo staged em disco
+  - atualiza manifesto em Postgres
+  - grava chunks em Qdrant
+- `outbox_service`:
+  - lê/escreve Postgres
+  - publica RabbitMQ
+- `startup_self_study_check()`:
+  - consulta/escreve Postgres
+  - grava experiências em Qdrant
+  - atualiza SelfMemory/Experience no Neo4j
 
 ## Shutdown
 - Ao sair do `lifespan`, o app tenta cancelar cada `asyncio.Task` registrada em `app.state.orchestrator_workers`.
 - Em seguida executa `await asyncio.shield(close_graph())`, fechando o checkpointer do graph orchestrator quando ele usa `AsyncPostgresSaver`.
 - Depois executa `await asyncio.shield(kernel.shutdown())`. O `Kernel` tenta `stop()` em cada item de `kernel.workers`, cancela `_neural_training_task`, `_consolidation_consumer_task` e `_document_ingestion_consumer_task`, para o monitor, para o scheduler, chama `db.shutdown()` e fecha `graph_db`, `memory_db` e `broker` com `asyncio.gather(..., return_exceptions=True)`.
 - O código não fecha explicitamente Redis, não chama teardown do `VoiceManager` e não aguarda término de tarefas fire-and-forget como auto-index, warm-up LLM e self-study de startup.
+- Como `app.state.orchestrator_workers` e `kernel.workers` rastreiam conjuntos diferentes, o shutdown também desmonta duas superfícies assíncronas distintas.
 
 ## Arquivos-fonte
 - `backend/app/main.py`
@@ -96,3 +136,5 @@ Documentar como o backend monta o runtime a partir de `FastAPI`, `lifespan` e `K
 - `_start_background_processes()` captura falhas globalmente, registra um health check `background_workers` como `unhealthy`, mas não aborta o boot. Isso cria um modo "API respondeu, runtime interno incompleto".
 - O comentário de `AUTO_INDEX_ON_STARTUP` sugere indexação apenas se o grafo estiver vazio, mas a checagem de vazio não aparece nesse caminho de startup; aqui a flag apenas agenda `_run_auto_index()`.
 - O padrão de DI continua altamente centralizado em um único `Kernel`, o que simplifica wiring mas amplia o raio de falha de mudanças no boot.
+- O boot mistura loops internos, consumers de fila e tarefas fire-and-forget sem uma única registry canônica de runtime.
+- Quando o orquestrador também inicia workers no startup, o contrato HTTP de workers não revela sozinho a multiplicidade de consumers já criada pelo `Kernel`.

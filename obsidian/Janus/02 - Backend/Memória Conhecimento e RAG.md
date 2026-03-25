@@ -63,6 +63,15 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - Sustenta o grafo de autoestudo e a auditoria/reparo de `SelfMemory`.
 - Não é a fonte principal de contexto do chat normal. O chat geral usa Qdrant; Neo4j entra em fluxos de conhecimento/código e administração.
 
+### Postgres
+- Não guarda embeddings nem relações semânticas, mas é parte do pipeline de persistência.
+- Guarda o manifesto documental em `document_manifests`, o estado de `knowledge_spaces`, mensagens persistidas do chat e metadados que depois referenciam contexto vetorial/estrutural.
+- Também guarda estado operacional de autonomia e o checkpointer do `graph_orchestrator`.
+
+### Redis
+- Não participa como backend de memória ou conhecimento.
+- Atua apenas como coordenação efêmera para rate limit, hot-reload de configuração e quotas/spend temporários.
+
 ## Memória: captura e persistência
 ### Memória episódica/generativa
 - `GenerativeMemoryService.add_memory()` calcula `importance`, grava a experiência em `janus_episodic_memory`, espelha em `user_memory_<user_id>` e tenta persistir um nó `Experience` no Neo4j.
@@ -143,6 +152,15 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - Só segue adiante se existir `MemoryService`, `message`, `user_id` e a política de rota escolher `RouteTarget.QDRANT`.
 - O contexto retornado é um bloco textual para prompt, não uma estrutura de citação.
 
+### Assimetria importante entre REST e SSE
+- O caminho REST do chat agenda `RAGService.maybe_index_message()` para mensagem do usuário e para a resposta do assistente.
+- O caminho SSE do chat não agenda `maybe_index_message()`.
+- Como a UI de conversa usa SSE por padrão, a coleção `user_chat_<user_id>` pode ficar menos atualizada do que o histórico SQL real.
+- Na prática:
+  - o histórico persistido em SQL continua crescendo
+  - o prompt enriquecido por Qdrant pode refletir só turnos passados por REST ou legados
+  - a sensação de “memória recente” pode divergir do que o operador vê na conversa
+
 ### Fontes consultadas
 - Contexto episódico: busca vetorial em `user_chat_<user_id>`, com reranker semântico opcional e score final que favorece mesma `conversation_id` e recência.
 - Contexto semântico: `UserPreferenceMemoryService.list_preferences()` em `user_memory_<user_id>`.
@@ -160,11 +178,34 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - `collect_chat_citations()` também tenta `MemoryService.recall_filtered()`, ou seja, a coleção episódica por trás do repositório de memória.
 - Contexto de prompt e citações são pipelines diferentes.
 
+### Relação com o fluxo de conversa
+- O chat usa RAG de duas formas diferentes:
+  - enriquecimento de prompt via `retrieve_context()`
+  - citação posterior via `collect_chat_citations()`
+- Esses dois caminhos não compartilham necessariamente a mesma fonte final:
+  - o prompt usa sobretudo `user_chat_<user_id>`, preferências, procedural e segredos
+  - as citações podem vir de documentos, memórias ou fallback de study
+- Isso explica por que uma resposta pode:
+  - ter contexto relevante no prompt e ainda assim sair sem `citations`
+  - ou ter `citations` documentais mesmo quando o prompt principal veio mais de memória episódica
+
 ## Documentos: o que o código comprova
 - `DocumentIngestionService` transforma o arquivo em texto, aplica enriquecimento semântico, quebra em chunks e grava `doc_chunk` em `user_docs_<user_id>`.
+- O mesmo service cria e atualiza `DocumentManifest` em Postgres antes, durante e depois da indexação.
 - O chat usa esses chunks para citações e para um resumo leve de anexos da conversa.
 - O código lido não comprova uma consolidação de `doc_chunk` para Neo4j equivalente à consolidação de experiências episódicas.
 - `KnowledgeService.consolidate_document()` delega para `knowledge_consolidator.consolidate_document(...)`, mas essa implementação não aparece em `knowledge_consolidator_worker.py` no estado atual do código.
+
+## Knowledge space: persistência composta
+- `KnowledgeSpaceRepository` guarda em Postgres o espaço, seu estado de consolidação, contadores e resumo operacional.
+- `DocumentManifestRepository` liga cada documento ao `knowledge_space_id`, também em Postgres.
+- `KnowledgeSpaceService` reaproveita `user_docs_<user_id>` no Qdrant para persistir seções e frames canônicos do espaço consolidado.
+- `_persist_structure_graph()` projeta esse mesmo espaço no Neo4j como `KnowledgeSpace`, `Work`, `Section`, `Concept`, `Entity` e encadeamento `NEXT_SECTION`.
+- Portanto, `KnowledgeSpace` depende de três camadas:
+  - Postgres para controle e status
+  - Qdrant para recuperação textual/vetorial
+  - Neo4j para estrutura navegável
+- A falha de Neo4j nesse fluxo é parcial: o serviço atualiza o status em Postgres e mantém a consolidação vetorial, mas marca no sumário que a persistência de grafo ficou parcial.
 
 ## Dependências externas e impacto de falha
 ### Qdrant indisponível
@@ -182,6 +223,15 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - Persistência de entidades/relacionamentos e auditoria de `SelfMemory` ficam indisponíveis.
 - `ask_code_with_citations()` perde a parte estrutural do code graph.
 
+### Postgres indisponível
+- Chat persistido, identidade, manifests, knowledge spaces, autonomia e outbox perdem a fonte de verdade.
+- O `graph_orchestrator` tenta usar `AsyncPostgresSaver`; se a falha ocorrer na inicialização, ele degrada para `MemorySaver`.
+- Mesmo quando Qdrant e Neo4j estão saudáveis, o produto perde o plano de controle transacional sem Postgres.
+
+### Redis indisponível
+- Não remove memórias nem documentos já persistidos.
+- Remove coordenação de quotas temporárias, spend distribuído, Pub/Sub de config e parte do rate limit, dependendo do modo fail-open/fail-closed.
+
 ### Embeddings/LLM indisponíveis
 - `MemoryCore` e vários serviços caem para vetor zero quando embedding falha.
 - `GenerativeMemoryService` usa LLM para `importance`; sem LLM cai em defaults.
@@ -193,6 +243,7 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - O code graph e o self-memory são fluxos diferentes: indexar o codebase não cria resumos; rodar self-study não substitui a indexação estrutural.
 - O chat normal usa Qdrant por usuário; conhecimento em Neo4j não é consultado automaticamente nesse caminho.
 - O worker de consolidação atua sobre `janus_episodic_memory`; mensagens do chat e chunks de documentos ficam fora desse pipeline.
+- `DataRetentionService` tenta limpar Qdrant em coleções hardcoded que não batem com as coleções realmente usadas pelos fluxos atuais, então a política de retenção cross-store não está coerente com a persistência observada.
 
 ## Arquivos-fonte
 - `backend/app/services/memory_service.py`

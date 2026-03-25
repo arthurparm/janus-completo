@@ -39,6 +39,28 @@ Explicar a arquitetura do Janus como plataforma agentic full stack.
 - Persistência cognitiva: Neo4j e Qdrant.
 - Inferência: provedores cloud e Ollama local.
 
+## Plano de dados por store
+- Postgres:
+  - fonte de verdade transacional para identidade, chat persistido, autonomia, prompts, outbox, manifests e knowledge spaces
+- Redis:
+  - coordenação efêmera para rate limit, hot-reload de configuração e spend/quota temporária
+- RabbitMQ:
+  - transporte assíncrono para workers e fan-out operacional
+- Qdrant:
+  - persistência vetorial para memória episódica, chat por usuário, documentos, preferências, regras e segredos
+- Neo4j:
+  - persistência estrutural para entidades, experiências consolidadas, code graph, self-memory e projeções estruturais de knowledge spaces
+
+## Separação correta entre controle e dados
+- Plano de controle:
+  - `main.py`, `lifespan`, `Kernel`, repositórios SQL, scheduler, workers e serviços que decidem quando persistir ou publicar trabalho
+- Plano de dados:
+  - Postgres e Redis em PC1
+  - Neo4j e Qdrant em PC2
+  - RabbitMQ como backbone de tarefas assíncronas
+- Consequência:
+  - o produto pode continuar servindo HTTP com parte do plano de dados cognitivo degradado, porque o boot do API só bloqueia dependências locais de PC1
+
 ## Leituras centrais
 - `main.py` monta a superfície FastAPI em tempo de importação: logging, tracing, middlewares, exception handlers, routers e endpoints utilitários.
 - O `lifespan` coordena a sequência de boot: valida segredos, chama `Kernel.startup()`, inicializa graph/prompt loading e publica dependências selecionadas em `app.state`.
@@ -60,3 +82,4 @@ Explicar a arquitetura do Janus como plataforma agentic full stack.
 ## Riscos/Lacunas
 - O kernel concentra muita composição e aumenta acoplamento estrutural.
 - O frontend possui um client API muito largo, sugerindo bounded contexts ainda não totalmente separados.
+- `KnowledgeSpace` e chat grounded são domínios compostos: dependem de Postgres para controle, de Qdrant para recuperação e, em partes do fluxo, de Neo4j para estrutura.

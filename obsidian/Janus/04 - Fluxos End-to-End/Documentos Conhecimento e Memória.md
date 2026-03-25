@@ -26,6 +26,7 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - Chunks `doc_chunk` em `user_docs_<user_id>`.
 - Citações documentais no chat.
 - Resumo leve de anexos da conversa para `RAGService.retrieve_context()`.
+- Estrutura de `KnowledgeSpace` quando a consolidação desse domínio é disparada.
 
 ## Dependências
 - [[02 - Backend/Memória Conhecimento e RAG]]
@@ -68,11 +69,35 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 4. Antes do upsert, `_delete_doc_points()` remove chunks antigos do mesmo `doc_id`.
 5. Ao final, o manifesto é marcado como `completed` com `chunks_total`, `chunks_indexed` e resumo semântico.
 
+## Persistência por etapa
+- Stage:
+  - disco local para arquivo staged
+  - Postgres para `DocumentManifest`
+- Indexação:
+  - Qdrant para `user_docs_<user_id>`
+  - Postgres continua como fonte do estado do processamento
+- Uso no chat:
+  - Qdrant para chunks e citações
+  - Postgres apenas para saber quais documentos/manifests estão associados à conversa
+- Knowledge space:
+  - Postgres para `knowledge_spaces` e associação dos manifests
+  - Qdrant para seções canônicas
+  - Neo4j para raiz e estrutura navegável do space quando `_persist_structure_graph()` roda
+
 ## Como documentos entram no chat
 ### Citações
 - `chat_citation_service.collect_document_citations()` consulta `user_docs_<user_id>` por embedding da pergunta.
 - Se não houver hits e a pergunta mencionar material enviado, `_recent_document_citations()` faz `scroll` recente na mesma coleção.
 - As citações vêm exclusivamente de `doc_chunk` em Qdrant no fluxo lido aqui.
+
+### Branch documental no fluxo de conversa
+- Em `MessageOrchestrationService.generate_document_grounded_reply()`, a existência de manifests documentais já basta para o serviço tentar grounding.
+- No estado atual do código, `_should_use_document_grounding()` devolve `True` para qualquer conversa com manifests.
+- Isso significa que, na conversa principal, anexar um documento muda o branch prioritário da conversa inteira:
+  - primeiro knowledge space, se resolvível
+  - depois grounding documental
+  - só depois fluxo geral de chat, se o grounding não se aplicar
+- A nota [[04 - Fluxos End-to-End/Conversa e Chat]] detalha o efeito disso sobre REST e SSE.
 
 ### Contexto de prompt
 - `RAGService.retrieve_context()` não injeta chunks completos.
@@ -94,6 +119,10 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - `process_document_ingestion_task()` pode tentar auto-consolidação:
   - `KnowledgeSpaceService.consolidate_space(...)` quando existe `knowledge_space_id`
   - `KnowledgeService.consolidate_document(...)` quando não existe
+- No caminho de `KnowledgeSpaceService.consolidate_space(...)`, a persistência comprovada é composta:
+  - lê manifests em Postgres
+  - lê chunks em Qdrant
+  - pode gravar estrutura em Neo4j
 
 ### O que o código não comprova neste estado
 - O código lido não mostra implementação de `knowledge_consolidator.consolidate_document(...)`.
@@ -109,6 +138,14 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - Citações documentais e o resumo contextual de anexos deixam de aparecer no chat.
 - A recuperação posterior depende de reprocessar o documento ou da existência prévia dos pontos.
 
+### Postgres indisponível
+- Não há manifesto confiável para acompanhar o documento nem para ligá-lo à conversa/knowledge space.
+- Mesmo que o arquivo exista em disco, o fluxo perde rastreabilidade operacional.
+
+### Neo4j indisponível
+- A ingestão básica documental segue em manifesto + Qdrant.
+- Apenas a parte estrutural de `KnowledgeSpace` fica parcial.
+
 ### Disco/local storage indisponível
 - `stage_upload()` e `process_staged_document()` falham antes da indexação.
 - `process_staged_document()` tenta recuperação parcial apenas se o manifesto já indicar chunks indexados no Qdrant.
@@ -121,6 +158,8 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - O manifesto e os pontos vetoriais podem divergir; o código já tem caminho de recuperação quando o arquivo staged some, mas os chunks ainda existem.
 - O fluxo documental do chat depende de `conversation_id`; anexos fora da conversa ativa não entram no bloco resumido de `RAGService.retrieve_context()`.
 - O código atual sugere uma consolidação documental para conhecimento, mas a implementação efetiva não aparece no worker inspecionado.
+- O domínio documental é multi-store: olhar só manifesto SQL ou só Qdrant não basta para entender o estado real do documento.
+- Como a existência de manifests já empurra a conversa para o branch documental, qualquer desvio ou imprecisão nesse fluxo impacta diretamente a conversa principal, não apenas um submódulo de documentos.
 
 ## Arquivos-fonte
 - `backend/app/services/document_service.py`

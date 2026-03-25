@@ -49,10 +49,33 @@ Registrar a ordem real de inicialização e encerramento do backend, distinguind
 10. O app publica dependências do `Kernel` em `app.state`, incluindo bancos, broker, manager, serviços, `goal_manager` e `workers`.
 11. O app tenta criar `AutonomyAdminService`, tenta garantir o usuário de sistema, configura rate limits quando `LLM_RATE_LIMITS` está preenchido, sobe workers do orquestrador quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP` está ativo e agenda o self-study check de startup.
 
+## Dependências de persistência materializadas no boot
+- Obrigatórias para o runtime local do compose de PC1:
+  - Postgres
+  - Redis
+  - RabbitMQ
+- Obrigatórias por configuração, mas fora do `depends_on` local:
+  - Neo4j
+  - Qdrant
+  - Ollama
+- Efeito prático:
+  - o boot bloqueia mais cedo em falhas locais de PC1
+  - falhas remotas de PC2 tendem a aparecer como degradação funcional depois da subida da API
+
 ## Fase de serving
 - Depois do `yield`, o app passa a servir requests usando `request.app.state.*` como fonte de serviços para várias funções `get_*_service(request)`.
 - `app.state.orchestrator_workers` não existe por padrão; ele só aparece quando o boot ou o endpoint de workers efetivamente iniciam essas tarefas.
 - `kernel.workers` e `app.state.orchestrator_workers` representam conjuntos diferentes: o primeiro contém objetos/serviços de fundo do `Kernel`, o segundo rastreia tarefas do orquestrador HTTP-controláveis.
+
+## Degradação por store observada no runtime
+- Postgres indisponível:
+  - falha dura para grande parte do runtime e perda do saver durável do graph orchestrator
+- Redis indisponível:
+  - o kernel tenta seguir com coordenação parcial degradada
+- Qdrant indisponível:
+  - memória vetorial e RAG sobem degradados
+- Neo4j indisponível:
+  - o grafo pode ficar em modo offline e devolver vazio/no-op
 
 ## Fase de shutdown
 1. O `lifespan` tenta cancelar cada task presente em `app.state.orchestrator_workers`.

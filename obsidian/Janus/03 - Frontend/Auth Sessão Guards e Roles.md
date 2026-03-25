@@ -9,9 +9,15 @@ status: ativo
 # Auth Sessão Guards e Roles
 
 ## Objetivo
-Registrar o comportamento real de autenticacao e autorizacao do frontend Angular.
+Registrar como o frontend Angular implementa sessao, bootstrap de identidade, guards, roles e interacao com os endpoints de autenticacao.
 
-## Escopo de leitura
+## Responsabilidades
+- Explicar como `AuthService` sobe, restaura e derruba a sessao.
+- Documentar os interceptors e guards que realmente participam do runtime.
+- Mostrar como a UI consome `roles` e `permissions`.
+- Destacar diferencas entre comportamentos implementados e expectativas comuns.
+
+## Entradas
 - `frontend/src/app/core/auth/auth.service.ts`
 - `frontend/src/app/core/guards/auth.guard.ts`
 - `frontend/src/app/core/interceptors/auth.interceptor.ts`
@@ -22,91 +28,169 @@ Registrar o comportamento real de autenticacao e autorizacao do frontend Angular
 - `frontend/src/app/features/auth/register/register.ts`
 - `frontend/src/app/services/auth.utils.ts`
 
-## Sessao: inicializacao real
-- `AuthService` executa `initializeAuth()` no construtor.
-- O startup da auth sempre comeca com `authReady = false`.
-- `firebaseAuthReady` e marcado como `true` imediatamente, sem handshake real com Firebase Auth. No estado atual ele funciona como flag de compatibilidade, nao como prova de sessao Firebase.
-- O token e lido por `getStoredAuthToken()`, que busca primeiro `localStorage` e depois `sessionStorage`.
-- A chave padrao do token e `JANUS_AUTH_TOKEN`, vinda de `VITE_AUTH_TOKEN_KEY` com fallback em `frontend/src/app/services/api.config.ts`.
-- Quando existe token, o frontend chama `GET ${API_BASE_URL}/v1/auth/local/me`.
-- Com a configuracao padrao (`API_BASE_URL = /api`) e o `baseUrlInterceptor` ativo, essa chamada efetiva fica em `/api/v1/auth/local/me`.
-- Se `/auth/local/me` responder com sucesso, `AuthService` marca `isAuthenticated = true` e popula `user` com o payload retornado.
-- Se `/auth/local/me` falhar por qualquer motivo, `clearSession()` apaga o token dos dois storages, remove `JANUS_VISITOR_MODE` do `localStorage`, zera `user` e mantem a sessao como nao autenticada.
-- Se nao houver token, a sessao sobe como anonima e `authReady` vai para `true` sem chamada de perfil.
+## Saidas
+- Modelo mental unico do fluxo de auth no frontend.
+- Mapa de guards ativos e comportamento de redirecionamento.
+- Contrato da sessao local consumida pela UI.
 
-## Persistencia do token
-- `storeAuthToken(token, remember)` usa `localStorage` quando `remember = true`.
-- Quando `remember = false`, o token vai para `sessionStorage`.
+## Dependencias
+- [[04 - Fluxos End-to-End/Login e Identidade]]
+- [[03 - Frontend/Guards Interceptors e Estado]]
+- [[03 - Frontend/Shell e Navegação]]
+
+## Estado de autenticacao no frontend
+
+### Sinais expostos por `AuthService`
+- `isAuthenticated`
+- `user`
+- `firebaseAuthReady`
+- `authReady`
+
+### Observables derivados
+- `isAuthenticated$`
+- `user$`
+- `firebaseAuthReady$`
+- `authReady$`
+
+### Computeds relevantes
+- `isAdmin`: verdadeiro quando `user.roles` contem `admin`
+- `userEmail`: devolve `user.email` ou string vazia
+
+## Bootstrap real da sessao
+1. `AuthService` executa `initializeAuth()` no construtor.
+2. O startup sempre comeca com `authReady = false`.
+3. `firebaseAuthReady` vai para `true` imediatamente. Hoje isso nao depende de handshake real com Firebase Auth.
+4. `getStoredAuthToken()` procura primeiro em `localStorage` e depois em `sessionStorage`.
+5. Se houver token, o frontend chama `GET ${API_BASE_URL}/v1/auth/local/me`.
+6. Com `API_BASE_URL = /api`, a chamada efetiva fica em `/api/v1/auth/local/me`.
+7. Se a resposta vier com usuario, o service popula `user`, marca `isAuthenticated = true` e conclui com `authReady = true`.
+8. Se a resposta falhar, `clearSession()` apaga o token dos dois storages, remove `VISITOR_MODE_KEY`, zera `user` e sobe a aplicacao como anonima.
+9. Se nao houver token salvo, nenhuma chamada a `/local/me` e feita.
+
+## Persistencia da sessao
+- A chave padrao do token e `JANUS_AUTH_TOKEN`.
+- `storeAuthToken(token, true)` grava em `localStorage`.
+- `storeAuthToken(token, false)` grava em `sessionStorage`.
 - O login respeita o checkbox `remember`.
-- O cadastro nao respeita escolha do usuario: `registerLocal()` sempre salva com `remember = true`.
-- `logout()` so limpa estado local; nao existe chamada de revogacao ou encerramento de sessao no backend.
-- `clearSession()` limpa tambem `VISITOR_MODE_KEY`, entao qualquer modo visitante local e abandonado apos login, logout ou falha de restauracao.
+- O cadastro ignora uma escolha de persistencia e sempre grava em `localStorage`.
+- `logout()` apenas limpa storage e estado local; nao existe round-trip de encerramento no backend.
 
-## /auth/local/me no fluxo real
-- `/auth/local/me` e o unico passo de restauracao de sessao na abertura da aplicacao.
-- O login e o cadastro nao fazem re-fetch desse endpoint depois da autenticacao; o frontend passa a confiar no `user` retornado diretamente por `/auth/local/login` ou `/auth/local/register`.
-- A protecao de rotas depende do estado produzido por esse bootstrap inicial ou pelas mutacoes de login/cadastro.
+## Cadeia HTTP que impacta auth
 
-## Interceptors que impactam auth
-- O `provideHttpClient()` ativo registra apenas `baseUrlInterceptor`, `authInterceptor`, `errorLoggerInterceptor` e `errorMappingInterceptor`.
-- O `authInterceptor` anexa `Authorization: Bearer <token>` quando a request ainda nao possui esse header.
-- O mesmo interceptor tenta adicionar `X-User-Id` a partir de `decodeTokenUserId(token)`.
-- `decodeTokenUserId()` e `decodeTokenExp()` leem `parts[0]` do token, nao `parts[1]`. Se o token for um JWT convencional `header.payload.signature`, a leitura do payload tende a falhar e `X-User-Id` nao sera enviado.
-- Os interceptors em classe de `frontend/src/app/core/interceptors/http.interceptor.ts` nao entram na cadeia HTTP atual. Logo, o redirecionamento global em `401` definido ali nao faz parte do fluxo efetivo.
-- `errorMappingInterceptor` trata indisponibilidade/offline, mas nao restaura nem encerra sessao.
+### Interceptors realmente ativos
+- `baseUrlInterceptor`
+- `authInterceptor`
+- `errorLoggerInterceptor`
+- `errorMappingInterceptor`
 
-## Login local
-- `LoginComponent` chama `AuthService.loginWithPassword(email, password, remember)`.
-- O service envia `POST ${API_BASE_URL}/v1/auth/local/login` com `email` e `password`.
-- Se a resposta trouxer `token`, o frontend persiste o token, remove `VISITOR_MODE_KEY`, marca a sessao autenticada e armazena `out.user`.
-- Depois do sucesso, a tela espera 100 ms e navega sempre para `/`.
-- O componente nao consome `returnUrl` da query string. O guard gera esse parametro, mas o login nao o usa na navegacao de retorno.
-- `loginWithProvider('google' | 'github')` existe, mas retorna `false` com log de aviso. Os botoes de Google e GitHub nao autenticam no modo atual.
-- O componente aplica um lock client-side de 60 segundos depois de 5 falhas consecutivas na mesma instancia da tela.
-- O tratamento de erro do login diferencia `401`, `422` e `429`, com mensagens especificas mapeadas no `AuthService`.
+Ordem de registro:
+- `baseUrlInterceptor -> authInterceptor -> errorLoggerInterceptor -> errorMappingInterceptor`
 
-## Recuperacao de senha
-- `recoverAccess()` chama `POST ${API_BASE_URL}/v1/auth/local/request-reset`.
-- Se a API devolver `reset_token`, a tela exibe esse token ao usuario no bloco de aviso.
-- `submitResetPassword()` chama `POST ${API_BASE_URL}/v1/auth/local/reset`.
-- O frontend exige minimo de 8 caracteres no reset de senha.
+### `baseUrlInterceptor`
+- Prefixa requests relativas com `API_BASE_URL`.
+- Nao prefixa URLs absolutas.
+- Evita double-prefix.
+- Ignora caminhos de assets e alguns endpoints raiz como `/healthz`.
 
-## Cadastro local
-- `RegisterComponent` chama `AuthService.registerLocal(...)`.
-- O service envia `POST ${API_BASE_URL}/v1/auth/local/register`.
-- Em sucesso, o frontend salva token com persistencia longa, marca a sessao como autenticada e popula `user`.
-- A tela de cadastro nao redireciona automaticamente apos sucesso. Ela exibe mensagem de sucesso e faz `form.reset(...)`, mesmo com a sessao ja autenticada.
+### `authInterceptor`
+- Le o token salvo por `getStoredAuthToken()`.
+- Se a request ainda nao tiver `Authorization`, injeta `Authorization: Bearer <token>`.
+- Se a request ainda nao tiver `X-User-Id`, tenta decodificar o token e enviar esse header tambem.
+- `decodeTokenUserId()` le a primeira parte do token, o que faz sentido porque o token interno Janus e `payload.signature`, nao JWT padrao.
+- O interceptor nao exige autenticacao: requests anonimas continuam funcionando sem falhar no cliente.
 
-## Guards e redirecionamento
-- `AuthGuard` espera `authReady$` ficar `true` antes de decidir. Isso evita bloquear a rota antes de a restauracao da sessao terminar.
-- Se a sessao estiver autenticada, `AuthGuard` libera a navegacao.
-- Se nao estiver autenticada, `AuthGuard` redireciona para `/login` com `queryParams: { returnUrl }` e mostra aviso de acesso negado.
-- O `returnUrl` vem de `state.url` quando disponivel; fallback usa `route.url?.join('/')` e depois `/`.
-- `RoleGuard` tambem espera `authReady$`. Sem usuario, ele navega para `/login`.
-- Quando ha usuario, `RoleGuard` usa semantica OR: basta uma role requerida bater em `user.roles`.
-- Se faltar role, o guard mostra erro e manda o usuario para `/`.
-- `PermissionGuard` usa semantica AND: todas as permissoes declaradas na rota precisam existir em `user.permissions`.
-- `PermissionGuard` nao espera `authReady$`; se for aplicado em uma rota no startup, ele pode decidir antes da restauracao da sessao terminar.
-- `NoAuthGuard` existe para impedir acesso de usuario autenticado a telas publicas, mas nao esta ligado a `/login` nem a `/registro`.
-- `SystemReadyGuard` existe, mas o check atual apenas espelha `isAuthenticated$`, o que nao caracteriza prontidao de sistema.
+### Interceptors existentes fora da cadeia atual
+- `frontend/src/app/core/interceptors/http.interceptor.ts` contem classes para loading, timeout, retry e tratamento de `401`.
+- Esse arquivo nao esta registrado em `provideHttpClient()`.
+- Logo, qualquer comportamento de redirecionamento em `401` definido nele nao faz parte do runtime real.
 
-## Rotas protegidas hoje
-- `''`, `conversations`, `conversations/:conversationId`, `tools` e `observability` usam `AuthGuard`.
-- `admin/autonomia` usa `AuthGuard` e `RoleGuard` com `data.roles = ['admin']`.
-- `login` e `registro` sao publicas.
-- `**` redireciona para `login`.
+## Fluxo de login no frontend
+1. A tela `/login` coleta `email`, `password` e `remember`.
+2. O form exige email valido e password preenchida.
+3. `LoginComponent.loginEmailPassword()` bloqueia reentradas via `loading`.
+4. A tela aplica lock local de 60 segundos depois de 5 falhas consecutivas.
+5. `AuthService.loginWithPassword()` envia `POST /api/v1/auth/local/login` com `email` e `password`.
+6. Se a API devolver `token`, o frontend persiste o token, remove `VISITOR_MODE_KEY`, seta `isAuthenticated = true` e grava `out.user`.
+7. Depois do sucesso, a tela espera 100 ms e navega sempre para `/`.
 
-## Roles no frontend
-- `AuthService.isAdmin` deriva exclusivamente de `user.roles?.includes('admin')`.
-- Elementos de UI e a rota `admin/autonomia` dependem dessa role do payload de usuario.
-- Nao existe no frontend um refresh dedicado de roles separado da sessao; roles mudam quando `user` muda.
+## Tratamento de erro no login
+- `401`: vira `reason = invalid_credentials` e orientacao para revisar credenciais ou recuperar acesso.
+- `422`: vira `reason = invalid_request` com mensagens diferentes para senha curta, email invalido ou payload invalido.
+- `429`: vira `reason = rate_limited`.
+- Outros casos: `reason = unknown`.
 
-## Limitacoes e comportamentos visiveis
-- O frontend depende do token estar valido no storage para restaurar sessao; nao existe refresh token nem renovacao automatica visivel neste escopo.
-- O retorno pos-login ignora `returnUrl`, entao o usuario sempre cai na home autenticada.
-- Login social esta exposto na UI, mas desativado na implementacao real.
-- Cadastro autentica automaticamente, mas nao reposiciona a navegacao para uma area privada.
-- Os guards `PermissionGuard`, `NoAuthGuard` e `SystemReadyGuard` parecem preparados para cenarios maiores do que o roteamento atual realmente usa.
+## Recuperacao de senha na UI
+- `recoverAccess()` chama `POST /api/v1/auth/local/request-reset`.
+- Se a API devolver `reset_token`, a tela mostra o token ao usuario no proprio formulario.
+- Se a API nao devolver token, a tela mostra uma mensagem neutra de recuperacao.
+- `submitResetPassword()` chama `POST /api/v1/auth/local/reset`.
+- O frontend exige minimo de 8 caracteres e confirmacao de senha antes de enviar.
+
+## Cadastro no frontend
+- `RegisterComponent` coleta `username`, `fullName`, `cpf`, `phone`, `email`, `password` e `terms`.
+- O CPF e validado no cliente.
+- A senha precisa:
+  - ter pelo menos 8 caracteres
+  - conter maiuscula
+  - conter minuscula
+  - conter numero
+  - conter caractere especial
+  - nao conter tokens derivados de nome, username, email, CPF ou telefone
+- Em sucesso, `AuthService.registerLocal()` autentica imediatamente o usuario.
+- A tela nao redireciona; ela mostra sucesso e reseta o formulario.
+
+## Guards
+
+### `AuthGuard`
+- Espera `authReady$` ficar `true`.
+- Usa `combineLatest([authReady$, isAuthenticated$])`.
+- Se autenticado, libera a rota.
+- Se nao autenticado, redireciona para `/login` com `returnUrl` e dispara notificacao de acesso negado.
+
+### `RoleGuard`
+- Tambem espera `authReady$`.
+- Le `route.data['roles']`.
+- Usa semantica OR: basta uma role requerida estar em `user.roles`.
+- Sem usuario carregado, redireciona para `/login`.
+- Sem role suficiente, mostra erro e redireciona para `/`.
+
+### `PermissionGuard`
+- Le `route.data['permissions']`.
+- Usa semantica AND: todas as permissoes exigidas precisam estar em `user.permissions`.
+- Nao espera `authReady$`; se for usado em rotas carregadas logo no bootstrap, pode decidir cedo demais.
+- Nao esta conectado a nenhuma rota atual.
+
+### `NoAuthGuard`
+- Bloqueia tela publica quando o usuario ja esta autenticado.
+- Hoje nao esta ligado a `/login` nem a `/registro`.
+
+### `SystemReadyGuard`
+- Existe, mas o check atual apenas espelha `isAuthenticated$`.
+- Nao representa uma verificacao real de prontidao do sistema.
+
+## Rotas e protecao atuais
+- `''`: `AuthGuard`
+- `conversations`: `AuthGuard`
+- `conversations/:conversationId`: `AuthGuard`
+- `tools`: `AuthGuard`
+- `observability`: `AuthGuard`
+- `admin/autonomia`: `AuthGuard + RoleGuard` com `roles = ['admin']`
+- `login`: publica
+- `registro`: publica
+- `**`: redireciona para `login`
+
+## Roles e permissoes consumidas pela UI
+- `isAdmin` deriva apenas de `user.roles`.
+- A rota `admin/autonomia` depende desse array vindo do backend.
+- `permissions` hoje chegam como `['read']` no fluxo local.
+- Nao existe refresh dedicado de roles; mudancas de role so chegam quando o objeto `user` muda.
+
+## Comportamentos importantes
+- O frontend depende do token estar valido no storage para restaurar sessao.
+- O retorno pos-login ignora `returnUrl`.
+- Login social aparece na tela, mas nao autentica no codigo atual.
+- `firebaseAuthReady` hoje nao prova sessao autenticada com Firebase.
+- A UI confia no payload `user` devolvido por login e cadastro sem refazer `/local/me` logo em seguida.
 
 ## Arquivos-fonte
 - `frontend/src/app/core/auth/auth.service.ts`
@@ -118,7 +202,14 @@ Registrar o comportamento real de autenticacao e autorizacao do frontend Angular
 - `frontend/src/app/features/auth/login/login.ts`
 - `frontend/src/app/features/auth/register/register.ts`
 - `frontend/src/app/services/auth.utils.ts`
+- `frontend/src/app/services/api.config.ts`
 
 ## Fluxos relacionados
 - [[04 - Fluxos End-to-End/Login e Identidade]]
 - [[03 - Frontend/Guards Interceptors e Estado]]
+- [[04 - Fluxos End-to-End/Conversa e Chat]]
+
+## Riscos e lacunas
+- `returnUrl` e produzido pelo guard, mas nao consumido pela tela de login.
+- O arquivo `http.interceptor.ts` pode induzir leitura errada do runtime porque nao esta registrado.
+- `PermissionGuard`, `NoAuthGuard` e `SystemReadyGuard` existem, mas nao foram integrados ao fluxo principal atual.

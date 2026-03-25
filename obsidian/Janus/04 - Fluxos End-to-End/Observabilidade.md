@@ -78,6 +78,21 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
   - Resume uso de `openai` e `google_gemini` lendo eventos de auditoria com `status=ok`.
   - Depende de `details_json` conter `input_tokens`, `output_tokens` e `cost_usd`.
 
+### Superfície operacional adjacente, mas fora de `api/v1/observability/*`
+- `GET /api/v1/workers/status`
+  - lê apenas `app.state.orchestrator_workers`
+  - não mede consumers por fila
+- `POST /api/v1/workers/start-all`
+  - registra o conjunto do orquestrador no estado da aplicação
+- `POST /api/v1/workers/stop-all`
+  - cancela só o conjunto rastreado pelo orquestrador
+- `GET /api/v1/tasks/queue/{queue_name}`
+  - é a única superfície HTTP simples que mostra `messages` e `consumers` reais por fila
+- `GET /api/v1/tasks/queue/{queue_name}/policy`
+  - mostra argumentos reais da fila
+- `GET /api/v1/system/overview`
+  - agrega o status simplificado de workers para o frontend operador
+
 ### SLOs e anomalias
 - `GET /api/v1/observability/slo/domains`
   - Classifica eventos de auditoria nos domínios `chat`, `rag`, `tools` e `workers`.
@@ -132,6 +147,7 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
 - Higiene do grafo e backlog de quarentena de relações.
 - Timeline por `request_id` quando os eventos usam `trace_id`.
 - Estado das tarefas rastreadas pelo orquestrador de workers.
+- Quantidade real de consumers por fila somente quando cruza a leitura com `/api/v1/tasks/queue/{queue_name}`.
 
 ## O que a UI `/observability` realmente mostra
 - A tela Angular nao usa `GET /api/v1/observability/health/system` nem os demais endpoints principais de `api/v1/observability/*`.
@@ -168,6 +184,21 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
 - A UI reduz o payload de workers para `name`, `state` e `running`, ocultando `exception`, `reason`, `detail`, `children` e `tracked`.
 - A UI trata falha de fila com fallback local `messages=-1`; isso diferencia indisponibilidade da fila na interface, mas nao explica a causa operacional.
 
+## Fluxo real de leitura de workers na operação
+1. O runtime sobe loops internos do `Kernel` e, opcionalmente, o conjunto do orquestrador em `app.state.orchestrator_workers`.
+2. `GET /api/v1/workers/status` enxerga apenas o segundo conjunto.
+3. `GET /api/v1/system/overview` simplifica ainda mais o payload e injeta `last_heartbeat` sintético.
+4. `GET /api/v1/tasks/queue/{queue_name}` pode revelar mais consumers do que o painel de workers sugere.
+5. Quando há mismatch entre workers e filas, a fila é a fonte mais próxima do runtime observado.
+
+## Lacuna observada no runtime
+- No PC TESTE, em 25 de março de 2026:
+  - `GET /api/v1/workers/status` retornou `tracked=21`
+  - `google_productivity` apareceu como `disabled`
+  - `janus.knowledge.consolidation`, `janus.document.ingestion` e `janus.neural.training` mostraram `consumers=2`
+- Isso é compatível com o código: o `Kernel` sobe esses consumers e o `lifespan` pode subi-los novamente via `start_all_workers()`.
+- Portanto, o operador não deve inferir cardinalidade real de consumers só a partir de `/workers/status` ou `/system/overview`.
+
 ## Arquivos-fonte
 - `backend/app/api/v1/endpoints/observability.py`
 - `backend/app/services/observability_service.py`
@@ -187,6 +218,7 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
 - `GET /api/v1/observability/audit/events` e `GET /api/v1/observability/audit/export` chamam `service.get_audit_events(...)` com argumentos posicionais desalinhados. Na prática, `limit` cai no parâmetro `endpoint`, o que tende a zerar a consulta e distorcer a superfície operacional.
 - `workers/status` e `system/overview` enxergam apenas `app.state.orchestrator_workers`. Os workers iniciados pelo `Kernel` e outros processos de fundo não entram nessa visão.
 - `system/overview` fabrica `last_heartbeat` com `datetime.now()` e usa `tasks_processed` default `0`; isso não representa heartbeat real nem throughput real.
+- `workers/status` também não distingue quando uma mesma fila foi consumida por handles iniciados em superfícies diferentes do runtime.
 - Há duas fontes de sinal para domínio (`AuditEvent` e métricas Prometheus do middleware), mas elas não são reconciliadas em um mesmo relatório.
 - A tela `/observability` pode dar a impressao de painel completo, mas ela opera sobre um subconjunto pequeno da malha de observabilidade exposta pelo backend.
 - O toggle visual de auto-refresh nao pausa os widgets; quem usa a tela pode presumir congelamento total e tomar decisao sobre dados ainda mudando.

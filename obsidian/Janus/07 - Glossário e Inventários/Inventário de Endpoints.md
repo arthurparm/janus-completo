@@ -89,6 +89,29 @@ Listar os módulos de endpoint existentes para navegação rápida.
   - `POST /api/v1/pending_actions/action/{action_id}/approve`
   - `POST /api/v1/pending_actions/action/{action_id}/reject`
 
+## Recorte workers e filas
+- `workers`
+  - `GET /api/v1/workers/status`
+  - `POST /api/v1/workers/start-all`
+  - `POST /api/v1/workers/stop-all`
+- `system_overview`
+  - `GET /api/v1/system/overview`
+  - agrega `system_status`, `services_status` e status simplificado de `app.state.orchestrator_workers`
+- `tasks`
+  - `POST /api/v1/tasks/consolidation`
+  - `GET /api/v1/tasks/queue/{queue_name}`
+  - `GET /api/v1/tasks/queue/{queue_name}/policy`
+  - `GET /api/v1/tasks/queue/{queue_name}/policy/validate`
+  - `POST /api/v1/tasks/queue/{queue_name}/policy/reconcile`
+  - `GET /api/v1/tasks/health/rabbitmq`
+  - `GET /api/v1/tasks/outbox/stats`
+  - `POST /api/v1/tasks/outbox/reconcile`
+
+## Leitura operacional
+- `workers` expõe apenas o registry HTTP do orquestrador.
+- `tasks/queue/{queue_name}` expõe o número real de `consumers` e `messages` por fila.
+- `system/overview` é uma view de painel; não substitui `workers/status` nem `tasks/queue/*`.
+
 ## Arquivos-fonte
 - `backend/app/api/v1/router.py`
 - `backend/app/api/v1/endpoints/**/*.py`
@@ -99,3 +122,4 @@ Listar os módulos de endpoint existentes para navegação rápida.
 
 ## Riscos/Lacunas
 - Este inventário lista presença de módulos, não a exaustão de cada rota individual.
+- Para workers, o módulo `workers` sozinho não explica a operação completa; é preciso cruzar com `tasks` e `system_overview`.

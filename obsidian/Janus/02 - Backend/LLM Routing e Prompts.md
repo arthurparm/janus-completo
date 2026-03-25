@@ -56,10 +56,33 @@ Descrever como o chat escolhe papel, provedor, prompt e caminho de execução.
   - aplica `PolicyEngine` para risco, quotas, confirmação e content safety
   - coleta `pending_action_id` a partir do resultado das tools
 
+### Ordem real de decisão no REST
+- Antes do fluxo geral com LLM, o serviço ainda pode desviar para:
+  - comando
+  - discovery
+  - docs
+  - capabilities
+  - criação explícita de tool
+  - grounding documental
+  - knowledge space
+  - secret recall
+- Portanto, o role routing por intenção só governa plenamente o ramo geral; ele não garante que o request vá de fato para `ChatAgentLoop`.
+
 ### SSE (`GET /api/v1/chat/stream/{conversation_id}`)
 - O stream faz `llm.select_provider()` e `llm.invoke_llm()` diretamente no caminho geral.
 - O SSE aplica circuit breaker, heartbeat, TTFT e streaming incremental, mas não entra no `ChatAgentLoop`.
 - Resultado prático: stream e REST compartilham parte do grounding/prompting, porém divergem no suporte a tools e no acoplamento com RAG pós-resposta.
+
+### Ordem real de decisão no SSE
+- O SSE também passa por branches antes do fluxo geral:
+  - grounding documental
+  - knowledge space
+  - secret recall
+  - discovery
+  - docs
+  - capabilities
+- Só depois disso entra no caminho `select_provider() + invoke_llm()`.
+- Como o SSE não usa `ChatAgentLoop`, qualquer capability dependente de tools some no transporte principal da UI.
 
 ## Resiliência observada no código
 - `LLMService` é usado com seleção de provedor, fallback e pricing.
@@ -94,3 +117,4 @@ Descrever como o chat escolhe papel, provedor, prompt e caminho de execução.
 - O comportamento final depende de flags, thresholds e budgets espalhados entre endpoint, serviço de chat, `LLMService` e config.
 - O papel efetivo no chat muda conforme confiança/risco, mas a UI padrão continua pedindo `orchestrator`; isso torna o roteamento menos visível para o operador.
 - REST e SSE têm diferenças estruturais de execução, então a mesma pergunta pode produzir capacidades diferentes dependendo do transporte.
+- `knowledge_space_id` ativo força `orchestrator`, o que desliga overrides de papel exatamente nos casos em que a conversa está dominada por conteúdo documental.
