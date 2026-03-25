@@ -1,0 +1,86 @@
+---
+tipo: inventario
+dominio: backend
+camada: referencia
+fonte-de-verdade: codigo
+status: ativo
+---
+
+# Inventário de Workers
+
+## Objetivo
+Listar os workers nomeados do sistema.
+
+## Responsabilidades
+- Facilitar entendimento do plano assíncrono.
+
+## Entradas
+- `backend/app/core/workers/*.py`
+
+## Saídas
+- Índice de workers.
+
+## Dependências
+- [[02 - Backend/Autonomia e Workers]]
+
+## Workers
+- `agent_tasks_worker`
+- `async_consolidation_worker`
+- `auto_scaler`
+- `code_agent_worker`
+- `codex_worker`
+- `data_harvester`
+- `debate_critic_worker`
+- `debate_proponent_worker`
+- `distillation_worker`
+- `document_ingestion_worker`
+- `google_productivity_worker`
+- `knowledge_consolidator_worker`
+- `life_cycle_worker`
+- `memory_maintenance_worker`
+- `meta_agent_worker`
+- `neural_training_system`
+- `neural_training_worker`
+- `orchestrator`
+- `professor_agent_worker`
+- `red_team_agent_worker`
+- `reflexion_worker`
+- `router_worker`
+- `sandbox_agent_worker`
+- `thinker_agent_worker`
+
+## Workers/tarefas observados em runtime
+- `memory_maintenance`
+- `knowledge_consolidation`
+- `document_ingestion`
+- `agent_tasks`
+- `neural_training`
+- `reflexion`
+- `meta_agent`
+- `failure_consumer`
+- `auto_healer`
+- `router`
+- `code_agent`
+- `red_team_agent`
+- `professor_agent`
+- `sandbox_agent`
+- `thinker_agent`
+- `distillation`
+- `google_productivity`
+- `debate_proponent`
+- `debate_critic`
+- `codex_worker`
+
+## Leitura operacional
+- O runtime expõe nomes de tarefas orquestradas, que nem sempre coincidem 1:1 com o nome do arquivo Python.
+- Use esta nota junto com [[02 - Backend/Autonomia e Workers]] e `/api/v1/workers/status`.
+
+## Arquivos-fonte
+- `backend/app/core/workers/*.py`
+
+## Fluxos relacionados
+- [[04 - Fluxos End-to-End/Autonomia]]
+- [[04 - Fluxos End-to-End/Observabilidade]]
+
+## Riscos/Lacunas
+- Nem todos os workers necessariamente rodam sempre; parte depende de flags e boot path.

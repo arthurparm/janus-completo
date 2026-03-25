@@ -1,0 +1,240 @@
+{
+  "main": {
+    "id": "e4c5a36adbed8db4",
+    "type": "split",
+    "children": [
+      {
+        "id": "deb77577934b58c7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5ff63ce3624a9f97",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "00 - Índice/Home.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Home"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "011ff3d82dc77a3b",
+    "type": "split",
+    "children": [
+      {
+        "id": "d908b739d30b623f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "864ef69f8832e95c",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "93d03b149f54d173",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "e5a943313f2bc566",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "3c84bc9bbb6e6e20",
+    "type": "split",
+    "children": [
+      {
+        "id": "919cac7716b1cd0d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d0716ff3169c1896",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "00 - Índice/Home.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos para Home"
+            }
+          },
+          {
+            "id": "77841d44e130e5cf",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "00 - Índice/Home.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída para Home"
+            }
+          },
+          {
+            "id": "715db81d599b8a6c",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "cd7c9652a6e4447f",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "0e5f1b0ecdb39d4c",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "00 - Índice/Home.md",
+                "followCursor": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário de Home"
+            }
+          },
+          {
+            "id": "bd080296f25c91fa",
+            "type": "leaf",
+            "state": {
+              "type": "footnotes",
+              "state": {},
+              "icon": "lucide-file-signature",
+              "title": "Notas de rodapé"
+            }
+          }
+        ],
+        "currentTab": 4
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "workspaces:Gerenciar leiautes da área de trabalho": false,
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false,
+      "zk-prefixer:Criar nova nota única": false,
+      "markdown-importer:Abrir importador Markdown": false,
+      "audio-recorder:Começar/parar a gravação de áudio": false,
+      "random-note:Abrir nota aleatória": false
+    }
+  },
+  "active": "5ff63ce3624a9f97",
+  "lastOpenFiles": [
+    "00 - Índice/Mapa Mestre do Sistema.md",
+    "02 - Backend/API por Bounded Context.md",
+    "01 - Visão do Sistema/Dependências Externas.md",
+    "01 - Visão do Sistema/Arquitetura Geral.md",
+    "05 - Infra e Operação/PC1 PC2 e Docker.md",
+    "07 - Glossário e Inventários/Inventário de Integrações Externas.md",
+    "07 - Glossário e Inventários/Inventário de Workers.md",
+    "07 - Glossário e Inventários/Inventário de Entidades.md",
+    "07 - Glossário e Inventários/Inventário de Serviços.md",
+    "07 - Glossário e Inventários/Inventário de Endpoints.md",
+    "06 - Qualidade e Testes/Checklist de Validação.md",
+    "06 - Qualidade e Testes/Lacunas e Riscos.md",
+    "06 - Qualidade e Testes/Contratos Cobertos.md",
+    "06 - Qualidade e Testes/Mapa de Testes.md",
+    "05 - Infra e Operação/Healthchecks e Contratos Operacionais.md",
+    "05 - Infra e Operação/Bancos Filas e Modelos.md",
+    "04 - Fluxos End-to-End/Ferramentas e Sandbox.md",
+    "04 - Fluxos End-to-End/Documentos Conhecimento e Memória.md",
+    "04 - Fluxos End-to-End/Observabilidade.md",
+    "04 - Fluxos End-to-End/Autonomia.md",
+    "04 - Fluxos End-to-End/Conversa e Chat.md",
+    "04 - Fluxos End-to-End/Login e Identidade.md",
+    "03 - Frontend/Guards Interceptors e Estado.md",
+    "03 - Frontend/Serviços de Integração.md",
+    "03 - Frontend/Features e Experiência.md",
+    "03 - Frontend/Shell e Navegação.md",
+    "07 - Glossário e Inventários",
+    "06 - Qualidade e Testes",
+    "05 - Infra e Operação",
+    "04 - Fluxos End-to-End",
+    "03 - Frontend",
+    "02 - Backend",
+    "01 - Visão do Sistema",
+    "00 - Índice",
+    "Sem título.base",
+    "Sem título.canvas"
+  ]
+}
