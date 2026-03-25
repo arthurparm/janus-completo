@@ -216,3 +216,11 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+## Achados do dia (2026-03-25)
+- [ ] **B602: Command Injection (`shell=True`)**: O `backend/app/core/tools/launcher_tools.py` continua usando `shell=True` com `subprocess.Popen` no Windows, abrindo brecha para injeção de comandos (detectado na linha 33).
+- [ ] **B113: Requisições HTTP sem Timeout**: Diversos scripts de testes e tooling (`test_tool_evolution_chat.py`, `verify_arch_knowledge.py`, `e2e/conftest.py`, `test_api_endpoints.py`) continuam usando `requests.get` e `requests.post` sem timeout definido, podendo travar pipelines CI/CD.
+- [ ] **B310: Abertura insegura de URL**: `backend/tests/smoke/run_repo_smoke_test.py` utiliza `request.urlopen` sem validação de scheme (linha 19).
+- [ ] **B108: Criação de arquivo temporário insegura**: O script `test_logging_config_legacy_normalization.py` usa o caminho hardcoded `/tmp/x` que pode levar a ataques de colisão de arquivos temporários TOCTOU (linhas 34, 40).
+- [ ] **B104: Bind de todas as interfaces**: Apesar das menções anteriores, o `backend/windows_agent.py` ainda possui no código uma chamada a `uvicorn.run(app, host="0.0.0.0", port=5001)` identificada pelo Bandit, com risco de exposição indevida (linha 329).
+- [ ] **CVE-2026-4539 em dependências Python**: A dependência `pygments` (versão 2.19.2) possui vulnerabilidade conhecida relacionada à ineficiência de regex. Identificado pelo `pip-audit`.
+- [ ] **Dependências Node.js Vulneráveis**: Identificadas mais de 25 vulnerabilidades de severidade Alta no frontend (`npm audit`), afetando pacotes como `@angular/*`, `@hono/node-server`, `express-rate-limit`, e `tar`.

@@ -70,3 +70,7 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+## Achados do dia (2026-03-25)
+- [ ] **Risco de Acesso Contínuo a Mídias Não Auditadas**: O `backend/windows_agent.py` continua exportando endpoints de captura e áudio expostos localmente sem nenhum mecanismo de proteção AuthZ.
+- [ ] **Vazamento de PII em logs e telemetria**: Falta de minimização de logs em diversos níveis do backend persiste, precisando integrar `redact_pii_text_only`.
+- [ ] **Possibilidade de Injeção de Header e Impersonation**: Configuração `AUTH_TRUST_X_USER_ID_HEADER=True` nativa do sistema em `backend/app/config.py` pode permitir roubo de sessão ou manipulação de PII de terceiros de forma trivial por meio do cabeçalho `X-User-Id`.

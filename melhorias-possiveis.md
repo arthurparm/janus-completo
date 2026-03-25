@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Múltiplos Achados de Segurança em Testes e Tooling (Bandit)
+- Problema atual: Testes de ponta a ponta e tooling (`conftest.py`, `run_repo_smoke_test.py`, `test_logging_config_legacy_normalization.py`) utilizam práticas inseguras: chamadas `requests` sem timeout (B113), abertura de URL irrestrita via `request.urlopen` (B310) e uso explícito de diretórios `/tmp/` hardcoded para mocks (B108).
+- Solucao proposta: Aplicar timeouts `timeout=10` globalmente nas requisições HTTP, restringir `urlopen` validando os schemas (http/https), e converter usos de `/tmp/x` para instâncias de `tempfile.TemporaryDirectory`.
+- Impacto esperado: Evita deadlocks em pipelines de teste e mitiga TOCTOU ou SSRF restrito em infraestrutura CI/CD.
+- Riscos: Testes que dependem de demoras de mock podem falhar se timeout for muito agressivo.
+- Dependencias: Pytest.
+- Prioridade: P2
+- Esforco: S
+- Dono: QA / SecTools
+- Status: aberto
+
+### [SG-038] Vulnerabilidade em pygments (CVE-2026-4539) e Múltiplas CVES em Frontend NPM
+- Problema atual: A varredura de dependências indica que a biblioteca `pygments@2.19.2` do Python contém a CVE-2026-4539 (RegEx ineficiente), enquanto o Frontend em `package.json` possui +25 dependências críticas/altas (incluindo `@angular/*`, `@hono/node-server`, `express-rate-limit`, `tar`) necessitando update massivo de Lock files.
+- Solucao proposta: Atualizar versões vulneráveis no `requirements.txt`/Poetry e forçar `npm audit fix --force` com validação de quebras nas suítes Angular do frontend.
+- Impacto esperado: Remoção imediata de vetores públicos de ataque na supply chain do Janus.
+- Riscos: Updates drásticos em Node.js (especialmente Angular e Hono) podem quebrar builds se houver incompatibilidade de APIs.
+- Dependencias: Testes E2E (Playwright) para garantia de estabilidade visual e de interface.
+- Prioridade: P1
+- Esforco: M
+- Dono: DevSecOps
+- Status: aberto
+
+### [SG-039] Agente Windows Binding em 0.0.0.0 com Exposição Local
+- Problema atual: O `backend/windows_agent.py` sobe o servidor Uvicorn com bind em `0.0.0.0:5001`, expondo a interface gráfica sem autenticação para a rede da máquina hospedeira.
+- Solucao proposta: Alterar para `127.0.0.1` ou introduzir um modelo de token/senha se houver intenção de acesso na LAN.
+- Impacto esperado: Previne ataques de escuta/ação não autorizada de outras máquinas na mesma rede.
+- Riscos: Interrupção de testes de conectividade em containers caso dependam de `0.0.0.0`.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: DevSecOps
+- Status: aberto
