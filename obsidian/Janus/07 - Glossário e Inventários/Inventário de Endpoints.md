@@ -68,6 +68,27 @@ Listar os módulos de endpoint existentes para navegação rápida.
 - `workers`
 - `workspace`
 
+## Recorte tools e sandbox
+- `tools`
+  - `GET /api/v1/tools/`
+  - `GET /api/v1/tools/{tool_name}`
+  - `GET /api/v1/tools/stats/usage`
+  - `GET /api/v1/tools/categories/list`
+  - `GET /api/v1/tools/permissions/list`
+  - `POST /api/v1/tools/create/from-function`
+  - `POST /api/v1/tools/create/from-api`
+  - `DELETE /api/v1/tools/{tool_name}`
+- `sandbox`
+  - `POST /api/v1/sandbox/execute`
+  - `POST /api/v1/sandbox/evaluate`
+  - `GET /api/v1/sandbox/capabilities`
+- `pending_actions`
+  - `GET /api/v1/pending_actions/`
+  - `POST /api/v1/pending_actions/{thread_id}/approve`
+  - `POST /api/v1/pending_actions/{thread_id}/reject`
+  - `POST /api/v1/pending_actions/action/{action_id}/approve`
+  - `POST /api/v1/pending_actions/action/{action_id}/reject`
+
 ## Arquivos-fonte
 - `backend/app/api/v1/router.py`
 - `backend/app/api/v1/endpoints/**/*.py`

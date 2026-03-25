@@ -46,6 +46,10 @@ Agrupar a superfície `/api/v1` por contexto funcional.
 ## Leitura operacional
 - O modo `PUBLIC_API_MINIMAL` reduz a superfície exposta.
 - Chat, autonomia e auth são a trilha principal voltada ao uso diário.
+- No recorte de tools, a superfície HTTP relevante se divide em:
+  - `tools`: catálogo, filtros, estatísticas e criação/remoção dinâmica
+  - `sandbox`: execução Python controlada por endpoint dedicado
+  - `pending_actions`: aprovação humana para fluxos SQL e LangGraph
 
 ## Arquivos-fonte
 - `backend/app/api/v1/router.py`
@@ -53,6 +57,8 @@ Agrupar a superfície `/api/v1` por contexto funcional.
 - `backend/app/api/v1/endpoints/autonomy.py`
 - `backend/app/api/v1/endpoints/observability.py`
 - `backend/app/api/v1/endpoints/tools.py`
+- `backend/app/api/v1/endpoints/sandbox.py`
+- `backend/app/api/v1/endpoints/pending_actions.py`
 - `backend/app/api/v1/endpoints/chat/*`
 
 ## Fluxos relacionados

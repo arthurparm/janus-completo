@@ -62,6 +62,11 @@ Listar os serviços nomeados do backend.
 - `tool_service`
 - `trace_service`
 
+## Recorte tools e sandbox
+- `tool_service`: camada de catálogo sobre `ToolRepository`; lista, detalha, cria e remove tools no `action_registry`.
+- `tool_executor_service`: parser e executor real de `tool_call_envelope`; valida schema, política, quotas, simulação, timeout e auditoria.
+- `sandbox_service`: fachada HTTP para `python_sandbox`; executa código/expressão e descreve capacidades do sandbox.
+
 ## Arquivos-fonte
 - `backend/app/services/*.py`
 

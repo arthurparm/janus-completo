@@ -36,6 +36,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 - `ChatStudyJobService` e in-memory e perde estado em restart.
 - `GET /api/v1/chat/start` aceita `title`, mas a implementacao descarta o valor.
 - `AgentEventsService` depende de `EventSource` sem headers; se `CHAT_AUTH_ENFORCE_REQUIRED` subir, o stream de eventos tende a quebrar.
+- O dominio de tools mistura catalogo em memoria, import side-effects, pendencias SQL e pendencias LangGraph sob a mesma UX operacional.
 
 ## Lacunas percebidas
 - Pouca evidencia de E2E de UX completa.
@@ -44,6 +45,14 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 - O frontend escuta `tool_status`, mas o backend atual nao emite esse evento em `StreamingService`.
 - O fluxo SSE nao indexa mensagens no RAG nem chama `maybe_summarize()`, entao historico e grounding podem divergir do caminho REST.
 - A criacao de pending action fallback depende de `user_id`; em cenarios anonimos ou mal resolvidos a UI pode receber confirmacao sem ID estruturado.
+- A tela `/tools` lista apenas pending actions SQL (`include_graph: false`), embora o backend tambem tenha pending actions LangGraph com semantica diferente de retomada.
+- `approve_sql_action()` e `reject_sql_action()` apenas mudam o status em `pending_actions` e sincronizam o historico do chat; a aprovacao SQL nao reexecuta a tool pendente.
+- O catalogo de tools e process-local: `action_registry`, historico de chamadas e rate limits em memoria sao perdidos em restart e nao representam necessariamente outros processos/workers.
+- O registro de tools depende de side-effects de import. `Kernel.startup()` garante `os_tools` e `ui_tools`, mas varias tools de `agent_tools` so entram no registry quando esse modulo e importado por outro fluxo.
+- `ActionRegistry.register()` permite sobrescrever uma tool existente pelo mesmo nome; a permissao efetiva e a implementacao efetiva dependem da ordem de registro.
+- `ToolService.PROTECTED_TOOLS` protege apenas parte das tools built-in; outras tools nativas continuam removiveis via `DELETE /api/v1/tools/{tool_name}`.
+- As rotas de criacao dinamica de tool nao recebem `requires_confirmation`; uma tool criada em runtime entra no registry sem esse guardrail explicito, salvo bloqueios indiretos de politica/permissao.
+- `execute_system_command()` declara "sem restricoes" no docstring, mas a implementacao usa `run_restricted_command()`; a documentacao inline do proprio codigo ja diverge da execucao real.
 
 ## Autonomia: riscos reais do codigo atual
 - O `AutonomyLoop` nao executa um plano inteiro; ele escolhe um unico `selected_step` e publica um `TaskState` para o `router`. O restante do plano vira contexto, nao contrato de execucao.
@@ -67,6 +76,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 - `backend/app/services/collaboration_service.py`
 - `backend/app/main.py`
 - `frontend/src/app/features/conversations/conversations.ts`
+- `frontend/src/app/features/tools/tools.ts`
 - `frontend/src/app/services/backend-api.service.ts`
 - `frontend/src/app/services/chat-stream.service.ts`
 - `frontend/src/app/core/services/agent-events.service.ts`
@@ -75,6 +85,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 ## Fluxos relacionados
 - [[04 - Fluxos End-to-End/Conversa e Chat]]
 - [[04 - Fluxos End-to-End/Autonomia]]
+- [[04 - Fluxos End-to-End/Ferramentas e Sandbox]]
 - [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]]
 
 ## Riscos/Lacunas

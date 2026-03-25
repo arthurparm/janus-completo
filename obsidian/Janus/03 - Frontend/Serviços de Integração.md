@@ -39,6 +39,8 @@ Mapear como a UI de conversa consome o backend de chat na prática.
   - `sendChatMessage() -> POST /api/v1/chat/message`
   - `getChatHistory()` e `getChatHistoryPaginated()`
   - `getChatStudyJob()` para polling de `pending_study`
+  - no domínio de tools, `getTools()`, `getToolDetails()`, `getToolStats()`, `getToolCategories()`, `getToolPermissions()`, `listPendingActions()`, `approvePendingAction()` e `rejectPendingAction()`
+- A feature `/tools` consome catálogo, estatísticas, auditoria e pending actions, mas não executa tool no browser.
 - `ChatStreamService` usa `fetch` em vez de `EventSource` para poder enviar headers de auth no SSE principal.
 - O stream principal interpreta `partial`, `done`, `error`, `cognitive_status` e aceita `token` como alias legado de `partial`.
 - `AgentEventsService` usa `EventSource` puro em `/api/v1/chat/{conversationId}/events`, sem headers customizados.
@@ -49,14 +51,18 @@ Mapear como a UI de conversa consome o backend de chat na prática.
 - `frontend/src/app/services/chat-stream.service.ts`
 - `frontend/src/app/core/services/agent-events.service.ts`
 - `frontend/src/app/features/conversations/conversations.ts`
+- `frontend/src/app/features/tools/tools.ts`
 - `frontend/src/app/services/chat-auth-headers.util.ts`
 
 ## Fluxos relacionados
 - [[04 - Fluxos End-to-End/Conversa e Chat]]
 - [[04 - Fluxos End-to-End/Observabilidade]]
+- [[04 - Fluxos End-to-End/Ferramentas e Sandbox]]
+- [[03 - Frontend/Observability Frontend]]
 - [[07 - Glossário e Inventários/Inventário de Endpoints]]
 
 ## Riscos/Lacunas
 - `BackendApiService` segue como cliente monolítico.
 - `ConversationsComponent` centraliza streaming, polling, pending actions, feedback, contexto e navegação.
 - O stream principal e o stream de eventos usam tecnologias diferentes (`fetch` SSE vs `EventSource`), com superfícies de autenticação diferentes.
+- A tela `/tools` opera como painel de observabilidade/aprovação, mas não cobre pending actions `langgraph` nem a execução real.

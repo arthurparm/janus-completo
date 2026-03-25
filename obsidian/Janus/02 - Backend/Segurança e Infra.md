@@ -35,13 +35,20 @@ Mapear os guardrails transversais do backend.
 - `SecurityHeadersMiddleware`.
 - Guards de request e pending actions para risco/consentimento.
 - Políticas de tool execution, sandbox e quotas de memória.
+- No fluxo real de tools, os guardrails ficam repartidos entre `PolicyEngine`, `ToolExecutorService`, `python_sandbox` e `command_sandbox`.
 
 ## Arquivos-fonte
 - `backend/app/api/v1/endpoints/auth.py`
+- `backend/app/api/v1/endpoints/tools.py`
+- `backend/app/api/v1/endpoints/sandbox.py`
 - `backend/app/core/security/*`
 - `backend/app/core/infrastructure/auth.py`
 - `backend/app/core/infrastructure/rate_limit_middleware.py`
+- `backend/app/core/infrastructure/python_sandbox.py`
 - `backend/app/core/middleware/security_headers.py`
+- `backend/app/core/autonomy/policy_engine.py`
+- `backend/app/core/tools/command_sandbox.py`
+- `backend/app/services/tool_executor_service.py`
 
 ## Fluxos relacionados
 - [[06 - Qualidade e Testes/Contratos Cobertos]]
@@ -50,3 +57,4 @@ Mapear os guardrails transversais do backend.
 ## Riscos/Lacunas
 - A segurança é espalhada por endpoint, middleware e serviços.
 - O sistema combina auth clássica e governança baseada em confirmação/risco, exigindo leitura contextual.
+- Em tools, `permission_level` sozinho não explica o comportamento final: allowlists, blocklists, simulação heurística e quotas ainda podem bloquear a execução.

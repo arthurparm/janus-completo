@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "00 - Índice/Home.md",
+                "file": "06 - Qualidade e Testes/Lacunas e Riscos.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Home"
+              "title": "Lacunas e Riscos"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "00 - Índice/Home.md",
+                "file": "06 - Qualidade e Testes/Lacunas e Riscos.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Links inversos para Home"
+              "title": "Links inversos para Lacunas e Riscos"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "00 - Índice/Home.md",
+                "file": "06 - Qualidade e Testes/Lacunas e Riscos.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Links de saída para Home"
+              "title": "Links de saída para Lacunas e Riscos"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "00 - Índice/Home.md",
+                "file": "06 - Qualidade e Testes/Lacunas e Riscos.md",
                 "followCursor": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Sumário de Home"
+              "title": "Sumário de Lacunas e Riscos"
             }
           },
           {
@@ -200,6 +200,10 @@
   },
   "active": "5ff63ce3624a9f97",
   "lastOpenFiles": [
+    "03 - Frontend/Observability Frontend.md",
+    "03 - Frontend/Auth Sessão Guards e Roles.md",
+    "00 - Índice/Home.md",
+    "04 - Fluxos End-to-End/Observabilidade.md",
     "00 - Índice/Mapa Mestre do Sistema.md",
     "02 - Backend/API por Bounded Context.md",
     "01 - Visão do Sistema/Dependências Externas.md",
@@ -218,14 +222,10 @@
     "05 - Infra e Operação/Bancos Filas e Modelos.md",
     "04 - Fluxos End-to-End/Ferramentas e Sandbox.md",
     "04 - Fluxos End-to-End/Documentos Conhecimento e Memória.md",
-    "04 - Fluxos End-to-End/Observabilidade.md",
     "04 - Fluxos End-to-End/Autonomia.md",
     "04 - Fluxos End-to-End/Conversa e Chat.md",
     "04 - Fluxos End-to-End/Login e Identidade.md",
     "03 - Frontend/Guards Interceptors e Estado.md",
-    "03 - Frontend/Serviços de Integração.md",
-    "03 - Frontend/Features e Experiência.md",
-    "03 - Frontend/Shell e Navegação.md",
     "07 - Glossário e Inventários",
     "06 - Qualidade e Testes",
     "05 - Infra e Operação",
