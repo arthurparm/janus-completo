@@ -35,6 +35,7 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
    - muda a meta para `in_progress`;
    - usa `config.plan` se existir; caso contrario chama o planner Reflexion; se falhar, usa fallback seguro;
    - escolhe um passo preferindo `search_web` ou `get_enriched_context`; se nao houver, usa o ultimo passo do plano;
+   - se o plano efetivo chegar vazio nessa etapa, o ciclo registra falha local e retorna sem fazer rollback automatico da goal para `pending`;
    - cria ou reaproveita um registro idempotente em `autonomy_enqueue_ledger`;
    - publica um `TaskState` para o `router` com `meta.autonomy.goal_id`, `execution_mode=enqueue_router`, `plan`, `selected_step` e `autonomy_run_id`.
 7. O `router` passa a tarefa para os workers/agentes do Parlamento.
@@ -60,7 +61,7 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
 - Valida `plan` apenas se o request trouxe passos.
 - Inicia o loop em background e devolve `{"status":"started"}`.
 - Se o lease do escopo ja estiver ocupado por outra instancia, devolve `409`.
-- Se a propria instancia ja estiver ativa, devolve `400`.
+- Se a propria instancia ja estiver ativa, devolve `400` antes de tentar subir outra task local.
 
 ### `POST /api/v1/autonomy/stop`
 - Sincrono no request.
@@ -81,6 +82,7 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
 - Revalida o plano contra a allowlist/blocklist correntes do service.
 - Substitui apenas `self._config.plan` em memoria.
 - Nao persiste o plano em banco.
+- Pode ser chamado com o loop parado; nesse caso usa a configuracao em memoria atual do service.
 
 ### `PUT /api/v1/autonomy/policy`
 - Sincrono no request.
@@ -88,6 +90,7 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
 - Reconstroi o `PolicyEngine`.
 - Nao revalida o plano que ja estava carregado.
 - Nao persiste a politica na run ja existente.
+- Pode ser chamado com o loop parado; o efeito continua sendo apenas no service residente.
 
 ### `GET /api/v1/autonomy/plan`
 - Sincrono no request.
@@ -112,6 +115,7 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
 O planner interno usa uma validacao diferente e mais fraca:
 
 - remove tools bloqueadas pela `blocklist`;
+- em `risk_profile=conservative`, reduz a lista inicial a `READ_ONLY|SAFE` e `WRITE` allowlisted;
 - ignora tools inexistentes;
 - forca `args` para `dict`;
 - aceita metadados como `critical`, `retry` e `fallback_tool`;
@@ -136,6 +140,7 @@ Mas o `AutonomyLoop` atual usa so uma parte disso no caminho real:
 - `start()` e `update_policy()` apenas recriam o `PolicyEngine`;
 - o planner usa a `blocklist` e parte do `risk_profile` para listar tools;
 - o endpoint valida allowlist/blocklist/schema apenas para planos enviados manualmente.
+- `can_continue_cycle()` e `reset_cycle_quota()` nao sao chamados no loop atual.
 
 O loop nao chama `validate_tool_call()`, `validate_content_safety()`, `simulate_tool_call()` nem `can_continue_cycle()` antes de enfileirar o passo selecionado.
 
@@ -153,6 +158,7 @@ Na pratica, o sistema esta mais estrito para planos manuais do que para planos g
 ### Fonte de verdade
 - SQL em `autonomy_goals` e `autonomy_goal_transitions`.
 - Firestore e apenas espelho opcional.
+- `GET /api/v1/autonomy/goals` sem `status` lista so goals nao terminais; com `status`, aplica filtro exato.
 
 ### Estados
 - `pending`
@@ -166,6 +172,7 @@ Na pratica, o sistema esta mais estrito para planos manuais do que para planos g
 ### Fechar meta
 - O loop muda `pending -> in_progress` ao selecionar.
 - Se falhar antes de publicar o enqueue, a meta volta para `pending`.
+- Se o ciclo terminar cedo com plano efetivo vazio nessa etapa, nao existe rollback automatico para `pending`.
 - Se o `TaskState` autonomo termina e volta ao `router`, a meta fecha via `CollaborationService`.
 - `completed` no `TaskState` fecha a goal como `completed`.
 - `failed`, `blocked` e `cancelled` fecham a goal como `failed`.
@@ -180,6 +187,7 @@ O lock de runtime vive em `autonomy_loop_leases`.
 - `start()` tenta `try_acquire`.
 - a cada ciclo o loop chama `renew()`.
 - `stop()` chama `release()`.
+- se `renew()` falhar ou o lease ja nao puder ser renovado, o loop para sem passar pelo cleanup completo de `stop()`.
 
 ### O que aparece em `/status`
 `runtime_lock` exposto pelo endpoint inclui:
@@ -208,6 +216,7 @@ Isso permite ver se a instancia atual segura o lease ou apenas enxerga outro own
 - os workers do orquestrador sobem no startup apenas se `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`
 - o `Kernel` ja sobe `knowledge_consolidation`, `document_ingestion` e `neural_training` antes disso
 - quando o orquestrador tambem sobe no startup, essas filas podem ficar com dois consumers no mesmo processo
+- o `SchedulerService` tambem sobe no `Kernel`, mas nao ha chamada direta de `AutonomyService` para ele e nenhum job padrao do scheduler inicia ou para o `AutonomyLoop`
 
 ## Filas side-effect do fluxo
 - `router_worker`
@@ -255,9 +264,11 @@ APIs de historico:
 - O loop escolhe um unico passo do plano; o restante do plano e contexto, nao contrato de execucao.
 - `PUT /policy` nao revalida o plano que ja esta carregado.
 - O planner interno nao valida `args_schema` nem a allowlist do mesmo jeito que a API valida planos manuais.
+- Um ciclo com plano efetivo vazio nessa etapa pode deixar a goal em `in_progress` sem enqueue publicado.
 - O fechamento automatico da meta depende do `TaskState` terminal voltar ao `router` com `meta.autonomy.goal_id`.
 - O patch manual para `completed` sempre agenda self-study, mesmo quando a meta ja estava `completed`.
 - O caminho de perda de lease encerra o loop, mas nao passa pelo mesmo cleanup de `stop()`.
+- `GET /api/v1/workers/status` nao informa o estado do `AutonomyLoop`; essa observabilidade fica separada em `/api/v1/autonomy/status`.
 - O fluxo de autonomia consegue publicar para `blue_team` e `security_judge`, mas o conjunto de workers iniciado pelo runtime analisado não cobre esses papéis.
 - O operador que olha só `/api/v1/workers/status` não enxerga cardinalidade real de consumers nas filas da autonomia.
 

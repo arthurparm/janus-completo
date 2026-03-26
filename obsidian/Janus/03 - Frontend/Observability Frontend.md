@@ -59,13 +59,13 @@ Descrever o comportamento real da rota `/observability` no Angular e separar cla
 ## Auto-refresh real
 - O toggle de auto-refresh fica no componente raiz e nasce ligado (`signal(true)`).
 - O toggle controla apenas o painel `Modo Operador`.
-- O painel do operador faz polling a cada `5000ms` com `interval(...).pipe(startWith(0))`, entao a primeira coleta acontece imediatamente ao montar a tela.
-- Desligar o toggle cancela apenas `refreshOperatorView()`. Os tres widgets continuam com seus pollings proprios.
-- Cada widget faz `loadData()` uma vez no `ngOnInit()` e depois abre um `interval(5000)`.
-- `SystemStatusWidget` atualiza so `systemStatus` no polling; `servicesHealth` e carregado apenas na carga inicial.
-- `DatabaseHealthWidget` atualiza todo o snapshot de validacao do schema a cada 5s.
-- `KnowledgeHealthWidget` atualiza apenas `health` a cada 5s; `detailed` e carregado uma vez e so volta a ser buscado apos `resetCircuitBreaker()`.
-- `getSystemStatus()` envia `ngsw-bypass: true`; os demais requests da tela nao fazem esse bypass explicitamente.
+- **Comportamento por widget**:
+  - `SystemStatusWidget`: atualiza apenas `systemStatus` no polling; `servicesHealth` fica congelado após carga inicial
+  - `DatabaseHealthWidget`: atualiza snapshot completo de validação a cada 5s
+  - `KnowledgeHealthWidget`: atualiza apenas health básico; detalhado não acompanha refresh contínuo
+- O painel do operador faz polling a cada `5000ms` com `interval(...).pipe(startWith(0))`, então a primeira coleta acontece imediatamente ao montar a tela.
+- Desligar o toggle cancela apenas `refreshOperatorView()`. Os três widgets continuam com seus pollings próprios.
+- `getSystemStatus()` envia `ngsw-bypass: true`; os demais requests da tela não fazem esse bypass explicitamente.
 
 ## Operator view
 - O painel superior junta duas fontes:
@@ -146,8 +146,12 @@ Descrever o comportamento real da rota `/observability` no Angular e separar cla
 - O reset do circuit breaker so aparece quando o breaker esta `OPEN`.
 
 ## UI versus profundidade da API
-- A rota se chama observability, mas nao consome os endpoints centrais de `backend/app/api/v1/endpoints/observability.py`.
-- A UI atual nao usa:
+- A rota se chama observability, mas não consome os endpoints centrais de `backend/app/api/v1/endpoints/observability.py`.
+- **Limites por widget**:
+  - `SystemStatusWidget`: ignora campos `timestamp`, `system`, `process`, `performance`, `config` da API
+  - `DatabaseHealthWidget`: não mostra campo `status` do contrato; sem ações de migração/reconciliação
+  - `KnowledgeHealthWidget`: não explora campos `basic_health`, `detailed_status.offline`, `detailed_status.metrics`, `monitoring`
+- A UI atual não usa:
   - `GET /api/v1/observability/health/system`
   - `POST /api/v1/observability/health/check-all`
   - `GET /api/v1/observability/metrics/summary`
@@ -158,10 +162,10 @@ Descrever o comportamento real da rota `/observability` no Angular e separar cla
   - `GET /api/v1/observability/audit/export`
   - `GET /api/v1/observability/requests/{request_id}/dashboard`
   - `GET /api/v1/observability/graph/*`
-- A UI tambem nao usa `GET /api/v1/system/overview`, embora o frontend tenha o metodo `getSystemOverview()`.
+- A UI também não usa `GET /api/v1/system/overview`, embora o frontend tenha o método `getSystemOverview()`.
 - Em resumo:
-  - a API backend cobre saude logica agregada, poison pills, SLOs, auditoria, request tracing, uso de LLM e higiene do grafo;
-  - a UI atual cobre apenas um painel operacional curto de workers/filas e tres widgets de status.
+  - a API backend cobre saúde lógica agregada, poison pills, SLOs, auditoria, request tracing, uso de LLM e higiene do grafo;
+  - a UI atual cobre apenas um painel operacional curto de workers/filas e três widgets de status.
 
 ## Limites reais da tela
 - O toggle de auto-refresh nao pausa o dashboard inteiro; pausa apenas o operator view.
@@ -174,6 +178,14 @@ Descrever o comportamento real da rota `/observability` no Angular e separar cla
   - worker falhando com `exception`;
   - worker composto com filhos em estados diferentes;
   - backlog de fila por politica ou por erro de broker.
+
+## Comportamento de Error Handling
+- **Operator View**: Em falha total, zera workers e filas, mostra erro textual e continua operacional
+- **SystemStatusWidget**: Falhas silenciosas com `catchError(() => of(null))`, exibe `UNKNOWN` quando `systemStatus=null`
+- **DatabaseHealthWidget**: Captura mensagens de erro e exibe ao usuário
+- **KnowledgeHealthWidget**: Mensagens de erro em alertas visuais
+- **Fallback de filas**: Quando indisponível, fabrica `{name: <fila>, messages: -1, consumers: 0}`
+- **Interpretação de filas**: `messages < 0` = indisponível, `messages > 0` = alerta visual, `messages === 0` = sem backlog
 
 ## Arquivos-fonte
 - `frontend/src/app/app.routes.ts`

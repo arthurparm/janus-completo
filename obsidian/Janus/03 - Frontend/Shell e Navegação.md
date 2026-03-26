@@ -38,10 +38,18 @@ Descrever a casca Angular que organiza a experiência do operador.
 - `/` e `/home`
 - `/registro`
 
+Leitura rapida:
+- `/login` e `/registro` sao publicas.
+- `register` apenas redireciona para `/registro`.
+- `**` redireciona para `login`.
+
 ## Leitura operacional
 - Quase toda a aplicação é protegida por `AuthGuard`.
 - Área administrativa depende também de `RoleGuard`.
 - O shell visual é composto por header/sidebar e componentes compartilhados.
+- O shell redireciona para `/login` no logout a partir do `Header`.
+- `AuthGuard` preserva a rota desejada em `returnUrl`, mas o login atual nao usa esse valor depois da autenticacao.
+- Como `NoAuthGuard` nao esta ligado, um usuario autenticado ainda consegue abrir `/login` e `/registro` manualmente.
 
 ## Arquivos-fonte
 - `frontend/src/app/app.routes.ts`

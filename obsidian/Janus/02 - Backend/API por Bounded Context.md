@@ -34,6 +34,13 @@ Agrupar a superfície `/api/v1` por contexto funcional.
   - `auth`, `users`, `profiles`, `consents`, `pending_actions`
 - Chat e interação:
   - `chat/chat_message`, `chat/chat_stream`, `chat/chat_history`, `chat/chat_admin`, `chat/chat_study_jobs`
+  - recorte operacional principal:
+    - `POST /api/v1/chat/start`: abre conversa e retorna só `conversation_id`
+    - `POST /api/v1/chat/message`: turno síncrono REST com enriquecimento de `citations`, `understanding`, `confirmation`, `agent_state` e, quando necessário, `study_job`
+    - `GET /api/v1/chat/stream/{conversation_id}`: turno SSE com `start/protocol/ack/token|partial/done|error`
+    - `GET /api/v1/chat/{conversation_id}/history` e `/history/paginated`: histórico com reconciliação de confirmações já resolvidas
+    - `GET /api/v1/chat/{conversation_id}/trace` e `/events`: observabilidade pós-fato e stream de eventos de agente
+    - `GET /api/v1/chat/study-jobs/{job_id}`: polling do fallback assíncrono de estudo disparado pelo REST
 - Autonomia e coordenação:
   - `autonomy`, `autonomy_admin`, `autonomy_history`, `collaboration`, `tasks`
 - Conhecimento e memória:
@@ -46,6 +53,9 @@ Agrupar a superfície `/api/v1` por contexto funcional.
 ## Leitura operacional
 - O modo `PUBLIC_API_MINIMAL` reduz a superfície exposta.
 - Chat, autonomia e auth são a trilha principal voltada ao uso diário.
+- O bounded context de chat cruza dois contratos adjacentes:
+  - `pending_actions`: aprovação/rejeição humana quando o chat produz uma pendência estruturada
+  - `documents`/`knowledge`: manifests e `knowledge_space_id` podem dominar o pipeline da conversa antes do ramo geral de LLM
 - No recorte de tools, a superfície HTTP relevante se divide em:
   - `tools`: catálogo, filtros, estatísticas e criação/remoção dinâmica
   - `sandbox`: execução Python controlada por endpoint dedicado

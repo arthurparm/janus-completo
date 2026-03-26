@@ -35,6 +35,25 @@ Explicar o modelo mental do backend além da lista de módulos.
 - Workers executam rotinas contínuas e assíncronas fora do caminho síncrono da request.
 - O kernel é o centro de composição e o `app.state` é o barramento de entrega para os endpoints.
 
+## Exemplo concreto: chat
+- O endpoint decide o mínimo necessário de borda:
+  - resolver identidade
+  - validar acesso/tamanho/origem
+  - resolver papel efetivo inicial
+  - traduzir exceções para contrato HTTP/SSE
+- `ChatService` funciona como fachada estável e distribui responsabilidade para três serviços internos:
+  - `ConversationService`: ciclo de vida da conversa, histórico e reconciliação de pending actions já resolvidas
+  - `MessageOrchestrationService`: ramo REST, ordem de decisão, RAG/memória, grounding documental e pós-processamento
+  - `StreamingService`: ramo SSE, handshake incremental, heartbeats, circuito e persistência final do stream
+- A política real do chat não fica num ponto único:
+  - heurística semântica nasce em `message_helpers.py`
+  - routing por intenção nasce no endpoint via `IntentRoutingService`
+  - confirmação/pending action nasce na combinação endpoint + `chat_contracts.py`
+  - tool loop e content safety ficam em `ChatAgentLoop`
+- O backend pensa em degradação por transporte:
+  - REST prioriza capacidade completa, incluindo `ChatAgentLoop`, indexação RAG do turno e sumarização
+  - SSE prioriza entrega incremental e observabilidade, mas o caminho geral não usa `ChatAgentLoop`
+
 ## Padrões recorrentes
 - DTOs Pydantic nos endpoints.
 - Serviços como fachadas estáveis.

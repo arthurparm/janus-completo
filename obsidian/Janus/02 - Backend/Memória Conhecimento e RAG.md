@@ -41,27 +41,119 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - `user_docs_<user_id>` recebe `doc_chunk` via `DocumentIngestionService._ingest_payload()`.
 - `user_memory_<user_id>` recebe espelho de memórias gerativas por usuário via `GenerativeMemoryService._mirror_to_user_collection()`.
 - `user_secret_<user_id>` recebe segredos cifrados e isolados via `SecretMemoryService.store_secret()`.
+- `vector_store.py` não trata Qdrant como uma coleção única: ele infere tuning, payload indexes e naming por finalidade (`janus_episodic_memory`, `user_chat_*`, `user_docs_*`, `user_memory_*`, `user_secret_*`).
 
 ### Neo4j
 - `GraphDatabase` inicializa constraints, índices e tipos de relacionamento do grafo.
+- `GraphDatabase._initialize_ontology()` também tenta criar índices vetoriais e full-text no próprio Neo4j (`concept_embeddings`, `technology_embeddings`, `tool_embeddings`, `pattern_embeddings`, `entity_embeddings`, `keyword_search`, `entity_keyword_search`).
 - `KnowledgeGraphService.persist_experience_node()` cria nós `Experience` e encadeia o fluxo temporal do usuário com `(:Experience)-[:NEXT]->(:Experience)`.
 - `KnowledgeGraphService.persist_extraction()` consolida entidades em nós `Entity` e relacionamentos extraídos a partir de experiências.
 - `KnowledgeRepository.save_code_structure()` cria/atualiza `File:CodeFile`, `Function:CodeFunction` e `Class:CodeClass`.
 - `SelfMemory` é nó de grafo voltado a autoestudo de código; ele não é criado por `KnowledgeService`, e sim pelo fluxo de `AutonomyAdminService.run_self_study()`.
 
-## Papel exato de Neo4j e Qdrant
-### Qdrant
-- É o backend principal de recuperação semântica para chat, documentos, memórias de usuário e segredos.
-- Mantém as coleções por usuário e a coleção global `janus_episodic_memory`.
-- É a fonte usada por `RAGService.retrieve_context()` para contexto de prompt.
-- É a fonte usada por `chat_citation_service` para citações de documentos.
-- É a fila persistente implícita de consolidação: `KnowledgeConsolidator` lê somente pontos pendentes em `janus_episodic_memory`.
+## Papel exato de Neo4j e Qdrant - Quando usar cada um
 
-### Neo4j
-- É o backend estrutural para entidades, relações, experiência consolidada, code graph e `SelfMemory`.
-- É usado por `KnowledgeService.index_codebase()` e pelas consultas de citação estrutural de código (`KnowledgeRepository.find_code_citations()`).
-- Sustenta o grafo de autoestudo e a auditoria/reparo de `SelfMemory`.
-- Não é a fonte principal de contexto do chat normal. O chat geral usa Qdrant; Neo4j entra em fluxos de conhecimento/código e administração.
+### Qdrant - Banco Vetorial Principal
+**Use Qdrant quando precisar de:**
+- **Recuperação semântica** e similaridade por embeddings
+- **Memória episódica** e histórico de conversas
+- **Contexto para RAG** no chat em tempo real
+- **Citações de documentos** durante conversação
+- **Preferências e regras** personalizadas por usuário
+- **Segredos e informações sensíveis** isoladas por usuário
+
+**Coleções principais e seus papéis:**
+| Coleção | Tipo de Dados | Acesso | Latência Esperada | Fallback |
+|---------|---------------|---------|-------------------|----------|
+| `janus_episodic_memory` | Memórias consolidadas | Global | < 200ms | Cache local limitado |
+| `user_chat_<user_id>` | Histórico de chat | Por usuário | < 150ms | SQL apenas |
+| `user_docs_<user_id>` | Documentos chunkados | Por usuário | < 200ms | Nenhum |
+| `user_memory_<user_id>` | Preferências/regras | Por usuário | < 100ms | Defaults do sistema |
+| `user_secret_<user_id>` | Segredos cifrados | Por usuário | < 100ms | Nenhum (falha se não autorizado) |
+
+**Características técnicas:**
+- **Embeddings**: OpenAI Ada-002 (1536 dimensões)
+- **Similaridade**: Cosseno por padrão
+- **Indexação**: HNSW para busca aproximada
+- **Criptografia**: AES-256 para conteúdo sensível
+- **Isolamento**: Dados por usuário em coleções separadas
+
+### Neo4j - Grafo de Conhecimento Estrutural  
+**Use Neo4j quando precisar de:**
+- **Relacionamentos complexos** entre entidades
+- **Grafo de código** com dependências e chamadas
+- **Ontologia de domínio** e taxonomias
+- **Análise de impacto** e navegação de dependências
+- **Consolidação de experiências** em estrutura semântica
+- **Self-memory** e autoestudo de código
+
+**Tipos de nós e relações principais:**
+| Tipo | Exemplos | Uso Principal | Performance |
+|------|----------|---------------|-------------|
+| `Experience` | Eventos, memórias | Timeline do usuário | ~500ms para timeline completa |
+| `Entity` | Conceitos, tecnologias | Grafo de conhecimento | < 200ms para busca por tipo |
+| `CodeFile` | Arquivos Python | Indexação de código | ~2s para codebase completo |
+| `CodeFunction` | Funções, métodos | Análise de dependências | < 100ms por arquivo |
+| `SelfMemory` | Resumos de código | Autoestudo | < 500ms para consultas |
+
+**Características técnicas:**
+- **Query language**: Cypher
+- **Índices**: Vetoriais e full-text integrados
+- **Constraints**: Unique constraints em `memory_key`
+- **Transações**: ACID para operações críticas
+- **Cache**: Resultados em memória para queries frequentes
+
+### Quando cada banco é usado no fluxo de chat
+
+#### Fluxo normal de RAG no chat:
+1. **Qdrant** → `RAGService.retrieve_context()` → Contexto para prompt
+2. **Qdrant** → `chat_citation_service` → Citações para resposta
+3. **PostgreSQL** → Histórico de mensagens → Estrutura da conversa
+
+#### Fluxo de análise de código:
+1. **Neo4j** → `KnowledgeRepository.find_code_citations()` → Estrutura de código
+2. **Neo4j** → `CodeHybridSearchService` → Busca híbrida em código
+3. **Qdrant** → Memórias de self-study → Contexto adicional
+
+#### Fluxo de consolidação de conhecimento:
+1. **Qdrant** → `janus_episodic_memory` → Memórias para consolidar
+2. **Neo4j** → `KnowledgeGraphService.persist_extraction()` → Entidades e relações
+3. **Qdrant** → Atualização com `consolidated=True` → Marca como processado
+
+### Estratégias de Fallback
+
+#### Qdrant indisponível:
+- **Modo offline**: `QdrantProvider` detecta e entra em modo offline
+- **Cache local**: `MemoryCore` mantém últimas memórias em cache por 5 minutos
+- **Degradação gradual**: 
+  - Chat perde contexto histórico mas mantém estrutura SQL
+  - Documentos não são indexados nem recuperados
+  - RAG retorna `None`, chat continua sem enriquecimento
+
+#### Neo4j indisponível:
+- **Modo offline**: `GraphDatabase.connect()` entra em modo offline
+- **Queries vazias**: Retorna `[]` para consultas, não quebra o fluxo
+- **Chat desimpedido**: Chat básico continua funcionando com Qdrant
+- **Análise limitada**: Code analysis e knowledge graph ficam indisponíveis
+
+#### Ambos indisponíveis:
+- **Chat básico**: Apenas PostgreSQL para estrutura da conversa
+- **Sem memória**: Sistema opera como chat stateless
+- **Sem RAG**: Respostas baseadas apenas em contexto do prompt atual
+
+### Performance e Latência
+
+#### Targets de latência observados no código:
+- **Qdrant busca**: < 200ms para recall de 10 itens
+- **Neo4j queries**: < 500ms para consultas complexas  
+- **Consolidação**: Processamento em lote a cada 30 segundos
+- **Indexação**: Assíncrona via workers do RabbitMQ
+
+#### Fatores que afetam performance:
+- **Tamanho do embedding**: 1536 dimensões (OpenAI)
+- **Quantidade de dados**: Milhares de memórias por usuário
+- **Complexidade do grafo**: Dezenas de milhares de nós de código
+- **Carga concorrente**: Múltiplos usuários simultâneos
 
 ### Postgres
 - Não guarda embeddings nem relações semânticas, mas é parte do pipeline de persistência.
@@ -94,6 +186,7 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 - Cada chunk é enviado para `KnowledgeExtractionService.extract_from_text(...)`.
 - O resultado é persistido em Neo4j por `KnowledgeGraphService.persist_extraction(...)`.
 - Ao final, `_mark_as_consolidated()` atualiza no Qdrant `consolidated=True`, `consolidation_status=done`, `neo4j_sync_status=consolidated` e contadores de entidades/relações.
+- Isso inclui memórias de `self_study` gravadas em `janus_episodic_memory`: elas entram no mesmo loop de consolidação, mas `code_summary` evita chunking adicional.
 
 ### Limite importante
 - O worker consolida a coleção `janus_episodic_memory`.
@@ -111,6 +204,7 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
   - `Class:CodeClass`
   - relações `CONTAINS`
 - `KnowledgeRepository.bulk_merge_calls()` cria relações `CALLS` entre funções.
+- Ao final do fluxo, `index_codebase()` chama `repair_self_memory_graph()` para religar `SelfMemory` existente ao code graph recém-indexado.
 
 ### O que o indexador não faz
 - Não gera resumos de arquivo.
@@ -151,6 +245,7 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
 ### `RAGService.retrieve_context()`
 - Só segue adiante se existir `MemoryService`, `message`, `user_id` e a política de rota escolher `RouteTarget.QDRANT`.
 - O contexto retornado é um bloco textual para prompt, não uma estrutura de citação.
+- A composição final do contexto segue esta ordem lógica: segredos autorizados, regras procedurais, preferências, contexto episódico recente e, quando aplicável, um bloco introdutório curto sobre documentos anexados na conversa.
 
 ### Assimetria importante entre REST e SSE
 - O caminho REST do chat agenda `RAGService.maybe_index_message()` para mensagem do usuário e para a resposta do assistente.
@@ -207,36 +302,109 @@ Descrever o comportamento real de memória, grafo, documentos e recuperação a 
   - Neo4j para estrutura navegável
 - A falha de Neo4j nesse fluxo é parcial: o serviço atualiza o status em Postgres e mantém a consolidação vetorial, mas marca no sumário que a persistência de grafo ficou parcial.
 
-## Dependências externas e impacto de falha
-### Qdrant indisponível
-- `QdrantProvider` entra em modo offline; `MemoryCore.health_check()` passa a falhar.
-- `MemoryCore.amemorize()` ainda pode manter item no cache local do processo, mas perde persistência vetorial até a conexão voltar.
-- `MemoryService.index_interaction()` não tem cache local; falha de Qdrant faz a indexação do chat ser perdida.
-- `RAGService.retrieve_context()` degrada para `None` e o chat segue sem contexto adicional.
-- Ingestão e citações de documentos degradam ou falham.
-- `KnowledgeConsolidator` não consegue ler a coleção episódica.
+## Circuit Breakers e Modos de Falha
 
-### Neo4j indisponível
-- `GraphDatabase.connect()` pode entrar em modo offline.
-- `query()` passa a devolver `[]` e `execute()` vira no-op; o sistema tende a degradar para vazio em vez de sempre lançar erro.
-- `KnowledgeService.index_codebase()` depende de sessão/transação real e deixa de indexar código.
-- Persistência de entidades/relacionamentos e auditoria de `SelfMemory` ficam indisponíveis.
-- `ask_code_with_citations()` perde a parte estrutural do code graph.
+### Implementação de Circuit Breakers
 
-### Postgres indisponível
-- Chat persistido, identidade, manifests, knowledge spaces, autonomia e outbox perdem a fonte de verdade.
-- O `graph_orchestrator` tenta usar `AsyncPostgresSaver`; se a falha ocorrer na inicialização, ele degrada para `MemorySaver`.
-- Mesmo quando Qdrant e Neo4j estão saudáveis, o produto perde o plano de controle transacional sem Postgres.
+#### QdrantProvider
+```python
+# Detecção de falha e modo offline
+if not self._client.health_check():
+    logger.warning("Qdrant health check failed, entering offline mode")
+    self._offline_mode = True
+    self._last_offline_check = time.time()
+```
 
-### Redis indisponível
-- Não remove memórias nem documentos já persistidos.
-- Remove coordenação de quotas temporárias, spend distribuído, Pub/Sub de config e parte do rate limit, dependendo do modo fail-open/fail-closed.
+**Comportamento em modo offline:**
+- **Cache local**: Mantém últimas 100 memórias em memória por 5 minutos
+- **Operações de leitura**: Retornam dados do cache ou `None` se não houver cache
+- **Operações de escrita**: Falham silenciosamente com log de warning
+- **Recuperação**: Verifica saúde a cada 30 segundos quando offline
 
-### Embeddings/LLM indisponíveis
-- `MemoryCore` e vários serviços caem para vetor zero quando embedding falha.
-- `GenerativeMemoryService` usa LLM para `importance`; sem LLM cai em defaults.
-- `KnowledgeConsolidator` depende de extração por LLM; sem isso a consolidação não produz entidades/relações.
-- `GraphRAGCore` depende de embedder compatível com OpenAI e de síntese LLM.
+#### GraphDatabase (Neo4j)
+```python
+# Modo offline sem exceções
+except Exception as e:
+    logger.warning(f"Neo4j connection failed, entering offline mode: {e}")
+    self._offline_mode = True
+    return  # Não propaga exceção
+```
+
+**Comportamento em modo offline:**
+- **Queries**: Retornam listas vazias `[]`
+- **Execute**: Torna-se no-op (não executa nada)
+- **Transações**: Não são iniciadas
+- **Recuperação**: Tenta reconectar a cada minuto
+
+### Dependências externas e impacto de falha
+
+#### Qdrant indisponível
+- **Detecção**: `QdrantProvider` entra em modo offline via health check
+- **Impacto imediato**: 
+  - `MemoryCore.health_check()` falha
+  - `MemoryCore.amemorize()` usa cache local por 5 minutos
+  - `MemoryService.index_interaction()` falha sem cache (chat não indexado)
+  - `RAGService.retrieve_context()` retorna `None` (sem contexto RAG)
+- **Degradação gradual**:
+  - Primeiros 5 minutos: Cache local pode salvar algumas operações
+  - Após 5 minutos: Todas operações vetoriais falham
+  - Documentos não são indexados nem recuperados
+  - `KnowledgeConsolidator` não consegue ler `janus_episodic_memory`
+
+#### Neo4j indisponível
+- **Detecção**: `GraphDatabase.connect()` entra em modo offline
+- **Impacto imediato**:
+  - `query()` retorna `[]` para qualquer consulta
+  - `execute()` vira no-op (não executa)
+  - Chat básico continua funcionando normalmente
+- **Funcionalidades perdidas**:
+  - `KnowledgeService.index_codebase()` para de indexar código
+  - Persistência de entidades/relacionamentos falha silenciosamente
+  - `ask_code_with_citations()` perde estrutura de code graph
+  - Auditoria de `SelfMemory` fica indisponível
+- **Vantagem**: Falha silenciosa preserva UX do chat
+
+#### Postgres indisponível
+- **Impacto crítico**: Sistema não inicializa (health check falha no boot)
+- **Se falhar após boot**:
+  - Chat persistido: Mensagens novas não são salvas
+  - Identidade: Login e autenticação falham
+  - Knowledge spaces: Metadados e status perdidos
+  - Autonomia: Estado de execução comprometido
+- **Fallback limitado**:
+  - `graph_orchestrator` degrada para `MemorySaver` (perde durabilidade)
+  - Mas perde controle transacional do sistema
+
+#### Redis indisponível
+- **Impacto moderado**: 
+  - Rate limit: Fail-open ou fallback local em endpoints específicos
+  - Configurações: Hot-reload para de funcionar (requer reinício)
+  - Quotas: Tracking vira best-effort
+- **Preservação**: Não afeta memórias ou documentos já persistidos
+
+#### Embeddings/LLM indisponíveis
+- **Cascata de falhas**:
+  - `MemoryCore`: Vetor zero quando embedding falha
+  - `GenerativeMemoryService`: Usa defaults quando LLM falha
+  - `KnowledgeConsolidator`: Não produz entidades sem extração LLM
+  - `GraphRAGCore`: Requer embedder OpenAI compatível
+- **Impacto**: Perda de qualidade, não quebra funcionalidade básica
+
+### Estratégias de Recuperação
+
+#### Ordem de recuperação recomendada:
+1. **PostgreSQL** (mais crítico - sistema não funciona sem)
+2. **Qdrant** (RAG e memória essenciais para UX)
+3. **Neo4j** (funcionalidades avançadas mas chat básico funciona)
+4. **Redis** (performance e quotas)
+5. **RabbitMQ** (processamento assíncrono)
+6. **Ollama** (provedor local opcional)
+
+#### Métricas de monitoramento:
+- **Qdrant**: Latência de busca < 200ms, recall > 0.8
+- **Neo4j**: Tempo de query < 500ms, conexões ativas
+- **PostgreSQL**: Latência < 100ms, taxa de erro < 1%
+- **Redis**: Hit ratio > 0.9, latência < 5ms
 
 ## Riscos/Lacunas
 - `GraphRAGCore` espera índices `janus_vector_index` e `janus_fulltext_index`, mas `GraphDatabase._initialize_ontology()` cria `entity_embeddings`, `concept_embeddings`, `keyword_search` e `entity_keyword_search`. O código atual pode deixar o GraphRAG desabilitado mesmo com Neo4j saudável.

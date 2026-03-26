@@ -56,6 +56,7 @@ Cobertura real no fluxo de autonomia:
 - forte no caminho HTTP de planos manuais;
 - parcial no planner;
 - ausente como gate final antes do enqueue do passo escolhido.
+- `reset_cycle_quota()` e `can_continue_cycle()` existem, mas nao sao acionados pelo `AutonomyLoop` atual antes do publish.
 
 ### `planner`
 Implementa um ciclo Reflexion:
@@ -66,6 +67,13 @@ Implementa um ciclo Reflexion:
 4. fallback seguro
 
 Ele gera um array de passos, mas a validacao interna e limitada a existencia da tool, formato de `args`, blocklist e metadados opcionais.
+
+Refinamentos importantes do comportamento real:
+
+- a listagem de tools do planner aplica `blocklist`;
+- em `risk_profile=conservative`, ele so mantem tools `READ_ONLY|SAFE` e `WRITE` explicitamente allowlisted;
+- a validacao final do planner nao reaplica allowlist geral;
+- `args_schema` das tools nao e validado nesse caminho.
 
 ### `AutonomyAdminService`
 Nao faz parte do loop principal, mas e parte importante do dominio:
@@ -98,6 +106,25 @@ Nao faz parte do loop principal, mas e parte importante do dominio:
 - `Kernel` injeta `autonomy_service`, `goal_manager` e `autonomy_admin_service` em `app.state`
 - `start_all_workers()` sobe consumers do orquestrador se a flag permitir
 - `startup_self_study_check()` roda sem bloquear o boot
+- o `SchedulerService` sobe no `Kernel`, mas nao e chamado por `AutonomyService` nem pelos endpoints de `/autonomy`
+
+## Start, stop e status
+### `POST /autonomy/start`
+- valida o `plan` apenas quando ele vem no request;
+- tenta adquirir lease no escopo calculado por `user_id` e `project_id`;
+- retorna `409` quando o lease ja esta ocupado por outra instancia no mesmo escopo;
+- retorna `400` quando o loop da propria instancia ja esta ativo.
+
+### `POST /autonomy/stop`
+- cancela a task em memoria;
+- tenta marcar a run atual como encerrada;
+- libera o lease do escopo atual;
+- retorna `400` se nao houver loop ativo nesta instancia.
+
+### `GET /autonomy/status`
+- expoe apenas estado em memoria do service atual;
+- inclui `config` e `runtime_lock`;
+- nao consulta scheduler nem o registry de workers.
 
 ## Runtime lock
 O lease de autonomia e uma protecao cross-instance em banco:
@@ -116,6 +143,10 @@ Escopos possiveis:
 - `user:<user_id>:project:<project_id>`
 
 Na pratica, o lock protege a subida simultanea do loop no mesmo escopo, nao a execucao interna de cada agente/worker.
+
+Detalhe operacional importante:
+
+- se o lease for perdido durante a renovacao no ciclo, o loop se encerra marcando `_running=false`, mas esse caminho nao passa pelo mesmo cleanup completo de `stop()`.
 
 ## Plano e politica: contrato real
 ### Plano manual
@@ -140,6 +171,7 @@ Plano gerado automaticamente e menos governado:
 Impactos:
 
 - a politica nova vale para futuros ciclos do service atual;
+- pode ser atualizada mesmo com o loop parado, porque o contrato e apenas em memoria;
 - a run SQL nao e regravada;
 - o plano que ja estava em memoria nao e revalidado;
 - o modo `enqueue_router` continua sem gate de policy no ponto final de publish.
@@ -148,6 +180,7 @@ Impactos:
 ### Origem
 - `POST /autonomy/goals`
 - `AutonomyAdminService.sync_backlog()`
+- `GET /autonomy/goals` sem filtro omite estados terminais; com `status`, aplica filtro exato no SQL
 
 ### Selecionar
 - sempre a primeira `pending` por `priority asc, created_at asc`
@@ -155,6 +188,7 @@ Impactos:
 ### Progredir
 - `pending -> in_progress` quando o loop seleciona a meta
 - `in_progress -> pending` se o publish do enqueue falhar
+- se o plano efetivo chegar vazio nessa etapa, o ciclo retorna sem excecao e a goal pode permanecer `in_progress`
 
 ### Finalizar
 - via `PATCH /goals/{id}/status`
@@ -167,6 +201,27 @@ Mapeamento do hook automatico:
 
 ## Workers relevantes para autonomia
 O `AutonomyLoop` nao aparece em `WORKER_NAMES`; ele e uma task propria do service. O que o orquestrador sobe e o ecossistema que consome o trabalho enfileirado.
+
+Relacao real com workers e scheduler:
+
+- o loop depende operacionalmente de `router` e dos workers do Parlamento para que a meta avance apos o enqueue;
+- o scheduler do `Kernel` nao dispara nem controla ciclos do `AutonomyLoop`;
+- `/api/v1/workers/status` nao mostra o `AutonomyLoop`; para ele, a superficie correta e `/api/v1/autonomy/status`.
+
+### Workers: contrato canônico por superfície
+- Task do `AutonomyLoop`
+  - vive dentro de `AutonomyService` (processo FastAPI)
+  - superfície correta: `GET /api/v1/autonomy/status`
+- Workers do orquestrador (nome observado)
+  - registry: `app.state.orchestrator_workers`
+  - inicialização: `start_all_workers()` no `lifespan` quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true` ou manualmente via `POST /api/v1/workers/start-all`
+  - superfície correta: `GET /api/v1/workers/status` (serializa somente o registry; não consulta broker)
+- Loops/serviços do `Kernel` fora do endpoint de workers
+  - registry parcial: `kernel.workers` (ex.: `knowledge_consolidator`, `data_harvester`, `life_cycle_worker`, `outbox_service`)
+  - o `Kernel` também inicia alguns consumers de fila diretamente e esses handles não entram no registry do endpoint
+- Observabilidade objetiva por fila (consumers reais)
+  - superfície correta: `GET /api/v1/tasks/queue/{queue_name}`
+  - usada para confirmar duplicação de consumers e backlog por fila
 
 ### Essenciais para o fluxo atual
 - `router`
@@ -229,6 +284,9 @@ O `AutonomyLoop` nao aparece em `WORKER_NAMES`; ele e uma task propria do servic
   - `janus.document.ingestion`
   - `janus.neural.training`
 - `main.py` tambem pode subir esses mesmos consumers via `start_all_workers()` quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`
+- `GET /api/v1/workers/status`
+  - conta apenas o registry de `app.state.orchestrator_workers`
+  - em condições normais, o total rastreado tende a ser `len(WORKER_NAMES)` (incluindo handles `disabled` quando aplicável)
 - no PC TESTE, em 25 de marco de 2026, as filas `janus.knowledge.consolidation`, `janus.document.ingestion` e `janus.neural.training` estavam com `consumers=2`
 - `/api/v1/workers/status` mostrava apenas um nome por worker orquestrado e nao expunha essa duplicacao
 

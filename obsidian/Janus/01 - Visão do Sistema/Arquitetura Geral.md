@@ -19,7 +19,8 @@ Explicar a arquitetura do Janus como plataforma agentic full stack.
 ## Entradas
 - FastAPI montado em `backend/app/main.py`.
 - `lifespan` como coordenador de boot e shutdown.
-- Kernel com DI manual.
+- `Kernel` com DI manual.
+- `settings` de `backend/app/config.py` definindo flags, defaults e validadores usados no boot.
 - Angular com rotas standalone.
 - Docker dividido entre PC1 e PC2.
 
@@ -34,7 +35,7 @@ Explicar a arquitetura do Janus como plataforma agentic full stack.
 ## Camadas
 - Interface: Angular em `frontend/src/app`.
 - BFF/API: FastAPI em `backend/app/main.py` e `backend/app/api/v1`.
-- Orquestração interna: kernel, serviços, repositórios e workers.
+- Orquestração interna: `lifespan`, `Kernel`, serviços, repositórios e dois planos de workers (`kernel.workers` e `app.state.orchestrator_workers`).
 - Persistência operacional: Postgres, Redis, RabbitMQ.
 - Persistência cognitiva: Neo4j e Qdrant.
 - Inferência: provedores cloud e Ollama local.
@@ -59,12 +60,15 @@ Explicar a arquitetura do Janus como plataforma agentic full stack.
   - Neo4j e Qdrant em PC2
   - RabbitMQ como backbone de tarefas assíncronas
 - Consequência:
-  - o produto pode continuar servindo HTTP com parte do plano de dados cognitivo degradado, porque o boot do API só bloqueia dependências locais de PC1
+  - a separação continua válida conceitualmente, mas o boot do API não bloqueia só dependências locais de PC1
+  - pelo código, `graph_db`, `memory_db`, broker e Redis entram juntos no caminho crítico de `_init_infrastructure()`, então falhas de Neo4j/Qdrant também podem impedir o serving inicial
+  - a degradação parcial acontece mais tarde, em serviços opcionais e subsistemas de background, não no núcleo mínimo de infraestrutura
 
 ## Leituras centrais
 - `main.py` monta a superfície FastAPI em tempo de importação: logging, tracing, middlewares, exception handlers, routers e endpoints utilitários.
-- O `lifespan` coordena a sequência de boot: valida segredos, chama `Kernel.startup()`, inicializa graph/prompt loading e publica dependências selecionadas em `app.state`.
-- O `Kernel` compõe repositórios e serviços manualmente e sobe a maior parte do runtime assíncrono de fundo.
+- O `lifespan` coordena a sequência de boot: chama o gate de segredos, executa `Kernel.startup()`, inicializa graph/prompt loading, publica dependências selecionadas em `app.state` e ainda monta serviços extras como `AutonomyAdminService`.
+- O `Kernel` compõe repositórios e serviços manualmente, sobe a maior parte do runtime assíncrono de fundo e mantém handles internos que não são publicados em `app.state`.
+- `config.py` influencia diretamente o boot por defaults como `AUTO_INDEX_ON_STARTUP=True`, `START_ORCHESTRATOR_WORKERS_ON_STARTUP=True`, `FIREBASE_ENABLED=False`, `SERVE_STATIC_FILES=False` e por validadores como o preenchimento automático de `CORS_ALLOW_ORIGINS` em ambiente não produtivo.
 - O frontend consome a API majoritariamente por `BackendApiService`.
 
 ## Arquivos-fonte
@@ -81,5 +85,7 @@ Explicar a arquitetura do Janus como plataforma agentic full stack.
 
 ## Riscos/Lacunas
 - O kernel concentra muita composição e aumenta acoplamento estrutural.
+- O runtime assíncrono fica dividido entre workers rastreados pelo `Kernel`, tasks do orquestrador em `app.state` e tarefas fire-and-forget sem registry única de shutdown.
+- `PUBLIC_API_KEY` é consultado dinamicamente em `main.py`, sem aparecer como campo tipado em `AppSettings`, o que enfraquece a previsibilidade da superfície de configuração.
 - O frontend possui um client API muito largo, sugerindo bounded contexts ainda não totalmente separados.
 - `KnowledgeSpace` e chat grounded são domínios compostos: dependem de Postgres para controle, de Qdrant para recuperação e, em partes do fluxo, de Neo4j para estrutura.

@@ -33,6 +33,25 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - [[01 - Visão do Sistema/Dependências Externas]]
 - [[04 - Fluxos End-to-End/Conversa e Chat]]
 
+## Superfície frontend real dentro de `conversations`
+- O fluxo documental não vive numa tela dedicada; ele aparece no rail avançado `Cliente` de `frontend/src/app/features/conversations/conversations.ts`.
+- A aba `Docs` expõe quatro operações distintas na mesma conversa:
+  - upload de arquivo via `file` input com progresso reportado via callback de evento (`selectedUploadFile`, `docUploadInFlight`, `docUploadProgress`)
+  - vínculo remoto por URL via `linkUrl(conversation_id, url, user_id)`
+  - busca manual de trechos via `searchDocuments(query, ..., userId)`
+  - exclusão da biblioteca da conversa via `deleteDocument(docId, userId)`
+  - Status `file_too_large` e `quota_exceeded` tratados explicitamente no callback de upload
+- Ao selecionar uma conversa, `loadContext(conversationId)` recarrega em paralelo:
+  - `listDocuments(conversationId, userId)` para a biblioteca documental
+  - `getMemoryTimeline(..., conversation_id=conversationId)` para memória associada
+- A UI coloca `Docs`, `Memória` e `RAG` lado a lado por desenho de produto. Isso é importante porque o operador valida o efeito do documento no mesmo painel em que:
+  - grava memória generativa
+  - consulta memória existente
+  - roda RAG manual para inspeção
+
+Ponto importante:
+- O frontend trata documentos como contexto da conversa ativa, não como um acervo global genérico. A biblioteca exibida no rail é scoped pelo `conversation_id` selecionado.
+
 ## Sequência real
 ### 1. Stage do upload
 1. `DocumentIngestionService.stage_upload()` cria `doc_id`, resolve caminho em disco e cria o manifesto.
@@ -66,8 +85,9 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
    - `semantic_summary`
    - `semantic_confidence`
    - `content_hash`
-4. Antes do upsert, `_delete_doc_points()` remove chunks antigos do mesmo `doc_id`.
-5. Ao final, o manifesto é marcado como `completed` com `chunks_total`, `chunks_indexed` e resumo semântico.
+4. `vector_store.py` garante que `user_docs_<user_id>` seja criada com payload indexes específicos para filtros documentais recorrentes, como `doc_id`, `knowledge_space_id`, `source_type`, `doc_role`, `conversation_id`, `file_name`, `status` e `timestamp`.
+5. Antes do upsert, `_delete_doc_points()` remove chunks antigos do mesmo `doc_id`.
+6. Ao final, o manifesto é marcado como `completed` com `chunks_total`, `chunks_indexed` e resumo semântico.
 
 ## Persistência por etapa
 - Stage:
@@ -99,12 +119,17 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
   - só depois fluxo geral de chat, se o grounding não se aplicar
 - A nota [[04 - Fluxos End-to-End/Conversa e Chat]] detalha o efeito disso sobre REST e SSE.
 
+Reflexo direto na UI:
+- Depois de upload, link ou exclusão, `refreshConversationContext()` recarrega o contexto da conversa.
+- O operador percebe esse branch dominante no mesmo lugar em que conversa com o Janus; não existe separação entre “módulo de documentos” e “módulo de chat”.
+
 ### Contexto de prompt
 - `RAGService.retrieve_context()` não injeta chunks completos.
 - Se a mensagem mencionar arquivo/anexo/documento, `_conversation_document_context()` faz `scroll` em `user_docs_<user_id>` filtrando:
   - `metadata.type = doc_chunk`
   - `metadata.user_id = <user>`
   - `metadata.conversation_id = <conversa>`
+- Esse passo é um `scroll` filtrado por conversa, não uma busca vetorial nova.
 - O resultado é um bloco textual curto com nome do arquivo e `semantic_summary` ou preview do chunk.
 
 ## Relação com memória
@@ -112,6 +137,12 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - `doc_chunk` não passa por `MemoryCore.amemorize()`.
 - A recuperação documental do chat é separada do recall de `user_chat_<user_id>` e `user_memory_<user_id>`.
 - `collect_chat_citations()` pode combinar documentos e memórias, mas são pipelines distintos.
+- O frontend reforça essa separação: a aba `Memória` usa endpoints próprios (`addGenerativeMemory`, `getGenerativeMemories`, `getMemoryTimeline`) e não reaproveita `doc_chunk` como se fosse memória.
+- `generativeMemoryMetaLine()` formata a visualização de cada item de memória generativa como: tipo (episodic/semantic/procedural), importância numérica (0-10), score e timestamp de criação/atualização.
+- Ao mesmo tempo, o desenho da tela faz as três coisas parecerem vizinhas operacionais:
+  - documentos enriquecem grounding e citações
+  - memória generativa guarda fatos/preferências
+  - RAG manual serve para inspecionar o que cada pipeline está devolvendo
 
 ## Relação com conhecimento/Neo4j
 ### O que o código comprova
@@ -131,6 +162,7 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
   - manifesto
   - indexação vetorial em `user_docs_<user_id>`
   - uso em citações/contexto de conversa
+- Em outras palavras: `doc_chunk` não entra no mesmo pipeline observado de `janus_episodic_memory` usado pelo `KnowledgeConsolidator.consolidate_batch()`.
 
 ## Dependências externas e impacto de falha
 ### Qdrant indisponível
@@ -160,6 +192,7 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - O código atual sugere uma consolidação documental para conhecimento, mas a implementação efetiva não aparece no worker inspecionado.
 - O domínio documental é multi-store: olhar só manifesto SQL ou só Qdrant não basta para entender o estado real do documento.
 - Como a existência de manifests já empurra a conversa para o branch documental, qualquer desvio ou imprecisão nesse fluxo impacta diretamente a conversa principal, não apenas um submódulo de documentos.
+- Como a UI concentra docs, memória e RAG no mesmo rail, qualquer inconsistência de sincronização pós-upload aparece imediatamente como ruído na experiência da conversa, não só como problema de “gestão documental”.
 
 ## Arquivos-fonte
 - `backend/app/services/document_service.py`
@@ -168,3 +201,5 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - `backend/app/services/rag_service.py`
 - `backend/app/db/vector_store.py`
 - `backend/app/services/knowledge_service.py`
+- `frontend/src/app/features/conversations/conversations.ts`
+- `frontend/src/app/features/conversations/admin-code-qa.util.ts`

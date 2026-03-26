@@ -20,8 +20,7 @@ Registrar a ordem real de inicialização e encerramento do backend, distinguind
 - `backend/app/main.py`
 - `backend/app/core/kernel.py`
 - `backend/app/config.py`
-- `backend/app/core/agents/graph_orchestrator.py`
-- `backend/app/core/security/secret_validator.py`
+- Chamadas externas feitas por `main.py` durante o boot: `validate_production_secrets()`, `init_graph()` e `close_graph()`
 
 ## Saídas
 - Checklist operacional de startup/shutdown com pontos de bloqueio e degradação.
@@ -34,54 +33,50 @@ Registrar a ordem real de inicialização e encerramento do backend, distinguind
 ## Fase de montagem do app
 1. `backend/app/main.py` é importado, escolhe `log_file` e chama `setup_logging()` antes mesmo do `lifespan`.
 2. O módulo cria `app = FastAPI(..., lifespan=lifespan)` com `title` e `version` vindos de `settings`.
-3. Ainda em tempo de importação, o código aplica `setup_tracing(app)`, instrumentação Prometheus se a dependência existir, middlewares, handlers de exceção, router `/api/v1`, middleware opcional de `PUBLIC_API_KEY`, `actor_binding`, content negotiation com MsgPack, health endpoints e static serving opcional.
+3. Ainda em tempo de importação, o código aplica `setup_tracing(app)`, instrumentação Prometheus se a dependência existir, middlewares, handlers de exceção, router `/api/v1`, middleware opcional de `PUBLIC_API_KEY` via `getattr(settings, "PUBLIC_API_KEY", None)`, `actor_binding`, content negotiation com MsgPack, health endpoints e static serving opcional.
+4. `config.py` já entra nesse ponto com alguns defaults que influenciam a superfície HTTP: `SERVE_STATIC_FILES=False`, `TAILSCALE_SERVE_ENABLED=False` e `CORS_ALLOW_ORIGINS` preenchido automaticamente com localhost em ambiente não produtivo quando a lista vier vazia.
 
 ## Fase de startup (`lifespan`, antes do `yield`)
-1. `validate_production_secrets()` roda primeiro. Só bloqueia o boot quando `ENVIRONMENT=production` e algum segredo crítico ainda está em valor inseguro conhecido.
+1. `validate_production_secrets()` roda primeiro. O detalhe da política de validação fica fora do escopo desta nota, mas o posicionamento do gate é inequívoco: nada do `Kernel` sobe antes dele.
 2. O `lifespan` valida a configuração de LangSmith. Falta de `LANGCHAIN_API_KEY` com `LANGCHAIN_TRACING_V2 == "true"` gera warning, não aborta.
 3. `Kernel.get_instance().startup()` executa a sequência interna do backend.
-4. Dentro do `Kernel`, `_init_infrastructure()` tenta `db.create_tables()`, tenta migração via `db_migration_service`, inicializa Neo4j, memória vetorial, broker e Redis em paralelo, tenta Firebase e então materializa `graph_db`, `memory_db`, `broker` e `agent_manager`.
-5. Ainda no `Kernel`, `_init_mas_actors()` cria `PROJECT_MANAGER`, `CODER`, `RESEARCHER` e `SYSADMIN` se `INIT_MAS_AGENTS_ON_STARTUP` não estiver desabilitado.
-6. `_build_dependency_graph()` monta repositórios, serviços, `GoalManager`, stack de chat, observabilidade e config service.
+4. Dentro do `Kernel`, `_init_infrastructure()` tenta `db.create_tables()`, tenta migração via `db_migration_service`, inicializa `graph_db`, `memory_db`, broker e Redis em um `asyncio.gather(...)` crítico, tenta Firebase e então materializa `graph_db`, `memory_db`, `broker` e `agent_manager`.
+5. Ainda no `Kernel`, `_init_mas_actors()` cria `PROJECT_MANAGER`, `CODER`, `RESEARCHER` e `SYSADMIN` se `INIT_MAS_AGENTS_ON_STARTUP` não estiver desabilitado. O default em `config.py` é subir esses atores.
+6. `_build_dependency_graph()` monta repositórios, serviços, `GoalManager`, stack de chat, observabilidade, `config_service` e os componentes auxiliares de chat/RAG.
 7. O `Kernel` registra ferramentas OS/UI, sobe monitor, config service, consolidadores, ingestion/training workers, outbox e scheduler. Depois agenda auto-index e warm-up LLM em background e tenta inicializar `VoiceManager`.
-8. De volta ao `lifespan`, o app inicializa o graph orchestrator com `init_graph()`. Se o saver PostgreSQL falhar, o runtime degrada para `MemorySaver`.
-9. O `lifespan` carrega prompts globais (`load_advanced_prompts`, `load_specialized_prompts`, `load_evolution_prompts`). Falhas aqui são registradas e toleradas.
-10. O app publica dependências do `Kernel` em `app.state`, incluindo bancos, broker, manager, serviços, `goal_manager` e `workers`.
-11. O app tenta criar `AutonomyAdminService`, tenta garantir o usuário de sistema, configura rate limits quando `LLM_RATE_LIMITS` está preenchido, sobe workers do orquestrador quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP` está ativo e agenda o self-study check de startup.
+8. De volta ao `lifespan`, o app chama `init_graph()`, carrega prompts globais (`load_advanced_prompts`, `load_specialized_prompts`, `load_evolution_prompts`) e tolera falhas nesses loaders com log.
+9. O app publica dependências do `Kernel` em `app.state`, incluindo bancos, broker, manager, serviços, `goal_manager` e `workers`.
+10. O app monta `AutonomyAdminService` diretamente no `lifespan`, tenta garantir o usuário de sistema, configura rate limits só quando `LLM_RATE_LIMITS` está preenchido, sobe workers do orquestrador quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP` está ativo e agenda o self-study check de startup.
 
 ## Dependências de persistência materializadas no boot
-- Obrigatórias para o runtime local do compose de PC1:
-  - Postgres
-  - Redis
-  - RabbitMQ
-- Obrigatórias por configuração, mas fora do `depends_on` local:
-  - Neo4j
-  - Qdrant
-  - Ollama
-- Efeito prático:
-  - o boot bloqueia mais cedo em falhas locais de PC1
-  - falhas remotas de PC2 tendem a aparecer como degradação funcional depois da subida da API
+- `graph_db`, `memory_db`, broker e Redis entram todos no caminho crítico de `_init_infrastructure()`.
+- Em termos de código, `initialize_graph_db()`, `initialize_memory_db()`, `initialize_broker()` e `RedisManager.get_instance().initialize()` são aguardados juntos antes do backend poder servir tráfego.
+- `db.create_tables()` e a migração de schema são tentativas tolerantes a falha antes desse bloco crítico.
+- Firebase é opcional: só tenta inicializar quando `FIREBASE_ENABLED` e `FIREBASE_CREDENTIALS_PATH` estiverem preenchidos, e falhas ali não derrubam o boot.
 
 ## Fase de serving
 - Depois do `yield`, o app passa a servir requests usando `request.app.state.*` como fonte de serviços para várias funções `get_*_service(request)`.
 - `app.state.orchestrator_workers` não existe por padrão; ele só aparece quando o boot ou o endpoint de workers efetivamente iniciam essas tarefas.
 - `kernel.workers` e `app.state.orchestrator_workers` representam conjuntos diferentes: o primeiro contém objetos/serviços de fundo do `Kernel`, o segundo rastreia tarefas do orquestrador HTTP-controláveis.
+- `autonomy_admin_service` também não é garantido: ele só existe em `app.state` se a construção local no `lifespan` não falhar.
 
-## Degradação por store observada no runtime
-- Postgres indisponível:
-  - falha dura para grande parte do runtime e perda do saver durável do graph orchestrator
-- Redis indisponível:
-  - o kernel tenta seguir com coordenação parcial degradada
-- Qdrant indisponível:
-  - memória vetorial e RAG sobem degradados
-- Neo4j indisponível:
-  - o grafo pode ficar em modo offline e devolver vazio/no-op
+## Degradação por store observada no código
+- Postgres:
+  - o boot tolera falha em `create_tables()` e na migração, mas vários repositórios e serviços SQL assumem que a camada estará utilizável depois
+- Redis:
+  - participa do `asyncio.gather(...)` crítico da infraestrutura; falha aqui aborta o boot
+- Qdrant / memory DB:
+  - participa do `asyncio.gather(...)` crítico da infraestrutura; falha aqui aborta o boot
+- Neo4j / graph DB:
+  - participa do `asyncio.gather(...)` crítico da infraestrutura; falha aqui aborta o boot
+- RabbitMQ / broker:
+  - participa do `asyncio.gather(...)` crítico da infraestrutura; falha aqui aborta o boot
 
 ## Fase de shutdown
 1. O `lifespan` tenta cancelar cada task presente em `app.state.orchestrator_workers`.
 2. O app executa `close_graph()` sob `asyncio.shield()`.
 3. O app executa `kernel.shutdown()` também sob `asyncio.shield()`.
-4. O `Kernel` para workers rastreados, cancela handles internos de treinamento/consumo, para monitor e scheduler, fecha SQL e depois fecha `graph_db`, `memory_db` e `broker`.
+4. O `Kernel` para workers rastreados, cancela handles internos de treinamento/consumo sem aguardar join explícito, para monitor e scheduler, fecha SQL e depois fecha `graph_db`, `memory_db` e `broker`.
 
 ## Arquivos-fonte
 - `backend/app/main.py`
@@ -96,7 +91,8 @@ Registrar a ordem real de inicialização e encerramento do backend, distinguind
 - [[02 - Backend/LLM Routing e Prompts]]
 
 ## Riscos/Lacunas
-- Abortam o boot: segredos inseguros em `production`, falhas em infraestrutura crítica, falhas na criação de agentes MAS e falhas na montagem do grafo de dependências do `Kernel`.
-- Degradam sem abortar: saver do graph em Postgres, prompts globais, Firebase, `VoiceManager`, `AutonomyAdminService`, usuário de sistema, workers do orquestrador e self-study de startup.
+- Abortam o boot: falha no gate inicial `validate_production_secrets()`, falhas em infraestrutura crítica, falhas na criação de agentes MAS e falhas na montagem do grafo de dependências do `Kernel`.
+- Degradam sem abortar: prompts globais, Firebase, `VoiceManager`, `AutonomyAdminService`, usuário de sistema, workers do orquestrador e self-study de startup.
 - `_start_background_processes()` pode falhar e apenas registrar `background_workers` como `unhealthy`, deixando a API viva com runtime interno incompleto.
 - Auto-index, warm-up LLM e self-study de startup são agendados em background sem coordenação explícita de shutdown.
+- `START_ORCHESTRATOR_WORKERS_ON_STARTUP=True` por default e o `Kernel` também inicia consumers próprios; sem uma registry única, o desenho do boot aceita duplicidade potencial de workers.

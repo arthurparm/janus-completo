@@ -32,6 +32,58 @@ Monorepo with two main parts:
 - Docker + Docker Compose
 - PowerShell (for `tooling/*.ps1` workflows)
 
+## Build and Runtime Model
+
+This repository has more than one valid "build" path. Do not treat them as the same thing.
+
+### Recommended local bootstrap
+
+Preferred command:
+```bash
+python tooling/dev.py up
+```
+
+What it does internally:
+- Ensures `.env.pc1` and `.env.pc2` exist, copying from examples if needed.
+- Builds the backend runtime image `janus-completo-janus-api:latest` from `backend/docker/Dockerfile`.
+- Starts `PC2` first with `docker-compose.pc2.yml`.
+- Starts `PC1` after that with `docker-compose.pc1.yml`.
+- Waits for `http://localhost:8000/health`, `http://localhost:8000/healthz` and `http://localhost:8000/api/v1/system/status`.
+
+### Manual split deploy/build (PC2 -> PC1)
+
+This is the operational split documented for the project:
+```bash
+docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker build -f backend/docker/Dockerfile -t janus-completo-janus-api:latest backend
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
+```
+
+Order matters in the documented deploy flow:
+1. Start `PC2`.
+2. Validate `Neo4j`, `Qdrant` and `Ollama`.
+3. Build the API image on `PC1`.
+4. Start `PC1`.
+
+### What is actually built in Docker
+
+- `janus-api` is built from `backend/docker/Dockerfile` and runs the FastAPI app on port `8000`.
+- `janus-frontend` is built from `frontend/docker/Dockerfile`, which installs dependencies with `npm install --legacy-peer-deps` and runs `ng serve` on port `4300` with `proxy.docker.conf.json`.
+- `PC2` services (`neo4j`, `qdrant`, `ollama`) use published images; they are pulled, not custom-built in this repo.
+
+### Frontend build modes
+
+- Local dev: `npm start` serves Angular on `http://localhost:4200`.
+- Docker dev/runtime on `PC1`: the frontend container serves Angular on `http://localhost:4300`.
+- CI quality gate build: `npm run build -- --configuration development`.
+- Production static build for FTP deploy: `npm run build -- --configuration production --base-href /`.
+- Production artifact directory: `frontend/dist/janus-angular/browser/`.
+
+### Backend image targets
+
+- Runtime image: default/final target from `backend/docker/Dockerfile`.
+- Test image: `--target test`, used by the Dockerized validation flow.
+
 ## Quick Start Workflows
 
 ### One-Command Local Bootstrap (recommended)
@@ -47,9 +99,16 @@ python tooling/dev.py down
 python tooling/dev.py doctor --host 100.89.17.105 --backend-port 8000 --frontend-port 4300 --json-out outputs/qa/quick_diagnostics_report.json
 ```
 
-### Full Stack (recommended)
+### Full Stack (manual)
 ```bash
 docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
+docker build -f backend/docker/Dockerfile -t janus-completo-janus-api:latest backend
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
+```
+
+For a forced image rebuild of the PC1 app services:
+```bash
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 build janus-api janus-frontend
 docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
 
@@ -71,6 +130,23 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```bash
 cd backend
 pytest
+```
+
+## Docker Image Build Catalog
+
+Build backend runtime image:
+```bash
+docker build -f backend/docker/Dockerfile -t janus-completo-janus-api:latest backend
+```
+
+Build backend test image:
+```bash
+docker build --target test -f backend/docker/Dockerfile -t janus-completo-janus-api:test backend
+```
+
+Build frontend container image used by `docker-compose.pc1.yml`:
+```bash
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 build janus-frontend
 ```
 
 ## Frontend Command Catalog (`frontend/`)
@@ -103,6 +179,12 @@ npm run build -- --configuration development
 npm run build -- --configuration production --base-href /
 npm run watch
 ```
+
+Build intent:
+- `npm run build`: default Angular build used as the generic local build command.
+- `npm run build -- --configuration development`: matches the frontend CI quality gate.
+- `npm run build -- --configuration production --base-href /`: generates the static artifact used by FTP deploy.
+- `npm run watch`: incremental build in development mode.
 
 Tests:
 ```bash
@@ -161,6 +243,14 @@ Start stack:
 docker compose -f docker-compose.pc2.yml --env-file .env.pc2 up -d
 docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 ```
+
+Operational note:
+- In manual split deploys, prefer building the API image explicitly before starting `PC1`:
+```bash
+docker build -f backend/docker/Dockerfile -t janus-completo-janus-api:latest backend
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
+```
+- `docker-compose.pc1.yml` also contains `build` directives for `janus-api` and `janus-frontend`, so `docker compose build ...` is the standard forced rebuild path when needed.
 
 Status:
 ```bash
@@ -274,6 +364,10 @@ npm run build -- --configuration production --base-href /
 
 Build output path expected by deploy workflow:
 - `frontend/dist/janus-angular/browser/`
+
+Important distinction:
+- FTP deploy publishes the static production artifact from `frontend/dist/janus-angular/browser/`.
+- `docker-compose.pc1.yml` does not use that artifact for the frontend service; it builds a Node-based Angular dev server container from `frontend/docker/Dockerfile`.
 
 ## API/QA Workflows (Manual)
 Primary source: `documentation/qa/api-test-playbook.md`.

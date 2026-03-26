@@ -40,6 +40,10 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
 - `PoisonPillHandler` rastreia falhas por mensagem, quarentena e estatísticas por fila.
 - `DomainSLOMetricsMiddleware` incrementa métricas Prometheus por domínio HTTP, mas o relatório de SLO não lê essas métricas.
 - `auto_healer` consome os snapshots do `HealthMonitor` e tenta corrigir broker, fila, poison pills e LLM router.
+- Famílias Prometheus realmente emitidas nesse recorte:
+  - `HealthMonitor`: `component_health_status`, `system_health_score`, `health_check_duration_seconds`, `component_observed_latency_seconds`, `component_recommended_timeout_seconds`, `janus_system`.
+  - `PoisonPillHandler`: `poison_pill_detected_total`, `poison_pill_quarantined_total`, `poison_pill_in_quarantine`.
+  - `ObservabilityService`: `janus_observability_operations_total`, `janus_observability_operation_duration_seconds`, `janus_observability_result_items`, `janus_observability_ux_metrics_total`, `janus_observability_ux_latency_seconds`.
 
 ## Endpoints de observabilidade
 
@@ -48,31 +52,45 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
   - Retorna o snapshot agregado do `HealthMonitor`.
   - Não executa checks novos.
   - Consolida `status`, `score`, `message`, `components`, `last_check` e `suggested_timeouts`.
+  - Se `HealthMonitor.last_results` ainda estiver vazio, responde `status=unknown`, `score=0` e `Nenhum health check executado ainda`.
 - `POST /api/v1/observability/health/check-all`
   - Força a execução paralela de todos os checks registrados e devolve um mapa `componente -> resultado`.
+  - Atualiza `HealthMonitor.last_results`, que passa a alimentar o health agregado.
 - `GET /api/v1/observability/health/components/llm_router`
+  - Executa um check novo do componente; não lê `last_results`.
   - Lê estado de circuit breakers e pool de instâncias LLM.
 - `GET /api/v1/observability/health/components/multi_agent_system`
+  - Executa um check novo do componente; não lê `last_results`.
   - Informa contagem de agentes, tarefas do workspace e se há project manager.
 - `GET /api/v1/observability/health/components/poison_pill_handler`
-  - Deveria refletir o estado do handler, mas hoje sofre com incompatibilidade de status entre `warning`/`critical` e o enum do `HealthMonitor`.
+  - Executa um check novo do componente; não lê `last_results`.
+  - Hoje sofre com incompatibilidade de status entre `warning`/`critical` do handler e o enum `healthy`/`degraded`/`unhealthy`/`unknown` aceito pelo `HealthMonitor`.
 
 ### Poison pills
 - `GET /api/v1/observability/poison-pills/quarantined`
   - Lista mensagens em quarentena, com `message_id`, `queue`, `reason`, `failure_count` e `quarantined_at`.
+  - Aceita `queue` opcional para filtrar uma fila específica.
 - `POST /api/v1/observability/poison-pills/release`
   - Remove uma mensagem da quarentena; opcionalmente mantém possibilidade de retry.
 - `POST /api/v1/observability/poison-pills/cleanup`
   - Limpa mensagens expiradas com base em `quarantine_duration`.
+  - O payload atual é mínimo: `{ "removed": <n> }`.
 - `GET /api/v1/observability/poison-pills/stats`
   - Retorna estatísticas globais ou por fila.
+  - Sem `queue`, devolve `total_tracked_messages`, `total_quarantined`, `by_queue` e `quarantine_duration_hours`.
+  - Com `queue`, devolve `total_failures`, `total_quarantined`, `consecutive_failures` e `quarantined_count` da fila.
 
 ### Métricas e uso
 - `GET /api/v1/observability/metrics/summary`
   - Consolida apenas três blocos: LLM pool/circuit breakers, contagens do multi-agent system e saúde do poison pill handler.
   - Não devolve um snapshot amplo de Prometheus.
+- `GET /metrics`
+  - Só existe se `prometheus_fastapi_instrumentator` estiver disponível no ambiente Python.
+  - Expõe as métricas HTTP genéricas do instrumentator e as famílias customizadas de `HealthMonitor`, `PoisonPillHandler`, domínio HTTP e `ObservabilityService`.
 - `POST /api/v1/observability/metrics/ux`
-  - Registra métricas Prometheus de UX (`ttft` e `latency`) e faz log estruturado.
+  - Incrementa `janus_observability_ux_metrics_total` por `outcome` e `provider`.
+  - Observa `janus_observability_ux_latency_seconds` com `metric=ttft|latency` e converte ms para segundos.
+  - Faz log estruturado.
   - Não persiste a métrica em banco.
 - `GET /api/v1/observability/llm/usage`
   - Resume uso de `openai` e `google_gemini` lendo eventos de auditoria com `status=ok`.
@@ -99,6 +117,12 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
   - Calcula `error_rate_pct`, `availability_pct` e `latency_p95_ms`.
   - Compara contra thresholds em `settings`.
   - Marca `insufficient_data` quando o domínio não atinge `min_events`.
+  - Defaults atuais:
+    - `chat`: erro `<= 5%`, p95 `<= 3500ms`
+    - `rag`: erro `<= 5%`, p95 `<= 4500ms`
+    - `tools`: erro `<= 3%`, p95 `<= 2500ms`
+    - `workers`: erro `<= 3%`, p95 `<= 4000ms`
+  - O payload agregado fica em `status=degraded` quando existe qualquer breach ativo; `status=insufficient_data` só aparece quando todos os domínios ficaram sem dados suficientes; caso contrário fica `ok`.
 - `GET /api/v1/observability/anomalies/predictive`
   - Lê eventos de auditoria e snapshots de filas do broker.
   - Delegado ao serviço de detecção preditiva.
@@ -120,9 +144,9 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
   - Executa auditoria de higiene no Neo4j.
   - Retorna tipos de relacionamento presentes, registrados, não registrados, fora do padrão, além de `quarantine_count` e `mentions_count`.
 - `GET /api/v1/observability/graph/quarantine`
-  - Lista nós `Quarantine` com metadados suficientes para triagem manual.
+  - Lista nós `Quarantine` com `node_id`, `reason`, `type`, `from_name`, `to_name`, `confidence` e `source_snippet`.
 - `POST /api/v1/observability/graph/quarantine/promote`
-  - Registra o tipo de relacionamento se necessário, cria ou atualiza a aresta e marca o nó como `promoted`.
+  - Registra o tipo de relacionamento se necessário, cria ou atualiza a aresta entre nós encontrados por `name` e marca o nó `Quarantine` com `status='promoted'` e `promoted_at`.
 
 ## Health checks registrados
 - `llm_router` é crítico.
@@ -145,12 +169,17 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
 - Quantidade e detalhes das mensagens em quarentena por poison pill.
 - SLO por domínio baseado em eventos auditados, não em tráfego bruto HTTP.
 - Higiene do grafo e backlog de quarentena de relações.
-- Timeline por `request_id` quando os eventos usam `trace_id`.
-- Estado das tarefas rastreadas pelo orquestrador de workers.
+- Timeline por `request_id` quando os eventos usam `trace_id`, com contagens por `status`, `endpoint`, `action` e `tool`.
+- Estado das tarefas rastreadas pelo orquestrador de workers, inclusive `disabled`, `composite`, `children`, `reason` e `detail` quando presentes.
 - Quantidade real de consumers por fila somente quando cruza a leitura com `/api/v1/tasks/queue/{queue_name}`.
 
 ## O que a UI `/observability` realmente mostra
-- A tela Angular nao usa `GET /api/v1/observability/health/system` nem os demais endpoints principais de `api/v1/observability/*`.
+- A tela Angular não usa `GET /api/v1/observability/health/system` nem os demais endpoints principais de `api/v1/observability/*`.
+- **Refresh real**: 
+  - Toggle de auto-refresh só controla painel "Modo Operador"
+  - Cada widget tem polling próprio de 5s, independente do toggle
+  - `SystemStatusWidget` não refresca `servicesHealth` - fica congelado após carga inicial
+  - `KnowledgeHealthWidget` não refresca `detailed` nem `recommendations` continuamente
 - O frontend atual consome apenas:
   - `GET /api/v1/system/status`
   - `GET /api/v1/system/health/services`
@@ -160,20 +189,23 @@ Mapear a superfície real de observabilidade exposta pelo backend: saúde lógic
   - `POST /api/v1/knowledge/health/reset-circuit-breaker`
   - `GET /api/v1/workers/status`
   - `GET /api/v1/tasks/queue/{queue_name}`
-- A secao `Modo Operador` mostra apenas:
+- A seção `Modo Operador` mostra apenas:
   - workers de `app.state.orchestrator_workers`;
   - quatro filas fixas hardcoded no Angular (`router`, `agent.tasks`, `knowledge.consolidation`, `codex`).
-- Os widgets mostram:
-  - status do sistema em formato resumido;
-  - validacao do schema do banco;
-  - saude da memoria/grafo com foco em Neo4j, Qdrant e circuit breaker.
+- **Limitações técnicas**:
+  - Filas são fixas no frontend; filas novas no backend não aparecem sem mudança de código Angular
+  - UI reduz payload de workers para `name`, `state` e `running`, ocultando `exception`, `reason`, `detail`, `children`, `tracked`
+  - Fallback de filas trata `messages=-1` como indisponível, mas não explica causa operacional
 
-## Auto-refresh real da UI
-- O toggle de auto-refresh do cabecalho controla so o painel `Modo Operador`.
-- Esse painel usa polling a cada `5s` com disparo imediato (`startWith(0)`).
-- Cada widget tem polling proprio de `5s`, independente do toggle da tela.
-- `System Status` atualiza apenas `/system/status` no polling; `/system/health/services` fica congelado apos a carga inicial.
-- `Knowledge Health` atualiza apenas o payload basico; o payload detalhado nao acompanha o refresh continuo.
+## Limites de Contexto vs Runtime Real
+- **Workers contextuais**: UI mostra apenas `app.state.orchestrator_workers`, mas `Kernel` inicia workers adicionais não rastreados
+- **Fila vs Consumers**: `/tasks/queue/{queue_name}` pode revelar mais consumers que painel de workers sugere
+- **Heartbeat sintético**: `system/overview` fabrica `last_heartbeat` com `datetime.now()` e usa `tasks_processed` default `0`
+- **Distinguir estados**: UI não separa visualmente:
+  - Worker parado por `disabled`
+  - Worker falhando com `exception` 
+  - Worker composto com filhos em estados diferentes
+  - Backlog por política vs erro de broker
 
 ## Limites reais da implementação
 - O relatório de SLO lê `AuditEvent`; ele não usa `janus_domain_requests_total` nem `janus_domain_request_latency_seconds` do middleware HTTP.

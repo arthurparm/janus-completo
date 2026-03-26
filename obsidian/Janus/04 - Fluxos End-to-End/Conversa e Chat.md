@@ -61,6 +61,11 @@ Reconstruir o fluxo real de conversa do Janus a partir do código, ligando UI An
 - Cliente HTTP principal: `frontend/src/app/services/backend-api.service.ts`
 - Cliente SSE de resposta: `frontend/src/app/services/chat-stream.service.ts`
 - Cliente SSE de eventos de agente: `frontend/src/app/core/services/agent-events.service.ts`
+- Componentes compartilhados que moldam a UX do fluxo:
+  - `frontend/src/app/shared/components/jarvis-avatar/jarvis-avatar.component.ts`
+  - `frontend/src/app/shared/pipes/markdown.pipe.ts`
+  - `frontend/src/app/shared/components/ui/ui-badge/ui-badge.component.ts`
+  - `frontend/src/app/shared/components/skeleton/skeleton.component.ts`
 - Endpoints de chat: `backend/app/api/v1/endpoints/chat/chat_message.py`, `chat_stream.py`, `chat_history.py`
 - Confirmações/pending actions: `backend/app/api/v1/endpoints/pending_actions.py`
 - Fachada de chat: `backend/app/services/chat_service.py`
@@ -83,6 +88,51 @@ Reconstruir o fluxo real de conversa do Janus a partir do código, ligando UI An
 3. O caminho padrão da UI é SSE porque `streamingEnabled` nasce `true`. O caminho REST continua implementado e pode ser usado quando o streaming é desligado.
 4. O backend persiste conversa e mensagens em SQL via `ChatRepositorySQL`.
 5. O enriquecimento contextual vem majoritariamente de Qdrant via `RAGService` e `MemoryService`; o chat normal não usa Neo4j como fonte principal de prompt.
+
+## Superfície real da tela
+### Estrutura principal
+- A tela não é um chat isolado; ela junta três áreas sincronizadas pelo mesmo `conversationId`:
+  - coluna lateral com busca, ordenação implícita por atividade, criação e seleção de conversas
+  - feed principal com mensagens, estado de stream, entendimento, confirmação, citações e feedback
+  - rail avançado opcional com contexto e operações paralelas à conversa
+- O modo padrão de abertura é simples (`showAdvanced=false`), mas a preferência de modo e das abas é persistida em `localStorage`.
+- `JarvisAvatarComponent` reflete o estado operacional percebido pelo usuário:
+  - `thinking` quando o stream está `connecting`, `retrying` ou `open`
+  - `speaking` quando `streamTyping()` está ativo
+  - `idle` fora do ciclo de resposta
+
+### Subfluxos embutidos na mesma feature
+- `Insights`:
+  - resume a última resposta com fontes, confiança, latência, provider e model
+  - mostra `thoughtStream`, alimentado tanto pelo stream principal quanto por `AgentEventsService`
+  - carrega `trace` sob demanda via `getConversationTrace()`
+- `Cliente`:
+  - `Docs`: upload (com progresso), link por URL, busca documental e biblioteca da conversa
+  - `Memória`: criação e busca de memória generativa com campo `importance` numérico opcional, além da leitura de memória da conversa e do usuário. `generativeMemoryMetaLine()` formata tipo, importância, score e timestamp do item.
+  - `RAG`: execução manual de consultas fora do envio principal do chat, com visualizações `Resposta`, `Fontes` e `Raw`. Modo `productivity` faz `ragProductivitySearch` e devolve `results` (não `answer`).
+- `Autonomia`:
+  - consulta `status`, `goals` e `tools`
+  - permite iniciar/parar o loop autônomo
+  - permite criar meta e alterar status de metas ativas
+- `Feedback`:
+  - cada resposta final do assistente ganha thumbs up/down e comentário opcional
+  - o envio vai para `api/v1/feedback/thumbs-up|thumbs-down`
+  - quick prompts fixos (resumo em 5 pontos, próximos passos, explicação simples) preenchem o composer e disparam envio normal
+- `Admin code QA`:
+  - se o operador for admin e digitar `/code ...`, a tela desvia do fluxo normal e chama `askAutonomyAdminCodeQa()`
+  - o parsing do comando `/code` é isolado em `admin-code-qa.util.ts` via `parseAdminCodeQaCommand()`
+  - reconciliação local de pending actions via regex `a[cç][aã]o pendente #(\d+) (aprovada|rejeitada)` em `reconcileResolvedPendingActions()` (detecta resoluções via mensagem de sistema)
+
+### Onde a tela concentra complexidade
+- A mesma classe coordena:
+  - histórico otimista de mensagens
+  - SSE principal
+  - SSE de eventos de agente
+  - polling de `study_job`
+  - reconciliação local de pending actions resolvidas
+  - refresh de documentos, memória e autonomia
+  - persistência de preferências de visualização
+- O componente não é só renderização; ele funciona como orquestrador de estado da feature.
 
 ## Persistência por camada no chat
 - Postgres:
@@ -124,6 +174,7 @@ Reconstruir o fluxo real de conversa do Janus a partir do código, ligando UI An
 5. `ChatService.start_conversation_async()` delega para `ConversationService.start_conversation_async()`.
 6. `ConversationService.start_conversation()` chama `ChatRepository.start_conversation(persona, user_id, project_id)`.
 7. Em `ChatRepositorySQL.start_conversation()`, a sessão nasce com `title or "Nova Conversa"`.
+8. O contrato HTTP de saída é mínimo: `ChatStartResponse` devolve apenas `conversation_id`.
 
 Ponto importante:
 - `ChatStartRequest` aceita `title`, o frontend envia esse campo, o repositório suporta `title`, mas `chat_message.start_chat()` não propaga `title` para `ChatService`. Na prática, a conversa nasce sempre com o título padrão do repositório.
@@ -145,6 +196,10 @@ Ponto importante:
 - `selectedPriority`: prioridade pedida pelo operador.
 - `streamingEnabled`: chave de escolha entre SSE e REST.
 - `pendingActionLoading`: mapa de aprovação/rejeição em andamento.
+- `showAdvanced`, `advancedRailTab`, `customerTab`: controlam a topologia da própria tela, não apenas detalhes cosméticos.
+- `docs`, `memoryUser`, `generativeMemoryResults`, `ragResult`: mantêm o contexto lateral sincronizado com a conversa ativa.
+- `feedbackStateByMessageId` e `feedbackCommentDraftByMessageId`: isolam feedback por resposta do assistente.
+- `autonomyStatus`, `autonomyGoals`, `autonomyTools`: mantêm um mini-painel operacional dentro da conversa.
 
 ## 3. Caminho REST real
 1. `sendClassic()` chama `BackendApiService.sendChatMessage(conversation_id, content, role, priority, ...)`.
@@ -163,14 +218,15 @@ Ponto importante:
 1. Carrega a conversa do repositório e valida acesso por `user_id` e `project_id`.
 2. Valida tamanho da mensagem contra `CHAT_MAX_MESSAGE_BYTES`.
 3. Gera `understanding` heurístico com `build_understanding_payload()`.
-4. Decide `use_light_chat` somente quando:
+4. `ChatService` não concentra lógica aqui: ele só delega para `MessageOrchestrationService`, que é onde o branch real é decidido.
+5. Decide `use_light_chat` somente quando:
    - `role == ORCHESTRATOR`
    - `intent in {"general", "question"}`
    - mensagem tem até `CHAT_LIGHT_MAX_MESSAGE_CHARS` caracteres
-5. Persiste a mensagem do usuário em SQL.
-6. Agenda captura em memória ativa com `active_memory_service.maybe_capture_from_message()`.
-7. Agenda indexação RAG do turno do usuário com `RAGService.maybe_index_message()`, que grava em `user_chat_<user_id>` via `MemoryService.index_interaction()`.
-8. Segue por esta ordem de branches:
+6. Persiste a mensagem do usuário em SQL.
+7. Agenda captura em memória ativa com `active_memory_service.maybe_capture_from_message()`.
+8. Agenda indexação RAG do turno do usuário com `RAGService.maybe_index_message()`, que grava em `user_chat_<user_id>` via `MemoryService.index_interaction()`.
+9. Segue por esta ordem de branches:
    - comando via `ChatCommandHandler`
    - intro de discovery
    - documentação de tools
@@ -246,7 +302,7 @@ Ponto importante:
    - `failure_classification`
 7. O endpoint busca a última mensagem do assistente e faz `update_message_payload()` para persistir metadados estruturados na linha SQL já gravada.
 
-### Contracto de payload do REST
+### Contrato de payload do REST
 - `response`: texto final já sanitizado para UI.
 - `conversation_id`: sempre presente.
 - `message_id`: só existe quando o endpoint conseguiu localizar e atualizar a última mensagem do assistente.
@@ -259,6 +315,9 @@ Ponto importante:
   - `confirmation`
 - `confirmation`: só aparece quando existe razão válida ou pending action estruturada.
 - `agent_state`: deriva de `confirmation`, `understanding` e fase do fluxo.
+- `delivery_status` e `failure_classification`: aparecem principalmente quando o endpoint converte a resposta em placeholder de `pending_knowledge_space` ou `pending_study`.
+- `study_job` e `study_notice`: aparecem só no fallback assíncrono do REST.
+- `knowledge_space_id`: pode voltar no payload final quando a conversa entra no ramo documental/knowledge space.
 
 ## 4. Caminho SSE real
 1. `startStreaming()` cria uma mensagem local vazia do assistente e chama `ChatStreamService.start()`.
@@ -303,6 +362,7 @@ Ponto importante:
 - `ChatStreamService` adota o primeiro modo recebido e ignora mistura posterior.
 - `done` carrega o payload final com `message_id`, `citations`, `citation_status`, `understanding`, `confirmation` e `agent_state`.
 - `error` carrega erro estruturado com `code`, `category`, `retryable` e `http_status`.
+- `heartbeat` mantém a conexão viva enquanto a invocação principal ainda não terminou.
 
 ### Sequência real interna do SSE
 1. O stream tenta `generate_document_grounded_reply()` antes do fluxo geral.
@@ -331,7 +391,7 @@ Ponto importante:
 - O SSE não faz patch posterior equivalente ao REST; ele já grava a mensagem final com metadata no momento da persistência do assistente.
 
 Consequência prática:
-- O caminho padrão da UI é SSE, mas o pipeline que alimenta `user_chat_<user_id>` para RAG contextual só existe no REST. Se a conversa roda majoritariamente em SSE, o histórico SQL cresce, mas a memória vetorial de chat pode ficar desatualizada.
+- O caminho padrão da UI é SSE, mas o pipeline que alimenta `user_chat_<user_id>` para RAG contextual só existe no REST. Se a conversa roda majoritariamente em SSE, o histórico SQL cresce, a memória ativa ainda pode capturar sinais do usuário, mas a memória vetorial episódica do chat pode ficar desatualizada.
 
 ## Impacto de falha por store no fluxo de chat
 - Postgres falha:
@@ -418,10 +478,14 @@ Consequência prática:
 - pending action explícita vinda de tools ou marcador legado no texto
 - fallback SQL criado por `maybe_create_fallback_pending_action()`
 
+Ponto importante:
+- o reforço por baixa confiança não existe no pipeline SSE; no stream principal, confirmação adicional entra por risco alto, marcador de pending action ou fallback heurístico em `chat_contracts.py`.
+
 ### Como a UI trata confirmação
 - A UI só considera uma mensagem “acionável” se `confirmation` tiver `pending_action_id` ou endpoints.
 - Confirmações heurísticas sem `pending_action_id` existem no backend, mas `messageConfirmation()` devolve `null` nesse caso.
 - Resultado prático: o backend pode marcar `requires_confirmation`, porém a UI só mostra botões de aprovar/rejeitar quando existe pendência estruturada.
+- Quando o backend só marca `understanding.low_confidence`, a UI não abre botões de aprovação; ela apenas mostra o card “Entendi assim” com CTA para preencher o composer com uma frase de confirmação.
 
 ### Aprovação/rejeição
 1. `approvePendingActionForMessage()` e `rejectPendingActionForMessage()` chamam `BackendApiService.approvePendingAction()` ou `rejectPendingAction()`.
@@ -430,6 +494,18 @@ Consequência prática:
 4. `_sync_chat_confirmation_for_action()` percorre o histórico SQL da conversa e faz `update_message_payload()` na mensagem do assistente correspondente.
 5. `ConversationService.get_history()` ainda reconcilia pendências resolvidas ao carregar o histórico.
 6. A UI faz uma segunda reconciliação local lendo mensagens de sistema do tipo `Ação pendente #N aprovada/rejeitada`.
+
+## 6.5 Feedback da resposta
+1. O bloco de feedback só aparece para mensagens do assistente que já terminaram de streamar.
+2. `submitFeedback()` usa `conversation_id` da conversa ativa e prefere `backendMessageId`; se ele não existir, faz fallback para o `id` local da mensagem.
+3. O comentário é opcional e fica separado por mensagem em `feedbackCommentDraftByMessageId`.
+4. O backend é chamado por:
+   - `POST /api/v1/feedback/thumbs-up`
+   - `POST /api/v1/feedback/thumbs-down`
+5. A UI trava reenvio enquanto `submitting=true` e, após sucesso, muda o bloco para estado de confirmação com a mensagem retornada pelo servidor.
+
+Ponto importante:
+- O feedback pertence à resposta específica, não à conversa como um todo; por isso o componente guarda estado por `message.id`.
 
 ## 7. Histórico, eventos e trace
 
@@ -458,6 +534,9 @@ Consequência prática:
    - consome o broker em `janus.events` com routing key `janus.event.conversation.{conversation_id}.#`
    - retransmite como SSE `event: agent_event`
 6. Esse canal mostra thought/tool events publicados pelo agent loop e por outros workers.
+
+Ponto importante:
+- O `thoughtStream` exibido ao operador é híbrido: ele mistura eventos vindos desse segundo SSE com estados internos do stream principal (`connecting`, `retrying`, `open`, `done`, `error`, `cognitive_status`, `tool_status`).
 
 ### Trace
 - `GET /api/v1/chat/{conversation_id}/trace` existe e a UI carrega sob demanda.
@@ -499,12 +578,14 @@ Consequência prática:
 - REST:
   - pode usar `ChatAgentLoop`
   - pode executar tools
+  - aplica reforço de confirmação por baixa confiança no endpoint
   - indexa user e assistant em RAG
   - pode resumir conversa
   - faz patch posterior da última mensagem do assistente
 - SSE:
   - não usa `ChatAgentLoop`
   - não executa tools
+  - não roda o threshold extra de baixa confiança do endpoint REST
   - não indexa em RAG
   - não resume conversa
   - entrega progresso via eventos e persiste a mensagem final já com metadata
@@ -591,6 +672,7 @@ Consequência prática:
 ## Riscos/Lacunas
 - `ChatStartRequest.title` existe no contrato, mas o endpoint não o propaga ao service/repositório.
 - O caminho padrão da UI é SSE, porém o caminho SSE tem menos capacidades que o REST.
+- O SSE ainda captura memória ativa do usuário, mas não indexa o turno em `user_chat_<user_id>` nem roda sumarização; isso cria assimetria entre histórico SQL e memória vetorial.
 - Qualquer conversa com manifests documentais tende a entrar primeiro no branch documental, mesmo para perguntas gerais.
 - O stream principal e o stream de eventos usam tecnologias diferentes e superfícies de autenticação diferentes.
 - O chat depende de SQL, Qdrant, broker e LLM em graus diferentes; falhas parciais geram sintomas visuais parecidos para o operador.

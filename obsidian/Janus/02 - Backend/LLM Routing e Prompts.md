@@ -33,17 +33,21 @@ Descrever como o chat escolhe papel, provedor, prompt e caminho de execução.
 ## Roteamento por intenção
 - `backend/app/services/intent_routing_service.py` classifica a mensagem em `code_generation`, `knowledge_query`, `security_audit`, `incident_response`, `deep_reasoning` ou `general`.
 - A decisão contém `intent`, `risk_level`, `urgency_level`, `confidence`, `suggested_role`, `signals`, `guardrails` e alternativas.
+- `resolve_role()` devolve uma tríade: `selected_role`, `routing_decision` e `route_applied`.
 - `resolve_role()` só muda o papel automaticamente quando:
   - `requested_role=auto`
   - ou o papel pedido é `orchestrator` e a confiança passa os thresholds configurados
   - ou há escalonamento por risco alto
 - O frontend de conversa envia `selectedRole = 'orchestrator'` por padrão; logo o override depende dos thresholds de confiança, não do modo `auto`.
 - Se `knowledge_space_id` ativo for resolvido, os endpoints de chat forçam `ModelRole.ORCHESTRATOR` e desabilitam a troca automática.
+- O routing por intenção nasce no endpoint, não em `ChatService`; o service recebe o `role` já decidido.
 
 ## Montagem de prompt
 - `MessageOrchestrationService` e `StreamingService` usam `PromptBuilderService.build_prompt(persona, history, message, summary, relevant_memories)`.
 - O histórico usado no REST vai até 60 mensagens recentes; no SSE, 20.
-- `build_understanding_payload()` roda antes da inferência e gera o rascunho semântico que depois pode ser enriquecido por `routing`, `risk` e `confirmation`.
+- `build_understanding_payload()` roda antes da inferência e gera o rascunho semântico de baixo custo com intents locais como `file_reference`, `reminder`, `documentation_query`, `action_request`, `question` e `general`.
+- Esse `understanding` inicial depois pode ser enriquecido por `routing`, `risk` e `confirmation`.
+- O reforço por `low_confidence` com `confidence_band` e troca da resposta para pedido explícito de confirmação é específico do endpoint REST; o SSE não roda esse threshold adicional.
 
 ## Caminhos de execução
 ### REST (`POST /api/v1/chat/message`)
@@ -51,7 +55,7 @@ Descrever como o chat escolhe papel, provedor, prompt e caminho de execução.
 - Fora disso, o fluxo geral usa `ChatAgentLoop.run_loop()`.
 - `ChatAgentLoop`:
   - invoca LLM com `FallbackChain`
-  - procura envelope `tool_call_envelope`
+  - procura tool calls no texto retornado pelo modelo via `ToolExecutorService.parse_tool_calls(...)`
   - executa tools com `ToolExecutorService`
   - aplica `PolicyEngine` para risco, quotas, confirmação e content safety
   - coleta `pending_action_id` a partir do resultado das tools
@@ -71,6 +75,7 @@ Descrever como o chat escolhe papel, provedor, prompt e caminho de execução.
 ### SSE (`GET /api/v1/chat/stream/{conversation_id}`)
 - O stream faz `llm.select_provider()` e `llm.invoke_llm()` diretamente no caminho geral.
 - O SSE aplica circuit breaker, heartbeat, TTFT e streaming incremental, mas não entra no `ChatAgentLoop`.
+- Depois da resposta do provedor, o SSE ainda faz pós-processamento estrutural: coleta citações, normaliza `understanding`, deriva `confirmation`, pode abrir fallback de study inline e só então persiste o turno do assistente.
 - Resultado prático: stream e REST compartilham parte do grounding/prompting, porém divergem no suporte a tools e no acoplamento com RAG pós-resposta.
 
 ### Ordem real de decisão no SSE

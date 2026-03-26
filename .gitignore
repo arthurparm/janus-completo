@@ -128,3 +128,4 @@ backend/evals/technical-qa/runs/
 evidencia.txt
 .playwright-cli/*
 output/*
+.trae/*

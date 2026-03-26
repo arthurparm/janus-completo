@@ -49,9 +49,46 @@ Listar o plano assíncrono real do backend e separar com precisão:
   - recebe `kernel.workers`
   - contém só objetos long-lived selecionados pelo `Kernel`
   - não é consumido por `/api/v1/workers/status`
+- `app.state.autonomy_service`
+  - hospeda a task do `AutonomyLoop`
+  - não entra no inventário de `/api/v1/workers/status`
+  - é observável por `/api/v1/autonomy/status`, não pelo endpoint de workers
 - `GET /api/v1/tasks/queue/{queue_name}`
   - expõe `messages` e `consumers` por fila
   - é a forma mais objetiva de observar duplicação de consumers
+
+## Contrato de ordem do orquestrador
+- `GET /api/v1/workers/status` fala no vocabulário de `WORKER_NAMES` e é preenchido por um contrato **posicional**:
+  - `start_all_workers()` retorna uma lista de handles/tarefas na ordem em que os workers são iniciados
+  - `WORKER_NAMES[i]` é associado ao handle `workers[i]`
+  - consequência: “nome observado” não é metadata do worker; é um rótulo atribuído por índice no boot
+- Se um worker muda de posição, é inserido no meio ou retorna um handle a mais/a menos sem atualizar `WORKER_NAMES`, o endpoint passa a rotular incorretamente o runtime.
+- Workers “disabled” continuam ocupando o slot posicional:
+  - o orquestrador usa `DisabledWorkerHandle` quando uma feature flag desabilita o worker (ex.: Google Productivity), mantendo a forma do inventário sem mentir que está rodando.
+
+## Knobs operacionais observáveis (impactam runtime)
+- Prefetch/concurrency explícitos nos consumers de fila (quando definidos no código):
+  - `agent_tasks`: prefetch 10
+  - `router`: prefetch 10
+  - `code_agent`: prefetch 5
+  - `red_team_agent`: prefetch 5
+  - `professor_agent`: prefetch 5
+  - `distillation`: prefetch 5
+  - `meta_agent`: prefetch 2
+  - `failure_consumer`: prefetch 5
+  - `neural_training`: prefetch 2
+  - `knowledge_consolidation`: prefetch 2
+  - `document_ingestion`: prefetch 1
+  - `reflexion`: prefetch 3
+  - `sandbox_agent`: prefetch 3
+  - `thinker_agent`: prefetch 3
+  - `debate_proponent`: prefetch 5
+  - `debate_critic`: prefetch 5
+  - `codex_worker`: prefetch 2
+  - `google_productivity`: prefetch 10 em cada fila (calendar/mail)
+- Flags relevantes:
+  - `START_ORCHESTRATOR_WORKERS_ON_STARTUP` controla se o `lifespan` sobe o orquestrador automaticamente
+  - `ENABLE_GOOGLE_PRODUCTIVITY_WORKER` controla se o worker de produtividade inicia consumers reais ou fica em `disabled`
 
 ## Workers observados pelo orquestrador
 
@@ -132,6 +169,7 @@ Listar o plano assíncrono real do backend e separar com precisão:
   - `daily_cleanup` diariamente às 03:00
   - `audit_retention_cleanup` em intervalo configurável
   - `update_gemini_quotas` a cada 3600 s
+  - não existe, no conjunto analisado, job padrão do scheduler para iniciar, parar ou renovar o `AutonomyLoop`
 
 ## Contrato real de `/api/v1/workers/status`
 - O endpoint nunca consulta broker, scheduler ou `HealthMonitor`.
@@ -180,6 +218,8 @@ Listar o plano assíncrono real do backend e separar com precisão:
 - Para entender um incidente operacional, quase sempre é preciso cruzar as três superfícies.
 
 ## Observação prática do runtime
+- Observação contextual (ambiente/data): não é contrato.
+  - Contrato canônico de nomes/ordem vem de `WORKER_NAMES` + `start_all_workers()`.
 - Em 25 de março de 2026, no PC TESTE (`100.89.17.105`), `GET /api/v1/workers/status` retornou `tracked=21`.
 - No mesmo runtime:
   - `google_productivity` apareceu como `disabled` com `detail=ENABLE_GOOGLE_PRODUCTIVITY_WORKER=false`
@@ -193,6 +233,7 @@ Listar o plano assíncrono real do backend e separar com precisão:
 - O `Kernel` sobe `knowledge_consolidation`, `document_ingestion` e `neural_training` por conta própria.
 - O `lifespan` também pode subir esses mesmos consumers via `start_all_workers()` quando `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`.
 - Resultado: a fila pode ter mais consumers do que o endpoint de workers deixa evidente.
+- O `AutonomyLoop` depende operacionalmente desses workers, mas ele mesmo não aparece em `WORKER_NAMES` nem em `/api/v1/workers/status`.
 - `/api/v1/workers/status` não mostra `knowledge_consolidator`, `data_harvester`, `life_cycle_worker`, `outbox_service` nem `scheduler`.
 - O runtime aceita publicar para `blue_team` e `security_judge`, mas o inventário de consumers iniciados não cobre esses papéis.
 - `google_productivity` é um único nome observado, mas operacionalmente representa duas filas e pode virar worker composto.

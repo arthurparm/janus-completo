@@ -64,15 +64,28 @@ Separar probe de container, liveness HTTP, readiness real do processo e saúde l
 
 | Endpoint | Camada | O que garante | Limites reais |
 | --- | --- | --- | --- |
-| `GET /healthz` | liveness HTTP | o processo respondeu FastAPI | não valida dependência nenhuma |
-| `GET /health` | liveness HTTP com metadados | processo respondeu e expôs `service`, `version`, `environment`, `build_ref`, Tailscale | não valida dependências; pode ser bloqueado por `PUBLIC_API_KEY` |
-| `GET /api/v1/system/status` | inventário do processo | uptime, PID, RSS, CPU, memória, config básica | `status` é sempre `OPERATIONAL`; não consulta dependências |
-| `GET /api/v1/observability/health/system` | health lógico agregado | último snapshot do `HealthMonitor` | não força reexecução; score pode esconder degradação crítica parcial |
-| `POST /api/v1/observability/health/check-all` | health lógico on-demand | roda todos os checks e atualiza o snapshot | pode demorar conforme timeout dos checks |
-| `GET /api/v1/observability/health/components/*` | health lógico por componente | inspeção individual | não cobre todos os serviços do stack |
-| `GET /api/v1/system/health/services` | resumo operacional | visão resumida de `agent`, `knowledge`, `memory`, `llm` | não é o mesmo conjunto do `HealthMonitor`; `memory` é heurística de RAM |
+| `GET /healthz` | liveness HTTP | o processo respondeu FastAPI | não valida dependência nenhuma; bypass de `PUBLIC_API_KEY` e de rate limit |
+| `GET /health` | liveness HTTP com metadados | processo respondeu e expôs `service`, `version`, `environment`, `build_ref`, Tailscale | não valida dependências; pode exigir `X-API-Key` quando `PUBLIC_API_KEY` estiver definida |
+| `GET /api/v1/system/status` | inventário do processo | uptime, PID, RSS, CPU, memória, config básica | `status` é sempre `OPERATIONAL`; não consulta dependências; pode exigir `X-API-Key` quando `PUBLIC_API_KEY` estiver definida |
+| `GET /api/v1/observability/health/system` | health lógico agregado | último snapshot do `HealthMonitor` | não força reexecução; antes do primeiro ciclo pode responder `unknown`; score pode esconder degradação crítica parcial |
+| `POST /api/v1/observability/health/check-all` | health lógico on-demand | roda todos os checks e atualiza o snapshot | pode demorar conforme timeout dos checks; passa a alimentar `health/system` |
+| `GET /api/v1/observability/health/components/*` | health lógico por componente | executa um check novo do componente solicitado | não lê `last_results` e não cobre todos os serviços do stack |
+| `GET /api/v1/system/health/services` | resumo operacional | visão resumida de `agent`, `knowledge`, `memory`, `llm` | não é o mesmo conjunto do `HealthMonitor`; `agent` faz check fresco, `knowledge`/`llm` usam outros serviços, `memory` é heurística de RAM |
 | `GET /api/v1/system/overview` | painel agregado | junta status do processo, serviços e workers | injeta `last_heartbeat` sintético e não é fonte canônica |
-| `GET /api/v1/workers/status` | workers orquestrados | estado dos tasks registrados em `app.state.orchestrator_workers` | não cobre todos os processos internos do `Kernel` |
+| `GET /api/v1/workers/status` | workers orquestrados | estado dos tasks registrados em `app.state.orchestrator_workers` | não cobre todos os processos internos do `Kernel`; pode exigir `X-API-Key` quando `PUBLIC_API_KEY` estiver definida |
+
+## Readiness operacional (o que existe hoje)
+
+### Readiness do Compose (container “healthy”)
+- O Compose marca o container como `healthy`/`unhealthy` com base no healthcheck configurado no próprio compose.
+- No `janus-api`, o healthcheck chama `GET /health` sem headers.
+
+### Readiness do processo FastAPI (HTTP “de pé”)
+- O processo só começa a aceitar tráfego depois que o `lifespan` termina.
+- Na prática, isso significa que qualquer probe HTTP (incluindo `/healthz`) é necessariamente posterior ao startup do `Kernel` e do wiring do `app.state`.
+
+### `/readyz` e `/livez`
+- Não existem como rotas do FastAPI hoje; se chamados, retornam 404.
 
 ## Leitura correta de readiness
 
@@ -91,6 +104,15 @@ Separar probe de container, liveness HTTP, readiness real do processo e saúde l
 - Usa `SystemStatusService`.
 - Sempre devolve `status: OPERATIONAL`.
 - Serve para inventário operacional do processo, não para decisão de failover.
+
+### `/api/v1/observability/health/system`
+- Usa apenas `HealthMonitor.last_results`.
+- Não substitui `check-all`; ele só lê o último estado calculado.
+- `suggested_timeouts` são recomendações derivadas de latência observada e configuração, não prova de readiness.
+
+### `/api/v1/observability/health/components/*`
+- Chamam `check_component()` diretamente.
+- Por isso podem divergir do snapshot agregado se o último loop do monitor ainda não incorporou a mesma condição.
 
 ## Componentes monitorados pelo `HealthMonitor`
 
@@ -123,6 +145,11 @@ Separar probe de container, liveness HTTP, readiness real do processo e saúde l
 ### `multi_agent_system`
 - Só confere que o objeto do sistema multiagente responde.
 - Pode retornar `healthy` com `active_agents=0` quando `INIT_MAS_AGENTS_ON_STARTUP=false`.
+
+### `poison_pill_handler`
+- Reusa `PoisonPillHandler.get_health_status()`.
+- O handler produz `healthy`, `warning` ou `critical`, mas `HealthMonitor.check_component()` só entende `healthy`, `degraded`, `unhealthy` e `unknown`.
+- Na prática, qualquer retorno diferente de `healthy` pode estourar no parsing do enum e o componente acabar aparecendo como `unhealthy`.
 
 ### `rabbitmq_consolidation_queue_policy`
 - Consulta a fila `janus.knowledge.consolidation` e compara TTL, max length e DLX.
@@ -185,9 +212,30 @@ Separar probe de container, liveness HTTP, readiness real do processo e saúde l
 - `/api/v1/workers/status` cobre apenas workers guardados em `app.state.orchestrator_workers`.
 - `DisabledWorkerHandle` aparece como `state=disabled`, com `reason` e `detail`.
 - Estruturas compostas podem aparecer com `composite=true` e `children`.
+- Tasks concluídas com exceção expõem `exception` e passam para `state=error`.
 - O nome devolvido vem do registro do orquestrador, não do nome real da fila.
 - O endpoint não consulta RabbitMQ para confirmar o número real de consumers.
 - Para confirmar consumidores por fila, a checagem real continua sendo a camada de broker e filas.
+
+### Playbook rápido (leitura correta)
+- Prova de liveness do processo: `GET /healthz`
+- Prova de metadata do processo: `GET /health` e `GET /api/v1/system/status`
+- Prova de workers “observados” (somente registry do orquestrador): `GET /api/v1/workers/status`
+- Prova objetiva de consumers e backlog por fila: `GET /api/v1/tasks/queue/{queue_name}`
+- Conclusão operacional: quando a pergunta é “tem consumer de verdade?”, a resposta vem das filas, não do endpoint de workers.
+
+### Observação: `PUBLIC_API_KEY`
+- Se `PUBLIC_API_KEY` estiver configurada, endpoints fora do bypass exigem `X-API-Key`.
+- `/healthz` permanece fora dessa proteção; `/health` e os endpoints `/api/v1/*` podem exigir o header.
+
+### Troubleshooting: workers parecem OK, mas a fila está acumulando
+- Se `/api/v1/workers/status` está `running`, mas `messages` cresce em `/api/v1/tasks/queue/{queue}`:
+  - confirmar `consumers` por fila (pode estar `0` mesmo com registry “ok” em outro ambiente/processo)
+  - considerar duplicação de consumers quando `Kernel` e `orquestrador` iniciam a mesma fila
+  - validar mismatch de vocabulário: nome observado não é nome de fila (ex.: `code_agent` consome `janus.tasks.agent.coder`)
+- Se `state=error` em `/api/v1/workers/status`:
+  - usar o campo `exception` como pista e cruzar com logs do container `janus-api`
+  - confirmar se a fila continua com consumer vivo (pode existir consumer iniciado fora do registry HTTP)
 
 ## Validação prática no PC TESTE em 25 de março de 2026
 - `GET /healthz` retornou `{"status":"ok"}`.
@@ -205,7 +253,9 @@ Separar probe de container, liveness HTTP, readiness real do processo e saúde l
 ## Métricas e superfícies auxiliares
 - `/metrics` só existe se `prometheus_fastapi_instrumentator` estiver disponível.
 - `DomainSLOMetricsMiddleware` registra métricas Prometheus por domínio HTTP.
+- O `HealthMonitor`, o `PoisonPillHandler` e o próprio `ObservabilityService` também publicam famílias próprias no registry Prometheus.
 - `/api/v1/observability/slo/domains` não lê essas métricas; ele recalcula o SLO a partir de `AuditEvent`.
+- `/api/v1/observability/metrics/summary` não é export Prometheus; ele resume só `llm`, `multi_agent` e `poison_pills`.
 
 ## Arquivos-fonte
 - `backend/app/main.py`
@@ -225,7 +275,11 @@ Separar probe de container, liveness HTTP, readiness real do processo e saúde l
 
 ## Riscos/Lacunas
 - O healthcheck do container `janus-api` usa `/health`, mas o endpoint anônimo resiliente para probe é `/healthz`.
+- Se `PUBLIC_API_KEY` for configurada, `/health` e `/api/v1/*` podem exigir `X-API-Key`; como o healthcheck do Compose chama `/health` sem header, o container pode ficar `unhealthy` mesmo com a API funcional para clientes autenticados.
 - O score agregado do `HealthMonitor` pode mascarar degradação de componente crítico se o estado ainda for `degraded` e não `unhealthy`.
+- O check do `poison_pill_handler` ainda sofre incompatibilidade entre status do handler (`warning`/`critical`) e o enum aceito pelo `HealthMonitor`.
+- `GET /api/v1/observability/health/system` pode devolver `unknown` até o primeiro loop do monitor ou `check-all`; isso é estado inicial válido, não necessariamente incidente.
 - `/api/v1/system/status` não participa de decisão de saúde real, apesar do nome sugerir isso.
 - `/api/v1/system/overview` usa `last_heartbeat` sintético e não deve ser tratado como telemetria autoritativa.
 - O endpoint de workers cobre apenas `app.state.orchestrator_workers`, não todos os processos do `Kernel`.
+- `/readyz` e `/livez` aparecem como bypass de rate limit, mas não existem como rotas do FastAPI hoje.
