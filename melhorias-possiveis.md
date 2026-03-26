@@ -836,3 +836,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [ARQ-012] Uso excessivo de blocos Try/Except/Pass silenciosos (Lógica Frágil)
+- Problema atual: Foram identificados múltiplos blocos de `try-except-pass` em repositórios (como `llm_repository.py`) e serviços (como `message_orchestration_service.py` e `autonomy_service.py`), o que cria falhas silenciosas que mascaram possíveis exceções e dificultam a detecção precoce de bugs ou comportamentos inesperados.
+- Solucao proposta: Remover ou substituir declarações `pass` por tratamentos adequados, usando `structlog.get_logger().exception()` para registrar os erros sem quebrar a execução onde o fail-open é intencional.
+- Impacto esperado: Melhor rastreabilidade e observabilidade de exceções no backend, além de mitigar bugs silenciosos.
+- Riscos: Exposição repentina em logs de exceções antigas (mas inofensivas) que antes passavam despercebidas.
+- Dependencias: Camada de logging baseada no `structlog`.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-041] Potencial Configuração de Rede Estática Insegura (Tailscale)
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` contém lógica complexa de rede que manipula acessos e políticas sem se integrar com o gerenciamento centralizado de secrets ou infraestrutura-as-code padrão, além de possuir configurações e timeouts hardcoded.
+- Solucao proposta: Revisar a integração do script para garantir que chaves ou variáveis sensíveis sejam passadas sempre via ambiente (`.env`), e adaptar os logs de segurança para usar a infraestrutura existente de telemetria invés de arquivos textuais dispersos como `tailscale-security-monitor.log`.
+- Impacto esperado: Garantia de governança de acesso e prevenção contra configurações acidentais frágeis de VPN local ou exposição do host.
+- Riscos: Falhas de permissões durante a execução do setup se mal parametrizado no CI.
+- Dependencias: Políticas de provisionamento locais da máquina de dev/servidor.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: ideia

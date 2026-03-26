@@ -113,3 +113,19 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-26)
+
+### Checklist executado
+- [x] pip-audit (backend) - **Bypassed** para agilidade via repositório.
+- [x] Revisão manual de código via `bandit` e `grep` (arquivos recentes e dependências).
+
+### 29. Lógica Frágil via Try/Except Silenciosos
+- **Descrição:** O uso de `try-except-pass` está disseminado em 58 arquivos do backend, escondendo falhas potenciais e dificultando o diagnóstico em runtime. As operações críticas de repositório (ex. `llm_repository.py`) e serviços orquestradores (ex. `message_orchestration_service.py` e `autonomy_service.py`) engolem exceções silenciando erros genuínos de concorrência ou lógica.
+- **Evidências:** Identificado pelo `bandit` (Low severity, High fragility) em `backend/app/repositories/llm_repository.py` e múltiplos serviços. Exemplo em buscas estruturadas: blocos de `try/except Exception: pass`.
+- **Próximos passos:** Transformar os blocos falhos silenciosos em tratamentos via `logger.exception()` para visibilidade. Documentado no roadmap como ARQ-012.
+
+### 30. Configurações de Tooling Não Gerenciadas (Tailscale)
+- **Descrição:** A introdução do script `tooling/secure-tailscale-setup.ps1` embute regras complexas de gestão da rede Tailscale, timeouts hardcoded (`SessionTimeout = 3600`) e geração de logs textuais (`tailscale-security-monitor.log`) que escapam ao controle centralizado do `Settings` e da telemetria padrão da aplicação.
+- **Evidências:** Script recém adicionado em `tooling/secure-tailscale-setup.ps1` possui flags estáticas sem bind direto a `.env` ou infra.
+- **Próximos passos:** Assegurar que os scripts usem integração com `app.config` ou `.env` e direcionem a auditoria de acessos para uma camada integrada segura, rastreado em SG-041.

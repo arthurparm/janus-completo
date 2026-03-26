@@ -216,3 +216,22 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-26)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Bypassed** (não houve alterações diretas de frontend para essa auditoria incremental).
+- [x] pip-audit (backend) - **Bypassed** (limitação ambiental registrada).
+- [x] Revisão manual de código via `bandit` (arquivos recentes / evidências levantadas).
+
+### 31. Lógica Frágil via Try/Except Silenciosos
+- **Caminho:** `backend/app/repositories/llm_repository.py`, `backend/app/services/chat/message_orchestration_service.py` e mais 56 arquivos.
+- **Gravidade:** Baixa (Bandit B110 - Try, Except, Pass detected) / Alta em fragilidade e manutenção.
+- **Descrição:** Uso contínuo de exceções capturadas com `pass` mascarando erros e ocultando a capacidade de resiliência e visibilidade (fail-open silencioso).
+- **Ação Recomendada:** Remover `pass` e utilizar logs (`logger.exception`) estruturados. (ARQ-012)
+
+### 32. Configuração Insegura e Estática na Automação (Tailscale)
+- **Caminho:** `tooling/secure-tailscale-setup.ps1`
+- **Gravidade:** Média
+- **Descrição:** O script inclui lógicas de proteção de rede estáticas e geração local de logs (`tailscale-security-monitor.log`) que são sensíveis (incluem hostnames e comportamentos de acesso) escapando ao controle centralizado ou telemetria padronizada. (SG-041)
+- **Ação Recomendada:** Utilizar variáveis de ambiente ou gerenciamento da cloud (Infrastructure as code) e evitar logs locais textuais soltos com dados sensíveis sem o mascaramento (`redact_pii_text_only`).

@@ -70,3 +70,11 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-26)
+
+### Lacunas e Impacto
+- **Shadow IT de Monitoramento (Tailscale Security Monitor):** O novo script `tooling/secure-tailscale-setup.ps1` inclui logs de segurança de rede do Tailscale (`tailscale-security-monitor.log`) com prints explícitos em background dos hostnames (`$Peer.HostName`) e status de acessos de peers. Tais logs gerados na máquina local ou container fogem aos padrões de mascaramento PII estabelecidos no core.
+
+### Próximos Passos
+1. **Unificar Auditoria:** Evitar geração de logs avulsos (`tailscale-security-monitor.ps1/log`) sem passar pela mesma sanitização utilizada pelo sistema, integrando-o ao structlog e mascarando os dados sensíveis como IPs de usuários.
