@@ -717,6 +717,61 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-044] Vazamento PII no setup do Tailscale (Shadow IT)
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` atua como um monitor de Shadow IT que escreve no log local `tailscale-security-monitor.log` os nomes de host e peers em texto plano (LGPD risco).
+- Solucao proposta: Aplicar um filtro de ofuscação com redação de PII nos logs, mascarando os hosts e os identificadores expostos de forma irreversível localmente.
+- Impacto esperado: Eliminação do risco de vazamento de meta-dados de rede para auditores indesejados locais.
+- Riscos: Logs menos detalhados em investigações.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-045] Vulnerabilidade CVE-2026-4539 (Pygments)
+- Problema atual: O pacote `pygments` (versão 2.19.2) reportado pelo pip-audit possui uma vulnerabilidade de segurança (CVE-2026-4539).
+- Solucao proposta: Atualizar a versão do pacote `pygments` no `pyproject.toml` para uma versão segura e regravar o `poetry.lock`.
+- Impacto esperado: Remoção da vulnerabilidade documentada de dependência.
+- Riscos: Possíveis incompatibilidades com versões de syntax highlighting em uso (baixo).
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-046] URL Opening Inseguro com Arbitrary Schemes (run_repo_smoke_test.py)
+- Problema atual: Uso de rotinas de abertura de URL em `run_repo_smoke_test.py` permite abrir esquemas arbitrários, apontado como vulnerabilidade B310 pelo Bandit.
+- Solucao proposta: Adicionar validação de scheme (verificar se começa com `http://` ou `https://`) antes do Request.
+- Impacto esperado: Proteção contra leitura local de arquivos indesejados (SSRF / Arbitrary File Read).
+- Riscos: Nenhum, visto que é arquivo de teste (baixo impacto).
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-047] Uso Inseguro de exec/eval (faulty_tools.py)
+- Problema atual: As funções em `backend/app/core/tools/faulty_tools.py` usam `eval` ou `exec` de forma insegura, o que pode permitir execução de código arbitrário (Bandit B307/B102).
+- Solucao proposta: Substituir por alternativas seguras como `ast.literal_eval` ou implementar validação e sandboxing rigoroso antes da execução.
+- Impacto esperado: Mitigação de vulnerabilidade de injeção de código.
+- Riscos: Quebra de funcionalidade caso entradas intencionalmente dinâmicas não sejam suportadas (médio).
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-048] Requisições HTTP sem Timeout em Testes (test_debate_system.py)
+- Problema atual: O script `test_debate_system.py` faz requisições sem tempo de timeout explícito (Bandit B113).
+- Solucao proposta: Adicionar `timeout=10` ou equivalente nas chamadas.
+- Impacto esperado: Evitar que CIs e testes travem aguardando respostas de requisições pendentes.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

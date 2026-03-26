@@ -216,3 +216,40 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-26)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (ex: `@angular/*`, `@hono`, `express-rate-limit`, `tar`).
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. Vulnerabilidade em Dependência do Backend (CVE-2026-4539)
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta
+- **Descrição:** O pacote `pygments` (versão 2.19.2) possui uma vulnerabilidade conhecida (CVE-2026-4539).
+- **Ação Recomendada:** Atualizar a versão do `pygments` no `pyproject.toml` para uma versão corrigida e rodar `poetry update pygments`.
+
+### 31. Uso de exec/eval Inseguro
+- **Caminho:** `backend/app/core/tools/faulty_tools.py`
+- **Gravidade:** Média (Bandit B307/B102)
+- **Descrição:** Uso de função `eval` e `exec` detectada. Pode permitir injeção de código se a entrada não for perfeitamente validada.
+- **Ação Recomendada:** Substituir por alternativas seguras como `ast.literal_eval` ou implementar sandboxing robusto.
+
+### 32. URL Opening Inseguro com Arbitrary Schemes
+- **Caminho:** `tests/smoke/run_repo_smoke_test.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de rotinas de abertura de URL que permitem abrir esquemas arbitrários, propiciando leitura local de arquivos indesejados.
+- **Ação Recomendada:** Validar ativamente que as URLs começam com `http://` ou `https://` antes de permitir qualquer requisição.
+
+### 33. Requisições HTTP sem Timeout em Testes
+- **Caminho:** `test_debate_system.py`
+- **Gravidade:** Baixa (Bandit B113)
+- **Descrição:** O script realiza chamadas ou executa tarefas sem definir um limite de tempo explícito (timeout) assíncrono.
+- **Ação Recomendada:** Adicionar explicitamente parâmetros de timeout.
