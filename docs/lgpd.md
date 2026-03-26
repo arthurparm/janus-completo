@@ -70,3 +70,12 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-19)
+
+### Lacunas e Impacto
+- **Captura do Windows sem Autenticação (Interface Binding `0.0.0.0`):** Foi levantado que o script `backend/windows_agent.py` mantêm o seu binding configurado publicamente para a rede do servidor. Tratando-se de endpoints de monitoramento contínuo da máquina host (como `/screenshot` ou `win32gui` no `/window/title`), sem Autenticação na API, isto expõe a intimidade, sessões e possivelmente todo o ambiente local e visual de trabalho do usuário a curiosos na mesma rede, criando gravíssimo risco de vazamento massivo de PII visual sem rastreio de auditoria adequado.
+
+### Próximos Passos
+1. **Restringir Monitoramento:** A interface de bind do `backend/windows_agent.py` precisa ser imediatamente rebaixada para o localhost (`127.0.0.1`) impedindo acesso arbitrário na interface LAN/WAN.
+2. **Implementar Camada de Obfuscação em `/screenshot`:** Ao capturar imagem via `ImageGrab.grab()` as ferramentas de OCR/Visão devem varrer e criar uma ofuscação primária antes do payload Base64 deixar a máquina host local (ou, no mínimo, forçar tokenização por sessão).

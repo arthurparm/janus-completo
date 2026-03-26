@@ -836,3 +836,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Injeção SQL Potencial via F-Strings (Bandit B608)
+- Problema atual: O script `backend/app/services/dedupe_service.py` utiliza formatação de string (f-strings) diretamente no `text()` do SQLAlchemy (ex: `f"UPDATE {table} SET user_id..."`), permitindo injeção SQL se o conteúdo da variável não for validado estritamente.
+- Solucao proposta: Refatorar as queries usando parametrização correta, metadata ORM, ou métodos do SQLAlchemy para construir consultas de forma segura sem `f-strings` expostas na diretiva SQL principal.
+- Impacto esperado: Prevenção contra injeção de tabela ou comandos perigosos via exploração.
+- Riscos: Quebra nas rotinas do dedupe_service caso ocorra mapeamento incorreto das colunas e metadados.
+- Dependencias: Revisão nos testes unitários e de integração de consolidação e dados (`test_memory_service`, `test_dedupe_graph_integration`).
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Requisição sem timeout no verify_arch_knowledge (Bandit B113)
+- Problema atual: O script de teste funcional `backend/scripts/verify_arch_knowledge.py` faz requisições com `requests.post()` sem parametrizar timeout, podendo causar hang nas esteiras de automação ou teste se a API ficar instável.
+- Solucao proposta: Adicionar `timeout=15` ou variável de ambiente semelhante nos parâmetros de chamada `requests.post()`.
+- Impacto esperado: Maior resiliência e fail-fast em scripts manuais e CI.
+- Riscos: Scripts falharem rapidamente em ambientes com muita latência.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto

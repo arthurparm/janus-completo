@@ -216,3 +216,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-19)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Executado**: 42 vulnerabilidades (25 moderadas, 17 altas).
+- [x] pip-audit (backend) - **Executado**: 1 vulnerabilidade alta (`pygments` CVE-2026-4539 registrada previamente/mantida).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Possível Injeção SQL via F-Strings
+- **Caminho:** `backend/app/services/dedupe_service.py` (linhas 94, 101, 137)
+- **Gravidade:** Alta (Bandit B608)
+- **Descrição:** Uso de f-strings para injeção de nomes de tabela em comandos SQL brutos (`text(f"UPDATE {table}...")`), o que, embora mitigado se os nomes das tabelas forem estáticos/controlados, constitui um padrão inseguro e aponta vulnerabilidade de injeção SQL.
+- **Ação Recomendada:** Utilizar parametrização estrita ou abstrações seguras de metadados do SQLAlchemy em vez de formatação de string direta.
+
+### 30. Interface Binding Inseguro (0.0.0.0)
+- **Caminho:** `backend/windows_agent.py` (linha 329)
+- **Gravidade:** Alta (Bandit B104)
+- **Descrição:** A API do Windows Agent vincula-se a todas as interfaces de rede (`host="0.0.0.0"`) na porta 5001. A ausência de autenticação permite que qualquer pessoa ou serviço na rede local acesse e invoque funções críticas de captura do SO host.
+- **Ação Recomendada:** Restringir o bind para localhost (`127.0.0.1`) ou implementar AuthZ severo.
+
+### 31. Requisições HTTP sem Timeout (Bandit B113)
+- **Caminho:** `backend/scripts/verify_arch_knowledge.py` (linhas 19 e 36)
+- **Gravidade:** Baixa/Média (Bandit B113)
+- **Descrição:** Chamadas utilizando a biblioteca `requests` para `requests.post()` não possuem timeout configurado, o que pode gerar travamentos infinitos.
+- **Ação Recomendada:** Adicionar explicitamente `timeout=10` ou equivalente nas requisições.
