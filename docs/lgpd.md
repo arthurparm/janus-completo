@@ -70,3 +70,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-19)
+
+### 11. Arquivo de Log Sem Redação no Monitoramento Local (Shadow IT)
+- **Caminho:** `tooling/secure-tailscale-setup.ps1`
+- **Descrição:** O script grava num arquivo de log local (`tailscale-security-monitor.log`) dados sobre a arquitetura (hostnames) e peers da rede Tailscale, sem qualquer camada de ofuscação (PII redaction bypass).
+- **Impacto:** Exposição de identidades e topologia da máquina local que transgridem as regras de data minimization, gerando um risco por ser um monitoramento em "shadow".
+- **Próximos Passos:** Interromper a geração de log local não mascarado ou implementar hash/ofuscação nos logs gerados pelo script powershell.
+
+### 12. Carga Insegura de Logs para Memória (log_aware_reflector)
+- **Caminho:** `backend/app/core/memory/log_aware_reflector.py`
+- **Descrição:** O componente extrai arquivos brutos, como `janus.log`, diretamente da máquina para memória, ignorando a diretiva de usar `redact_pii_text_only` que sanitizaria PIIs originais.
+- **Impacto:** A omissão acarreta o carregamento de nomes de usuário, e-mails ou dados pessoais em sessões do `SafeEvolutionManager`, que por sua vez, pode vazar os dados nas evoluções sugeridas.
+- **Próximos Passos:** Adicionar uma chamada para o serviço/utilitário de PII redactor ao realizar a extração dos logs, antes de enviá-los ao LLM ou salvá-los no state.

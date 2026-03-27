@@ -216,3 +216,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-19)
+
+### Checklist executado
+- [x] npm audit (frontend) - Encontradas vulnerabilidades de dependência em 25 pacotes.
+- [x] pip-audit (backend) - Encontrada vulnerabilidade (CVE-2026-4539) no pygments.
+- [x] Revisão manual e SAST via bandit (foco em modificados nas últimas 24h).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas vulnerabilidades em pacotes reportados pelo npm audit, incluindo `@angular/core`, `tar`, `express-rate-limit`, entre outras dependências.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+### 30. Vulnerabilidade de ReDoS em Dependência do Backend (pygments)
+- **Caminho:** `backend/pyproject.toml`
+- **Gravidade:** Média/Alta (CVE-2026-4539)
+- **Descrição:** A biblioteca `pygments` foi identificada com vulnerabilidade de negação de serviço através de ineficiência de regex (ReDoS) na função `AdlLexer` (versões até 2.19.2).
+- **Ação Recomendada:** Fazer o upgrade do pacote `pygments` via poetry.
+
+### 31. Vazamento de Segredos em Print e Falta de Timeout em Requisições
+- **Caminho:** `tooling/qa_request_support.py`, `backend/scripts/test_grok_internal.py`, `tooling/test_debate_system.py`, `backend/tests/chaos_harness.py`, `backend/tests/unit/test_message_broker_di.py`
+- **Gravidade:** Alta (Bandit B105 / B113)
+- **Descrição:** Encontrados scripts com senhas e chaves de API explícitas (`RABBITMQ_PASSWORD`, `password = "JanusE2E123!"`, `XAI_API_KEY`), frequentemente logados usando `print()`. Identificada também ausência de timeouts explícitos em requisições `requests.get` ou assíncronas, causando risco de travamento em CI/CD.
+- **Ação Recomendada:** Substituir variáveis com senhas por chamadas `os.getenv` ou Secret Manager, remover logs do tipo `print(password)`, e acrescentar timeout explícito nas chamadas web.

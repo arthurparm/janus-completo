@@ -836,3 +836,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-044] Atualizar dependência pygments (CVE-2026-4539)
+- **Problema atual:** O `pip-audit` detectou um vetor de ataque ReDoS presente no pacote `pygments` (função `AdlLexer`).
+- **Solução proposta:** Incrementar a versão de `pygments` no arquivo `pyproject.toml` ou removê-lo caso não seja mais necessário no backend.
+- **Impacto esperado:** Prevenção contra exaustão de CPU oriunda de inputs abusivos no parser de textos/código.
+- **Riscos:** Baixo, possíveis mudanças de syntax highlighting.
+- **Dependências:** Nenhuma forte identificada.
+- **Prioridade:** P1
+- **Esforço:** S
+- **Dono:** Equipe AppSec
+- **Status:** Aberto
+
+### [SG-045] Eliminar chaves hardcoded e implementar timeouts em scripts de QA/Ferramentas
+- **Problema atual:** Scripts críticos como `test_debate_system.py`, `test_grok_internal.py` e `qa_request_support.py` fixam senhas (`JanusE2E123!`), API Keys da xAI e imprimem esses dados abertamente em tela (stdout). Ausência de timeout em chamadas de API.
+- **Solução proposta:** Alterar as credenciais para injeção via environment (`os.environ.get(...)`), e assegurar timeouts (ex: `requests.get(..., timeout=10)`) em todo o diretório `tooling/` e `backend/scripts/`.
+- **Impacto esperado:** Maior segurança em pipelines e logs, prevenindo travamentos misteriosos no CI.
+- **Riscos:** Quebra temporária no CI/CD se as senhas não estiverem setadas nos secrets das actions.
+- **Dependências:** Nenhuma.
+- **Prioridade:** P0
+- **Esforço:** M
+- **Dono:** Equipe QA/Tooling
+- **Status:** Aberto
+
+### [LGPD-011] Ofuscar log do monitoramento Tailscale local
+- **Problema atual:** O script powershell de configuração `secure-tailscale-setup.ps1` está salvando log aberto de rede e peers na máquina local (`tailscale-security-monitor.log`), evadindo controles centrais de PII (Shadow IT).
+- **Solução proposta:** Implementar ofuscação de nomes de hosts e IP antes da escrita no log, ou redirecionar o monitoramento para o syslog já protegido.
+- **Impacto esperado:** Adequação aos requisitos de privacidade da LGPD.
+- **Riscos:** Dificultar o debug da rede na máquina local.
+- **Dependências:** Nenhuma.
+- **Prioridade:** P1
+- **Esforço:** S
+- **Dono:** Equipe Infra
+- **Status:** Aberto
+
+### [LGPD-012] Aplicar redação de PII no log_aware_reflector
+- **Problema atual:** Ao tentar refletir e recuperar erros para evolução, `backend/app/core/memory/log_aware_reflector.py` lê o conteúdo livre de `janus.log` diretamente, correndo o risco de submeter e-mails/nomes de usuário a módulos de IA sem controle (ex: `SafeEvolutionSession`).
+- **Solução proposta:** Invocar rotinas de `redact_pii_text_only` em todas as strings lidas antes de passá-las adiante.
+- **Impacto esperado:** Bloquear vazamento de PII interna de usuários e de metadados para serviços externos ou LLMs.
+- **Riscos:** Custo de tempo ou limitação da compreensão dos erros pelo agente.
+- **Dependências:** Depende da existência prévia do sanitizador central.
+- **Prioridade:** P0
+- **Esforço:** M
+- **Dono:** Equipe Backend / Data
+- **Status:** Aberto
