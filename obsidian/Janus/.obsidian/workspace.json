@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04 - Fluxos End-to-End/Conversa e Chat.md",
+                "file": "00 - Índice/Home.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Conversa e Chat"
+              "title": "Home"
             }
           }
         ]
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "04 - Fluxos End-to-End/Conversa e Chat.md",
+                "file": "00 - Índice/Home.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Links de saída para Conversa e Chat"
+              "title": "Links de saída para Home"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "04 - Fluxos End-to-End/Conversa e Chat.md",
+                "file": "00 - Índice/Home.md",
                 "followCursor": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Sumário de Conversa e Chat"
+              "title": "Sumário de Home"
             }
           },
           {
@@ -176,7 +176,7 @@
             }
           }
         ],
-        "currentTab": 1
+        "currentTab": 4
       }
     ],
     "direction": "horizontal",
@@ -200,6 +200,9 @@
   },
   "active": "8b3e1bbf3d1eced8",
   "lastOpenFiles": [
+    "04 - Fluxos End-to-End/Documentos Conhecimento e Memória.md",
+    "04 - Fluxos End-to-End/Ferramentas e Sandbox.md",
+    "04 - Fluxos End-to-End/Conversa e Chat.md",
     "04 - Fluxos End-to-End/Autonomia.md",
     "03 - Frontend/Shell e Navegação.md",
     "03 - Frontend/Serviços de Integração.md",
@@ -223,9 +226,6 @@
     "00 - Índice/Mapa por Fluxos Críticos.md",
     "00 - Índice/Mapa Mestre do Sistema.md",
     "00 - Índice/Home.md",
-    "06 - Qualidade e Testes/Lacunas e Riscos.md",
-    "04 - Fluxos End-to-End/Observabilidade.md",
-    "01 - Visão do Sistema/Dependências Externas.md",
     "07 - Glossário e Inventários",
     "06 - Qualidade e Testes",
     "05 - Infra e Operação",
