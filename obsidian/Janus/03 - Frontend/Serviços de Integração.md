@@ -62,7 +62,7 @@ Mapear como a UI de conversa consome o backend de chat na prática.
 ### `AgentEventsService`
 - É um segundo stream, separado do stream de resposta.
 - Existe para exibir eventos publicados pelo backend no broker, não para transportar a resposta do assistente.
-- Usa `EventSource`, então depende mais do contexto autenticado do browser e do `user_id` em query string.
+- Usa `EventSource`, então depende mais do contexto autenticado do browser e do `user_id` em query string; em modo estrito (`CHAT_AUTH_ENFORCE_REQUIRED=1`) pode falhar com 401 por não conseguir enviar `Authorization`.
 
 ## Assimetrias importantes do frontend
 - `getChatHistoryPaginated()` chama o endpoint `/history` com query params, não o endpoint `/history/paginated`; o nome do método frontend é mais amplo que o endpoint efetivamente usado.
@@ -92,7 +92,7 @@ Mapear como a UI de conversa consome o backend de chat na prática.
   - `done`
   - `error`
   - `cognitive_status`
-  - `tool_status`
+  - `tool_status` (suportado pelo client; não emitido pelo backend do stream principal hoje)
 - Para eventos auxiliares:
   - `agent_event`
 

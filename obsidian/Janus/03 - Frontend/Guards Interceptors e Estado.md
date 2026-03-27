@@ -45,11 +45,12 @@ Ordem real:
 ### `baseUrlInterceptor`
 - Prefixa requests relativas com `API_BASE_URL`.
 - Mantem URLs absolutas inalteradas.
+- Quando a URL ja comeca com `API_BASE_URL`, ela passa sem alteracao (evita double-prefix).
 - Evita double-prefix quando a URL ja veio com base normalizada.
 - Nao prefixa assets e alguns endpoints especiais como `/healthz`.
 
 ### `authInterceptor`
-- Le `JANUS_AUTH_TOKEN` de `localStorage` ou `sessionStorage` via `getStoredAuthToken()` ([auth.interceptor.ts:15](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/interceptors/auth.interceptor.ts#L15)).
+- Le `AUTH_TOKEN_KEY` (default `JANUS_AUTH_TOKEN`) de `localStorage` ou `sessionStorage` via `getStoredAuthToken()` ([auth.interceptor.ts:15](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/interceptors/auth.interceptor.ts#L15)).
 - Injeta `Authorization: Bearer <token>` quando a request ainda nao tem esse header ([auth.interceptor.ts:18-20](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/interceptors/auth.interceptor.ts#L18-L20)).
 - Tenta injetar `X-User-Id` a partir do token via `decodeTokenUserId()` ([auth.interceptor.ts:22-27](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/interceptors/auth.interceptor.ts#L22-L27)).
 - Nao persiste usuario nem reconstroi sessao; apenas propaga o token ja salvo.

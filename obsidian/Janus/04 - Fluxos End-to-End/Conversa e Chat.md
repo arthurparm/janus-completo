@@ -363,6 +363,7 @@ Ponto importante:
 - `done` carrega o payload final com `message_id`, `citations`, `citation_status`, `understanding`, `confirmation` e `agent_state`.
 - `error` carrega erro estruturado com `code`, `category`, `retryable` e `http_status`.
 - `heartbeat` mantém a conexão viva enquanto a invocação principal ainda não terminou.
+- `tool_status`: o cliente implementa parsing e estado local para esse evento, mas o backend do stream principal não emite `event: tool_status` no estado atual (apesar de existir no contrato documental).
 
 ### Sequência real interna do SSE
 1. O stream tenta `generate_document_grounded_reply()` antes do fluxo geral.
@@ -536,7 +537,8 @@ Ponto importante:
 6. Esse canal mostra thought/tool events publicados pelo agent loop e por outros workers.
 
 Ponto importante:
-- O `thoughtStream` exibido ao operador é híbrido: ele mistura eventos vindos desse segundo SSE com estados internos do stream principal (`connecting`, `retrying`, `open`, `done`, `error`, `cognitive_status`, `tool_status`).
+- O `thoughtStream` exibido ao operador é híbrido: ele mistura eventos vindos desse segundo SSE com estados internos do stream principal (`connecting`, `retrying`, `open`, `done`, `error`, `cognitive_status`).
+- Como o backend resolve identidade com `allow_anonymous_fallback=False`, o endpoint pode retornar `CHAT_AUTH_REQUIRED` (401) quando `CHAT_AUTH_ENFORCE_REQUIRED=1` e o browser não tiver contexto de auth compatível com `EventSource`.
 
 ### Trace
 - `GET /api/v1/chat/{conversation_id}/trace` existe e a UI carrega sob demanda.
@@ -640,12 +642,13 @@ Ponto importante:
 ## 9. Falhas comuns e comportamento real
 - `CHAT_CONVERSATION_NOT_FOUND`: 404 quando a conversa não existe ou o acesso é negado durante validação.
 - `CHAT_ACCESS_DENIED`: 403 quando `user_id` ou `project_id` não batem com a conversa.
-- `CHAT_MESSAGE_TOO_LARGE`: 413 em REST e SSE.
+- `CHAT_MESSAGE_TOO_LARGE`: 413; no REST valida contra `CHAT_MAX_MESSAGE_BYTES`, no SSE do stream principal valida um limite fixo de 10KB (10 * 1024 bytes).
 - `CHAT_INVALID_ROLE_OR_PRIORITY`: 422 em REST e SSE.
 - `CHAT_AUTH_REQUIRED`: o start aceita fallback anônimo em transição; o stream usa resolução mais estrita e depende de auth/header/explicit user id.
 - `Origin not allowed`: o SSE é bloqueado por `ensure_origin_allowed()` se a origem não estiver em `CORS_ALLOW_ORIGINS`.
 - `SSE capacity exceeded`: `acquire_sse_slot()` pode devolver 429 por usuário/canal ou global.
 - `stream_closed`, `connection_error`, `parse_error`: o `ChatStreamService` entra em retry exponencial até `SSE_MAX_RETRIES`; depois fecha com status `error`.
+- Erros de histórico: alguns endpoints de histórico retornam `detail` simples em vez de `chat_http_error_detail`, então o cliente deve tratar 404/500 sem depender de `code/category`.
 - `missing_required` em citações:
   - no REST vira placeholder + polling assíncrono
   - no SSE vira estudo inline ou placeholder de knowledge space

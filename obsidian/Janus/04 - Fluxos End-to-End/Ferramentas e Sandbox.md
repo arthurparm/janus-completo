@@ -57,6 +57,7 @@ Cobrir o plano de execução de ferramentas do Janus.
   - `productivity_tools.py`
   - criação dinâmica por `/api/v1/tools/create/from-function` e `/api/v1/tools/create/from-api`
 - `ActionRegistry.register()` permite sobrescrever uma tool existente pelo mesmo nome; a implementação e a permissão efetivas dependem da ordem de registro.
+- O `ToolService` possui uma camada de proteção (`PROTECTED_TOOLS`) que impede a deleção de ferramentas vitais (ex: `write_file`, `read_file`, `execute_python_code`, `search_web`).
 
 ## Categorias e permissões
 - Categorias expostas por `/api/v1/tools/categories/list`:
@@ -79,9 +80,11 @@ Cobrir o plano de execução de ferramentas do Janus.
 - `frontend/src/app/features/tools/tools.ts` usa:
   - `getTools()`
   - `getToolStats()`
-  - `listAuditEvents()`
+  - `listAuditEvents({ limit: 100 })`
   - `listPendingActions({ include_sql: true, include_graph: false })`
 - A própria tela só aprova/rejeita pending actions.
+- Possui filtros locais para Pending Actions por nível de risco (`high`, `medium`, `low`), origem (`sql`, `langgraph`) e busca textual.
+- Aplica computações dedicadas para destacar o uso e eventos de ferramentas relacionadas a código (prefixo `codex_`).
 - Não há execução de tool, criação dinâmica nem uso do endpoint `/api/v1/sandbox/*` na feature `/tools`.
 
 ## Onde começa a execução real
@@ -89,13 +92,15 @@ Cobrir o plano de execução de ferramentas do Janus.
   - `type = "tool_call_envelope"`
   - `version = "1.0"`
   - `calls = [{ name, args }]`
-- `ChatAgentLoop` extrai esse envelope com `parse_tool_calls(...)`.
+- `ChatAgentLoop` extrai esse envelope com `parse_tool_calls(...)`. O método `_extract_json_envelope_payload` é resiliente e busca blocos delimitados por crases ou extrai o objeto JSON nativamente caso haja texto em volta.
 - `ToolExecutorService.execute_tool_calls(...)` então:
-  - valida `args_schema`
-  - faz content safety
+  - valida `args_schema` diretamente com Pydantic (`model_validate`)
+  - faz content safety e gera sumário de escopo (`_build_scope_metadata` para targets como `file_path` e `conversation_id`)
+  - audita a pré-execução (`tool_precheck`) ofuscando dados sensíveis via `redact_sensitive_payload`
   - consulta `PolicyEngine`
   - aplica quotas e rate limits
   - decide por executar, bloquear ou pedir confirmação
+  - invoca a ferramenta suportando nativamente implementações assíncronas (`ainvoke`, corrotinas) e síncronas (`asyncio.to_thread`)
   - registra auditoria e estatísticas
 - `AssistantService` é um caminho alternativo: executa tools direto no `action_registry`, sem passar pelo `ToolExecutorService`.
 
@@ -112,20 +117,21 @@ Cobrir o plano de execução de ferramentas do Janus.
 
 ## Governança
 - `PolicyEngine` cruza `permission_level` com:
-  - `risk_profile`
-  - `allowlist`
-  - `blocklist`
+  - `risk_profile` (configurado via `CHAT_TOOL_RISK_PROFILE`)
+  - `allowlist` (`CHAT_TOOL_ALLOWLIST`)
+  - `blocklist` (`CHAT_TOOL_BLOCKLIST`)
   - `capability_allowlist`
   - `scope_allowlist`
   - `command_allowlist`
   - `command_blocklist_tokens`
+- O `PolicyEngine` também utiliza as variáveis `CHAT_TOOL_MAX_ACTIONS` e `CHAT_TOOL_MAX_SECONDS` para limites de ciclo.
 - `ToolExecutorService` ainda aplica:
   - limite de ações por ciclo
-  - timeout
-  - concorrência por semaphore
-  - quota diária por usuário
-  - sliding window quota por usuário/projeto
-- Tools com `requires_confirmation=True` ou simulação destrutiva geram pending action em vez de execução imediata.
+  - timeout (`TOOL_EXECUTOR_TIMEOUT_SECONDS`, padrão 30s)
+  - concorrência por semaphore (`TOOL_EXECUTOR_MAX_CONCURRENCY`, padrão 4)
+  - quota diária por usuário (avaliada via `ToolUsageRepository` e DB baseada em `TOOL_DAILY_QUOTAS`)
+  - sliding window quota por usuário/projeto (avaliada via Redis em `get_redis_usage_tracker()` baseada em `TOOL_SLIDING_WINDOW_QUOTAS`)
+- Tools com `requires_confirmation=True` ou que na simulação (`simulate_tool_call`) sinalizem ação destrutiva (`is_destructive`) geram pending action automaticamente em vez de execução imediata.
 
 ## Pending actions
 - Fonte `sql`
@@ -144,10 +150,10 @@ Cobrir o plano de execução de ferramentas do Janus.
 - `command_sandbox`
   - bloqueia operadores de shell, multiline, tokens perigosos e executáveis fora da allowlist
   - é usado por tools como `execute_shell` e `execute_system_command`
-- Endpoints dedicados:
-  - `/api/v1/sandbox/execute`
-  - `/api/v1/sandbox/evaluate`
-  - `/api/v1/sandbox/capabilities`
+- Endpoints dedicados em `/api/v1/sandbox/`:
+  - `/execute`: recebe `CodeExecutionRequest` (code, context) e retorna output, error, tempo de execução e variáveis afetadas.
+  - `/evaluate`: recebe `ExpressionRequest` (expression) e retorna result, error e tempo de execução.
+  - `/capabilities`: retorna capacidades e restrições configuradas no sandbox.
 
 ## Arquivos-fonte
 - `frontend/src/app/features/tools/tools.ts`

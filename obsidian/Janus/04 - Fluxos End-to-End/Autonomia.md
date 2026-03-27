@@ -37,8 +37,9 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
    - escolhe um passo preferindo `search_web` ou `get_enriched_context`; se nao houver, usa o ultimo passo do plano;
    - se o plano efetivo chegar vazio nessa etapa, o ciclo registra falha local e retorna sem fazer rollback automatico da goal para `pending`;
    - cria ou reaproveita um registro idempotente em `autonomy_enqueue_ledger`;
-   - publica um `TaskState` para o `router` com `meta.autonomy.goal_id`, `execution_mode=enqueue_router`, `plan`, `selected_step` e `autonomy_run_id`.
+   - publica um `TaskState` para o `router` com `next_agent_role="router"`, `data_payload.autonomy` (metrics/plan/selected_step/mode/autonomy_run_id) e `meta.autonomy` (goal_id/execution_mode/autonomy_run_id/enqueue_ledger_id/idempotency_key).
 7. O `router` passa a tarefa para os workers/agentes do Parlamento.
+   - No primeiro salto, como o `TaskState` chegou com `next_agent_role="router"` e status nao-terminal, o `router_worker` corrige o auto-loop inferindo o primeiro agente a partir do `original_goal`.
 8. Quando um `TaskState` autonomo volta ao `router` em estado terminal, `CollaborationService` fecha a meta automaticamente:
    - `completed` vira goal `completed`;
    - qualquer outro terminal (`failed`, `blocked`, `cancelled`) vira goal `failed`.
@@ -55,11 +56,17 @@ O loop principal nao executa o plano passo a passo dentro de `AutonomyService`. 
   - `knowledge_consolidator` -> fila `janus.knowledge.consolidation` -> worker observado `knowledge_consolidation`
 - Isso explica por que o vocabulário de `/api/v1/workers/status` não coincide com o vocabulário do plano ou do `TaskState`.
 
+## Superficies de frontend (onde isso aparece)
+- Cockpit: `/conversations` (aba avancada "Autonomia") mostra status do loop, iniciar/parar, criar meta e listar metas.
+- Home: widget "Autonomy Loop" consulta `GET /api/v1/autonomy/status` e abre `/conversations` já apontando para a aba `autonomia`.
+- API client Angular: `BackendApiService` concentra os contratos e chamadas de `start/stop/status/plan/policy` e CRUD de goals.
+- Admin: `/admin/autonomia` expõe backlog e self-study (fluxo separado do loop principal).
+
 ## Contratos HTTP principais
 ### `POST /api/v1/autonomy/start`
 - Sincrono no request.
 - Valida `plan` apenas se o request trouxe passos.
-- Inicia o loop em background e devolve `{"status":"started"}`.
+- Inicia o loop em background e devolve `{"status":"started","interval_seconds":<n>}`.
 - Se o lease do escopo ja estiver ocupado por outra instancia, devolve `409`.
 - Se a propria instancia ja estiver ativa, devolve `400` antes de tentar subir outra task local.
 
@@ -120,7 +127,7 @@ O planner interno usa uma validacao diferente e mais fraca:
 - forca `args` para `dict`;
 - aceita metadados como `critical`, `retry` e `fallback_tool`;
 - nao valida `args_schema`;
-- nao faz a mesma checagem de allowlist usada pelo endpoint.
+- nao aplica allowlist como gate do plano (exceto o filtro de `WRITE` em `risk_profile=conservative`).
 
 ## Policy update e cobertura real de politica
 `PolicyEngine` sabe lidar com:
@@ -254,16 +261,16 @@ O dominio registra:
 
 APIs de historico:
 
-- `GET /api/v1/autonomy-history/runs`
-- `GET /api/v1/autonomy-history/runs/{run_id}`
-- `GET /api/v1/autonomy-history/runs/{run_id}/steps`
-- `GET /api/v1/autonomy-history/runs/{run_id}/enqueues`
+- `GET /api/v1/autonomy/history/runs`
+- `GET /api/v1/autonomy/history/runs/{run_id}`
+- `GET /api/v1/autonomy/history/runs/{run_id}/steps`
+- `GET /api/v1/autonomy/history/runs/{run_id}/enqueues`
 
 ## Riscos e lacunas reais
 - O nome "AutonomyLoop" sugere execucao direta de plano, mas o comportamento atual e apenas `enqueue_router`.
 - O loop escolhe um unico passo do plano; o restante do plano e contexto, nao contrato de execucao.
 - `PUT /policy` nao revalida o plano que ja esta carregado.
-- O planner interno nao valida `args_schema` nem a allowlist do mesmo jeito que a API valida planos manuais.
+- O planner interno nao valida `args_schema` e nao aplica allowlist como gate do plano (exceto conservative/`WRITE`) como a API valida planos manuais.
 - Um ciclo com plano efetivo vazio nessa etapa pode deixar a goal em `in_progress` sem enqueue publicado.
 - O fechamento automatico da meta depende do `TaskState` terminal voltar ao `router` com `meta.autonomy.goal_id`.
 - O patch manual para `completed` sempre agenda self-study, mesmo quando a meta ja estava `completed`.
@@ -286,6 +293,11 @@ APIs de historico:
 - `backend/app/services/autonomy_lock_service.py`
 - `backend/app/core/workers/router_worker.py`
 - `backend/app/main.py`
+- `frontend/src/app/services/backend-api.service.ts`
+- `frontend/src/app/features/conversations/conversations.html`
+- `frontend/src/app/features/conversations/conversations.ts`
+- `frontend/src/app/features/home/widgets/autonomy-widget/autonomy-widget.ts`
+- `frontend/src/app/app.routes.ts`
 
 ## Fluxos relacionados
 - [[02 - Backend/Autonomia e Workers]]

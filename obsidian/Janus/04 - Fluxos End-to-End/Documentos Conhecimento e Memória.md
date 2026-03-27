@@ -44,6 +44,8 @@ Explicar o caminho comprovado em código entre upload de documento, indexação 
 - Ao selecionar uma conversa, `loadContext(conversationId)` recarrega em paralelo:
   - `listDocuments(conversationId, userId)` para a biblioteca documental
   - `getMemoryTimeline(..., conversation_id=conversationId)` para memória associada
+- A aba `Memória` suporta criação de memórias generativas (`addGenerativeMemory`) com definição explícita de `importance` (0-10) e `type` (episodic, semantic, procedural), comunicando-se com a API `/memory/generative`.
+- A aba `RAG` permite consultas manuais roteadas para diferentes modos suportados pela UI: `search`, `user_chat`, `hybrid_search` e `productivity`.
 - A UI coloca `Docs`, `Memória` e `RAG` lado a lado por desenho de produto. Isso é importante porque o operador valida o efeito do documento no mesmo painel em que:
   - grava memória generativa
   - consulta memória existente
@@ -132,12 +134,23 @@ Reflexo direto na UI:
 - Esse passo é um `scroll` filtrado por conversa, não uma busca vetorial nova.
 - O resultado é um bloco textual curto com nome do arquivo e `semantic_summary` ou preview do chunk.
 
+### Busca e Recuperação RAG
+Além do contexto injetado automaticamente, o sistema expõe endpoints explícitos de RAG que roteiam a intenção do usuário (`get_knowledge_routing_policy().resolve()`) para as bases apropriadas (Qdrant e/ou Neo4j):
+- `/rag/search`: Busca geral baseada em fatos consultando a memória vetorial.
+- `/rag/user_chat` (e `v2`): Busca semântica restrita a mensagens pessoais em `user_chat_<user_id>`.
+- `/rag/productivity`: Busca focada em itens de calendário, e-mails e notas do usuário.
+- `/rag/hybrid_search`: Busca híbrida de código que combina recuperação lexical/grafo (Neo4j) com vetorial (Qdrant).
+
 ## Relação com memória
-- `user_docs_<user_id>` não é a mesma coleção de memória episódica.
+- `user_docs_<user_id>` é uma coleção vetorial isolada das coleções de memória (`user_memory_<user_id>`, `user_chat_<user_id>`, `user_secret_<user_id>`) e da coleção global `janus_episodic_memory`.
 - `doc_chunk` não passa por `MemoryCore.amemorize()`.
 - A recuperação documental do chat é separada do recall de `user_chat_<user_id>` e `user_memory_<user_id>`.
 - `collect_chat_citations()` pode combinar documentos e memórias, mas são pipelines distintos.
-- O frontend reforça essa separação: a aba `Memória` usa endpoints próprios (`addGenerativeMemory`, `getGenerativeMemories`, `getMemoryTimeline`) e não reaproveita `doc_chunk` como se fosse memória.
+- O frontend reforça essa separação: a aba `Memória` usa endpoints próprios que refletem os namespaces de conhecimento:
+  - `/memory/generative`: gerencia memória episódica, semântica e procedural.
+  - `/memory/preferences`: consulta preferências do usuário.
+  - `/memory/secrets`: consulta segredos autorizados.
+  - `/memory/timeline`: exibe a linha do tempo consolidada.
 - `generativeMemoryMetaLine()` formata a visualização de cada item de memória generativa como: tipo (episodic/semantic/procedural), importância numérica (0-10), score e timestamp de criação/atualização.
 - Ao mesmo tempo, o desenho da tela faz as três coisas parecerem vizinhas operacionais:
   - documentos enriquecem grounding e citações

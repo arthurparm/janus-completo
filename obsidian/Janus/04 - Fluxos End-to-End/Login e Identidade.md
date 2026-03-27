@@ -92,7 +92,7 @@ Documentar o fluxo real de autenticacao ponta a ponta do Janus usando exclusivam
 ### Token Janus
 - Formato real: `base64url(payload_json).base64url(signature)` - não é JWT padrão de três partes.
 - O payload contem pelo menos `user_id` e `exp`.
-- A assinatura e `HMAC-SHA256(payload_json, AUTH_JWT_SECRET)`.
+- A assinatura e `HMAC-SHA256(key=AUTH_JWT_SECRET, message=payload_json)`.
 - O TTL usado por login e registro locais e `3600` segundos.
 - Decodificação no frontend via `decodeTokenUserId()` lê a primeira parte do token ([auth.utils.ts:3-17](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/services/auth.utils.ts#L3-L17)).
 
@@ -201,10 +201,10 @@ Request de confirmacao:
 ### 1. Bootstrap da sessao na abertura da aplicacao
 1. O Angular instancia `AuthService` e seu construtor executa `initializeAuth()` ([auth.service.ts:61-86](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/auth/auth.service.ts#L61-L86)).
 2. `authReady` inicia como `false` e `_firebaseAuthReady` vai para `true` imediatamente ([auth.service.ts:66-67](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/auth/auth.service.ts#L66-L67)).
-3. `getStoredAuthToken()` procura `JANUS_AUTH_TOKEN` primeiro em `localStorage` depois em `sessionStorage` ([auth.utils.ts:19-25](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/services/auth.utils.ts#L19-L25)).
+3. `getStoredAuthToken()` procura `AUTH_TOKEN_KEY` (default: `JANUS_AUTH_TOKEN`) primeiro em `localStorage` depois em `sessionStorage` ([auth.utils.ts:19-25](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/services/auth.utils.ts#L19-L25)).
 4. Se nao houver token, o frontend sobe anonimo e marca `authReady = true` imediatamente.
-5. Se houver token, `AuthService` chama `GET /v1/auth/local/me` com o token no header Authorization ([auth.service.ts:72-74](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/auth/auth.service.ts#L72-L74)).
-6. O `baseUrlInterceptor` transforma a URL em `/api/v1/auth/local/me`.
+5. Se houver token, `AuthService` chama `GET ${API_BASE_URL}/v1/auth/local/me` (default: `/api/v1/auth/local/me`) com o token no header Authorization ([auth.service.ts:72-74](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/auth/auth.service.ts#L72-L74)).
+6. O `baseUrlInterceptor` e relevante quando a URL chega relativa (sem `API_BASE_URL`); nesse caso, ele prefixa com a base e evita double-prefix.
 7. O `authInterceptor` anexa `Authorization: Bearer <token>` e tenta extrair `X-User-Id` do token ([auth.interceptor.ts:18-20](file:///Users/arthurparaiso/repos/janus-completo/frontend/src/app/core/interceptors/auth.interceptor.ts#L18-L20)).
 8. O backend resolve `request.state.actor_user_id` no middleware `actor_binding`.
 9. `local_me()` usa esse ator autenticado para carregar o usuario.
@@ -308,7 +308,7 @@ Request de confirmacao:
 - Essa decisao acontece toda no backend; o frontend apenas consome a role devolvida.
 
 ## Persistencia de sessao no frontend
-- Chave padrao: `JANUS_AUTH_TOKEN`.
+- Chave: `AUTH_TOKEN_KEY` (default: `JANUS_AUTH_TOKEN`).
 - `remember = true`: token vai para `localStorage`.
 - `remember = false`: token vai para `sessionStorage`.
 - `logout()` so limpa estado local e storage.
@@ -404,5 +404,6 @@ Request de confirmacao:
 ## Riscos e lacunas
 - O fluxo de retorno pos-login ainda ignora `returnUrl`.
 - A UI sugere login social, mas a implementacao efetiva esta desativada.
+- A tela de login exibe dica de "mínimo 6 caracteres", mas o backend exige `min_length=8` no login local.
 - Sem segredo fixo fora de producao, restart do backend invalida tokens emitidos antes.
 - Como nao ha revogacao server-side, a invalidacao pratica do token depende de expiracao ou troca de segredo.
