@@ -9,14 +9,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Ensure "app" package is discoverable when running from repo root
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
-from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata
-from app.services.knowledge_service import get_knowledge_service
-from app.services.llm_service import get_llm_service
-from app.services.observability_service import get_observability_service
-from app.services.optimization_service import get_optimization_service
-from app.services.tool_service import get_tool_service
+sys.path.append(os.path.join(os.getcwd(), "backend"))  # noqa: E402
+from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata  # noqa: E402
+from app.services.knowledge_service import get_knowledge_service  # noqa: E402
+from app.services.llm_service import get_llm_service  # noqa: E402
+from app.services.observability_service import get_observability_service  # noqa: E402
+from app.services.optimization_service import get_optimization_service  # noqa: E402
+from app.services.tool_service import get_tool_service  # noqa: E402
 
 
 class DummyToolService:

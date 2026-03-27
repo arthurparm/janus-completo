@@ -4,12 +4,11 @@ import sys
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-sys.path.append(os.path.join(os.getcwd(), "backend"))
-
-from app.api.v1.endpoints.chat import router as chat_router
-from app.config import settings
-from app.services.chat_service import get_chat_service
-from app.services.memory_service import get_memory_service
+sys.path.append(os.path.join(os.getcwd(), "backend"))  # noqa: E402
+from app.api.v1.endpoints.chat import router as chat_router  # noqa: E402
+from app.config import settings  # noqa: E402
+from app.services.chat_service import get_chat_service  # noqa: E402
+from app.services.memory_service import get_memory_service  # noqa: E402
 
 
 class _DummyRepo:
