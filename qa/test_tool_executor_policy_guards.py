@@ -1,13 +1,13 @@
 import os
 import sys
-from types import SimpleNamespace
 
-import pytest
-from pydantic import BaseModel
+sys.path.append(os.path.join(os.getcwd(), "backend"))
+from types import SimpleNamespace  # noqa: E402
+
+import pytest  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
 import app.services.tool_executor_service as tool_module  # noqa: E402
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))  # noqa: E402
 from app.core.autonomy.policy_engine import PolicyDecision, SimulationResult  # noqa: E402
 from app.services.tool_executor_service import ToolExecutorService  # noqa: E402
 

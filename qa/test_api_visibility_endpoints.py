@@ -1,16 +1,16 @@
 import os
 import sys
-import types
-from contextlib import asynccontextmanager
-from datetime import datetime
 
-import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+sys.path.append(os.path.join(os.getcwd(), "backend"))
+import types  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from datetime import datetime  # noqa: E402
+
+import pytest  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 # Ensure "app" package is discoverable when running from repo root
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))  # noqa: E402
 from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata  # noqa: E402
 from app.services.knowledge_service import get_knowledge_service  # noqa: E402
 from app.services.llm_service import get_llm_service  # noqa: E402

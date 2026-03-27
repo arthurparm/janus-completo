@@ -1,10 +1,11 @@
 import os
 import sys
 
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
+sys.path.append(os.path.join(os.getcwd(), "backend"))
 
-sys.path.append(os.path.join(os.getcwd(), "backend"))  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
 from app.api.v1.endpoints.chat import router as chat_router  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.services.chat_service import get_chat_service  # noqa: E402

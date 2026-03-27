@@ -1,8 +1,9 @@
 import os
 import sys
-from types import SimpleNamespace
 
-sys.path.append(os.path.join(os.getcwd(), "backend"))  # noqa: E402
+sys.path.append(os.path.join(os.getcwd(), "backend"))
+from types import SimpleNamespace  # noqa: E402
+
 from app.services.db_migration_service import DBMigrationService  # noqa: E402
 
 
