@@ -113,3 +113,34 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-27)
+
+### 11. Ausência de Autenticação em Endpoints Core (Segurança)
+**Descrição:** Observou-se que endpoints críticos do sistema de agentes não possuem validação de AuthN/AuthZ. Atores não-autenticados podem executar prompts e instruções completas de sistema.
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py`: Rota `@router.post("/execute")` não utiliza decoradores ou injeção de dependência para verificar se a requisição provém de um usuário autenticado.
+- `backend/app/api/v1/endpoints/assistant.py`: Rota `@router.post("/assistant/execute")` sofre da mesma falha, recebendo execução direta de pedidos (inclusive alterando blocos e ferramentas) sem restrição.
+
+**Próximos passos:**
+- Adicionar dependência `Depends(get_current_user)` ou mecanismos de API Key nas rotas `/execute` e `/assistant/execute`.
+- Documentar SG-037 no backlog técnico.
+
+### 12. Endpoint Admin Vulnerável e Atualização Frágil em Memória (Segurança/Operações)
+**Descrição:** O endpoint de administração para recarregar as configurações de ambiente não possui autenticação e realiza atualizações destrutivas apenas em memória, que serão perdidas ao reiniciar. Qualquer ator na rede pode reconfigurar o sistema "on the fly".
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: Rota `@router.patch("/admin/config")` não possui dependência de admin ou autenticação. A docstring indica "atualiza configurações em tempo de execução (...) perdidas no restart".
+
+**Próximos passos:**
+- Proteger as rotas de prefixo `/admin/*` com autenticação RBAC de administradores.
+- Sincronizar as atualizações persistentes no banco de dados, em vez de focar apenas no in-memory reload via pub/sub.
+- Adicionar issue OQ-017 (operabilidade) e SG-038 (segurança) no backlog ativo.
+
+### 13. Exposição de Lógica Destrutiva e AuthZ Bypass em Grafo (Segurança)
+**Descrição:** Um endpoint dedicado a manipular estados vitais do LangGraph foi exposto abertamente sem proteção, possuindo um modelo simplificado que adverte sobre "nuclear options" que deletam threads sem validar schema versions com segurança plena se forçado.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py`: Rota `@router.post("/purge_incompatible")` não exige credenciais, possibilitando Denial of Service ou corrupção da base se invocada com `force=True`.
+
+**Próximos passos:**
+- Aplicar decoradores rigorosos de controle de acesso de superusuário na rota `/admin/graph/purge_incompatible`.
+- Documentar SG-040 no backlog.

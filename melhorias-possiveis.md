@@ -836,3 +836,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Ausência de Autenticação em Endpoints Core
+- Problema atual: `backend/app/api/v1/endpoints/agent.py` (/execute) e `backend/app/api/v1/endpoints/assistant.py` (/assistant/execute) não utilizam dependências de autenticação (AuthN) ou autorização (AuthZ).
+- Solucao proposta: Adicionar as dependências de autenticação como `Depends(get_current_user)`.
+- Impacto esperado: Maior segurança impedindo que usuários anônimos solicitem a execução de agentes.
+- Riscos: Quebra de acesso caso scripts de ferramentas internas não estejam enviando o token.
+- Dependencias: API Key ou Auth middleware ajustado.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Endpoint Admin Vulnerável e Atualização Frágil em Memória
+- Problema atual: O endpoint `/admin/config` (`backend/app/api/v1/endpoints/admin_config.py`) permite que alterações nas configurações sejam realizadas on-the-fly sem nenhuma restrição ou validação de papel do autor da chamada, apresentando grave risco de RCE/Denial-of-Service via injeção.
+- Solucao proposta: Implementar políticas rigorosas de Role-Based Access Control (RBAC) e forçar persistência segura das alterações validadas.
+- Impacto esperado: Bloqueio de manipulação não-autorizada das configurações dinâmicas dos agentes.
+- Riscos: Redução de agilidade para operadores caso a integração via Redis Pub/Sub necessite de chaves autenticadas.
+- Dependencias: `Depends(get_current_admin)`.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-017] Atualização Destrutiva em Memória Perdida no Restart
+- Problema atual: Conforme a docstring em `backend/app/api/v1/endpoints/admin_config.py`, mudanças injetadas via `/admin/config` são aplicadas estritamente em memória (pub/sub) sem estarem atreladas ao banco ou volume, resultando na perda de estado de configuração.
+- Solucao proposta: Adicionar um processo de dump-to-disk persistente para a tabela de Settings ou AWS Parameter Store/Vault.
+- Impacto esperado: Garantir que reboots inesperados do worker do FastAPI não descartem tuning vital.
+- Riscos: Demora na propagação em clusters com múltiplos nodes.
+- Dependencias: Módulo de DB ORM.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Exposição de Lógica Destrutiva em Grafo de Agentes
+- Problema atual: O endpoint `/admin/graph/purge_incompatible` (`backend/app/api/v1/endpoints/admin_graph.py`) pode deletar threads cruciais na base de dados (PostgreSQL/LangGraph) caso seja chamado com `force=True`, porém não requer nenhuma autenticação administrativa para execução.
+- Solucao proposta: Introduzir Autenticação (JWT, Admin Roles) para proteger a rota.
+- Impacto esperado: Redução drástica do risco de destruição de dados (Wipe de memória) de longo e curto prazo via requests maliciosos.
+- Riscos: Nenhum além de restringir scripts de manutenção desatualizados.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
