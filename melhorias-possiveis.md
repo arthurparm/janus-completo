@@ -109,6 +109,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-043 | Resolver vulnerabilidades atualizadas no Frontend reportadas pelo npm audit | P1 | M | aberto |
+| SG-044 | Mitigar risco de LGPD / Vazamento PII no secure-tailscale-setup.ps1 | P1 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -713,6 +715,28 @@ Copiar e preencher:
 - Riscos: Falhas de funcionalidade em ferramentas que dependam do Shell global ou de injeção dinâmica intencional.
 - Dependencias: Nenhuma.
 - Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-043] Vulnerabilidades Atualizadas no Frontend (npm audit)
+- Problema atual: A revisão de segurança mais recente do `npm audit` revelou múltiplas dependências com vulnerabilidades (ex: 25 totais, 17 altas, 8 moderadas), incluindo bibliotecas do `@angular`, `hono`, `express-rate-limit`, `tar`, entre outras.
+- Solucao proposta: Executar e validar `npm audit fix`, ou forçar a atualização individual das bibliotecas afetadas.
+- Impacto esperado: Remoção imediata de vulnerabilidades de alto risco, prevenindo falhas de autorização e injeções.
+- Riscos: Quebra do build ou compatibilidade do código se existirem *breaking changes* nas novas versões (especialmente no ecossistema do Angular).
+- Dependencias: Execução da pipeline de testes e build no frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-044] Vazamento de PII em Scripts de Ferramentas de Rede (Shadow IT)
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` atua como um sistema de monitoramento não oficial, gerando logs locais (`tailscale-security-monitor.log`) com dados e IPs dos peers em claro, configurando vazamento de PII que foge ao controle da LGPD do projeto principal.
+- Solucao proposta: Modificar o script para incluir regras explícitas de ofuscação de PII nos logs criados, com ofuscação de hostnames de usuários e minimização dos IPs coletados.
+- Impacto esperado: Cumprimento estrito do princípio da LGPD de minimização, mesmo em componentes satélites ou infraestrutura local.
+- Riscos: Perda de capacidade de identificação de máquinas problemáticas localmente por DevOps caso a ofuscação oculte informação essencial.
+- Dependencias: Nenhuma.
+- Prioridade: P1
 - Esforco: S
 - Dono: a definir
 - Status: aberto
