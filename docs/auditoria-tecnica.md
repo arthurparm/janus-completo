@@ -5,6 +5,18 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 
 ## Achados do dia
 
+## Achados do dia (2026-03-27)
+
+### 1. Novo endpoint em AutonomyHistory sem testes
+**Descrição:** Detectado pela checagem de API drift que um novo endpoint `/api/v1/autonomy/history/runs/{run_id}/enqueues` foi adicionado, mas não está coberto por testes nem referenciado em scripts de QA ou no frontend.
+**Evidências:**
+- `outputs/qa/api_inventory.json` mostra a rota nova.
+- `outputs/qa/api_coverage_report.json` reflete a falta de cobertura.
+**Próximos passos:**
+- Criar testes automatizados cobrindo a rota no framework Pytest (backend/tests ou qa/).
+- Atualizar documentação frontend caso deva ser consumido.
+
+
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)
 **Descrição:** Observou-se que múltiplos serviços loggam inputs do usuário, artefatos completos ou prévias de mensagens, o que pode conter Informações Pessoalmente Identificáveis (PII) sensíveis. Não há redação ou ofuscação aplicada nesses fluxos antes da escrita do log.
 **Evidências:**

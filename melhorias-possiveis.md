@@ -836,3 +836,5 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+| OQ-018 | Adicionar cobertura de testes para rota /api/v1/autonomy/history/runs/{run_id}/enqueues | P1 | S | planejado |
