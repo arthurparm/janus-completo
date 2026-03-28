@@ -836,3 +836,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-018] Drift de contratos API e testes pendentes (Chat / Autonomy)
+- Problema atual: Múltiplos endpoints de chat e autonomy (`/api/v1/chat/stream/{conversation_id}`, `/api/v1/chat/{conversation_id}/trace`, `/api/v1/chat/{conversation_id}/events`, `/api/v1/chat/health`, `/api/v1/autonomy/history/runs/{run_id}/enqueues`) expostos na documentação OpenAPI que não possuem cobertura de testes automatizados completa (`has_tests: null` ou `not_covered`).
+- Solucao proposta: Expandir a suíte de testes (e.g., testes em `qa/test_chat_stream_sse_contract.py` ou novos arquivos correspondentes) para alcançar cobertura e confirmar a estabilidade dos novos contratos de Chat e Autonomy.
+- Impacto esperado: Prevenir regressões nos endpoints de Chat e Autonomy e consolidar a API Drift com os testes e CI.
+- Riscos: Quebras em build caso ocorram atualizações majoritárias dos testes.
+- Dependencias: Testes da pipeline de backend pytest e scripts QA.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto

@@ -113,3 +113,16 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-28)
+
+### 29. Desalinhamento de Contratos de API e Testes Ausentes (API Drift)
+**Descrição:** Observou-se novos endpoints de `chat` (ex: `/api/v1/chat/stream/{conversation_id}`, `/api/v1/chat/{conversation_id}/trace`, `/api/v1/chat/{conversation_id}/events`, `/api/v1/chat/health`) e de `autonomy` (ex: `/api/v1/autonomy/history/runs/{run_id}/enqueues`) expostos na documentação OpenAPI que não possuem cobertura de testes automatizados completa (`has_tests: null` ou `not_covered`).
+**Evidências:**
+- Saída de `tooling/extract_api_inventory.py` identificando os novos endpoints.
+- Relatório de cobertura em `outputs/qa/api_coverage_report.json` registrando a falta de validação e o baixo total de coverage.
+- O arquivo `backend/app/services/db_migration_service.py` apresentava um bloco de imports desorganizado (`I001`), o que reflete possíveis falhas nas verificações de pre-commit de desenvolvedores em PRs recentes (como a de organização de prompts).
+
+**Próximos passos:**
+- Adicionar ou expandir a suíte de testes (e.g., testes em `qa/test_chat_stream_sse_contract.py` ou novos arquivos correspondentes) para alcançar cobertura e confirmar a estabilidade dos novos contratos de Chat e Autonomy.
+- Registrar OQ-018 no backlog (`melhorias-possiveis.md`).
