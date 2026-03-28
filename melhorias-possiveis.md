@@ -836,3 +836,9 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+## Melhorias Adicionadas (2026-03-19)
+| ID | Descrição | Prioridade | Esforço | Status |
+| --- | --- | --- | --- | --- |
+| SG-044 | Atualizar dependências vulneráveis do frontend (npm audit fix) | P1 | M | não comprovada |
+| SG-045 | Corrigir vulnerabilidade CVE-2026-4539 no pygments | P1 | S | não comprovada |

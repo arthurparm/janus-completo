@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+## Achados do dia (2026-03-19)
+
+### Lacunas e Impacto
+- **Metadados de Email Sensíveis não Ofuscados (Logging):** Na função `send_email` de `backend/app/core/tools/productivity_tools.py`, metadados essenciais e potencialmente rastreáveis a pessoas (como o remetente `user_id`, destinatário `to` e o `subject`) continuam a ser passados ao `logger.info()` em texto claro, falhando no mascaramento preventivo de PII.
+- **Estado Global Compartilhado em Ferramentas de Produtividade (PII Leak Risk):** As listas globais na `backend/app/core/tools/productivity_tools.py` que armazenam `_notes` e `_calendar_events` permanecem retendo estado em memória entre requisições sem isolamento claro nem controle de AuthZ, o que pode levar a um vazamento transversal se o serviço for atacado.
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O loop principal no arquivo `backend/app/interfaces/daemon/daemon.py` continua realizando o log (`logger.info("log_info", message=f"Command received: {command}")`) de comandos de voz transcritos sem PII scrubbing prévio antes de gravar no log do console/janus.log, quebrando o princípio de minimização da LGPD.
+- **Captura de Tela Indiscriminada e sem Autorização (Windows Agent):** Os endpoints expostos pelo `backend/windows_agent.py` mantêm riscos críticos de vazamento por capturar a tela ativa do usuário de forma indiscriminada, sem minimização visual de áreas ou registro de auditoria local (logs no agent). Não há flag persistente `OPT_IN`.
+
+### Próximos Passos
+Ações sugeridas anteriormente (2026-03-18) continuam pendentes. A reincidência nos arquivos `windows_agent.py`, `productivity_tools.py` e `daemon.py` demanda urgência na aplicação de `redact_pii_text_only`, persistência em banco para estado global e flags `OPT_IN` para capturas OS.

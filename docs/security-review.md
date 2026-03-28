@@ -216,3 +216,30 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+## Achados do dia (2026-03-19)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit` (26 no total, sendo 17 altas e 9 moderadas). Incluindo:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`
+  - `@hono/node-server`, `hono`
+  - `express-rate-limit`, `flatted`, `immutable`, `path-to-regexp`, `picomatch`, `tar` (Todas Altas)
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para resolver as vulnerabilidades encontradas.
+
+### 30. Vulnerabilidade em Dependência do Backend (CVE-2026-4539)
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta
+- **Descrição:** O `pip-audit` identificou a vulnerabilidade CVE-2026-4539 na dependência `pygments`.
+- **Ação Recomendada:** Atualizar a versão do pacote `pygments` no `pyproject.toml` para uma versão segura.
+
+### 31. Interface Binding Potencialmente Inseguro (0.0.0.0) e Falta de Autenticação
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média/Alta (Bandit B104)
+- **Descrição:** O script expõe a API vinculando a todas as interfaces (`0.0.0.0`) na porta 5001 sem autenticação (AuthZ bypass), permitindo acesso da rede local aos endpoints de SO (ex: `/screenshot`, `/notify`, `/speak`). A persistência deste comportamento após a última execução reflete a ausência de mitigação.
+- **Ação Recomendada:** Restringir o bind para `127.0.0.1` ou implementar um mecanismo de autenticação robusto nos endpoints.
