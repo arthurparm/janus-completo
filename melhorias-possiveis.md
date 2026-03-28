@@ -836,3 +836,58 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Remover default secrets hardcoded de configurações sensíveis
+- Problema atual: O `backend/app/config.py` expõe por padrão segredos como `change_me_postgres_password`, `change_me_neo4j_password`, e `change_me_rabbitmq_password`.
+- Solucao proposta: Remover defaults em configurações de banco ou forçar bloqueio com uma validadora Strict do pydantic no boot caso permaneça em ambientes não-development.
+- Impacto esperado: Evita implantação acidental com chaves fáceis de deduzir.
+- Riscos: Crash de serviços caso o `.env` esteja incompleto/mal configurado em dev.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Adicionar decorators de Autenticação/AuthZ nos endpoints de Workspace
+- Problema atual: `backend/app/api/v1/endpoints/workspace.py` não valida `Depends(get_current_user)`, expondo funcionalidades e vazando artefatos de memória e PII para acessos anônimos diretos ou scripts na rede interna.
+- Solucao proposta: Injetar verificação estrita de identidade em rotas como `/workspace/artifacts/add` e nas mensagens de agent.
+- Impacto esperado: Restringe vazamento de PII entre artefatos de áreas compartilhadas e Impede DoS por acessos de `shutdown_system`.
+- Riscos: Possível quebra de fluxos de robôs interagentes que não assinam tokens JWT ainda.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Adicionar Rate Limit no endpoint de Autenticação local para prevenir brute force
+- Problema atual: A rota `/local/login` (`backend/app/api/v1/endpoints/auth.py`) não possui middlewares/decorators efetivos de rate limiting contra brute-forcing, facilitando invasão/enumeração de contas.
+- Solucao proposta: Configurar e adicionar o decorador nativo do sistema do Rate Limiter aos endpoints.
+- Impacto esperado: Impede exploração rápida e Account Takeover através de credenciais previsíveis.
+- Riscos: Bloqueio acidental de usuários reais de NATs compartilhados.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Desabilitar o trust automático de X-User-Id header por padrão
+- Problema atual: O `backend/app/config.py` traz `AUTH_TRUST_X_USER_ID_HEADER=True` por default, permitindo o bypass puro em `auth.py` ao apenas declarar o header na requisição.
+- Solucao proposta: Trocar default para `False`. Exigir apenas `True` em debug ou deploy severamente contido.
+- Impacto esperado: Previne Personificação simples através de requisições spoofed do exterior ou SSRFs.
+- Riscos: Caso algum proxy em produção dependa disso sem trocar a flag, irá quebrar logins do gateway.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Corrigir SQL Injection (B608) em dedupe_service
+- Problema atual: `backend/app/services/dedupe_service.py` utiliza formatação raw literal de `f"UPDATE {table} SET ..."` que o Bandit B608 identifica como injeção possível de Tabela e/ou Payload.
+- Solucao proposta: Substituir por abstrações do SQLAlchemy ou parameter binding formal do Table names se aplicável.
+- Impacto esperado: Fechamento formal da injeção arbitrária via SQL injection.
+- Riscos: Regressão no processo de duplicação caso a restrição fique rígida demais sem as FKs corretas.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto

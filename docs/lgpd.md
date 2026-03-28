@@ -70,3 +70,15 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-28)
+
+### Lacunas e Impacto
+- **Captura de Tela Indiscriminada e sem Autorização (Windows Agent):** Os endpoints expostos sem autenticação pelo `backend/windows_agent.py` (`/screenshot`) mantêm os riscos críticos de vazamento LGPD por capturar a tela ativa do usuário de forma indiscriminada, sem data minimisation visual (blur/redaction em certas janelas) ou registro de auditoria local. Este comportamento expõe PIIs, comunicações, dados bancários e de saúde que estiverem em tela plena.
+- **Risco de Acesso Desprotegido a Artefatos de Workspace:** O `backend/app/api/v1/endpoints/workspace.py` implementa rotas (`/workspace/artifacts/add`, `/workspace/artifacts/{key}`) que guardam e retornam artefatos que podem conter logs ou notas do usuário, sem NENHUM controle de acesso (`Depends(get_current_user)`). Isso viabiliza o vazamento lateral em tempo real de toda e qualquer anotação submetida ao serviço por diferentes sessões.
+- **Vulnerabilidade a Ataques Distribuídos sobre PII:** Endpoints de login local (`backend/app/api/v1/endpoints/auth.py` via `/local/login`) carecem de limites de requisição por IP (`RateLimiter`), permitindo colheita massiva de contas através da varredura de combinações e vazamento de base em dicionários, o que é uma infração às bases do LGPD de Proteção de Dados by Design and Default.
+
+### Próximos Passos
+1. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro de PII.
+2. **Adicionar Validação de Acesso Estrita nos Workspaces:** Modificar as rotas FastAPI no `workspace.py` para exigirem verificação AuthN ativa na API.
+3. **Impor Rate Limiting:** Adicionar o `limiter` em endpoints de auth do Janus, previnindo enums de usuário.

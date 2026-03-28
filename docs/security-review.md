@@ -216,3 +216,40 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-28)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de versão do python e falta de lockfile compatível no ambiente).
+- [x] Revisão manual de código via `bandit` e grep (arquivos alterados / evidências levantadas).
+
+### 24. Senhas e Segredos Default Hardcoded
+- **Caminho:** `backend/app/config.py`
+- **Gravidade:** Alta
+- **Descrição:** Senhas padrão como `change_me_neo4j_password`, `change_me_postgres_password` e `change_me_rabbitmq_password` encontram-se expostas diretamente no código-fonte, caracterizando um risco em caso de ausência de provisionamento via `.env`.
+- **Ação Recomendada:** Utilizar validadores `Strict` do pydantic para falhar o boot do sistema em produção caso detecte a configuração de chaves fracas default, ou remover os fallbacks hardcoded obrigando injeção via variáveis de ambiente.
+
+### 25. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Várias dependências do frontend (incluindo `hono`, `dompurify` e `picomatch`) exibiram novas vulnerabilidades apontadas como "high" no `npm audit`, somando um total de cerca de 13 altas e 10 moderadas, abrindo margem para XSS, ReDoS e Arbitrary File Access.
+- **Ação Recomendada:** Executar `npm audit fix` ou refatorar o gerenciamento de dependências.
+
+### 26. SQL Injection via f-strings
+- **Caminho:** `backend/app/services/dedupe_service.py`
+- **Gravidade:** Alta (Bandit B608)
+- **Descrição:** Na função `fix_db_duplicates`, há a construção de comandos SQL raw utilizando interpolação de string literal f-strings (`text(f"UPDATE {table} SET ...")`), constituindo uma vulnerabilidade de SQL Injection em potencial.
+- **Ação Recomendada:** Utilizar estritamente a parametrização segura (`:nome`) nos nomes das tabelas se for dinâmico, ou referenciar os Models da ORM.
+
+### 27. Autenticação Inexistente em Endpoints de Workspace
+- **Caminho:** `backend/app/api/v1/endpoints/workspace.py`
+- **Gravidade:** Alta
+- **Descrição:** Os endpoints como `add_artifact` e `shutdown_system` não invocam validadores de sessão ou tokens (como `Depends(get_current_user)`). Estão completamente expostos se a porta da API for acessada diretamente, incorrendo em Autenticação Falha.
+- **Ação Recomendada:** Injetar decorators ou validações de AuthN e AuthZ (ex: verificação de Role ou Identity).
+
+### 28. Rate Limiter não englobando Local Auth
+- **Caminho:** `backend/app/api/v1/endpoints/auth.py`
+- **Gravidade:** Média/Alta
+- **Descrição:** Ausência de controle de limite de tráfego / taxa (Rate Limit) nos endpoints de login tradicionais como `/local/login`. Isso propicia ataques de dicionário ou de força bruta (Brute-force).
+- **Ação Recomendada:** Requerer integração do `limiter` do backend na rota de autenticação.
