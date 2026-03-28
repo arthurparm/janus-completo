@@ -74,6 +74,27 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar testes do `AuthService` com `HttpTestingController`.
 - Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
 
+## Achados do dia (2026-03-28)
+
+### 11. Vazamento de Dados via Shadow IT em Monitoramento (LGPD/Segurança)
+**Descrição:** O script PowerShell `tooling/secure-tailscale-setup.ps1` atua como um monitor de segurança paralelo não homologado que escreve de forma contínua logs não redigidos em `tailscale-security-monitor.log`. Estes logs contêm latência por hostname e informações de peer, bypassando o processo padrão de ofuscação de PII e violando controles LGPD do repositório.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: A função `Test-TailscaleHealth` utiliza `Write-SecurityLog` para imprimir latências e eventos de autenticação de peers diretamente em disco (ex: `"High latency detected: $($Peer.HostName) ($($Peer.LatencyMs) ms)"`).
+
+**Próximos passos:**
+- Remover a criação local do log e enviar essas saídas de telemetria diretamente ao pipeline do backend para garantir sanitização e conformidade com PII/LGPD.
+- Inserir a issue SG-041 no backlog (`melhorias-possiveis.md`).
+
+### 12. Risco de CI Hangs e Ausência de Test Isolation (Arquitetura/Testes)
+**Descrição:** Scripts de teste e orquestração criados recentemente no nível de tooling ignoram as validações assíncronas padrão (sem timeout explícito) e desviam do runner do Pytest, diminuindo as coberturas de regressão e permitindo hangs na CI em caso de deadlock de redes.
+**Evidências:**
+- `tooling/test_debate_system.py`: A iteração `async for output in debate_graph.astream(...)` executa chamadas externas do grafo sem envolvimento de primitivas `asyncio.wait_for` e executa um teste unitário complexo (Graph flow) inteiramente fora do framework em `qa/`.
+- `tooling/seed-repro-scenarios.ps1`: Roda execuções sem se integrar com pipelines padrão de testes.
+
+**Próximos passos:**
+- Migrar `tooling/test_debate_system.py` para dentro de `qa/test_debate_system.py` como um teste Pytest válido com `@pytest.mark.asyncio` e incluir explicit timeouts nas chamadas da LLM e do grafo.
+- Mapear a issue DX-013 em `melhorias-possiveis.md`.
+
 ## Achados do dia (2026-03-08)
 
 ### 7. Segurança de Host e Endpoints Expostos

@@ -717,6 +717,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-041] Vazamento LGPD em Monitoramento Shadow (Tailscale)
+- Problema atual: O script PowerShell `tooling/secure-tailscale-setup.ps1` atua como um monitor de segurança independente que registra eventos e metadados de hostnames em logs de texto sem a redação de PII padrão do sistema.
+- Solucao proposta: Interromper a geração local desse arquivo de log, delegar a telemetria do Tailscale à API principal do Janus para processamento (via pipeline de ofuscação) ou eliminar o log no disco do usuário.
+- Impacto esperado: Restauração da conformidade LGPD e centralização da proteção de dados em logs.
+- Riscos: Queda de observabilidade nativa na máquina local caso o agente apresente falha de comunicação com o backend.
+- Dependencias: Modificar script de tooling.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Scripts de QA sem timeout e isolados do Pytest (Testes/Arquitetura)
+- Problema atual: O script `tooling/test_debate_system.py` atua como teste E2E do grafo sem utilizar runners de validação (`pytest`), enquanto carece de mecanismos de timeout assíncrono durante iterações do grafo LangGraph (`astream`).
+- Solucao proposta: Refatorar e mover esses testes para o diretório de Quality Assurance (`qa/`) integrando-os na pipeline Pytest (usando os hooks e markers corretos como `asyncio.wait_for`).
+- Impacto esperado: Aumento da segurança de regressão com relatórios integrados, evitando hangs não monitorados em esteiras de Continuous Integration.
+- Riscos: Falhas por limite temporal no QA se as queries das ferramentas no grafo excederem o threshold estabelecido.
+- Dependencias: Pytest no pipeline `qa`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
