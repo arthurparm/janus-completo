@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-039] Bypass de Autenticação em Agent e Assistant Execute
+- Problema atual: Os endpoints `/execute` (em `backend/app/api/v1/endpoints/agent.py`) e `/assistant/execute` (em `backend/app/api/v1/endpoints/assistant.py`) não exigem validação de sessão/autenticação, permitindo que usuários da rede executem ações e comandos livremente (RCE a nível de IA).
+- Solucao proposta: Adicionar dependência de autenticação JWT padrão (ex: `Depends(get_current_user)`) nas respectivas rotas de execução do FastAPI.
+- Impacto esperado: Proteção das rotas de execução contra invocação anônima não-autorizada.
+- Riscos: Redução de automações simples que atualmente consomem essas APIs sem token (requererão adaptação).
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-017] Atualização em memória frágil de configurações administrativas
+- Problema atual: A rota `/admin/config` (em `backend/app/api/v1/endpoints/admin_config.py`) aplica mudanças de configuração diretamente na memória da aplicação (ex: via Hot-Reload), as quais são perdidas imediatamente após um restart do contêiner caso não persistidas de forma externa.
+- Solucao proposta: Armazenar a configuração via banco de dados ou integração com sistemas externos como AWS Parameter Store/Redis persistente para que o AppSettings leia no startup.
+- Impacto esperado: Configurações sincronizadas, resilientes a restarts e propagadas de forma consistente.
+- Riscos: Adicionar latência de startup e aumentar a complexidade da estrutura de inicialização (startup event).
+- Dependencias: Ajustes do ConfigService para acessar a base de dados em boot-time.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Lógica perigosa de Purge no Admin Graph
+- Problema atual: A funcionalidade do LangGraph exposta via `/purge_incompatible` (em `backend/app/api/v1/endpoints/admin_graph.py`) pode eliminar todo o histórico de conversas no banco caso o schema evolua e a purgação seja forçada, oferecendo um risco destrutivo se abusada via endpoint API.
+- Solucao proposta: Remover ou isolar endpoints destrutivos da API REST comum. Tais rotinas de migração (ou purge) devem ocorrer via CLI com permissões sudo/adm explícitas, sem acesso direto em portas HTTP.
+- Impacto esperado: Remoção imediata do risco de perda de dados massiva via requisições HTTP forjadas.
+- Riscos: Dificuldade momentânea na manutenção e reset de ambientes de teste por parte do frontend.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto

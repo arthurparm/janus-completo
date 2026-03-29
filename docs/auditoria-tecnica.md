@@ -113,3 +113,33 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-29)
+
+### 11. Bypass de Autenticação em Endpoints de Execução
+**Descrição:** Os endpoints principais de execução de agentes e assistentes não exigem validação de sessão/autenticação, expondo capacidades de execução (RCE no nível de IA) para qualquer usuário da rede.
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py`: A rota `@router.post("/execute")` não utiliza decoradores como `Depends(get_current_user)`.
+- `backend/app/api/v1/endpoints/assistant.py`: A rota `@router.post("/assistant/execute")` sofre do mesmo problema.
+
+**Próximos passos:**
+- Adicionar validação JWT via dependência padrão do FastAPI em ambas as rotas.
+- Registrar SG-039 no backlog de melhorias.
+
+### 12. Atualização em Memória Frágil de Configurações Administrativas
+**Descrição:** O sistema possui um endpoint para recarregar configurações em tempo de execução, porém essas alterações são persistidas apenas na memória da aplicação, resultando em perda silenciosa do estado após um reinício de contêiner.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: A rota `@router.patch("/admin/config")` aceita `updates` mas alerta que "As mudanças são aplicadas em memória e perdidas no restart se não forem persistidas externamente".
+
+**Próximos passos:**
+- Integrar a atualização com uma camada persistente (ex: banco de dados ou AWS Parameter Store) antes do hot-reload, ou isolar feature em escopo temporário.
+- Registrar OQ-017 no backlog de melhorias.
+
+### 13. Lógica Perigosa de Purge no Admin Graph
+**Descrição:** Foi exposto um endpoint de expurgo de banco para limpar estados de conversas incompatíveis com novas versões de schema. Se abusada (ou explorada sem autenticação forte), essa funcionalidade pode destruir todo o histórico de interações no banco.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py`: A rota `@router.post("/purge_incompatible")` com parâmetro `force=True` pode disparar a execução de uma limpeza massiva de dados em tabelas do LangGraph.
+
+**Próximos passos:**
+- Refatorar para que expurgos não sejam expostos via API; realizar as migrações/deletions de forma assíncrona ou apenas via scripts internos CLI com AuthN administrativa explícita.
+- Registrar SG-040 no backlog de melhorias.
