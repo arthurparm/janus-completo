@@ -216,3 +216,22 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-29)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, `pip-audit: command not found`).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidades Críticas e Altas no Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas dependências do frontend possuem vulnerabilidades severas, sendo 26 identificadas no total (18 altas, 8 moderadas). Destacam-se as novas vulnerabilidades em `path-to-regexp` (DoS via multiple wildcards) e `picomatch` (Method Injection e ReDoS). As demais (`@angular/*`, `@hono/node-server`, `dompurify`, `express-rate-limit`, `flatted`, `hono`, `immutable`, `tar`) persistem do relatório anterior.
+- **Ação Recomendada:** Executar `npm audit fix` para atualizar dependências que suportam minor/patch bumps seguros, e revisar manualmente atualizações majoritárias.
+
+### 30. Senhas Hardcoded em Scripts de Testes (Credentials Leak)
+- **Caminho:** `backend/tests/verify_secret_management.py` (linhas 50, 78)
+- **Gravidade:** Alta (Bandit B105)
+- **Descrição:** Uso de strings literais (`'janus_pass'`, `'rabbit_secure_abc'`) indicando possíveis senhas/secrets expostos diretamente no repositório. O risco é acentuado pelo potencial vazamento durante sincronizações para CIs públicos.
+- **Ação Recomendada:** Utilizar as abstrações do sistema (ex. `.env.example`, fixtures, mocks e `SecretStr`) no lugar de senhas reais hardcoded.

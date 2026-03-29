@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-29)
+
+### Lacunas e Impacto
+- **Persistência de Fuga em Tools e Daemon:** Após nova verificação, os achados relativos à gravação de informações indiretamente biométricas sem restrição (`backend/app/interfaces/daemon/daemon.py`), e ao uso de estado global com registro em claro de destinatários de e-mail/assunto (`backend/app/core/tools/productivity_tools.py`) seguem não resolvidos, sustentando o cenário de risco PII de dados acumulados em logs não anonimizados.
+- **Risco em Novos Outputs de Teste (`tooling/test_debate_system.py`):** O script imprime (via `print()` explícito) conteúdos abertos ("Proponent Code generated", "Critic") sem limites. Esse comportamento em CIs vaza o contexto processado da memória diretamente na saída de logs contínuos que ficam arquivados permanentemente.
+
+### Próximos Passos
+1. **Reforço:** Reiterar os planos anteriores de mascaramento preventivo em texto (`redact_pii_text_only`) e isolamento de globais.
+2. **Revisar Novos Scripts de tooling:** Abordar `tooling/test_debate_system.py` e correlacionados limitando outputs no console local e impedindo que o fluxo completo dos agentes seja exibido inadvertidamente no stdout do build agent.

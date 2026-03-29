@@ -717,6 +717,39 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-048] Vulnerability in path-to-regexp and picomatch (npm audit)
+- Problema atual: Mapeado pelo `npm audit`, o frontend possui vulnerabilidades de severidade Alta no `path-to-regexp` (DoS via multiple wildcards) e `picomatch` (Method Injection e ReDoS).
+- Solucao proposta: Executar `npm audit fix` para atualizar as sub-dependências relativas a esses pacotes e recompilar.
+- Impacto esperado: Mitigação dos vetores de DoS e injeção do Regex parsing.
+- Riscos: Quebra do empacotamento do Angular se o lockfile divergir severamente.
+- Dependencias: NPM audit script.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-049] Hardcoded passwords in tests/verify_secret_management.py (Bandit B105)
+- Problema atual: Identificado o uso de strings hardcoded que se assemelham a senhas em `backend/tests/verify_secret_management.py` (`'janus_pass'`, `'rabbit_secure_abc'`), o que constitui risco de vazamento contínuo (Credentials Leak).
+- Solucao proposta: Remover as literais fixas, utilizar .env.test e mocks/fixtures apropriados nas instâncias do secret_management.
+- Impacto esperado: Conformidade com boas práticas de CI e mitigação da SAST (Bandit).
+- Riscos: Teste unitário correspondente pode necessitar de setup de `pytest` fixture extra.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Risco LGPD em output raw de tooling/test_debate_system.py
+- Problema atual: O script usa múltiplos `print()` para registrar no log do sistema em texto limpo o código gerado pelo Proponent e as críticas associadas, incorrendo no mesmo risco das `productivity_tools` de gravar conteúdo dos usuários passivamente em CIs.
+- Solucao proposta: Adaptar o uso de `print` com filtros e substituir por `logging` formal submetido ao `redact_pii_text_only`, ou não exibir o payload completo no stdout.
+- Impacto esperado: Manutenção do limite de contexto seguro da aplicação para logs estáticos (Data Minimization).
+- Riscos: Perda de visibilidade para debugadores que rodam a interface localmente sem debugger acoplado.
+- Dependencias: Refatoração para usar infra de logging.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
