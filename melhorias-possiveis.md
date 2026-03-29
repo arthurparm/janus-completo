@@ -836,3 +836,28 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+| SG-048 | Aplicar autenticacao/RBAC rigorosa nos endpoints em admin_config.py e admin_graph.py | P0 | S | aberto |
+| SG-049 | Adicionar Rate Limit nos endpoints de login e criacao de usuario em auth.py | P1 | S | aberto |
+
+### [SG-048] Bypass de Autenticação em Endpoints Administrativos (Hot-Reload)
+- Problema atual: Os endpoints em `backend/app/api/v1/endpoints/admin_config.py` e `backend/app/api/v1/endpoints/admin_graph.py` não possuem dependências de autenticação ou verificação de RBAC, permitindo manipulação irrestrita das configurações.
+- Solucao proposta: Adicionar obrigatoriedade de token administrativo nas rotas via injetor de dependência (AuthZ robusto).
+- Impacto esperado: Prevenir alteração indevida de configurações globais e comportamentos destrutivos.
+- Riscos: Quebra de scripts ou ferramentas internas que não estejam passando tokens válidos.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-049] Ausência de Rate Limiting nas Rotas de Login e Autenticação Locais
+- Problema atual: Rotas críticas de autenticação (`/auth/local/login` e `/auth/local/register` em `backend/app/api/v1/endpoints/auth.py`) permanecem desprotegidas contra ataques de força bruta, carecendo de mecanismos adequados de limite de requisições.
+- Solucao proposta: Aplicar anotação de limite de requisições por IP nas rotas sensíveis a Brute-Force (`@limiter.limit`).
+- Impacto esperado: Prevenir ataques automatizados contra senhas ou criação em massa de contas.
+- Riscos: Falsos positivos se houver usuários em NAT massivo.
+- Dependencias: Configuração do Redis/Rate Limiter.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

@@ -216,3 +216,22 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-29)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental e de pacote mantida)
+- [x] Revisão manual de código via logs incrementais (foco em AuthN, Segredos e Validação)
+
+### 29. Bypass de Autenticação em Endpoints Administrativos (Hot-Reload)
+- **Caminho:** `backend/app/api/v1/endpoints/admin_config.py` e `backend/app/api/v1/endpoints/admin_graph.py`
+- **Gravidade:** Alta
+- **Descrição:** Os endpoints introduzidos para administração de sistema, como o PATCH `/admin/config` (que altera configurações do ambiente em memória afetando todos os serviços via Redis) e POST `/admin/graph/purge_incompatible`, não possuem dependências de autenticação ou verificação de RBAC. Isso permite manipulação irrestrita das configurações por qualquer ator da rede interna que os acesse.
+- **Ação Recomendada:** Adicionar obrigatoriedade de token administrativo nas rotas via injetor de dependência (AuthZ robusto).
+
+### 30. Ausência de Rate Limiting nas Rotas de Login e Autenticação Locais
+- **Caminho:** `backend/app/api/v1/endpoints/auth.py`
+- **Gravidade:** Alta
+- **Descrição:** Rotas críticas de autenticação (`/auth/local/login` e `/auth/local/register`) permanecem desprotegidas contra ataques de força bruta, carecendo de mecanismos adequados de limite de requisições.
+- **Ação Recomendada:** Aplicar anotação de limite de requisições por IP nas rotas sensíveis a Brute-Force.

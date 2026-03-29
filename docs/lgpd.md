@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-29)
+
+### Lacunas e Impacto
+- **Armazenamento Temporal de Memória Global:** O arquivo `backend/app/core/tools/productivity_tools.py` continua armazenando dados transitórios de sessão em escopo global (`_notes` e `_calendar_events`), sem refatoração para contexto transacional/isolado. A persistência dessa falha permite que informações sensíveis criadas via agentes sejam interceptadas em cenários de concorrência ou dumps de memória em produção.
+- **Metadados Sensíveis em Texto Limpo:** Operações logadas em ferramentas continuam bypassando a camada central `redact_pii_text_only` (ex. `daemon.py` arquivando comandos de voz; `productivity_tools.py` registrando remetente e destinatário em envios de e-mail).
+
+### Próximos Passos
+1. **Refatorar Estado Global:** Executar a transição das listas `_notes` e `_calendar_events` para o banco Postgres usando o model de Usuário/Sessão (AuthZ garantido).
+2. **Aplicar Ocultamento Sistemático:** Configurar filtros globais no logger do structlog ou aplicar a máscara PII nativa em todos os argumentos passados em níveis INFO/DEBUG que contenham CPF, E-mail ou transcrições diretas.
