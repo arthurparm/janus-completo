@@ -113,3 +113,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+## Achados do dia (2026-03-29)
+
+### 11. Cobertura de API (API Drift)
+**Descrição:** A cobertura de API subiu de 10.62% para 11.95%. Foram cobertos os endpoints /api/v1/auth/local/login, /api/v1/autonomy/start e /api/v1/chat/stream/{conversation_id}.
+**Evidências:** outputs/qa/api_coverage_report.md e documentation/qa/api-endpoint-matrix.md.
+**Próximos passos:** Continuar mapeando endpoints não cobertos para testes de integração.
+
+### 12. Auditoria de Segurança e LGPD nas últimas 24h
+**Descrição:** Nenhum commit contendo lógica de negócios foi introduzido nas últimas 24 horas, isentando novos riscos estruturais ou vazamentos de dados LGPD nesse período.
+**Evidências:** `git log --since="24 hours ago"`
+**Próximos passos:** Manter monitoramento contínuo nas PRs futuras.
