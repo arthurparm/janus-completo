@@ -3,6 +3,36 @@
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
 
+## Achados do dia (2026-03-30)
+
+### 11. Vazamento Local de PII em Ferramentas de Rede (LGPD/Segurança)
+**Descrição:** O script `tooling/secure-tailscale-setup.ps1` atua como um monitor "Shadow IT" gerando logs locais (`tailscale-security-monitor.log`) que expõem hostnames, IPs e dados de conexão dos peers em texto claro. Este comportamento ignora a camada central de redação PII e apresenta risco à LGPD e vazamento de rede.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: A função `Test-TailscaleHealth` extrai JSON do `tailscale status` e grava `$Peer.HostName` em claro via `Write-SecurityLog`.
+
+**Próximos passos:**
+- Redigir endereços IP e identificadores sensíveis localmente ou canalizar essas métricas anonimizadas para a camada de observabilidade central (`observability_service.py`).
+- Registrar SG-041 no `melhorias-possiveis.md`.
+
+### 12. Vazamento de PII e Ausência de Timeout em Scripts de Teste (Segurança/Confiabilidade)
+**Descrição:** O script `tooling/test_debate_system.py` expõe informações de execução na saída padrão via `print()` (que podem conter dados sensíveis ou "thoughts" sem ofuscação de PII) para o fluxo de CI. Além disso, utiliza abstrações assíncronas do LangGraph sem definir timeouts explícitos para o encerramento do script, arriscando congelamentos contínuos de pipelines (hanging CI).
+**Evidências:**
+- `tooling/test_debate_system.py`: Chamadas indiscriminadas a `print(f"Preview: {state_update["code"][:100]}...")` e falta de `asyncio.wait_for` em torno de `debate_graph.astream()`.
+
+**Próximos passos:**
+- Migrar os outputs de teste isolados para a interface padronizada do logger do Janus (`structlog`), injetando PII redaction. Incorporar timeout assíncrono à execução do loop.
+- Documentar SG-050 e ARQ-013 (se aplicável) no backlog técnico.
+
+### 13. Isolamento e Bypass do Pipeline de Testes (Testes/DX)
+**Descrição:** Vários scripts em `tooling/` recém-adicionados (`test_debate_system.py`, `seed-repro-scenarios.ps1`) executam simulações isoladas contornando o runner oficial de Pytest configurado em `qa/`. Essa fragmentação quebra a paridade do CI, já que estes não geram métricas de cobertura e mascaram a detecção de regressão contínua.
+**Evidências:**
+- Arquivo `tooling/test_debate_system.py` define o próprio script runner `if __name__ == "__main__": asyncio.run(...)` isolado.
+- `seed-repro-scenarios.ps1` engatilha testes de comportamento em containers vivos arbitrariamente.
+
+**Próximos passos:**
+- Converter scripts de mock/debate na tooling para fixtures/casos dentro do escopo `qa/` ou integrar suas execuções ao conjunto diário com relatórios.
+- Registrar o débito técnico DX-013 no tracking de backlog.
+
 ## Achados do dia
 
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)

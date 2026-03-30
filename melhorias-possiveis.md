@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-041] Vazamento Local de PII em Monitoramento de Rede (Shadow IT)
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` cria um log de monitoramento próprio (`tailscale-security-monitor.log`) que escreve hostnames e informações de pareamento (peers) da VPN em claro no sistema operacional, contornando a política central de redação de PII (LGPD).
+- Solucao proposta: Interligar com a classe `log_aware_reflector.py` ou centralizar num wrapper do structlog para ofuscação (`redact_pii_text_only`) antes de jogar para arquivos locais ou não salvar os hostnames completos.
+- Impacto esperado: Conformidade contínua de privacidade de redes P2P integradas ao ambiente do Janus.
+- Riscos: Redução de legibilidade pontual no log local do Tailscale para debbuging.
+- Dependencias: Camada de mascaramento em `memory/security.py`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Vazamento de PII e Fragilidade de Timeout em Testes Base
+- Problema atual: O script de validação de fluxo `tooling/test_debate_system.py` expõe informações parciais de código/dados (que dependendo do contexto podem conter PII) usando prints (`print()`) crus no pipeline. Além disso, a iteração de grafos é assíncrona (`debate_graph.astream()`) sem timeout de cancelamento (`asyncio.wait_for()`), propiciando hangs em falhas de infra.
+- Solucao proposta: Trocar `print()` pelo `structlog` com redação ativa e encapsular a iteração de grafos e rede com timeouts predefinidos de proteção.
+- Impacto esperado: Maior resiliência de CI contra congelamentos silenciosos e conformidade de LGPD nos relatórios da automação.
+- Riscos: Testes demorados ocasionalmente cancelados indevidamente (timeout false-positive).
+- Dependencias: Nenhum.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Isolamento do Pipeline de Testes e Fragmentação (CI)
+- Problema atual: Ferramentas recentes como `tooling/test_debate_system.py` e `tooling/seed-repro-scenarios.ps1` executam casos de uso avançados em "silos" (como scripts independentes e PowerShell em containers vivos), escapando da malha diária do Pytest (`qa/`). Isso infla métricas falaciosas de cobertura, esconde regressões na orquestração dos subagentes e impossibilita geração de relatório consistente.
+- Solucao proposta: Converter as execuções "soltas" do tooling em testes de integração Pytest dentro da pasta `/qa/` ou acoplá-los nas chamadas diárias do pipeline do Github Actions coletando code-coverage e status.
+- Impacto esperado: Recuperar a centralização da garantia da qualidade e validações unificadas do repositório.
+- Riscos: Aumento da latência global do conjunto total de testes (`make test`).
+- Dependencias: Estrutura Pytest.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
