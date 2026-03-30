@@ -216,3 +216,34 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-30)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: dependências conflitam e limitam pip-audit)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 29. Vulnerabilidade em Dependência do Frontend (@angular, hono, tar, etc)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências (26 vulnerabilidades, sendo 18 altas e 8 moderadas) vulneráveis como `flatted` (DoS via parse), `hono` (Arbitrary file access, SSE injection), `path-to-regexp` (ReDoS), `picomatch` (ReDoS), e `tar` (Path Traversal).
+- **Ação Recomendada:** Atualizar dependências via `npm audit fix` ou upgrades manuais.
+
+### 30. OS Command Injection (shell=True)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Alta (Bandit B602)
+- **Descrição:** Uso de `subprocess.Popen(f'start "" "{app_name}"', shell=True)` possibilita Command Injection.
+- **Ação Recomendada:** Remover `shell=True` e usar lista de argumentos no Popen.
+
+### 31. URL Opening Inseguro com Arbitrary Schemes
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Chamadas `urlopen` sem validação de scheme (ex: `http/https`) permitindo `file://` arbitrary reads.
+- **Ação Recomendada:** Adicionar verificação de URL válida (scheme HTTP/HTTPS).
+
+### 32. Uso Inseguro de exec()
+- **Caminho:** `backend/app/core/infrastructure/python_sandbox.py`
+- **Gravidade:** Média (Bandit B102)
+- **Descrição:** Função `exec` usada, abrindo margem para Code Injection via input não sanitizado.
+- **Ação Recomendada:** Usar sandboxing robusto no SO ou remover o uso do exec/eval.

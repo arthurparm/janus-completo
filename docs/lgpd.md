@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-30)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** A interface Janus Daemon arquiva logs em texto plano de comandos de voz, retendo metadados e conversas sensíveis (identificáveis biométrica/comportamentalmente) sem ofuscação prévia (LGPD - Minimização e Segurança).
+- **Capturas de Tela sem Consentimento ou Ofuscação (Windows Agent):** Endpoints não-autenticados capturam screenshots globais (`/screenshot`) sem consentimento explícito, logs de trilha de auditoria para o request, ou máscara/ofuscação visual de PII sensível (emails/senhas visíveis na tela).
+
+### Próximos Passos
+1. **Redação de Texto Transcrito (Daemon):** Incorporar `redact_pii_text_only` em logs de transcrições antes da gravação em disco/console.
+2. **Consentimento e Autenticação Local:** Limitar endpoint de `/screenshot` em `windows_agent.py` para rodar sob Autenticação do sistema principal Janus, e aplicar um log trilha (ID de requisição, motivo, timestamp).

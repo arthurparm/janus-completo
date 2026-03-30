@@ -836,3 +836,37 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+
+### [SG-037] Múltiplas vulnerabilidades SAST (Bandit) identificadas
+- Problema atual: Uso inseguro de Popen shell=True, exec(), URL arbitrárias abertas sem sanitização (SSRF), e falhas de arquivo/variáveis globais identificadas em auditoria.
+- Solucao proposta: Corrigir o shell injection em launcher_tools.py, isolar chamadas de exec() em python_sandbox.py e validar URLs em message_broker.py.
+- Impacto esperado: Remoção de brechas críticas RCE/SSRF.
+- Riscos: Funcionalidades locais podem quebrar com restrições rígidas.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-038] Mitigar vulnerabilidades npm (ReDoS, SSRF, XSS) em frontend
+- Problema atual: npm audit alerta 26 vulnerabilidades (18 altas) afetando hono, picomatch, tar, path-to-regexp entre outras.
+- Solucao proposta: Atualizar versões vulneráveis no package.json ou rodar npm audit fix.
+- Impacto esperado: Menor risco de DoS/XSS em superfície do cliente.
+- Riscos: Incompatibilidade de código caso haja Major upgrades.
+- Dependencias: Testes E2E (Playwright) para garantia.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-039] LGPD - Minimização de dados no Windows Agent e Daemon
+- Problema atual: O agente Windows captura tela sem permissões ativas de log/audit, e o Daemon grava em log comandos vocais transcritos diretamente sem redação PII.
+- Solucao proposta: Interceptar logs do daemon com `redact_pii_text_only`, e refatorar `windows_agent.py` para bloquear `/screenshot` não autenticado e registrar cada requisição visualmente/logar.
+- Impacto esperado: Melhoria na adequação LGPD e mitigação de risco de vazamento de informações sensíveis do host.
+- Riscos: Custo de performance ao aplicar Redact em todos comandos do daemon.
+- Dependencias: Integração de módulo de segurança.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
