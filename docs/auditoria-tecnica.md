@@ -113,3 +113,26 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-30)
+
+### 11. Monitoramento Oculto (Shadow IT) e Vazamento de PII (LGPD/Segurança)
+**Descrição:** Foi introduzido um script de monitoramento do Tailscale que cria logs locais contendo informações sensíveis da rede, driblando a camada padrão de ofuscação de PII.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Grava nomes de host e dados de peers em texto claro no arquivo `tailscale-security-monitor.log`.
+**Próximos passos:**
+- Remover o arquivo de log local ou implementar ofuscação nesses dados antes de salvá-los. Documentar a issue SG-041.
+
+### 12. Fragilidades na Testagem Automatizada (Cód/Testes)
+**Descrição:** Foram adicionados testes como `test_debate_system.py` que não usam timeouts assíncronos explícitos, criando riscos de hangs nas pipelines (CI), e efetuam outputs via `print` que podem expor segredos ou informações de estado sensíveis no console.
+**Evidências:**
+- `tooling/test_debate_system.py`: Chamadas assíncronas do sistema de debates não possuem tempo limite; prints brutos para acompanhamento de execução.
+**Próximos passos:**
+- Encapsular as execuções dentro de bibliotecas robustas de testes (Pytest-asyncio com limits/fixtures) e mascarar saídas stdout. Documentar a issue SG-050.
+
+### 13. Scripts de QA evadindo Pipelines Padrão (Cód/Testes)
+**Descrição:** Foram identificados novos scripts na pasta `tooling/` que efetuam validações críticas de sistema ou orquestram setup, porém atuam à margem das rotinas padronizadas de CI no Pytest, fragmentando a confiabilidade das verificações de regressão.
+**Evidências:**
+- `tooling/test_debate_system.py` e `tooling/seed-repro-scenarios.ps1`: Executam setups e verificações vitais em fluxos isolados/containers avulsos.
+**Próximos passos:**
+- Migrar validações cruciais e fluxos de seeding de testes para suítes formais do `qa/` e integrar na pipeline nativa CI/CD do repositório. Documentar a issue DX-013.

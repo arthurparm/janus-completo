@@ -836,3 +836,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-041] Monitoramento Shadow IT (Tailscale) com vazamento de PII local
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` cria arquivos de log locais (`tailscale-security-monitor.log`) com nomes de host e dados de peers em texto puro. Isto dribla a camada de sanitização PII do sistema e pode causar incidentes LGPD locais.
+- Solucao proposta: Remover o salvamento em disco desses arquivos (enviar para um collector centralizado e protegido) ou utilizar o redator PII do backend antes de gravar no log.
+- Impacto esperado: Menor risco de exposição local de IPs e hosts da VPN.
+- Riscos: Redução de histórico visível em troubleshooting imediato na própria máquina.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Fragilidade em scripts QA e vazamentos em console
+- Problema atual: Scripts como `tooling/test_debate_system.py` utilizam chamadas raw de `print()` (que podem imprimir chaves ou inputs dos usuários/testes de forma clara) e executam chamadas assíncronas de requisição/grafo sem timeout explícito, permitindo resource starvation ou hang silencioso.
+- Solucao proposta: Incorporar logger configurado com redação e forçar `asyncio.wait_for` ou limites similares no orquestrador do test_debate.
+- Impacto esperado: Estabilidade das chamadas em caso de indisponibilidade ou lentidão do LangGraph, além da limpeza dos logs de console.
+- Riscos: Timeout errors para sistemas muito lentos onde o tempo padrão da requisição seria mais longo.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-013] Scripts de teste evadindo Pytest CI pipelines
+- Problema atual: Novos testes para funcionalidades importantes e seeding (`tooling/test_debate_system.py`, `tooling/seed-repro-scenarios.ps1`) operam fora da suíte padrão do Pytest localizada em `qa/`. Isso reduz a cobertura automatizada e não compõe relatórios oficiais do CI da plataforma.
+- Solucao proposta: Migrar as suítes e cenários de seeding para fixtures no pacote `qa/`, adequando ao padrão de test runner.
+- Impacto esperado: Aumento da confiança na pipeline e centralização de coverage.
+- Riscos: O processo de migração de shell scripts para fixtures Python pode precisar contornar permissões de container.
+- Dependencias: Ambiente unificado local para rodar pytest com o container em pé.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto
