@@ -54,7 +54,7 @@ async def assistant_execute(
             metrics={},
         )
         return result
-    except Exception as e:
+    except Exception:
         logger.error("Falha na execução automática de ferramentas", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error"

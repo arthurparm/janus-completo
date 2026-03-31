@@ -1,6 +1,6 @@
-import structlog
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 

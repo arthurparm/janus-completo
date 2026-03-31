@@ -1,11 +1,11 @@
-import structlog
 import asyncio
 import json
 from typing import Any, List
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
-from pydantic import BaseModel
+import structlog
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from langgraph.types import Command
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
 
@@ -363,7 +363,7 @@ async def list_pending(
 async def approve(thread_id: str, background_tasks: BackgroundTasks):
     graph = get_graph()
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     try:
         state = await _get_state(graph, config)
         thread_exists = await _thread_exists_in_checkpoints(thread_id)
@@ -378,13 +378,13 @@ async def approve(thread_id: str, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=404, detail="Thread not found or finished")
         if not _is_waiting_for_human_approval(getattr(state, "next", None)):
             raise HTTPException(status_code=409, detail="Thread is not waiting for approval")
-            
+
         # Update state to approved (fast operation)
         await _update_state(graph, config, {"approval_status": "approved"})
-        
+
         # Schedule resume execution in background
         background_tasks.add_task(_resume_graph_execution, thread_id, "approved")
-        
+
         return PendingActionDTO(
             source="langgraph",
             thread_id=thread_id,
@@ -515,7 +515,7 @@ async def reject_sql_action(action_id: int):
 async def reject(thread_id: str, background_tasks: BackgroundTasks):
     graph = get_graph()
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     try:
         state = await _get_state(graph, config)
         thread_exists = await _thread_exists_in_checkpoints(thread_id)
@@ -530,12 +530,12 @@ async def reject(thread_id: str, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=404, detail="Thread not found")
         if not _is_waiting_for_human_approval(getattr(state, "next", None)):
             raise HTTPException(status_code=409, detail="Thread is not waiting for approval")
-            
+
         await _update_state(graph, config, {"approval_status": "rejected"})
-        
+
         # Schedule resume execution in background
         background_tasks.add_task(_resume_graph_execution, thread_id, "rejected")
-        
+
         return PendingActionDTO(
             source="langgraph",
             thread_id=thread_id,

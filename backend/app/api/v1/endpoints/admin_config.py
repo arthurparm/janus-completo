@@ -40,7 +40,7 @@ async def update_config(
     se não forem persistidas externamente (env vars ou secrets).
     """
     await service.update_config(request.updates)
-    
+
     return ConfigUpdateResponse(
         message="Configuração atualizada e propagada com sucesso.",
         updated_keys=list(request.updates.keys())

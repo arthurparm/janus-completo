@@ -4,15 +4,6 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.llm import ModelPriority
-from app.services.chat_service import (
-    ChatService,
-    ChatServiceError,
-    ConversationNotFoundError,
-    MessageTooLargeError,
-    get_chat_service,
-)
-from app.services.intent_routing_service import get_intent_routing_service
-from app.services.memory_service import MemoryService, get_memory_service
 from app.services.chat.chat_citation_service import build_citation_status, map_citation_hits
 from app.services.chat.chat_contracts import (
     build_agent_state,
@@ -22,6 +13,15 @@ from app.services.chat.chat_contracts import (
     maybe_create_fallback_pending_action,
     normalize_understanding_payload,
 )
+from app.services.chat_service import (
+    ChatService,
+    ChatServiceError,
+    ConversationNotFoundError,
+    MessageTooLargeError,
+    get_chat_service,
+)
+from app.services.intent_routing_service import get_intent_routing_service
+from app.services.memory_service import MemoryService, get_memory_service
 
 from .deps import (
     is_chat_auth_enforced,
