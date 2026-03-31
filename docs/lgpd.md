@@ -70,3 +70,18 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-31)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O `backend/app/interfaces/daemon/daemon.py` realiza o log de comandos de voz em texto claro (`logger.info("log_info", message=f"Command received: {command}")`). Estes dados biométricos/comportamentais ferem o princípio de minimização da LGPD ao não terem _PII scrubbing_ antes da gravação.
+- **Metadados de Email Sensíveis não Ofuscados (Logging):** Na ferramenta de envio de email `send_email` em `backend/app/core/tools/productivity_tools.py`, metadados (remetente `user_id`, destinatário `to` e o `subject`) são passados ao `logger.info()` sem a ofuscação (`redact_pii_text_only`), resultando no vazamento de informações para os logs estáticos (`janus.log`).
+- **Estado Global Compartilhado em Ferramentas de Produtividade (PII Leak Risk):** Em `backend/app/core/tools/productivity_tools.py`, listas como `_notes` e `_calendar_events` permanecem em estado global, criando risco de vazamento in-memory e vazamentos trans-sessão se a aplicação não for reiniciada, falhando no isolamento e garantias AuthZ.
+- **Captura de Tela e Log de Monitoramento em Ferramentas de Rede:** O script `tooling/secure-tailscale-setup.ps1` possui comportamento de _Shadow IT_, gerando logs contínuos (`tailscale-security-monitor.log`) que expõem detalhes do ambiente do usuário, pares conectados e hostnames em texto limpo.
+- **Vazamento Secundário via Leitura de Logs na Memória:** O sistema inteligente `backend/app/core/memory/log_aware_reflector.py` lê linhas antigas do arquivo `janus.log` e injeta esses trechos cruéis de volta no contexto do LLM sem qualquer validação com regex de sanitização de PII (`redact_pii_text_only`). Isso espalha a área de superfície dos vazamentos para os prompts do LLM.
+
+### Próximos Passos
+1. **Mascarar Textos do Daemon:** Integrar a função `redact_pii_text_only` de `memory.security` para higienizar o `command` e informações verbais capturadas pelo daemon antes da gravação nos logs.
+2. **Mascarar Logs em Tools:** Aplicar ofuscação ativamente na função `send_email` e qualquer lugar onde o logger receba parâmetros PII diretamente.
+3. **Refatorar Estado Global:** Refatorar a classe ou módulo `productivity_tools.py` de forma a usar um store persistente de sessão, restrito por `user_id` e sem manter _state_ em variáveis estáticas isoladas do AuthZ.
+4. **Monitoramento Ofuscado e Minimização LLM:** Exigir revisão do script `secure-tailscale-setup.ps1` para suprimir saídas limpas de endereços ou descontinuar esta função não autorizada. No `log_aware_reflector.py`, interceptar cada linha resgatada do disco com o processo de PII scrubbing antes de entregá-la ao LLM.

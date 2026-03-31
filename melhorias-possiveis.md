@@ -836,3 +836,58 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Bypass de Autenticação na API de Workspace e Header User-Id (AuthZ)
+- Problema atual: Os endpoints em `backend/app/api/v1/endpoints/workspace.py` não contam com verificação de autenticação (`Depends(get_current_user)`). Além disso, `AUTH_TRUST_X_USER_ID_HEADER=True` na configuração padrão, permitindo que a própria requisição dite o usuário logado e realize AuthZ bypass direto.
+- Solucao proposta: Aplicar o AuthZ decorador padrão ao router de workspace e desativar estritamente o `AUTH_TRUST_X_USER_ID_HEADER` em `backend/app/config.py`.
+- Impacto esperado: Isolamento correto dos dados e remoção de acesso não autenticado a painéis de controle de colaboração.
+- Riscos: Redirecionamento de workflows que dependam do header em ambientes produtivos; requer testes e ajuste na secret de dev.
+- Dependencias: auth.py e config.py.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Rate Limiting Fail-Closed
+- Problema atual: O `backend/app/core/infrastructure/rate_limit_middleware.py` foi programado para falhar "fechado" caso o Redis não esteja configurado corretamente (retornando sempre `503 Service Unavailable`).
+- Solucao proposta: Mudar a tratativa de indisponibilidade da ferramenta limitadora de requests para `fail_open=True`, deixando passar requisições normais até restabelecer a infraestrutura de mensageria.
+- Impacto esperado: Maior disponibilidade do backend e APIs integradas.
+- Riscos: Ataques transitórios de DDoS durante a janela de outage do Redis.
+- Dependencias: `rate_limit_middleware.py`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Segredos Hardcoded em Configuração e Token de Reset Exposto
+- Problema atual: O `backend/app/config.py` disponibiliza segredos hardcoded como `change_me_postgres_password` em texto puro caso nenhuma env var seja injetada. O `LocalResetResponse` em `backend/app/api/v1/endpoints/auth.py` suporta retorno exposto através da flag `AUTH_RESET_RETURN_TOKEN`.
+- Solucao proposta: Interromper a aplicação (Raise Error) caso chaves em branco sejam utilizadas. Desativar nativamente suporte para retorno em claro de tokens e limpar configs legacy sensíveis.
+- Impacto esperado: Redução massiva de risco de exploração e acessos indevidos default.
+- Riscos: Quebra de pipelines onde falte o set do ENV no shell local do desenvolvedor.
+- Dependencias: config.py.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Falhas de Minimização e Ofuscação de PII nos Logs de Ferramentas e Daemon
+- Problema atual: `send_email` (`productivity_tools.py`) loga emails transparentemente. O `daemon.py` arquiva comandos de voz também limpos em `janus.log`. Adicionalmente, `log_aware_reflector.py` carrega o log completo e propaga o risco devolvendo dados em prompts ao LLM sem máscara.
+- Solucao proposta: Invocar massivamente `redact_pii_text_only` em strings originadas dos handlers de voz e no reflector antes do uso em memórias, assim como aplicar explicitamente no extra formatador do logger de envio de e-mails.
+- Impacto esperado: Concordância ativa com normativas LGPD em todo ciclo de vida do Log (Geração, Armazenamento e Leitura).
+- Riscos: Depuração das palavras e dos e-mails pode virar `***`, o que demandará outras vias de tracking.
+- Dependencias: memory/security.py
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Monitoramento "Shadow IT" do Tailscale Gerando Risco LGPD
+- Problema atual: O `tooling/secure-tailscale-setup.ps1` extrai relatórios de status do Tailscale expondo hostnames e IPs dos peers abertamente em um dump local sem o conhecimento estrito do usuário e políticas descritas em documentação.
+- Solucao proposta: Ofuscar o IP dos peers com Hash ou `***` no arquivo em disco, ou extinguir essa verificação se não for componente central para o agente.
+- Impacto esperado: Mitigação do Risco PII de infraestrutura de rede exposta sem sanitização.
+- Riscos: Remoção de uma feature que os SysAdmins podem usar localmente, mas não prevista pelo core de Segurança.
+- Dependencias: PowerShell Scripting.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto

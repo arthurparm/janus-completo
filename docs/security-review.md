@@ -216,3 +216,46 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-31)
+
+### Checklist executado
+- [x] npm audit (frontend) - Encontradas 26 vulnerabilidades (18 altas, 8 moderadas).
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada, problemas de versão do python e falta de lockfile compatível no ambiente).
+- [x] Revisão manual de código (arquivos alterados / evidências levantadas buscando padrões de risco de AuthZ, injeção, etc.).
+
+### 29. Endpoints de Workspace sem Autenticação (AuthZ Bypass)
+- **Caminho:** `backend/app/api/v1/endpoints/workspace.py`
+- **Gravidade:** Alta
+- **Descrição:** Os endpoints de workspace (ex: `/workspace/artifacts/add`, `/workspace/messages/send`) não utilizam o decorador de dependência de autenticação (ex: `Depends(get_current_user)`), permitindo acesso anônimo a recursos internos.
+- **Ação Recomendada:** Adicionar dependência de AuthZ em todos os endpoints do router de workspace.
+
+### 30. Rate Limiting com Estratégia Fail-Closed
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`
+- **Gravidade:** Média
+- **Descrição:** O middleware de rate limit possui uma configuração que falha fechado (`fail_closed=True` dependendo da flag/environment) quando o Redis está indisponível, o que causa indisponibilidade completa do serviço (503) em vez de degradar graciosamente.
+- **Ação Recomendada:** Alterar a estratégia padrão para fail-open para evitar outages completos do serviço caso o broker de rate limit caia.
+
+### 31. Segredos Hardcoded na Configuração Padrão
+- **Caminho:** `backend/app/config.py`
+- **Gravidade:** Média
+- **Descrição:** O arquivo de configuração possui valores padrão hardcoded para senhas de banco de dados e mensageria (ex: `change_me_postgres_password`, `change_me_neo4j_password`, `change_me_rabbitmq_password`), o que apresenta risco se a aplicação for subida em produção sem as devidas variáveis de ambiente.
+- **Ação Recomendada:** Remover os fallbacks hardcoded em texto plano e forçar erro na inicialização caso as variáveis de ambiente sensíveis não estejam definidas.
+
+### 32. Bypass de Autenticação via Cabeçalho X-User-Id Habilitado por Padrão
+- **Caminho:** `backend/app/config.py` e `backend/app/core/infrastructure/auth.py`
+- **Gravidade:** Alta
+- **Descrição:** A configuração `AUTH_TRUST_X_USER_ID_HEADER = True` vem habilitada por padrão, permitindo que qualquer requisição que envie este cabeçalho seja autenticada como o usuário informado, caracterizando um AuthZ bypass direto.
+- **Ação Recomendada:** Alterar o valor padrão de `AUTH_TRUST_X_USER_ID_HEADER` para `False` e habilitá-lo estritamente em ambientes de teste controlados.
+
+### 33. Risco de Exposição de Token de Reset
+- **Caminho:** `backend/app/config.py` e `backend/app/api/v1/endpoints/auth.py`
+- **Gravidade:** Média
+- **Descrição:** O `LocalResetResponse` permite retornar o token de reset em claro caso `AUTH_RESET_RETURN_TOKEN` esteja habilitado, o que pode gerar vazamento de credenciais.
+- **Ação Recomendada:** Garantir que este parâmetro continue desabilitado por padrão e desencorajar seu uso.
+
+### 34. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** O `npm audit` revelou 26 vulnerabilidades (18 altas e 8 moderadas) em pacotes como `@angular/compiler`, `@hono/node-server`, `dompurify`, `express-rate-limit`, `flatted`, `path-to-regexp`, `picomatch`, e `tar`.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
