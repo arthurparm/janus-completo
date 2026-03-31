@@ -836,3 +836,125 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+
+### [ARQ-011] Refatorar God Objects no Backend e Frontend
+- Problema atual: Arquivos hipertrofiados como `backend/app/services/observability_service.py` (~1200 linhas) e `frontend/src/app/features/conversations/conversations.ts` (~1700 linhas) violam o Single Responsibility Principle (SRP) ao centralizar múltiplas responsabilidades (Health, Metrics, Audit, Anomaly detection, etc).
+- Solucao proposta: Aplicar injeção de dependência e dividir essas classes em serviços menores baseados em domínio específico. No frontend, adotar NgRx/Store.
+- Impacto esperado: Maior manutenibilidade, redução de complexidade ciclomática e facilidade em testes unitários.
+- Riscos: Regressões no desmembramento das funções acopladas.
+- Dependencias: Testes E2E rodando verde antes e depois do refactoring.
+- Prioridade: P2
+- Esforco: L
+- Dono: a definir
+- Status: ideia
+
+### [ARQ-012] Widespread silent try-except blocks mask potential errors (Bandit B110)
+- Problema atual: A presença de blocos try-except seguidos apenas por `pass` mascara exceções (identificadas como B110 pelo Bandit) em arquivos do backend como `llm_repository.py` e `message_orchestration_service.py`.
+- Solucao proposta: Adicionar um `logger.warning` ou logging adequado com tratamento explícito para a falha ou remoção do catch genérico de `Exception`.
+- Impacto esperado: Maior observabilidade sobre falhas sistêmicas em tempo de execução e remoção de comportamentos imprevisíveis.
+- Riscos: Aumento na quantidade de logs caso exceções comuns estejam sendo caladas deliberadamente.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [DX-013] Scripts de Teste no Tooling bypassando CI Pytest Padrão
+- Problema atual: Diversos scripts na pasta `tooling/` (e.g., `test_debate_system.py`, `seed-repro-scenarios.ps1`) rodam isolados e ignoram o workflow padrão do `qa/`, reduzindo a confiança e a verificação automática de regressão em CI.
+- Solucao proposta: Migrar a lógica desses scripts para fixtures e testes do `pytest` dentro de `qa/`.
+- Impacto esperado: Confiabilidade da pipeline de integração contínua (CI), e melhor cobertura de testes integrada.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [OQ-017] Configuração in-memory frágil em admin_config.py
+- Problema atual: As atualizações feitas em `admin_config.py` são aplicadas apenas in-memory de forma fragilizada, podendo levar a estados inconsistentes quando a aplicação reinicia (falta de persistência estruturada).
+- Solucao proposta: Transicionar as configurações para um armazenamento de banco de dados ou arquivos `.env`/JSON centralizados com watchers.
+- Impacto esperado: Estabilidade da configuração do sistema em múltiplos workers/instâncias.
+- Riscos: Configurações em produção voltarem ao padrão não intencionalmente ao rodar.
+- Dependencias: Integração com PostgreSQL/Redis do admin.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-037] Múltiplos Riscos e Más Práticas Detectados por SAST (Bandit)
+- Problema atual: Identificados padrões inseguros como uso de `eval()` ao invés de `ast.literal_eval`, `shell=True` (B602) persistente, B310 em `run_repo_smoke_test.py`, B108, e Auth Bypass agravado por `AUTH_TRUST_X_USER_ID_HEADER=True` padrão.
+- Solucao proposta: Substituir funções inseguras (`eval` por `literal_eval`), remover `shell=True`, forçar URL parsing seguro, e mudar o default da config auth de header trust. Integrar `redact_pii_text_only` nos loggers para remediar logs textuais inseguros identificados no SAST.
+- Impacto esperado: Correção sistêmica de dezenas de falsos-positivos e vulnerabilidades verdadeiras reportadas por SAST.
+- Riscos: Bugs de parse de dados legítimos após mudança de avaliação dinâmica.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-038] Potencial Leak de Token no Reset de Auth
+- Problema atual: O `LocalResetResponse` em `backend/app/api/v1/endpoints/auth.py` tem uma configuração (`AUTH_RESET_RETURN_TOKEN`) que, se ativada, retorna o token livremente configurando um grande risco de segurança de fuga de token na redefinição.
+- Solucao proposta: Remover completamente o retorno do token no `LocalResetResponse`, independente da flag `AUTH_RESET_RETURN_TOKEN`. O usuário precisa fazer o login explicitamente após redefinição.
+- Impacto esperado: Prevenção absoluta de sequestro de conta em redefinição de senha insegura.
+- Riscos: Redução leve na UX do processo de redefinição de senha.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Lógica Perigosa de Purge no DB Graph (admin_graph.py)
+- Problema atual: A presença de endpoints que permitem a execução perigosa e destrutiva de purge de base de dados no `admin_graph.py` sem garantias suficientes de integridade e auditoria.
+- Solucao proposta: Inativar ou requerer MFA/Token Administrativo forte e confirmação de duplo passo e log irremovível antes do purge no banco de grafos.
+- Impacto esperado: Prevenção contra apagamento acidental ou malicioso de toda base relacional.
+- Riscos: Operadores legítimos gastando mais tempo para executar expurgos ou reset em QA.
+- Dependencias: AuthZ avançado (RBAC).
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Risco de LGPD e Shadow IT em Monitoramento Tailscale
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` atua como um 'Shadow IT' criando logs locais (`tailscale-security-monitor.log`) com dados e IPs dos peers em claro, contornando toda a política de redação do Janus.
+- Solucao proposta: Implementar mascaramento PII via regex aos nomes de máquina e IPs nesse script, e não arquivar logs temporários de rede dos peers a menos que explicitamente exigido para troubleshooting.
+- Impacto esperado: Conformidade contínua com LGPD (minimização de dados pessoais indiretos).
+- Riscos: Perda parcial de IPs visíveis durante investigação de conectividade na malha.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-043] Vulnerabilidade CVE em Dependência Backend Python
+- Problema atual: Auditoria `pip-audit` apontou a lib `pygments` associada a `CVE-2026-4539` (Supply Chain).
+- Solucao proposta: Aplicar pin ou atualizar no arquivo `requirements.txt`/Poetry Lock a versão de `pygments` (ou remover se não necessária).
+- Impacto esperado: Mitigação de vulnerabilidade severa mapeada publicamente no ambiente Python backend.
+- Riscos: Quebra de features de highlight na renderização do chat.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-049] Senhas Hardcoded em Scripts de Teste de Gestão de Segredos
+- Problema atual: O teste `tests/verify_secret_management.py` contém senhas inseridas explicitamente no código, caracterizando uma falha de "Hardcoded Password" (Bandit B105).
+- Solucao proposta: Remover senhas reais ou substituir por injeções de fixture (Mocks) baseados em env vars do CI (SecretStr).
+- Impacto esperado: Segurança do código fonte depositado no GIT que passará livre de detecção SAST de chaves comprometedoras.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Vazamento de Segredos/PII via print() e Ausência de Timeouts em Tooling
+- Problema atual: Scripts de tooling de QA/testes carecem de timeouts assíncronos (podendo gerar CI hangs) e utilizam excessivamente `print()` expondo outputs de API não sanitizados (possíveis leaks de PII).
+- Solucao proposta: Padronizar o uso do módulo `logger` (estruturado com PII scrub) ao invés do print em scripts de `tooling/` e aplicar `asyncio.wait_for` ou parâmetros de timeout aos HTTP requests.
+- Impacto esperado: Scripts resilientes a interrupções de rede e em conformidade estrita de privacidade em console output.
+- Riscos: Ocultação acidental de dados úteis aos desenvolvedores na tela durante um break.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto

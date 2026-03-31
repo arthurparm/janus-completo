@@ -113,3 +113,45 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+
+## Achados do dia (2026-03-19)
+
+### 11. Silent Failures e Fragilidades Estruturais (Cód/Testes)
+**Descrição:** Foi identificada, através de escaneamentos SAST (Bandit B110), a presença de blocos *widespread* `try-except-pass` ocultando exceções no sistema e mascarando falhas críticas (ex: `llm_repository.py` e `message_orchestration_service.py`). Simultaneamente, scripts da suíte `tooling/` (e.g. `test_debate_system.py`) foram vistos ignorando o fluxo de integração padrão Pytest (CI isolation bypass).
+**Evidências:**
+- Blocos mudos `except Exception: pass` no backend.
+- Scripts de QA sendo acionados isoladamente em detrimento das fixtures globais.
+- A persistência de Classes Deusas ('God Objects') em `backend/app/services/observability_service.py` limitando testabilidade isolada.
+
+**Próximos passos:**
+- Remover capturas genéricas que não informam o erro com logger e padronizar o pipeline de testes.
+- Submeter os itens ARQ-011, ARQ-012 e DX-013 à fila de `melhorias-possiveis.md`.
+
+### 12. Monitoramento Paralelo Inseguro / Shadow IT (LGPD)
+**Descrição:** O sistema possui instâncias de coleta e gravação de logs (rede e uso) que evadem o `structlog` com filtro de PII. Em particular, `tooling/secure-tailscale-setup.ps1` é usado para telemetria de rede onde salva abertamente nomes de host e endpoints em `tailscale-security-monitor.log`. O script `test_debate_system.py` na mesma pasta omite os limitadores de output e aciona `print()` com PII.
+**Evidências:**
+- Logs gerados localmente em scripts avulsos que registram dados PII textuais.
+
+**Próximos passos:**
+- Aplicar a mesma sanificação utilizada na infraestrutura principal para scripts de administração de nós (Tailscale).
+- Registrar SG-041 e SG-050 na listagem.
+
+### 13. Hardcoded Secrets e Autenticação Bypass (Segurança)
+**Descrição:** Foram revelados dois focos cruciais na segurança do sistema em testes que armazenam passwords e instâncias reais (Bandit B105) e vetores de exploração via bypass no cabeçalho de proxy reverso (`X-User-Id`), bem como o `LocalResetResponse` permitindo retorno direto de Tokens caso a config não esteja devidamente alinhada (`AUTH_RESET_RETURN_TOKEN`).
+**Evidências:**
+- `tests/verify_secret_management.py` expõe strings PII/Senhas reais.
+- `backend/app/core/infrastructure/auth.py` aceitando um trust inseguro padrão e potencial vazamento no Reset de senha.
+
+**Próximos passos:**
+- Adotar mock de segredos nos testes. Desativar bypass incondicional no proxy reverso em `config.py` e revogar flags de token retorno no reset.
+- Registrar SG-037, SG-038 e SG-049 na rastreabilidade.
+
+### 14. Purge Perigoso de Grafo (Confiabilidade)
+**Descrição:** Foi detectada vulnerabilidade crítica na administração do DB via `admin_graph.py` que não impõe autenticação forte de múltiplos fatores ou barreiras consistentes (Idempotência/Aprovação) antes do Purge da base de dados relacional (Neo4j).
+**Evidências:**
+- Funcionalidades de deleção e sobrescrita de chaves de base dados desprotegidas.
+
+**Próximos passos:**
+- Adicionar validações robustas (ex: Webhook dual-check) antes de expurgos.
+- Criar a issue SG-040.
