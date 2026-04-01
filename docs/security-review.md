@@ -233,3 +233,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
   - `picomatch` (Alta) - Method Injection and ReDoS vulnerability via extglob quantifiers.
   - `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify` seguem com avisos pré-existentes ou atualizados de Auth Bypass, ReDoS, Path Traversal e Prototype Pollution.
 - **Ação Recomendada:** Priorizar atualização crítica (`npm audit fix` ou via override manual no `package.json`) especificamente para corrigir as cadeias do Angular, `picomatch` e `path-to-regexp` para versões mitigadas.
+
+## Achados do dia (2026-04-01)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: erro `command not found: pip-audit` e conflito com a dependência `tflite-runtime` no ambiente virtual da aplicação via poetry).
+- [x] Revisão manual de código via `bandit` nos arquivos modificados desde a última auditoria (`backend/windows_agent.py`, `backend/scripts/`). Identificadas novas vulnerabilidades.
+
+### 30. Vulnerabilidades Recorrentes em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** A verificação `npm audit` confirma a permanência de vulnerabilidades de severidade alta na cadeia `@angular` (Angular vulnerable to XSS in i18n attribute bindings), englobando pacotes como `@angular/compiler`, `@angular/core`, entre outros derivados que aguardam mitigação ou override das versões.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar manualmente o Angular e sub-pacotes caso seja seguro realizar a migração sem interrupções em builds.
+
+### 31. URL Opening Inseguro com Arbitrary Schemes (Test Script)
+- **Caminho:** `backend/scripts/eval_technical_qa.py` (linha 50)
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de `urllib.request.urlopen` que pode permitir a leitura de esquemas arbitrários (SSRF ou Arbitrary File Read via `file://`).
+- **Ação Recomendada:** O script é utilizado internamente para avaliações de QA, mas é recomendável restringir a string da requisição para verificar explicitamente URLs iniciadas em `http://` ou `https://`.
+
+### 32. Utilização Insegura do módulo subprocess (Windows Agent)
+- **Caminho:** `backend/windows_agent.py` (linhas 23, 42)
+- **Gravidade:** Baixa/Média (Bandit B404, B603)
+- **Descrição:** O script do agente do Windows executa `subprocess.check_call` que, dependendo do input, traz implicações de injeção de comando, mesmo sem a flag `shell=True`.
+- **Ação Recomendada:** Assegurar que os caminhos e variáveis (ex: lista `missing`) enviadas via vetor para o subprocess originam-se unicamente de fontes seguras ou aplicar restrições ao agente Windows.

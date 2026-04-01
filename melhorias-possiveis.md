@@ -842,3 +842,25 @@ Copiar e preencher:
 - Esforço: M
 - Problema atual: Múltiplas vulnerabilidades novas (total 26, 18 altas, via `npm audit`) emergiram na infraestrutura de frontend (Angular, utilitários regex/paths). Isso propicia injeções de atributos XSS, ataques DoS via expressões regulares (ReDoS) e explorações diversas que enfraquecem a confiabilidade do cliente web.
 - Solucao proposta: Executar override ativo via npm/package.json ou migrar versões das bibliotecas (como @angular/compiler, path-to-regexp e picomatch) para mitigar essas CVEs específicas recém descobertas (não cobertas pelo escopo anterior do SG-034).
+
+### [SG-038] URL Opening Inseguro via urllib (Test Script)
+- Problema atual: O script de testes `backend/scripts/eval_technical_qa.py` realiza leitura de requisições `urllib.request.urlopen` vulneráveis à abertura de qualquer tipo de schema/URL (Bandit B310), possibilitando SSRF caso haja injeções.
+- Solucao proposta: Realizar verificação na URL (assegurar que é um schema restrito como `http://` ou `https://`) antes de evocar a lib.
+- Impacto esperado: Prevenção de abusos de file read dentro de scripts em ambiente de QA.
+- Riscos: Redução de flexibilidade nos protocolos aceitos pelo teste.
+- Dependencias: Nenhuma
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Possível injeção através de subprocess em Windows Agent
+- Problema atual: A classe `backend/windows_agent.py` usa o módulo `subprocess.check_call` diretamente usando input derivado sem validação estrita completa (Bandit B404/B603), aumentando riscos.
+- Solucao proposta: Sanitizar ou travar rigorosamente os paths e variáveis repassadas na matriz do `check_call`.
+- Impacto esperado: Menor risco de Command Injection por inputs mal-formatados que explorem vetores não-cobertos pela ausência de `shell=True`.
+- Riscos: Possíveis interrupções na interface caso um array de dependências seja filtrado incorretamente.
+- Dependencias: Nenhuma
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto

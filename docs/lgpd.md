@@ -80,3 +80,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos que manipulam entradas do usuário.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção aos desenvolvedores sobre a implementação dos tickets relacionados aos vazamentos biométricos e logs indiscriminados de e-mails mapeados anteriormente, já que o foco do período anterior foi restrito a prompts e sub-sistemas de interface (UI).
+
+## Achados do dia (2026-04-01)
+
+### Lacunas e Impacto
+- Nenhuma nova lacuna de processamento de dados (LGPD) ou fluxo que extraia dados sensíveis e PII foi introduzida no escopo de arquivos modificados nas últimas 24 horas (como as rotas e componentes UI frontend ou os testes e scripts de `tooling/` do backend).
+- As falhas críticas listadas em revisões anteriores (captura de áudio não minimizada no daemon `backend/app/interfaces/daemon/daemon.py` e exposição de screenshots via `/screenshot` no `backend/windows_agent.py` sem autenticação robusta/blur) permanecem em aberto sem evidências de correção no diff.
+
+### Próximos Passos
+1. **Seguir com Plano de Mitigação PII:** Priorizar a aplicação da função de PII redaction nos canais que lidam com outputs diretos ou capturam dados biométricos indiretos.
+2. **Revisar Consentimento Local:** Acompanhar a adoção do flag de `OPT_IN` antes de permitir capturas ativas de display para o host OS.
