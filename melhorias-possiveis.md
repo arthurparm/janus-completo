@@ -842,3 +842,25 @@ Copiar e preencher:
 - Esforço: M
 - Problema atual: Múltiplas vulnerabilidades novas (total 26, 18 altas, via `npm audit`) emergiram na infraestrutura de frontend (Angular, utilitários regex/paths). Isso propicia injeções de atributos XSS, ataques DoS via expressões regulares (ReDoS) e explorações diversas que enfraquecem a confiabilidade do cliente web.
 - Solucao proposta: Executar override ativo via npm/package.json ou migrar versões das bibliotecas (como @angular/compiler, path-to-regexp e picomatch) para mitigar essas CVEs específicas recém descobertas (não cobertas pelo escopo anterior do SG-034).
+
+### [SG-038] Novas atualizações críticas de dependências frontend (Angular ecosystem, brace-expansion)
+- Problema atual: A varredura de `npm audit` evidenciou vulnerabilidades associadas ao `@angular/build`, `@angular/cli`, `@schematics/angular` e `brace-expansion`, acrescentando vetores de ataque potenciais ao ecossistema de front.
+- Solucao proposta: Executar atualização das bibliotecas indicadas ou forçar mitigação manual no `package.json`.
+- Impacto esperado: Blindagem contra as novas vulnerabilidades reportadas na cadeia de ferramentas e build do frontend.
+- Riscos: Quebra de builds se a versão for incompatível.
+- Dependencias: Testes da pipeline de frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-039] Uso inseguro de eval() em ferramentas de falha (Bandit B307)
+- Problema atual: O `backend/app/core/tools/faulty_tools.py` faz uso de `eval()`, identificada como prática insegura para conversão ou avaliação de expressões matemáticas e lógicas dinâmicas.
+- Solucao proposta: Substituir `eval()` por abordagens seguras como `ast.literal_eval()`, ou reescrever a lógica caso não seja estritamente necessário.
+- Impacto esperado: Resolução do risco B307 apontado pelo Bandit e aumento na segurança do sandbox.
+- Riscos: Redução de flexibilidade no caso de ferramentas propositalmente "faulty" (com falha), requerendo documentação da escolha.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
