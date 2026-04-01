@@ -836,3 +836,9 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-037] Atualização crítica de dependências frontend (@angular/compiler, picomatch, path-to-regexp)
+- Prioridade: P1
+- Esforço: M
+- Problema atual: Múltiplas vulnerabilidades novas (total 26, 18 altas, via `npm audit`) emergiram na infraestrutura de frontend (Angular, utilitários regex/paths). Isso propicia injeções de atributos XSS, ataques DoS via expressões regulares (ReDoS) e explorações diversas que enfraquecem a confiabilidade do cliente web.
+- Solucao proposta: Executar override ativo via npm/package.json ou migrar versões das bibliotecas (como @angular/compiler, path-to-regexp e picomatch) para mitigar essas CVEs específicas recém descobertas (não cobertas pelo escopo anterior do SG-034).

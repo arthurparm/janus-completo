@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.core.llm import ModelPriority
+from app.services.chat.chat_contracts import chat_http_error_detail
 from app.services.chat_service import (
     ChatService,
     ConversationNotFoundError,
@@ -10,7 +11,6 @@ from app.services.chat_service import (
 )
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.trace_service import TraceService, get_trace_service
-from app.services.chat.chat_contracts import chat_http_error_detail
 
 from .deps import (
     acquire_sse_slot,

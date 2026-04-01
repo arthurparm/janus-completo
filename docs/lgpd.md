@@ -70,3 +70,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 2. **Refatorar Estado Global:** Passar a responsabilidade de manter `_notes` e `_calendar_events` (`productivity_tools.py`) para uma camada de persistência vinculada ao DB ou cache isolado por usuário (`user_id`), aplicando controles severos de acesso.
 3. **Mascarar Logs em Tools:** Aplicar ofuscação (`redact_pii_text_only`) ativamente aos parâmetros sensíveis injetados no logger de envio de e-mail e em criações de calendários e notas.
 4. **Adicionar Auditoria, Consentimento e Redação Visual:** Requerer `OPT_IN` local explicíto ou Autenticação na rede via Token no `windows_agent.py`, e adicionar log local para gerar uma trilha de auditoria cada vez que uma foto de tela for gerada, mantendo rastro LGPD.
+
+## Achados do dia (2026-03-31)
+
+### Lacunas e Impacto
+- Nenhuma nova lacuna LGPD ou fluxo de processamento de dados adicional (exposição de PII, novos logs inseguros, processamentos não minimizados) foi introduzida no escopo de arquivos modificados (`backend/app/api/v1/endpoints/`) desde a última auditoria (`2026-03-18`).
+- As falhas críticas de mitigação LGPD (como logs de áudio do daemon, retenção de sessões na ProductivityTools e capturas de tela sem consentimento/redação via `windows_agent.py`) permanecem sem tratativa ativa e constam nos achados anteriores.
+
+### Próximos Passos
+1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos que manipulam entradas do usuário.
+2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção aos desenvolvedores sobre a implementação dos tickets relacionados aos vazamentos biométricos e logs indiscriminados de e-mails mapeados anteriormente, já que o foco do período anterior foi restrito a prompts e sub-sistemas de interface (UI).

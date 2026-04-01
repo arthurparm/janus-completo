@@ -1,7 +1,7 @@
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -206,21 +206,22 @@ async def get_budget_summary():
     
     Utilizado pelo Budget Panel do frontend para mostrar consumo em tempo real.
     """
-    from app.core.llm import pricing
     from datetime import datetime
-    
+
+    from app.core.llm import pricing
+
     providers = ["openai", "google_gemini", "deepseek", "ollama"]
-    
+
     provider_data = []
     total_spent = 0.0
     total_budget = 0.0
-    
+
     for provider in providers:
         spent = pricing._provider_spend_usd.get(provider, 0.0)
         budget = pricing._provider_budgets_usd.get(provider, 0.0)
         remaining = max(0.0, budget - spent)
         percentage = (spent / budget * 100) if budget > 0 else 0.0
-        
+
         provider_data.append({
             "provider": provider,
             "spent": spent,
@@ -228,12 +229,12 @@ async def get_budget_summary():
             "remaining": remaining,
             "percentage": percentage
         })
-        
+
         total_spent += spent
         total_budget += budget
-    
+
     guardrail_active = total_spent >= (total_budget * 0.9)
-    
+
     return {
         "providers": provider_data,
         "total_spent": total_spent,
@@ -247,7 +248,7 @@ async def get_budget_summary():
 async def get_provider_pricing():
     """Retorna tabela de preços por provedor (USD por 1K tokens)."""
     from app.core.llm import pricing
-    
+
     return {
         provider: {
             "input_per_1k_usd": p.input_per_1k_usd,

@@ -216,3 +216,20 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B108)
 - **Descrição:** Possível uso inseguro de arquivo/diretório temporário (ex. paths hardcoded em `/tmp`), propício a TOCTOU.
 - **Ação Recomendada:** Utilizar `tempfile.NamedTemporaryFile` ou o gerenciador de arquivos centralizado.
+
+## Achados do dia (2026-03-31)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada: erro de instalação/versão Python no ambiente e comando não encontrado no poetry runtime).
+- [x] Revisão manual de código via `bandit` nos arquivos modificados desde a última auditoria (`backend/app/api/v1/endpoints`). Sem achados de severidade Alta ou Média; identificadas apenas exceções silenciadas e uso nativo do modulo `random`.
+
+### 29. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências críticas do frontend apresentaram vulnerabilidades (26 issues total, 18 altas e 8 moderadas), introduzindo novos vetores em relação aos dias anteriores:
+  - `@angular/compiler` e afins (Alta) - XSS in i18n attribute bindings.
+  - `path-to-regexp` (Alta) - Denial of Service via sequential optional groups.
+  - `picomatch` (Alta) - Method Injection and ReDoS vulnerability via extglob quantifiers.
+  - `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify` seguem com avisos pré-existentes ou atualizados de Auth Bypass, ReDoS, Path Traversal e Prototype Pollution.
+- **Ação Recomendada:** Priorizar atualização crítica (`npm audit fix` ou via override manual no `package.json`) especificamente para corrigir as cadeias do Angular, `picomatch` e `path-to-regexp` para versões mitigadas.

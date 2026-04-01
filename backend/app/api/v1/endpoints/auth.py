@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -144,6 +144,7 @@ def _can_return_reset_token() -> bool:
 
 def _ensure_firebase_initialized() -> None:
     import firebase_admin
+
     from app.core.infrastructure.firebase import get_firebase_service
 
     if firebase_admin._apps:
