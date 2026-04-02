@@ -1,4 +1,5 @@
 import json
+from contextvars import ContextVar
 import structlog
 from typing import Any
 
@@ -8,8 +9,38 @@ from app.core.tools.action_module import PermissionLevel, ToolCategory, action_r
 
 logger = structlog.get_logger(__name__)
 
-_calendar_events: dict[str, list[dict[str, Any]]] = {}
-_notes: dict[str, list[dict[str, Any]]] = {}
+_calendar_events_ctx: ContextVar[dict[str, list[dict[str, Any]]] | None] = ContextVar(
+    "calendar_events_ctx",
+    default=None,
+)
+_notes_ctx: ContextVar[dict[str, list[dict[str, Any]]] | None] = ContextVar(
+    "notes_ctx",
+    default=None,
+)
+
+
+def _get_context_store(
+    context_store: ContextVar[dict[str, list[dict[str, Any]]] | None],
+) -> dict[str, list[dict[str, Any]]]:
+    store = context_store.get()
+    if store is None:
+        store = {}
+        context_store.set(store)
+    return store
+
+
+def _email_domain(address: str) -> str:
+    parts = (address or "").split("@", 1)
+    if len(parts) != 2 or not parts[1]:
+        return "unknown"
+    return parts[1].lower()
+
+
+def _subject_fingerprint(subject: str) -> str:
+    normalized = (subject or "").strip()
+    if not normalized:
+        return "empty"
+    return f"len:{len(normalized)}"
 
 
 @tool
@@ -18,7 +49,7 @@ def list_calendar_events(user_id: str) -> str:
     Lista eventos do calendário do usuário.
     Requer escopo 'calendar.read'.
     """
-    events = _calendar_events.get(user_id) or []
+    events = _get_context_store(_calendar_events_ctx).get(user_id) or []
     return json.dumps(events, ensure_ascii=False)
 
 
@@ -29,7 +60,7 @@ def create_calendar_event(user_id: str, title: str, when_ts_ms: int) -> str:
     Requer escopo 'calendar.write'.
     """
     ev = {"title": title, "when_ts_ms": int(when_ts_ms)}
-    _calendar_events.setdefault(user_id, []).append(ev)
+    _get_context_store(_calendar_events_ctx).setdefault(user_id, []).append(ev)
     return json.dumps({"status": "created", "event": ev}, ensure_ascii=False)
 
 
@@ -39,7 +70,12 @@ def send_email(user_id: str, to: str, subject: str, body: str) -> str:
     Envia um email (stub) para o destinatário.
     Requer escopo 'email.send'.
     """
-    logger.info("[EMAIL]", extra={"user_id": user_id, "to": to, "subject": subject})
+    logger.info(
+        "email_queued",
+        user_id=user_id,
+        to_domain=_email_domain(to),
+        subject_fingerprint=_subject_fingerprint(subject),
+    )
     return json.dumps({"status": "queued", "to": to, "subject": subject}, ensure_ascii=False)
 
 
@@ -50,7 +86,7 @@ def create_note(user_id: str, title: str, content: str) -> str:
     Requer escopo 'notes.write'.
     """
     note = {"title": title, "content": content[:2000]}
-    _notes.setdefault(user_id, []).append(note)
+    _get_context_store(_notes_ctx).setdefault(user_id, []).append(note)
     return json.dumps({"status": "saved", "note": note}, ensure_ascii=False)
 
 
@@ -71,7 +107,7 @@ action_registry.register(
     send_email,
     category=ToolCategory.API,
     permission_level=PermissionLevel.DANGEROUS,
-    tags=["scope:mail.send", "personal", "sensitive"],
+    tags=["scope:email.send", "personal", "sensitive"],
 )
 action_registry.register(
     create_note,
