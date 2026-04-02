@@ -153,6 +153,19 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 ---
 
+## Segurança e LGPD (Achados de Auditoria)
+- **[SG-055] Atualizar pacotes com vulnerabilidades conhecidas no Backend (CVEs detectadas via pip-audit)**
+  - **Motivo**: O `pip-audit` identificou que as bibliotecas `aiohttp` (10 CVEs ligadas a Request Smuggling e Header Parsing), `cryptography`, `requests` e `pypdf` possuem falhas conhecidas de segurança que precisam ser atualizadas.
+  - **Ação**: Executar `poetry update aiohttp cryptography requests pypdf` no backend, validar dependências e subir PR.
+  - **Esforço/Prioridade**: S / P1
+  - **Status**: ideia
+
+- **[SG-056] Mitigar Novas Vulnerabilidades de Frontend (npm audit)**
+  - **Motivo**: O relatório diário apontou novos pacotes como `lodash-es` além de persistência de riscos no `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify`.
+  - **Ação**: Executar `npm audit fix` ou forçar overrides manuais em `frontend/package.json`.
+  - **Esforço/Prioridade**: S / P2
+  - **Status**: ideia
+
 ## 7) Plataforma, Dados e Integracoes
 
 | ID | Melhoria | Prioridade | Esforco | Status |

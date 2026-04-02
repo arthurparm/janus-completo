@@ -81,6 +81,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos que manipulam entradas do usuário.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção aos desenvolvedores sobre a implementação dos tickets relacionados aos vazamentos biométricos e logs indiscriminados de e-mails mapeados anteriormente, já que o foco do período anterior foi restrito a prompts e sub-sistemas de interface (UI).
 
+## Achados do dia (2026-04-02)
+
+### 31. Telemetria e Logs Ampliados em Componentes de Front-End e Features de Agente
+- **Caminho:** `frontend/src/app/features/*` e `backend/app/api/v1/endpoints/agent.py`
+- **Impacto e Gaps:** O aumento das interações assíncronas do frontend com os componentes do agent e home (ex: "conversations") pode levar à retenção implícita de PIIs em logs transacionais (ex: dados temporários das sessões e inputs descritivos). Apesar de não existirem evidências claras de vazamento direto (como gravação indevida no localStorage/sessionStorage), continua faltando uma rotina forte de Data Minimization e remoção do histórico (Redaction) para logs de telemetria.
+- **Próximos Passos:** Assegurar que `redact_pii_text_only` seja aplicado em todas as entradas processadas por rotas de chat e conversation history no backend antes de serem enviadas para logs do sistema ou provedores LLM.
+
 ## Achados do dia (2026-04-01)
 
 ### Lacunas e Impacto

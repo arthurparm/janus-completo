@@ -234,6 +234,30 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
   - `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify` seguem com avisos pré-existentes ou atualizados de Auth Bypass, ReDoS, Path Traversal e Prototype Pollution.
 - **Ação Recomendada:** Priorizar atualização crítica (`npm audit fix` ou via override manual no `package.json`) especificamente para corrigir as cadeias do Angular, `picomatch` e `path-to-regexp` para versões mitigadas.
 
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Vulnerabilidades encontradas** (executado com sucesso no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` nos arquivos modificados na janela (app/core e app/services).
+
+### 32. Vulnerabilidades em Dependências do Backend
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do backend apresentaram vulnerabilidades conhecidas (CVEs):
+  - `aiohttp` (10 CVEs ligadas a Request Smuggling e Header Parsing).
+  - `cryptography` (CVE-2026-34073).
+  - `requests` (CVE-2026-25645).
+  - `pypdf` (3 CVEs ligadas a DoS/Infinite Loop parsing).
+  - Outros pacotes com alertas menores: `black`, `pyasn1`, `pygments`.
+- **Ação Recomendada:** Atualizar os pacotes do backend via `poetry update aiohttp cryptography requests pypdf` para garantir que versões mitigadas sejam utilizadas.
+
+### 33. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** `npm audit` detectou 27 vulnerabilidades (19 altas, 8 moderadas). Os achados são consistentes com os dias anteriores, mantendo os alertas para o ecossistema `@angular/*`, `hono`, `tar`, `picomatch`, `path-to-regexp` e adicionando o pacote `lodash-es`.
+- **Ação Recomendada:** Executar `npm audit fix` para atualizar dependências que suportem auto-correção e revisar atualizações manuais no Angular.
+
 ## Achados do dia (2026-04-01)
 
 ### Checklist executado
