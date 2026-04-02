@@ -865,3 +865,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Atualização Crítica de Dependências do Backend (pip-audit)
+- Problema atual: A varredura via `pip-audit` detectou CVEs nas bibliotecas `aiohttp`, `cryptography`, `pyasn1`, `requests` e `pygments`. Isso expõe o backend a riscos que variam desde bypass de autenticação até negação de serviço e manipulação de arquivos temporários.
+- Solucao proposta: Atualizar as dependências afetadas usando `poetry update aiohttp cryptography pyasn1 requests pygments` no subprojeto `backend`.
+- Impacto esperado: Mitigação das CVEs listadas, blindando a API de DoS e injeções relacionadas a parser/criptografia.
+- Riscos: Regressão de testes caso haja quebra de retrocompatibilidade em patches/minor version bumps.
+- Dependencias: Suite de testes de integração (`backend/tests/integration/*`).
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Atualização Crítica de Dependências do Frontend (npm audit)
+- Problema atual: A varredura de `npm audit` reportou diversas vulnerabilidades de severidade Alta na cadeia de dependências do frontend (ex: Angular core/compiler, hono, lodash-es, tar, picomatch, path-to-regexp), permitindo vetores teóricos como ReDoS, XSS, Path Traversal e Prototype Pollution.
+- Solucao proposta: Executar atualização das bibliotecas indicadas ou forçar mitigação manual (`npm audit fix`).
+- Impacto esperado: Blindagem contra vulnerabilidades conhecidas no cliente e no servidor de build/ssr (se aplicável).
+- Riscos: Quebra de compatibilidade em pipelines de build frontend.
+- Dependencias: Suite de testes e linting do frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

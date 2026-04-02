@@ -254,3 +254,34 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Vulnerabilidades Encontradas** (resolvido problema de ambiente, novas CVEs detectadas).
+- [x] Revisão manual de código via `bandit` (arquivos alterados na janela / evidências levantadas). Sem novos achados críticos em relação a auditorias anteriores.
+
+### 32. Novas Vulnerabilidades em Dependências do Backend
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta / Média
+- **Descrição:** O `pip-audit` executado no ambiente Poetry detectou novas vulnerabilidades nas seguintes bibliotecas backend:
+  - `aiohttp` (Múltiplas CVEs de Alta severidade, como CVE-2026-34515 e pares associados)
+  - `cryptography` (CVE-2026-34073)
+  - `pyasn1` (CVE-2026-30922, DoS por recursão em parse ASN.1)
+  - `requests` (CVE-2026-25645, risco de escrita em tmp directory previsível via extract_zipped_paths)
+  - `pygments` (CVE-2026-4539)
+- **Ação Recomendada:** Executar a atualização via `poetry update aiohttp cryptography pyasn1 requests pygments` e validar contra quebras.
+
+### 33. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** A varredura via `npm audit` revelou múltiplas novas vulnerabilidades em pacotes do ecossistema Angular e dependências associadas, incluindo:
+  - `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`
+  - `@hono/node-server`, `hono` (Authorization bypass, Arbitrary file access, SSE injection)
+  - `express-rate-limit` (Bypass via IPv4-mapped IPv6)
+  - `flatted`, `immutable`, `lodash-es` (Prototype Pollution, DoS, Code Injection)
+  - `path-to-regexp`, `picomatch` (ReDoS, Method Injection)
+  - `tar` (Hardlink/Symlink Path Traversal)
+- **Ação Recomendada:** Executar `npm audit fix` ou realizar override/atualização manual das bibliotecas listadas para mitigar os riscos.
