@@ -254,3 +254,12 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend) - Novas vulnerabilidades críticas não encontradas. As anteriores persistem.
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+Nenhuma nova vulnerabilidade de segurança foi introduzida nas alterações recentes de código (janela: 2026-04-01 a 2026-04-02).
