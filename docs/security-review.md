@@ -254,3 +254,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - Executado com sucesso no virtualenv do poetry.
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Backend
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Foram identificadas 18 vulnerabilidades conhecidas em 7 pacotes do backend, incluindo `aiohttp` (múltiplos CVEs), `cryptography`, `black`, `pyasn1`, `pygments`, `pypdf`, e `requests`.
+- **Ação Recomendada:** Atualizar as dependências afetadas para versões seguras via `poetry update` ou fixando-as no `pyproject.toml`.
+
+### 33. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** O total de vulnerabilidades reportadas subiu para 27 (19 altas e 8 moderadas). Foram listados vetores para novas dependências como `@angular-devkit/architect`, `@angular-devkit/core` e `@angular-devkit/schematics`, somadas às demais relatadas anteriormente (Angular core/cli, hono, dompurify, etc).
+- **Ação Recomendada:** Executar `npm audit fix` ou realizar o pin de versões mitigadas.
+
+### 34. Code Injection Vulnerability (shell=True)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py` (linha 33)
+- **Gravidade:** Alta (Bandit B602)
+- **Descrição:** Uso de função do módulo `subprocess` com `shell=True` detectado pelo Bandit. Isso abre margem para ataques de injeção de comandos na máquina se as entradas não forem restritamente sanitizadas.
+- **Ação Recomendada:** Mudar para `shell=False` e passar os comandos como uma lista segura de argumentos se possível, ou garantir validação restrita do input.

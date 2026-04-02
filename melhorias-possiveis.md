@@ -865,3 +865,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Vulnerabilidades de dependencias frontend (npm audit 2026-04-02)
+- Problema atual: A auditoria do frontend (`npm audit`) listou 27 vulnerabilidades (19 altas, 8 moderadas), introduzindo novos pacotes afetados (`@angular-devkit/architect`, `@angular-devkit/core` e `@angular-devkit/schematics`) além dos relatados anteriormente.
+- Solucao proposta: Atualizar os pacotes ou rodar `npm audit fix` para tratar as vulnerabilidades e realizar mitigação das que não possuírem correções diretas.
+- Impacto esperado: Remoção de vulnerabilidades de dependências do client-side.
+- Riscos: Quebra de builds se as atualizações de major versão causarem incompatibilidades.
+- Dependencias: Testes E2E pós-update.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Vulnerabilidades de dependencias backend (pip-audit 2026-04-02)
+- Problema atual: A auditoria no backend (`pip-audit`) identificou 18 vulnerabilidades em 7 pacotes (incluindo `aiohttp`, `cryptography`, `black`, `requests`, `pygments`, `pypdf`, `pyasn1`).
+- Solucao proposta: Atualizar os pacotes listados modificando o `pyproject.toml` para versões fixas mais recentes que tenham os CVEs corrigidos, seguido por `poetry update`.
+- Impacto esperado: Remoção de vulnerabilidades de dependências no backend.
+- Riscos: Incompatibilidade de código de API de bibliotecas atualizadas.
+- Dependencias: Execução da suite QA para garantir que não haja regressão (OQ-011).
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] Uso inseguro de subprocess (shell=True) (Bandit B602)
+- Problema atual: O arquivo `backend/app/core/tools/launcher_tools.py` utiliza `subprocess` com `shell=True` o que permite injeção de comandos arbitrarios na infraestrutura se não houver sanitização adequada.
+- Solucao proposta: Refatorar o uso de `subprocess` para adotar `shell=False` e utilizar lista de comandos/argumentos (array-based input), ou garantir regex restrito.
+- Impacto esperado: Mitigação de possível execução arbitrária de comandos no host backend via escape de payload.
+- Riscos: Ferramentas launcher podem não funcionar corretamente no Windows sem `shell=True` caso dependam da chamada ao cmd.exe. É preciso adaptar a chamada.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
