@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Vulnerabilidades Críticas de Segurança em Dependências do Backend
+- Problema atual: A varredura de segurança identificou que bibliotecas base do backend (`requests`, `pyasn1`, `pygments`) possuem vulnerabilidades críticas (CVE-2026-25645, CVE-2026-30922, CVE-2026-4539) que variam desde injeção de arquivos locais e DoS por exaustão de pilha (RecursionError) até ataques de complexidade de RegEx (ReDoS).
+- Solucao proposta: Atualizar as dependências no arquivo `pyproject.toml` ou gerador de lockfiles para as respectivas versões mitigadas (`requests>=2.33.0`, `pyasn1>=0.6.3`, `pygments>=2.20.0`) e regenerar as amarrações do poetry.
+- Impacto esperado: Proteção imediata contra as CVEs detalhadas, garantindo estabilidade do parser, do cliente http e da serialização.
+- Riscos: Atualização de pacotes pode envolver adequação de assinaturas de API em casos isolados de breaking changes menores.
+- Dependencias: Pipeline de testes (`pytest`) para validação das regressões.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto

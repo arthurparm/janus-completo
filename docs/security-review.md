@@ -254,3 +254,36 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Vulnerabilidades encontradas**
+- [x] pip-audit (backend) - **Vulnerabilidades encontradas** (executado via `poetry run pip-audit` no virtualenv)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidades Críticas em Dependências do Backend
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas bibliotecas do backend possuem vulnerabilidades reportadas:
+  - `requests` (CVE-2026-25645 / GHSA-gc5v-m9x4-r6x2) - File extraction in temporary paths vulnerable to replacement by local attackers.
+  - `pyasn1` (CVE-2026-30922 / GHSA-jr27-m4p2-rc6r) - Denial of Service (DoS) vulnerability via RecursionError in decoder.
+  - `pygments` (CVE-2026-4539 / GHSA-5239-wwwm-4pmq) - Regular expression complexity in `AdlLexer` leading to ReDoS.
+- **Ação Recomendada:** Atualizar pacotes para versões mitigadas (`requests>=2.33.0`, `pyasn1>=0.6.3`, `pygments>=2.20.0`).
+
+### 33. Continuidade de Vulnerabilidades no Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** As vulnerabilidades nas dependências core do Angular e ferramentas associadas mapeadas em avaliações anteriores persistem. Notavelmente as bibliotecas de roteamento e compilação expostas a XSS e ReDoS (`path-to-regexp`, `picomatch`, ecossistema `@angular/*`).
+- **Ação Recomendada:** Executar `npm audit fix` rigoroso, atualizar overrides no `package.json` e refazer build dos pacotes problemáticos.
+
+### 34. Persistência de Achados do Bandit (Vulnerabilidades de Código)
+- **Caminho:** Múltiplos módulos no `backend/`
+- **Gravidade:** Alta / Média
+- **Descrição:** A varredura de código fonte do Bandit continua apontando vulnerabilidades críticas mapeadas nos dias anteriores, mas ainda ativas na codebase:
+  - Uso inseguro de `subprocess` com `shell=True` em `launcher_tools.py` (B602).
+  - Injeção SQL via F-Strings em `dedupe_service.py` (B608).
+  - Vulnerabilidade XXE na leitura de arquivos em `document_parser_service.py` (B314).
+  - Endpoints acessíveis com binding indiscriminado a `0.0.0.0` no `windows_agent.py` (B104).
+  - Avaliações inseguras de URL `urllib.urlopen` com esquema não validado em `message_broker.py` e `agent_tools.py` (B310).
+- **Ação Recomendada:** Priorizar a correção dos itens P0 no backend antes do próximo ciclo de release, resolvendo code smells e refatorando o parser de xml para `defusedxml`.
