@@ -27,6 +27,16 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
 
+## Achados do dia (2026-04-02)
+
+### Lacunas e Impacto
+- Nenhuma nova lacuna LGPD ou fluxo de processamento de dados adicional (exposição de PII, novos logs inseguros, processamentos não minimizados) foi introduzida no escopo de arquivos modificados (`backend/app/`) desde a última auditoria (`2026-04-01`).
+- As falhas críticas de mitigação LGPD mapeadas anteriormente (logs de áudio do daemon, retenção de sessões na ProductivityTools, metadados não ofuscados em envio de e-mails, e capturas de tela sem consentimento/redação via `windows_agent.py`) permanecem abertas.
+
+### Próximos Passos
+1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
+2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
 ## Achados do dia (2026-03-08)
 
 ### Lacunas e Impacto

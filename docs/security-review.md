@@ -47,6 +47,19 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
 
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` nos arquivos modificados na janela (`backend/app/`). Não há novas vulnerabilidades não mapeadas (falhas de B108, B102, B307, B602, B310 e B314 foram confirmadas como pré-existentes na base ou backlog).
+
+### 32. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend (27 no total) apresentaram vulnerabilidades conhecidas, como nos pacotes relacionados ao Angular, `path-to-regexp`, `picomatch`, `hono`, entre outros (XSS, DoS, ReDoS, Prototype Pollution).
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
 ## Achados do dia (2026-03-08)
 
 ### Checklist executado

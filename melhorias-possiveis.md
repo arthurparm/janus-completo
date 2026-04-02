@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-052] Resolver vulnerabilidades do frontend identificadas pelo npm audit (27 pacotes afetados)
+- Data de abertura: 2026-04-02
+- Area: Seguranca
+- Descricao curta: npm audit detectou 27 pacotes afetados no frontend.
+- Problema atual: multiplos pacotes desatualizados ou com vulnerabilidades.
+- Impacto esperado: correcoes de XSS, DoS, ReDoS.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
