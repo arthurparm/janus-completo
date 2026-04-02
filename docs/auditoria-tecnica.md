@@ -113,3 +113,13 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Mudar para `secrets` module no lugar do `random` no `auto_analysis.py`.
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
+
+## Achados do dia (2026-03-31)
+
+### 11. API Drift Detectado
+**Descrição:** A extração do inventário da API identificou um aumento no número de endpoints expostos, e 205 endpoints sem cobertura de testes. As alterações impactaram os módulos de Autonomy, Chat, Observability e Tasks.
+**Evidências:**
+- `outputs/qa/api_coverage_report.json` e `outputs/qa/api_inventory.json` refletem novos endpoints sem cobertura, ex: POST `/api/v1/tasks/consolidation` e GET `/api/v1/tasks/health/rabbitmq`.
+**Próximos passos:**
+- Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
+- Adicionar issue OQ-018 ao backlog.
