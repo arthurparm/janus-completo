@@ -254,3 +254,20 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram novas vulnerabilidades, introduzindo novos vetores:
+  - `@hono/node-server`, `dompurify`, `express-rate-limit`, `hono`, `immutable`, e `tar`.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+### Análise SAST
+- Nenhuma vulnerabilidade nova foi encontrada pelo Bandit nos arquivos alterados nas últimas 24 horas, no entanto, as vulnerabilidades anteriores não mitigadas (como injeção de SQL, eval e subprocess inseguros) continuam presentes na branch.

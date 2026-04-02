@@ -90,3 +90,12 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-02)
+
+### Lacunas e Impacto
+- **Nenhum vazamento de PII novo adicionado:** Baseado na revisão incremental dos arquivos modificados nas últimas 24 horas, e no relatório do `bandit`, nenhum novo vetor explícito de exposição de dados pessoais foi introduzido (ex: novos hardcoded paths, globais não seguras ou impressões sem minimização no log).
+- **Vulnerabilidades Antigas Permanecem:** Os problemas arquiteturais prévios (como o uso do `DataRetentionService` acoplado ao `janus.log` não expurgado e armazenamento do estado PII local) continuam presentes na branch sem refatoração até o presente momento.
+
+### Próximos Passos
+1. **Consolidar Ofuscação:** Retomar a priorização das issues anteriores (como a SG-019 e SG-023) para aplicar os padrões de `redact_pii_text_only` em logs de sistema de forma transversal no backend.

@@ -865,3 +865,9 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-040] Atualizar novas dependências no frontend (hono, dompurify, etc) via npm audit
+- **Prioridade:** P1
+- **Esforço:** S
+- **Problema atual:** Novas bibliotecas no frontend (`@hono/node-server`, `dompurify`, `express-rate-limit`, `hono`, `immutable`, e `tar`) estão sendo sinalizadas no `npm audit` como vulneráveis.
+- **Impacto:** Vulnerabilidades variadas dependendo dos vetores de cada pacote.
+- **Solução proposta:** Executar `npm audit fix` ou atualizar as dependências manualmente.
