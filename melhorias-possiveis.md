@@ -865,3 +865,80 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [ARQ-012] Tratamento Silencioso de Exceções (Bandit B110)
+- Problema atual: Uso de blocos `try-except` com `pass` em múltiplos arquivos do backend (ex: `llm_repository.py`, `message_orchestration_service.py`, `auth.py`). Essa lógica silenciosa (Try, Except, Pass) mascara erros reais e cria caminhos frágeis de execução.
+- Solucao proposta: Remover o `pass` cego e adicionar logging adequado (`logger.warning` ou `.error`) ou relançamento da exceção.
+- Impacto esperado: Maior rastreabilidade de falhas e redução de fragilidades lógicas mascaradas.
+- Riscos: Aumento do volume de logs.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [ARQ-013] Isolamento do ecossistema de testes em `tooling/`
+- Problema atual: Scripts como `test_debate_system.py` e `seed-repro-scenarios.ps1` executam validações de forma isolada, contornando os pipelines de CI de Pytest na suíte `qa/`. Isso diminui a cobertura automática validada por regressão.
+- Solucao proposta: Migrar lógicas de teste de `tooling/` para o escopo do Pytest em `qa/` garantindo execução nos runners padrões.
+- Impacto esperado: Padronização das execuções de testes do sistema.
+- Riscos: Necessidade de adaptar asserções customizadas ou scripts raw para a estrutura do pytest.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [ARQ-014] Refatoração de Callbacks `done()` Vitest (Frontend)
+- Problema atual: Uso do padrão de callback `done()` legado nos testes Vitest do frontend, o que introduz risco de 'Unhandled Rejections' ou falsos positivos em fluxos assíncronos (lógica frágil).
+- Solucao proposta: Refatorar os testes em questão para utilizarem `async/await` e retorno de Promises em vez dos callbacks.
+- Impacto esperado: Testes de frontend mais estáveis e fáceis de manter.
+- Riscos: Alteração sensível na suíte base que pode demandar esforço de homologação local.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [DX-014] Padronização e Update de Linting ESLint V9
+- Problema atual: Pipelines de linting no frontend podem falhar com ESLint v9+ por utilizarem arquivos `.eslintrc` (suporte legado/depreciado) e não possuírem `eslint.config.js`.
+- Solucao proposta: Migrar as configurações de `.eslintrc` para o padrão flat config (`eslint.config.js`) ou forçar a versão legacy via package.json.
+- Impacto esperado: Resolução do suporte no ecosistema JS moderno.
+- Riscos: Ajuste da pipeline de CI.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-049] Senhas e Segredos Hardcoded em Testes de Autenticação (Bandit B105)
+- Problema atual: O arquivo `tests/verify_secret_management.py` e outros expõem credenciais e senhas hardcoded (B105), caracterizando vulnerabilidade de exposição e gestão inadequada de segredos no código fonte.
+- Solucao proposta: Substituir variáveis estáticas por obtenção em ambiente ou usar `SecretStr` em mocks controlados.
+- Impacto esperado: Mitigação de vulnerabilidades SAST apontadas pelo Bandit.
+- Riscos: Quebra de testes durante a refatoração de leitura de ambiente.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Exposição de Stdout e Vazamentos por falta de Timeout em Testes/Tooling
+- Problema atual: Scripts do `tooling/` (ex: `test_debate_system.py`) omitem timeouts explícitos assíncronos e abusam de `print()` diretos, vazando PII, segredos e tokens, além de representarem lógica frágil sujeita a travamentos.
+- Solucao proposta: Utilizar loggers controlados (`redact_pii_text_only`) ao invés de prints simples e implementar limitadores de timeout como `asyncio.wait_for`.
+- Impacto esperado: Estabilidade nos jobs e bloqueio contra leakage PII nas execuções cruas do pipeline.
+- Riscos: Timeouts muito agressivos causarem flakyness.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-051] Shadow IT - Monitoramento LGPD no Tailscale Setup
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` atua como monitor extra-oficial (shadow IT) de logs em `tailscale-security-monitor.log`, expondo em texto claro hostnames, origens e pares, violando princípios de LGPD (ausência de redação).
+- Solucao proposta: Submeter os logs operacionais da infra para o mesmo framework unificado (com redação de PII) do app, ou remover o mecanismo "feito à mão" a favor de observability nativa da VPN.
+- Impacto esperado: Menos canais não controlados de coleta de dados indiretos.
+- Riscos: Redução imediata de visibilidade em logs locais de VPN.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

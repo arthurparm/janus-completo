@@ -123,3 +123,44 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-02)
+
+### 12. Tratamento Silencioso de Exceções (Fragilidade Lógica)
+**Descrição:** Identificou-se o uso de blocos `try-except` com `pass` no backend, caracterizando lógica frágil (Bandit B110). Isso mascara erros (Silent fails), dificultando o rastreamento e degradando a confiabilidade geral.
+**Evidências:**
+- Padrão detectado através de SAST em arquivos como `llm_repository.py`, `message_orchestration_service.py` e `auth.py`.
+**Próximos passos:**
+- Remover os `pass` cegos, implementando tratamento com propagação de exceções ou logging explícito.
+- Refatoração atrelada a ARQ-012.
+
+### 13. Isolamento e Fragilidade na Suíte de Testes e Tooling
+**Descrição:** Muitos scripts em `tooling/` executam em isolamento, contornando a esteira padrão Pytest (`qa/`). Além disso, scripts sofrem de ausência de timeouts apropriados em asserções assíncronas e utilizam legacy `done()` callbacks no Vitest (Frontend), gerando instabilidade ('Unhandled Rejections').
+**Evidências:**
+- `tooling/test_debate_system.py` e `tooling/seed-repro-scenarios.ps1` operando fora do ecossistema principal `qa/`.
+- Testes falhos com legacy callbacks Vitest identificados no frontend.
+**Próximos passos:**
+- Consolidar testes isolados integrando-os na suíte `qa/`.
+- Refatorar testes Vitest para Promises/Async Await e adicionar timeouts (ARQ-013, ARQ-014, SG-050).
+
+### 14. Exposição de Segredos B105 e Vazamentos em Stdout (Segurança)
+**Descrição:** Análise detectou chaves e credenciais expostas nos artefatos de validação e hardcoded de senhas, caracterizando quebra das práticas seguras de desenvolvimento e gestão de segredos.
+**Evidências:**
+- `tests/verify_secret_management.py`: Relatórios Bandit SAST sinalizam presença de hardcoded secrets (B105).
+- Relatos de `print()` diretos em testes do `tooling/` emitindo PII e/ou secrets para stdout sem controle (SG-050).
+**Próximos passos:**
+- Refatorar testes para utilizar Mocking e variáveis de ambiente configuradas por `.env`, blindando vazamentos e integrando ao SG-049.
+
+### 15. Shadow IT e LGPD Risks em Telemetria VPN
+**Descrição:** Existe a consolidação de telemetria lateral na configuração de Tailscale usando `secure-tailscale-setup.ps1`, operando sem ofuscação centralizada e guardando logs contendo metadados de host, origens e pares, violando princípios de retenção e minimização da LGPD.
+**Evidências:**
+- Script `tooling/secure-tailscale-setup.ps1` cria `tailscale-security-monitor.log` expondo texto pleno sem PII redaction.
+**Próximos passos:**
+- Extender o pipeline de ofuscação (PII scrubber) ou remover a coleta e confiar na observability nativa gerenciada da VPN (SG-051).
+
+### 16. Configuração Obsoleta de Linting Frontend (Complexidade)
+**Descrição:** Dívida técnica nas pipelines (Linting fallback). A transição incompleta para ESLint v9 gera falhas de CI por conta da falta do `eslint.config.js` enquanto há permanência de suporte legado ao formato de rc file.
+**Evidências:**
+- Suporte depreciado em `.eslintrc` impactando `npm run lint`.
+**Próximos passos:**
+- Migração formal para o flat config layout de linting no frontend (DX-014).
