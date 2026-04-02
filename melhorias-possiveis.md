@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-055] Mitigar vulnerabilidades introduzidas/persistentes em dependências de backend/frontend (lodash-es)
+- Problema atual: A varredura contínua apontou persistência de diversas vulnerabilidades críticas no stack frontend (Angular/express), sendo que a dependência `lodash-es` passou a constar explicitamente entre as vulnerabilidades que requerem tratativa para evitar brechas de segurança, o que compõe vetores não resolvidos pelas tratativas anteriores (ex. SG-034/SG-038).
+- Solucao proposta: Auditar a árvore de dependências no `package.json`, executar a mitigação para `lodash-es` via atualizações ou resoluções via overrides.
+- Impacto esperado: Diminuição da superfície de ataque oriunda de bibliotecas de terceiros.
+- Riscos: Riscos de compatibilidade no runtime angular.
+- Dependencias: Frontend testes/CI.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

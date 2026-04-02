@@ -254,3 +254,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidades Críticas de Dependências (Frontend)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend seguem reportando alertas de segurança (totalizando 27 vulnerabilidades, sendo 19 Altas e 8 Moderadas). Pacotes como `@angular/animations`, `@angular/compiler`, `@angular/core`, `tar`, `express-rate-limit`, `path-to-regexp` e `hono` estão entre os itens sinalizados, indicando possíveis riscos de Injeção XSS, Negação de Serviço por regex (ReDoS) ou escalação de privilégios.
+- **Ação Recomendada:** Atualizar dependências em `package.json` ou executar `npm audit fix` para atualizar as versões corrigidas.
+
+### 33. Code Injection (subprocess)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Alta (Bandit B602)
+- **Descrição:** Uso inseguro da função `subprocess.Popen` com o argumento `shell=True` detectado, o que permite Injeção de Comandos (OS Command Injection) caso o nome do app não seja totalmente validado.
+- **Ação Recomendada:** Remover `shell=True` e passar os argumentos como lista para a função `subprocess.Popen`.
+
+### 34. Abertura Insegura de URLs
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py`, `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de métodos que podem abrir esquemas customizados (ex. `file://`) além de `http`/`https` detectado.
+- **Ação Recomendada:** Realizar validação garantindo que as URLs comecem explicitamente com `http://` ou `https://` antes de invocá-las com bibliotecas como `urllib`.
