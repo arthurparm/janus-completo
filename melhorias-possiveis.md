@@ -28,6 +28,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | CI-004 | ExtraÃ§Ã£o AST de imports, decorators, assinatura, linhas inicio/fim | P1 | M | ideia |
 | CI-005 | Suporte a multiplas linguagens (TS/JS/Python/SQL) no parser | P1 | L | ideia |
 | CI-006 | Endpoint de pergunta sobre codigo com citacao (`arquivo` + `linha`) | P0 | M | feito (2026-02-12) |
+| SG-050 | Corrigir vazamento de PII em monitoramento Tailscale (logs não utilizam `redact_pii_text_only`) em `tooling/secure-tailscale-setup.ps1` | P2 | S | aberto |
+| OQ-019 | Integrar scripts isolados (`test_debate_system.py`) na suíte pytest oficial | P2 | S | aberto |
 | CI-007 | Busca hibrida para codigo (lexical + vetorial + grafo) | P1 | L | ideia |
 | CI-008 | Mapa de impacto de mudanca (o que quebra se alterar X) | P1 | M | ideia |
 | CI-009 | Hotspots de complexidade e debt automaticamente rankeados | P2 | M | ideia |

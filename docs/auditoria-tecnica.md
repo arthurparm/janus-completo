@@ -123,3 +123,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-02)
+
+### 12. Scripts Isolados de Testes e Shadow IT
+**Descrição:** Identificada a adição recente de scripts na pasta `tooling/` que executam lógicas de teste ou monitoramento fora das barreiras padrão do CI (pytest) e operam como "shadow IT". Estes scripts também contêm vulnerabilidades de privacidade ao gravar logs não redigidos.
+**Evidências:**
+- `tooling/test_debate_system.py`: Executa testes do LangGraph fora da suíte de QA, e usa `print()` em texto claro, o que pode vazar código gerado e críticas em logs não controlados.
+- `tooling/secure-tailscale-setup.ps1`: Configura um loop de monitoramento (`tailscale-security-monitor.ps1`) que grava `tailscale-security-monitor.log` contendo hostnames e latências de peers, sem proteção via `redact_pii_text_only`, quebrando a diretiva de LGPD.
+**Próximos passos:**
+- Mover ou integrar a execução do debate de LangGraph para a suíte do `pytest` (`qa/`).
+- Adicionar issue SG-050 (`melhorias-possiveis.md`) para rastrear o vazamento de informações em logs do monitoramento via PowerShell e exigir redação.
