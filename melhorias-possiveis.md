@@ -865,3 +865,24 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-051] Vulnerabilidades Conhecidas no Backend (pip-audit)
+- **Descrição:** O `pip-audit` apontou 14 CVEs associadas a versões atuais de bibliotecas Python sendo utilizadas no sistema (aiohttp, cryptography, pyasn1, pygments, requests).
+- **Ação Recomendada:** Atualizar os pacotes utilizando `poetry update` e validar regressões.
+- **Tíquete/Issue:** Pendente
+- **Esforço / Prioridade:** M / P1
+- **Status:** Aberto
+
+### [SG-052] Risco de SSRF/LFI em aberturas de URL (Bandit B310)
+- **Descrição:** O analisador estático (Bandit) reportou `B310` apontando para a abertura insegura de URLs em `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`, o que permite vetores de SSRF ao abrir schemes customizados ou locais (`file://`).
+- **Ação Recomendada:** Introduzir checagem estrita para `http://` e `https://` antes da chamada a leitura de recursos remotos/urls arbitrárias.
+- **Tíquete/Issue:** Pendente
+- **Esforço / Prioridade:** M / P1
+- **Status:** Aberto
+
+### [SG-053] Vulnerabilidades Críticas no Frontend (npm audit)
+- **Descrição:** O `npm audit` reportou 27 vulnerabilidades (19 altas, 8 moderadas) associadas a dependências do frontend (ex: `@angular/*`, `hono`, `dompurify`, `tar`, `express-rate-limit`).
+- **Ação Recomendada:** Rodar `npm audit fix` para mitigar as falhas automatizadas e realizar atualização gradual de dependências core (`@angular`).
+- **Tíquete/Issue:** Pendente
+- **Esforço / Prioridade:** M / P1
+- **Status:** Aberto

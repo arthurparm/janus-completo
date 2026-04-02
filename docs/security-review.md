@@ -254,3 +254,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Vulnerabilidades encontradas** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades no Backend (pip-audit)
+- **Caminho:** `backend/pyproject.toml`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** O script pip-audit foi executado no ambiente vitual do poetry e mapeou 14 vulnerabilidades de CVE conhecidos em 5 dependências (aiohttp, cryptography, pyasn1, pygments, requests).
+- **Ação Recomendada:** Atualizar os pacotes listados usando `poetry update`.
+
+### 33. Risco de Abertura Insegura de URLs (B310)
+- **Caminho:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** O Bandit alertou para a falta de validação explícita no scheme (ex: garantir que são `http` ou `https`) no momento da abertura de URLs nas linhas 775 e 865 do `message_broker.py` e na linha 719 do `agent_tools.py`, o que pode acarretar em ataques de SSRF (Server-Side Request Forgery) ou LFI.
+- **Ação Recomendada:** Adicionar uma verificação explícita contra uma whitelist de protocolos permitidos antes da execução.
+
+### 34. Novas Vulnerabilidades no Frontend (npm audit)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta (19 vulnerabilidades), Moderada (8 vulnerabilidades)
+- **Descrição:** Múltiplas dependências do frontend apresentam vulnerabilidades críticas em versões legadas: `@angular-devkit`, `@angular/cli`, `@schematics/angular`, `@hono/node-server`, `brace-expansion`, `dompurify`, `express-rate-limit`, `flatted`, `immutable`, `tar`, entre outras. Foram identificados 27 achados no total (8 Moderate, 19 High).
+- **Ação Recomendada:** Executar `npm audit fix` ou avaliar atualização manual (`npm install` das bibliotecas críticas).
