@@ -123,3 +123,16 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+
+
+## Achados do dia (2026-04-03)
+
+### 11. Manutenção de Drift de API e Cobertura
+**Descrição:** Na avaliação diária da paridade de CI e drift da API, confirmou-se a continuidade do aumento da malha de endpoints com 232 identificados, mantendo 205 endpoints (como `/api/v1/evaluation/experiments`, `/api/v1/agent/execute`) sem cobertura direta de testes de integração, correspondendo a apenas 11.64% de cobertura de endpoints.
+**Evidências:**
+- Geração das métricas no script `tooling/generate_api_coverage_report.py`, documentado em `outputs/qa/api_coverage_report.json`.
+- A totalidade dos endpoints esperada (229) foi superada (232 identificados) sem aumento correspondente nos testes unitários e e2e (smoke test falhou na contabilidade mas o gap já é conhecido).
+**Próximos passos:**
+- Dar andamento na task OQ-018 que já consta aberta em `melhorias-possiveis.md` para priorização de confecção de testes e-2-e para domínios centrais (Autonomy, Chat, Observability, Tasks).
+- Nenhuma duplicata em issues introduzida.
