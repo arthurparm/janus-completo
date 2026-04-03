@@ -254,3 +254,16 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-03)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados na janela / nenhum arquivo relevante alterado no período de 24h).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Além das vulnerabilidades previamente documentadas, o `npm audit` identificou uma nova vulnerabilidade associada à dependência `lodash-es` (Alta), elevando o total para 27 issues (19 altas e 8 moderadas).
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar a dependência manualmente para resolver ou mitigar a vulnerabilidade.

@@ -718,6 +718,17 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-040] Vulnerabilidade crítica na dependência Frontend `lodash-es`
+- Problema atual: Nova vulnerabilidade de segurança (Alta) reportada via `npm audit` em 2026-04-03, afetando a cadeia de dependência `lodash-es` no ambiente Frontend.
+- Solucao proposta: Executar `npm audit fix`, forçar a atualização manual no `package.json`, ou criar override para a versão mitigada da biblioteca identificada.
+- Impacto esperado: Proteção contra ataques direcionados a dependências vulneráveis e garantia de conformidade contínua nos pipelines de front.
+- Riscos: Quebra de compatibilidade em componentes que dependem de comportamentos específicos da versão desatualizada da biblioteca.
+- Dependencias: CI do Frontend.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

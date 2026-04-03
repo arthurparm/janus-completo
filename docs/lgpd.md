@@ -90,3 +90,12 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-03)
+
+### Lacunas e Impacto
+- Nenhuma nova lacuna LGPD ou fluxo de processamento de dados adicionais (exposição de PII, novos logs inseguros, processamentos não minimizados) foi introduzida no escopo atualizado, uma vez que não houve alteração relevante de arquivos desde a última auditoria (janela de 24h).
+- As falhas críticas de mitigação LGPD mapeadas anteriormente permanecem como débito técnico e requerem atenção.
+
+### Próximos Passos
+1. **Focar em Débitos Existentes:** Retomar a implementação de controles pendentes, como mascaramento em logs (`redact_pii_text_only`) e refatoração de estado global em ferramentas que tocam dados do usuário.
