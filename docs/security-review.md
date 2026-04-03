@@ -254,3 +254,29 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-03)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Crítica
+- **Descrição:** Algumas dependências do frontend seguem apresentando vulnerabilidades críticas/altas. Não foram identificadas novas dependências em falha que não estivessem mapeadas em semanas anteriores, mas os problemas com pacotes como `@hono/node-server`, `dompurify`, `express-rate-limit`, `hono`, `immutable` e `tar` persistem ativos nas varreduras.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para sanar o débito persistente.
+
+### 33. Vulnerabilidades contínuas no Backend (Bandit)
+- **Caminho:** Múltiplos arquivos (ex: `message_broker.py`, `python_sandbox.py`, `log_aware_reflector.py`, `agent_tools.py`, `faulty_tools.py`, `launcher_tools.py`, `dedupe_service.py`, `test_tool_evolution_chat.py`, `windows_agent.py`)
+- **Gravidade:** Média / Alta
+- **Descrição:** A varredura contínua apontou 28 potenciais problemas de segurança não corrigidos das auditorias anteriores, incluindo:
+  - `subprocess` call with `shell=True` (B602)
+  - `exec()` (B102) e `eval()` (B307)
+  - Abertura de URLs inseguras permitindo `file://` scheme (B310)
+  - Possível injeção de SQL via strings dinâmicas (B608)
+  - Chamadas HTTP via `requests` sem `timeout` (B113)
+  - Criação de arquivos temporários insegura (B108)
+  - Agente Windows exposto em 0.0.0.0 (B104)
+- **Ação Recomendada:** Proceder com as ações recomendadas mapeadas historicamente nos achados (ex: usar `subprocess.Popen` com arrays, `ast.literal_eval`, verificar URL scheme HTTP/HTTPS explicitamente, etc.).
