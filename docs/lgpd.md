@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-03)
+
+### Lacunas e Impacto
+- **Criação de Logs "Shadow IT" Locais (PII Leak Risk):** A implementação de um script de monitoramento para a rede virtual (`tooling/secure-tailscale-setup.ps1`) cria um arquivo de log local (`tailscale-security-monitor.log`) que arquiva explicitamente o hostname dos peers conectados sem ofuscação (ex: `` `Peer.HostName` ``). Isso pode expor identificadores dos usuários ou dados associativos na rede (SG-050).
+- As falhas críticas de mitigação LGPD mapeadas anteriormente (logs de áudio do daemon, retenção de sessões na ProductivityTools, metadados não ofuscados em envio de e-mails, e capturas de tela sem consentimento/redação via `windows_agent.py`) permanecem abertas.
+
+### Próximos Passos
+1. **Auditar "Shadow IT" Scripts:** Avaliar scripts auxiliares no repositório (como os `tooling/*.ps1`) e forçar que o log passe pela camada principal da aplicação ou inclua redação PII nativamente.
+2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.

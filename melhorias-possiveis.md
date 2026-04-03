@@ -865,3 +865,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-050] Shadow IT Logging e Vazamento de Peers em Infraestrutura (Tailscale)
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` cria `tailscale-security-monitor.log` localmente que retém os `Peer.HostName`, ignorando os fluxos centrais e filtros PII da aplicação, criando um sistema de Shadow IT log.
+- Solucao proposta: Reestruturar o script para aplicar ofuscação aos nomes de peers e, se possível, integrar esses alertas de monitoramento ao daemon central ou observability stack em vez de gravar arquivos desprotegidos.
+- Impacto esperado: Conformidade com LGPD e alinhamento dos logs aos requisitos de segurança globais.
+- Riscos: Dificuldade em alertar fora de banda caso a stack central esteja fora.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-019] Fragilidade e Falta de Timeout em Scripts de Teste e Qualidade
+- Problema atual: `tooling/test_debate_system.py` faz iterações de teste assíncronas (como graph iterators) sem `timeout` além de poluir o log através do uso extensivo de `print()`.
+- Solucao proposta: Adicionar `asyncio.wait_for` ou mecanismos explícitos de Timeout nas chamadas e substituir os prints pelo logger padrão do framework (`logging.getLogger()`).
+- Impacto esperado: Prevenção contra hanging tests no CI/CD e logs de qualidade mais limpos.
+- Riscos: Configurar timeouts muito curtos que causem falsos positivos em máquinas lentas.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-051] Abertura Insegura de URLs com arbitrary schemes em Ferramentas (Bandit B310)
+- Problema atual: A rotina de avaliação e QA `backend/scripts/eval_technical_qa.py` utiliza `urllib.request.urlopen` sem validar o protocolo.
+- Solucao proposta: Substituir por `requests` ou realizar o check se a URL inicia com http(s):// para evitar a leitura de arquivos locais (`file://`).
+- Impacto esperado: Reduzir falsos positivos do SAST e evitar SSRF em testes.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-052] Invocação de subprocessos perigosos não validados (Bandit B404)
+- Problema atual: `backend/windows_agent.py` usa repetidamente chamadas como `subprocess.check_call` e `asyncio.create_subprocess_exec`.
+- Solucao proposta: Certificar e documentar que os vetores injetáveis estão neutralizados, passando estritamente arrays de argumentos higienizados, limitando o shell fallback.
+- Impacto esperado: Elevação de segurança do agente local.
+- Riscos: Algumas chamadas dependentes do Windows Shell podem parar de funcionar se mal migradas.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

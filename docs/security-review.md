@@ -254,3 +254,26 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-03)
+
+### Checklist executado
+- [x] Revisão manual de código e logs de varredura SAST recém atualizados nos escopos `tooling/` e `backend/scripts/`.
+
+### 32. URL Opening Inseguro com Arbitrary Schemes em Ferramentas QA
+- **Caminho:** `backend/scripts/eval_technical_qa.py` (linha 50)
+- **Gravidade:** Média (Bandit B310)
+- **Descrição:** Uso de `urllib.request.urlopen` sem validação explícita de scheme. Pode permitir Server-Side Request Forgery ou leituras de arquivos locais (`file://`).
+- **Ação Recomendada:** Utilizar `requests` com timeout explícito ou validar os prefixos HTTP/HTTPS antes da chamada de `urlopen`.
+
+### 33. Invocação de Subprocesso Inseguro no Agente Local
+- **Caminho:** `backend/windows_agent.py` (linhas 42, 224, 260)
+- **Gravidade:** Baixa/Média (Bandit B404)
+- **Descrição:** Utilização de `subprocess.check_call` e `asyncio.create_subprocess_exec` podendo permitir injeção de comandos se os inputs ou o binário acionado (como o `pip` ou comandos Windows) não forem inteiramente limpos.
+- **Ação Recomendada:** Usar listas absolutas seguras de argumentos em comandos controlados.
+
+### 34. Arquivos de Log Shadow e Risco LGPD
+- **Caminho:** `tooling/secure-tailscale-setup.ps1`
+- **Gravidade:** Média
+- **Descrição:** O script grava `tailscale-security-monitor.log` localmente (arquivando Hostnames de peers) contornando a trilha de auditoria central e o mascaramento PII, agindo como um log de Shadow IT (SG-050).
+- **Ação Recomendada:** Refatorar scripts de apoio de infraestrutura para logar de forma padronizada ou mascarar dados PII gerados no ambiente.

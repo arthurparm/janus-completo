@@ -123,3 +123,28 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-03)
+
+### 12. Fragilidade em Testes e Tooling (Falta de timeouts)
+**Descrição:** Scripts de testes e tooling recentes não implementam controle de timeout explícito e realizam log em `print` stdout limpo.
+**Evidências:**
+- `tooling/test_debate_system.py`: Script faz iterações de teste assíncronas sem timeout, arriscando pendurar pipelines (hanging tests) (OQ-019). E também imprime estado e códigos abertamente usando `print()`.
+**Próximos passos:**
+- Adicionar blocos `asyncio.wait_for` em chamadas `astream()` do graph.
+- Documentar item OQ-019 no backlog.
+
+### 13. Componentes Monitoramento "Shadow IT" (Segurança/LGPD)
+**Descrição:** O sistema introduziu scripts de monitoramento locais que agem fora dos canais do Logger principal, criando arquivos contendo metadados sem ofuscação.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Cria um loop de monitoramento gravando localmente `tailscale-security-monitor.log` com detalhes de peers (`Peer.HostName`) e status.
+**Próximos passos:**
+- Adicionar item SG-050 no backlog e revisar LGPD de arquivos shadow locais.
+
+### 14. Vulnerabilidades de Código Fonte (Bandit)
+**Descrição:** Novos scripts ou arquivos recém-avaliados apresentam vulnerabilidades associadas a Subprocess e Abertura Insegura de URLs.
+**Evidências:**
+- `backend/windows_agent.py`: Uso de `subprocess.check_call` e `asyncio.create_subprocess_exec` não restritos (Bandit B404).
+- `backend/scripts/eval_technical_qa.py`: Uso de `urllib.request.urlopen` vulnerável a arbitrary schemes (Bandit B310).
+**Próximos passos:**
+- Adicionar itens associados ao backlog para restringir subprocessos e validar URIs (http/https).
