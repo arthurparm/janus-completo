@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-04)
+
+### Lacunas e Impacto
+- Nenhuma nova lacuna LGPD estrutural foi introduzida no código auditado desde a última revisão.
+- Contudo, as falhas críticas previamente levantadas não foram resolvidas (ex: ausência de consentimento e redação visual no `windows_agent.py`, ausência de minimização em arquivamento de áudios no `daemon.py`, metadados em logs de emails na `productivity_tools.py` e exposição de sessões globais na mesma ferramenta).
+
+### Próximos Passos
+1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
+2. **Priorizar Fechamento de Achados Abertos:** Reforçar a criticidade da mitigação dos endpoints não-autenticados que expõem capturas de tela e do tratamento apropriado dos logs do daemon e ferramentas de envio de e-mails para evitar punições severas no tocante a exposição de PII e telemetria sensível.

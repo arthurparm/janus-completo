@@ -718,6 +718,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-040] Vulnerabilidade em dependências frontend (lodash-es)
+- Problema atual: Pacote `lodash-es` introduziu vulnerabilidades de severidade alta mapeadas via `npm audit`.
+- Solucao proposta: Executar `npm audit fix` ou atualizar as dependências manualmente.
+- Impacto esperado: Resolução da vulnerabilidade removendo a brecha de segurança no ecossistema do frontend.
+- Riscos: Quebra de builds ou anomalias no client-side em caso de atualizações de versão major.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Criação Insegura de Arquivos Temporários em Testes (Bandit B108)
+- Problema atual: Uso provável de diretórios ou arquivos temporários não seguros mapeado pelo Bandit (B108) em `backend/tests/unit/core/test_logging_config_legacy_normalization.py`.
+- Solucao proposta: Substituir pelo uso de `tempfile.NamedTemporaryFile` ou semelhante seguro.
+- Impacto esperado: Fechamento de brecha tipo TOCTOU.
+- Riscos: Possíveis falhas isoladas de execução nos testes unitários afetados se o encerramento do recurso temporário for prematuro.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

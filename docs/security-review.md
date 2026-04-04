@@ -254,3 +254,22 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-04)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas dependências do frontend apresentaram vulnerabilidades, destacando a entrada do `lodash-es` com severidade alta, bem como a manutenção de riscos em pacotes centrais como `@angular/core`, `hono`, `express-rate-limit`, `path-to-regexp` e `picomatch`.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+### 33. Uso Inseguro de Arquivos Temporários
+- **Caminho:** `backend/tests/unit/core/test_logging_config_legacy_normalization.py` e `backend/app/core/memory/log_aware_reflector.py`
+- **Gravidade:** Média (Bandit B108)
+- **Descrição:** Uso provável de diretórios/arquivos temporários inseguros, facilitando ataques de TOCTOU (Time-of-check to time-of-use).
+- **Ação Recomendada:** Refatorar para utilizar instâncias seguras como `tempfile.NamedTemporaryFile`.
