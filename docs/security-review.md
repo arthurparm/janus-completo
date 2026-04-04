@@ -234,6 +234,21 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
   - `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify` seguem com avisos pré-existentes ou atualizados de Auth Bypass, ReDoS, Path Traversal e Prototype Pollution.
 - **Ação Recomendada:** Priorizar atualização crítica (`npm audit fix` ou via override manual no `package.json`) especificamente para corrigir as cadeias do Angular, `picomatch` e `path-to-regexp` para versões mitigadas.
 
+## Achados do dia (2026-04-04)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Foram identificadas 27 vulnerabilidades** (8 moderate, 19 high).
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidades Críticas em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentam vulnerabilidades (27 no total, sendo 19 de severidade alta). Os alertas incluem pacotes como `@angular/*`, `brace-expansion`, `dompurify`, `express-rate-limit`, `@hono/node-server`, entre outros.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+--
+
 ## Achados do dia (2026-04-01)
 
 ### Checklist executado

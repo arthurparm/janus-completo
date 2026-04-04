@@ -98,7 +98,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-012 | Proteger endpoint de reset de senha contra vazamento de token | P1 | S | feito (2026-02-20) |
 | SG-013 | Implementar politica de rotacao de logs e expurgo automatico de auditoria | P1 | S | ideia |
 | SG-018 | Remover senhas/credenciais default do config.py | P0 | S | ideia |
-| SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
+| SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | feito (2026-04-02) |
 | SG-020 | Corrigir vulnerabilidade de SQL Injection no dedupe_service.py (f-strings) | P0 | M | aberto |
 | SG-021 | Implementar autenticacao nos endpoints FastAPI expostos em windows_agent.py | P0 | S | aberto |
 | SG-022 | LGPD: Adicionar minimizacao e auditoria nas capturas de tela do windows_agent.py | P1 | M | aberto |
@@ -249,7 +249,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 - Prioridade: P1
 - Esforco: M
 - Dono: a definir
-- Status: ideia
+- Status: feito (2026-04-02 via commit 6ce9828)
 
 ### [SG-020] Potencial SQL Injection em queries dinâmicas (Bandit B608)
 - Problema atual: `backend/app/services/dedupe_service.py` constrói nomes de tabelas dinamicamente com f-strings nas queries SQL, apresentando um risco de injeção mapeado (Bandit B608).

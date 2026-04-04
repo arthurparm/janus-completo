@@ -81,6 +81,18 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos que manipulam entradas do usuário.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção aos desenvolvedores sobre a implementação dos tickets relacionados aos vazamentos biométricos e logs indiscriminados de e-mails mapeados anteriormente, já que o foco do período anterior foi restrito a prompts e sub-sistemas de interface (UI).
 
+## Achados do dia (2026-04-04)
+
+### Lacunas e Impacto
+- **Mitigação em Productivity Tools:** As vulnerabilidades relacionadas ao Estado Global Compartilhado em `_notes` e `_calendar_events` e os Metadados de Email Sensíveis não ofuscados em `backend/app/core/tools/productivity_tools.py` foram devidamente tratadas no commit `6ce9828` (JAN-66). Os metadados de email agora são ofuscados e o estado de calendário e notas está isolado por contexto de execução (ContextVar).
+- **Lacunas Remanescentes:** As falhas críticas de mitigação LGPD em `windows_agent.py` (capturas de tela indiscriminadas sem minimização e AuthZ) e `daemon.py` (retenção e logging em texto claro de comandos de voz com viés biométrico indireto) permanecem pendentes e continuam requerendo atenção da equipe.
+
+### Próximos Passos
+1. **Tratar Windows Agent:** Implementar camadas de ofuscação de PII antes de expor e armazenar dados de imagem no `/screenshot` do agente e adicionar camadas de autenticação.
+2. **Tratar Daemon:** Remover a redundância em logging texto-claro dos _transcripts_ de comandos de áudio provenientes dos usuários ou aplicar hash/redaction (`redact_pii_text_only`) universal no fluxo de log.
+
+--
+
 ## Achados do dia (2026-04-01)
 
 ### Lacunas e Impacto
