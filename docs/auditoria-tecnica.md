@@ -123,3 +123,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+
+## Achados do dia (2026-04-04)
+
+### 32. Shadow IT e Risco de LGPD em Monitoramento de Rede
+**Descrição:** O script `tooling/secure-tailscale-setup.ps1` atua como um componente de monitoramento Shadow IT que gera logs locais (`tailscale-security-monitor.log`) expondo nomes de host e dados de peers em texto claro. Isso contorna a redação padrão de PII e representa um risco de LGPD.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: `Write-SecurityLog "High latency detected: $($Peer.HostName) ($($Peer.LatencyMs) ms)" "WARNING"` e logs de autenticação armazenados em claro sem redação.
+**Próximos passos:**
+- Adicionar LGPD data minimization para ofuscar nomes de máquina ou IP em `tailscale-security-monitor.ps1`
+- Registrar SG-050 no backlog.

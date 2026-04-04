@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-03-31T21:14:08.944964",
+    "generated_at": "2026-04-04T21:30:41.756287",
     "source": "OpenAPI Specification",
     "version": "1.0"
   },
@@ -53,7 +53,7 @@
       "requires_auth": 0,
       "public": 232
     },
-    "extraction_timestamp": "2026-03-31T21:14:08.944801"
+    "extraction_timestamp": "2026-04-04T21:30:41.756111"
   },
   "endpoints": [
     {

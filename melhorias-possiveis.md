@@ -865,3 +865,13 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-050] Shadow IT e Risco de LGPD em Script de Setup (Tailscale)
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` gera e registra logs de rede em claro, incluindo nomes de hosts e dados de peers, burlando a centralização de logs e expondo PII, configurando risco de LGPD.
+- Solucao proposta: Aplicar ofuscação aos logs exportados no arquivo temporário, integrando com as políticas do _PII_PATTERNS ou removendo a coleta invasiva de peers se não estritamente necessária.
+- Impacto esperado: Conformidade com LGPD e alinhamento do componente com a arquitetura do backend.
+- Riscos: Redução da visibilidade detalhada nos logs puros.
+- Dependencias: Nenhuma.
+- Status: planejado
+- Priority: P1
+- Effort: S

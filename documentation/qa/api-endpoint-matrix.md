@@ -1,6 +1,6 @@
 # API Endpoint Matrix (Live)
 
-- Generated at: `2026-03-31T21:14:15.291829+00:00`
+- Generated at: `2026-04-04T21:30:50.020999+00:00`
 - Source: `openapi_live`
 - Regenerate command: `python tooling/generate_api_matrix.py`
 
