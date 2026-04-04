@@ -865,3 +865,80 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-017] Fragilidade de configuração in-memory
+- Problema atual: O endpoint em `backend/app/api/v1/endpoints/admin_config.py` realiza atualizações in-memory frágeis nas configurações de segurança e LLM.
+- Solucao proposta: Implementar persistência robusta atrelada a DB e eventos de notificação pub/sub para recarregar config através de instâncias de backend.
+- Impacto esperado: Previne divergência de estado de configuração entre containers.
+- Riscos: Redução de disponibilidade durante reloads de config.
+- Dependencias: Banco de dados relacional.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [OQ-019] Testes executando fora do CI padrão
+- Problema atual: Scripts de teste em `tooling/` (como `test_debate_system.py` e `seed-repro-scenarios.ps1`) executam ferramentas/testes de forma isolada, não integrados com as pipelines automatizadas do `qa/` no CI do pytest, e não definem timeouts seguros.
+- Solucao proposta: Refatorar scripts como testes pytest em `qa/` e integrar na pipeline nativa do CI garantindo uso de timeouts.
+- Impacto esperado: Menor fragmentação de testes e aumento na cobertura de integração.
+- Riscos: Timeout errors no CI.
+- Dependencias: Pipeline do Github Actions.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [OQ-020] Uso excessivo de blocos try-except silenciosos
+- Problema atual: O analisador Bandit (B110) detectou o uso indiscriminado de `try, except, pass` em diversos serviços centrais como `llm_repository.py`, `message_orchestration_service.py` e `auth.py`, mascarando falhas e corrompendo a lógica.
+- Solucao proposta: Substituir silenciamentos `pass` por logging apropriado, fallback determinístico, ou lançar a exceção.
+- Impacto esperado: Aumento brutal de previsibilidade, facilitando detecção de falhas de base em chamadas LLM e processamento de auth.
+- Riscos: Possível quebra inicial de funcionalidade em locais que confiavam na "passagem limpa" com falha.
+- Dependencias: Refatoramento de código core.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-040] Lógica perigosa de Purge no Admin Graph
+- Problema atual: Em `backend/app/api/v1/endpoints/admin_graph.py` foi introduzida recentemente uma lógica destrutiva e sem garantias para purgar nós de bancos de dados grafo (Neo4J).
+- Solucao proposta: Substituir comandos hard-delete puros por flags de `soft delete` ou criar camadas de rollback. Adicionar confirmação MFA ou forte.
+- Impacto esperado: Mitigar chance de perda de base de conhecimento inteira por acidente ou escalação de priv.
+- Riscos: O banco Neo4J pode ficar poluído com registros marcados em vez de purgados, demandando compactação assíncrona.
+- Dependencias: Neo4J DB.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-043] Auth Bypass em Agent/Assistant execution endpoints
+- Problema atual: Rotas de execução expostas recentemente como `/execute` em `agent.py` e `/assistant/execute` em `assistant.py` carecem de injeções de permissão estritas, possibilitando invocação desautenticada ou elevação de privilégio.
+- Solucao proposta: Forçar o middleware de autenticação (ex: `Depends(get_current_user)`) nestes endpoints e auditar token JWT de forma estrita.
+- Impacto esperado: Blindar as execuções de prompts ou agentes de acessos ilegítimos.
+- Riscos: Testes E2E sem injetar JWT correto falharão.
+- Dependencias: Sistema de Auth core.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-049] Senhas Hardcoded expostas em testes/verificações
+- Problema atual: O arquivo `tests/verify_secret_management.py` e scripts afins inserem senhas estáticas (Bandit B105) diretas na lógica em vez de usar env vars mockadas.
+- Solucao proposta: Utilizar variáveis de ambiente configuradas por framework (pytest monkeypatch) ou leitura via secrets_manager nativo.
+- Impacto esperado: Redução no número de falsos/verdadeiros positivos nas checagens SAST e mitigação de senhas expostas em código.
+- Riscos: Nenhum.
+- Dependencias: Pytest environment.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [SG-050] Shadow IT e log PII no tailscale monitor
+- Problema atual: O script recém criado `tooling/secure-tailscale-setup.ps1` atua como shadow monitor e lança ips e logs de auditoria em claro via local file (`tailscale-security-monitor.log`), evadindo os sistemas de redação PII nativos.
+- Solucao proposta: Reencaminhar logging das powershell automations ou scripts satélite para a via primária de telemetria (OpenTelemetry / Structlog) passando pelo scrubbing.
+- Impacto esperado: Consistência na governança de dados da LGPD sobre a infraestrutura tailscale que compõe o Janus.
+- Riscos: Over-engineering de logging script.
+- Dependencias: API externa de logging ou roteamento ao daemon Janus.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia

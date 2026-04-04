@@ -123,3 +123,41 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-02)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental e timeout).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+- [x] Avaliação contínua de memória e commits recentes.
+
+### 32. Testes operando fora da pipeline de CI padrão
+- **Caminho:** `tooling/test_debate_system.py`, `tooling/seed-repro-scenarios.ps1`
+- **Gravidade:** Baixa (OQ-019)
+- **Descrição:** Estes scripts de validação operam de forma autônoma (isolada) sem integração com o ambiente padronizado de QA automatizado (pytest) na pasta `qa/`. Carecem de assertions explícitos de CI e não possuem restrições via timeouts (Hanging risks).
+- **Ação Recomendada:** Migrar o script de debate para um teste padronizado em `qa/test_debate_system.py` com o framework nativo, assegurando monitoramento e timeout na bateria de regressão.
+
+### 33. Try-Excepts Silenciosos Mascarando Exceções (Bandit B110)
+- **Caminho:** `backend/app/repositories/llm_repository.py`, `backend/app/services/chat/message_orchestration_service.py`, `backend/app/api/v1/endpoints/auth.py`
+- **Gravidade:** Alta (OQ-020)
+- **Descrição:** Utilização frequente da sintaxe `try... except... pass`, engolindo erros sem emitir logs. Essa lógica frágil impede o tracking de bugs centrais no LLM e fluxos de mensagens, corrompendo o roteamento inteligente.
+- **Ação Recomendada:** Substituir `pass` por emissão de logs (`logger.error()`) em todos os blocos e/ou lançar exceções controladas para a camada HTTP.
+
+### 34. Exposição de API de Purge (Admin Graph) e Senhas Hardcoded
+- **Caminho:** `backend/app/api/v1/endpoints/admin_graph.py`, `backend/tests/verify_secret_management.py`
+- **Gravidade:** Alta (SG-040, SG-049)
+- **Descrição:** O endpoint inserido para limpar o banco grafo (neo4j purge) não conta com defesas estruturais e aplica soft/hard delete sem versionamento. Paralelamente, o arquivo de testes de secrest hardcoda uma string de senha real (B105), violando segurança.
+- **Ação Recomendada:** Validar restrição pesada no purge DB e mockar senhas dinamicamente (`monkeypatch`) nos testes.
+
+### 35. Configurações in-memory voláteis e Auth Bypass
+- **Caminho:** `backend/app/api/v1/endpoints/admin_config.py`, `backend/app/api/v1/endpoints/agent.py`, `backend/app/api/v1/endpoints/assistant.py`
+- **Gravidade:** Alta (OQ-017, SG-043)
+- **Descrição:** As novas rotas `/execute` não incluem validação da dependência Auth (`Depends`), permitindo invocações não autorizadas. Adicionalmente, as atualizações das configs do app estão restritas ao `in-memory` global state de um só container, ficando defasadas em deploys horizontais.
+- **Ação Recomendada:** Acoplar middlewares de verificação JWT e vincular atualizações do config.py via pub/sub com Redis.
+
+### 36. Shadow IT e Vazamento Local de PII no Tooling
+- **Caminho:** `tooling/secure-tailscale-setup.ps1`
+- **Gravidade:** Média (SG-050)
+- **Descrição:** O script age como monitor em background do Tailscale gerando o arquivo `tailscale-security-monitor.log` localmente. Ele contorna o logging padronizado do Janus, gravando hosts e IPs de peers em claro sem passar pelas rotinas de Data Minimization/PII Redaction.
+- **Ação Recomendada:** Modificar o output das powershell tools para não persistir em arquivos texto locais não-controlados, roteando os logs de infraestrutura via endpoint interno de observabilidade do Janus.
