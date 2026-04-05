@@ -254,3 +254,34 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-05)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` e `grep` (arquivos alterados / evidências levantadas).
+
+### 32. Ausência de Rate Limit nos Endpoints de Autenticação
+- **Caminho:** `backend/app/api/v1/endpoints/auth.py`
+- **Gravidade:** Alta
+- **Descrição:** Revalidação confirmou a ausência de mitigação de Rate Limit (DDoS/Brute-Force) nos fluxos críticos de autenticação como `login` e `refresh_token`, deixando o sistema suscetível a ataques automatizados.
+- **Ação Recomendada:** Implementar a notação `@limiter.limit("X/minute")` nos endpoints afetados.
+
+### 33. Impersonation via X-User-Id
+- **Caminho:** `backend/app/core/infrastructure/auth.py`
+- **Gravidade:** Crítica
+- **Descrição:** Revalidação confirmou o bypass ativo de autenticação permitindo a injeção do cabeçalho `X-User-Id` em conjunto com a configuração `AUTH_TRUST_X_USER_ID_HEADER=True`.
+- **Ação Recomendada:** Desativar a flag por padrão em `config.py` e validar origens de proxy.
+
+### 34. Command Injection (shell=True)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py:33`
+- **Gravidade:** Crítica (Bandit B602)
+- **Descrição:** Uso de `subprocess.Popen(..., shell=True)` sem sanitização adequada da variável `app_name`, permitindo Execução Arbitrária de Comandos (RCE).
+- **Ação Recomendada:** Remover `shell=True` e repassar argumentos como lista.
+
+### 35. Vulnerabilidades Críticas em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Novas detecções via `npm audit` para pacotes como `@angular/animations`, `@angular/compiler`, `@hono/node-server`, `express-rate-limit`, `lodash-es`, `tar`, entre outros, afetando segurança de componentes Web e rotas SSR/Node.
+- **Ação Recomendada:** Executar `npm audit fix` para atualizar a árvore de dependências afetada.

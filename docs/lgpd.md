@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-05)
+
+### Lacunas e Impacto
+- **Falta de ofuscação PII no Reflector:** O arquivo `backend/app/core/memory/log_aware_reflector.py` lê logs da aplicação (como `janus.log`) para extrair métricas e reports na evolução segura (SafeEvolutionManager), mas não aplica funções de redação como `redact_pii_text_only`, potencializando a duplicidade de dados sensíveis em texto claro (LGPD/PII Leakage).
+- **Falta de Rate Limiting:** A ausência de limits em rotas de autenticação (auth.py) e workspaces aumenta a superfície de exploração para vazamento de dados de contas de usuários, infringindo princípios de proteção de dados "by design".
+
+### Próximos Passos
+1. **Implementar Mascaramento Restante:** Injetar a camada de `redact_pii_text_only` nos leitores de logs do sub-módulo de reflexão (`log_aware_reflector.py`).
+2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores, incluindo endpoints abertos de workspace e capturas no windows_agent.

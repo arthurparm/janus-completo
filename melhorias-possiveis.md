@@ -865,3 +865,30 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Ausência de Redação PII no Leitor de Logs (Log Aware Reflector)
+- **Descricao:** A ausência de redação PII (ex: via `redact_pii_text_only`) durante a leitura de logs de aplicação (`janus.log`) na classe `log_aware_reflector.py` expõe informações sensíveis (LGPD) nos relatórios enviados à LLM ou salvos em disco.
+- **Solucao proposta:** Implementar a ofuscação de PII nos métodos de leitura de logs do reflector, impedindo vazamentos nos outputs da evolução segura.
+- **Esforco:** S
+- **Impacto:** Alta (Evita dupla exposição PII)
+- **Status:** aberto
+- **Prioridade:** P1
+- **Dependencias:** Função core `redact_pii_text_only`.
+
+### [SG-041] Vulnerabilidades Críticas Front-End (npm audit) e Rate Limiting Ausente
+- **Descricao:** Atualização do consolidado de riscos do `npm audit` revelou múltiplas novas falhas de dependências de alto impacto (`@angular/animations`, `@hono/node-server`, `express-rate-limit`, `lodash-es`), além das ausências ativas de rate limiter em rotas de auth confirmadas no backend.
+- **Solucao proposta:** Efetuar `npm audit fix` para mitigação de dependências. Garantir a adição do decorador `@limiter.limit` no endpoint `/login` e afins.
+- **Esforco:** M
+- **Impacto:** Alta
+- **Status:** aberto
+- **Prioridade:** P1
+- **Dependencias:** Nenhuma.
+
+### [SG-042] Segredos hardcoded no script de Verificação de Secrets (Bandit B105)
+- **Descricao:** O linter detectou senhas e chaves explícitas/testes no script de validação de secrets (`tests/verify_secret_management.py`), que podem representar vazamento se submetidos a artefatos não filtrados.
+- **Solucao proposta:** Remover tokens codificados de teste dos scripts automatizados, usando mock ou variáveis de ambiente de teste.
+- **Esforco:** S
+- **Impacto:** Média
+- **Status:** aberto
+- **Prioridade:** P2
+- **Dependencias:** Nenhuma.
