@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-05)
+
+### Lacunas e Impacto
+- Nenhuma nova lacuna LGPD ou fluxo de processamento de dados adicional (exposição de PII, novos logs inseguros, processamentos não minimizados) foi introduzida no escopo atualizado desde a última auditoria.
+- A vulnerabilidade de isolamento de estado nas `ProductivityTools` sofreu leve mitigação (`JAN-66 fix: harden productivity tool state isolation (#152)`), utilizando agora as chaves `user_id` em dicionários em vez de vazamento direto. No entanto, o armazenamento continua `in-memory` compartilhado, e metadados de e-mails (`user_id`, `to`, `subject`) seguem sendo loggados de maneira indiscriminada e não ofuscada na mesma ferramenta.
+
+### Próximos Passos
+1. **Refatorar Estado Global:** Terminar a refatoração das tools `_notes` e `_calendar_events` da memória estática para um datastore autenticado/isolado.
+2. **Mascaramento de Emails (Tools):** Executar mascaramento ativo (`redact_pii_text_only`) antes de lançar o log info de correios eletrônicos em `send_email`.

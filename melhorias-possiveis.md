@@ -718,6 +718,17 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-040] Vulnerabilidade lodash-es no frontend
+- Problema atual: A varredura de dependências (`npm audit`) acusou vulnerabilidades críticas no `lodash-es` (>=4.0.0 <=4.17.23) relativas a Injeção de Código via `_.template` e Prototype Pollution em `_.unset` e `_.omit`.
+- Solucao proposta: Atualizar a dependência para uma versão com mitigação (v4.17.24+ ou mais recente).
+- Impacto esperado: Proteção das aplicações front contra ataques de poluição de protótipos e RCE client-side.
+- Riscos: Mínimo se for feito patch update compatível, ou quebras se features depreciadas do lodash estiverem em uso.
+- Dependencias: Avaliação da stack do Angular e Vitest se utilizam a versão injetada do lodash-es.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
