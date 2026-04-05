@@ -718,6 +718,28 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-051] Fragile Fail-Closed Rate Limiting (Security/Availability)
+- Problema atual: O `backend/app/core/infrastructure/rate_limit_middleware.py` usa `fail_closed` por default caso o Redis fique indisponível, podendo derrubar globalmente a API (retornando HTTP 503).
+- Solucao proposta: Alternar o default para `fail_open` garantindo resiliência em caso de falha de infraestrutura de cache.
+- Impacto esperado: Maior disponibilidade do sistema.
+- Riscos: Overhead temporário no backend em caso de tráfego abusivo.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-052] Insecure X-User-Id Trust in Local Development
+- Problema atual: O `backend/app/core/infrastructure/auth.py` confia explicitamente no header `X-User-Id` em ambientes não produtivos devido a `AUTH_TRUST_X_USER_ID_HEADER=True`. Se uma instância exposta externamente (Tailscale) receber essa requisição, ocorre bypass total da identidade.
+- Solucao proposta: Desabilitar o trust by default ou atrelar sua aceitação apenas para origens locais restritas.
+- Impacto esperado: Prevenção contra spoofing de identidade via chamadas externas.
+- Riscos: Quebra de scripts de mock e testes de QA que usam a injeção via header sem token JWT.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

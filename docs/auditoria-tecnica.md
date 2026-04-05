@@ -114,6 +114,24 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Refatorar a query de banco em `dedupe_service.py` limitando os nomes de tabelas permitidas ou usando construtores ORM de forma explícita.
 - Documentar SG-020 e SG-025 no backlog.
 
+## Achados do dia (2026-04-05)
+
+### 12. Rate Limit Fail-Closed Fragility (Segurança/Disponibilidade)
+**Descrição:** O middleware de controle de taxa (`backend/app/core/infrastructure/rate_limit_middleware.py`) está configurado por default como fail-closed. Se a conexão com o Redis falhar, a aplicação inteira passará a retornar erro 503, em vez de falhar de forma gracefully (fail-open).
+**Evidências:**
+- `backend/app/core/infrastructure/rate_limit_middleware.py`: Comportamento estrito `self.fail_closed = bool(getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)) or env == "production"`. Se o redis falhar, e a flag for ativa, ou estiver em prod, ele bloqueia.
+**Próximos passos:**
+- Ajustar injeções de Rate Limiting para garantir fail-open resiliente no core, se não explicitamente configurado.
+- Adicionado issue SG-051 ao backlog ativo.
+
+### 13. Exposição via Header X-User-Id em Desenvolvimento (Segurança)
+**Descrição:** A configuração padrão da aplicação confia no cabeçalho `X-User-Id` em ambientes não produtivos. Isso facilita spoofing de identidade caso a aplicação esteja exposta externamente por VPNs (ex. Tailscale) durante testes locais.
+**Evidências:**
+- `backend/app/core/infrastructure/auth.py`: `trust_header = bool(getattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", True))` permite bypass sem JWT em `environment != production`.
+**Próximos passos:**
+- Adicionado issue SG-052 para revisão da política de trust header ou limitação a loopback apenas.
+
+
 ## Achados do dia (2026-03-31)
 
 ### 11. API Drift Detectado
