@@ -718,6 +718,17 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-040] Bypass de Autenticação em Novos Endpoints de Agente e Assistente
+- Problema atual: Os endpoints criados em `backend/app/api/v1/endpoints/agent.py` e `backend/app/api/v1/endpoints/assistant.py` não utilizam validação de AuthZ (`get_current_user`), permitindo acessos anônimos e arriscando bypass do sistema.
+- Solucao proposta: Injetar a injeção de dependência `Depends(get_current_user)` nas rotas vulneráveis.
+- Impacto esperado: Correção de vulnerabilidade grave de Auth e redução na superfície de exposição do agent.
+- Riscos: Quebra de fluxos de E2E mal configurados que não enviam headers.
+- Dependencias: CI de integração.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

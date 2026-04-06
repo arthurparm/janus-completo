@@ -27,6 +27,14 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
 
+## Achados do dia (2026-04-06)
+
+### Lacunas e Impacto
+- **Risco de Retenção e Coleta Indevida em Interações Desprotegidas:** A recente introdução de rotas não autenticadas `/execute` (`agent.py`) e `/assistant/execute` (`assistant.py`) potencializa o risco LGPD. Como a camada de AuthZ foi omitida, agentes externos ou sessões não validadas podem enviar volumes de requisições de prompt textuais (contendo possíveis PII como CPFs, nomes e e-mails de terceiros). Estes dados fluem diretamente pelas interfaces do agente e são invariavelmente escritos nos logs transacionais do sistema (`janus.log`), agravando a retenção de PII não higienizado originada de tráfego que sequer provém de um portador de token devidamente consentido/autenticado.
+
+### Próximos Passos
+- Implementar a diretiva `Depends(get_current_user)` urgentemente nas rotas envolvidas para reestabelecer o rastreio da origem do consentimento e aplicar redação estrita nas camadas de prompt de entrada antes do logging no `AgentService`.
+
 ## Achados do dia (2026-03-08)
 
 ### Lacunas e Impacto

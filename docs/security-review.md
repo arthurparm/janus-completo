@@ -234,6 +234,21 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
   - `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify` seguem com avisos pré-existentes ou atualizados de Auth Bypass, ReDoS, Path Traversal e Prototype Pollution.
 - **Ação Recomendada:** Priorizar atualização crítica (`npm audit fix` ou via override manual no `package.json`) especificamente para corrigir as cadeias do Angular, `picomatch` e `path-to-regexp` para versões mitigadas.
 
+## Achados do dia (2026-04-06)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma nova vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código - Busca de dependências sensíveis e bypasses.
+
+### Gaps + Severidade sugerida
+- **Bypass de Autenticação em Novos Endpoints (Crítica/Alta):** Os endpoints criados em `backend/app/api/v1/endpoints/agent.py` (`/execute`) e `backend/app/api/v1/endpoints/assistant.py` (`/assistant/execute`) não implementam `Depends(get_current_user)`, expondo funcionalidades sensíveis do core agent e assistant publicamente sem AuthZ/AuthN adequados.
+- **Dependências de Frontend Vulneráveis (Média/Alta):** A checagem com `npm audit` identificou vulnerabilidades pendentes em diversas dependências do frontend: `@schematics/angular`, `brace-expansion`, `dompurify`, `express-rate-limit`, `flatted`, `hono`, `immutable`, `lodash-es`, `path-to-regexp`, `picomatch`, `tar` e `vite`.
+
+### Ações recomendadas
+- Implementar as injeções de AuthZ (`Depends(get_current_user)`) nos endpoints críticos recém-adicionados.
+- Analisar impacto e programar atualizações de segurança para as libs do frontend (`npm audit fix`).
+
 ## Achados do dia (2026-04-01)
 
 ### Checklist executado
