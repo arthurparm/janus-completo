@@ -865,3 +865,58 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-051] Try/Except/Continue mascarando erros de processamento (Bandit B112)
+- Problema atual: Diversos arquivos, como `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py`, utilizam loops com `try/except/continue`, mascarando silenciosamente falhas na execução e dificultando a observabilidade de vazamentos de dados ou erros de IA.
+- Solucao proposta: Registrar as exceções com loggers seguros e tipados (sempre aplicando scrubbing de PII).
+- Impacto esperado: Melhora na capacidade de auditoria e resolução de bugs, mitigando riscos de LGPD.
+- Riscos: Aumento na volumetria de logs temporariamente.
+- Dependencias: Sistema de log e sanitização (redact_pii_text_only).
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-052] Possível vetor de Injeção SQL em serviço de deduplicação (Bandit B608)
+- Problema atual: O arquivo `backend/app/services/dedupe_service.py` utiliza queries baseadas em concatenação de string/f-strings dentro de construtos do SQLAlchemy, o que é inseguro contra injeção de SQL.
+- Solucao proposta: Refatorar o serviço para usar o ORM nativo do SQLAlchemy ou bind variables parametrizadas.
+- Impacto esperado: Eliminação do risco de SQL injection que permitiria exfiltração arbitrária do banco.
+- Riscos: Regressão no processo de deduplicação de tabelas caso as queries complexas sejam mal transcritas.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-053] Subprocesso sem checagem de entrada (Bandit B603)
+- Problema atual: Ferramentas de sistema como `backend/app/core/tools/command_sandbox.py`, `external_cli_tools.py` e `semantic_commit_service.py` iniciam subprocessos passando entradas diretas possivelmente não tratadas, possibilitando injeção.
+- Solucao proposta: Implementar uma camada rigorosa de sanitização de inputs (whitelisting/escapes) nestas ferramentas ou validar os argumentos sempre através da lista forte em vez do shell (onde possível).
+- Impacto esperado: Evita Remote Code Execution e privilege escalation local.
+- Riscos: Redução de funcionalidades ou falsos-positivos na validação de inputs do agente.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-054] Dependências com vulnerabilidades críticas e altas (Backend)
+- Problema atual: Pip-audit acusa CVEs em diversas bibliotecas em uso, como `aiohttp`, `black`, `cryptography`, `pyasn1`, `pygments`, `pypdf`, e `requests`.
+- Solucao proposta: Atualizar o versionamento dessas bibliotecas no arquivo de gerenciamento (poetry pyproject.toml / poetry.lock) e aplicar o bump para versões estáveis e seguras.
+- Impacto esperado: Eliminação de CVEs mapeadas e manutenção do perfil de compliance de segurança do projeto.
+- Riscos: Breaking changes no backend devido às novas versões, particularmente em ferramentas assíncronas (`aiohttp`).
+- Dependencias: Testes da pipeline nativa do Python.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-055] Exposição de Senhas Hardcoded (Bandit B105)
+- Problema atual: Senhas ou hashes expostos hardcoded detectados em `backend/app/core/infrastructure/rate_limit_middleware.py` e `backend/app/core/llm/sanitizer.py`.
+- Solucao proposta: Extrair qualquer credencial estática para o `config.py` e utilizar carregamento dinâmico através de variáveis de ambiente.
+- Impacto esperado: Menor risco de vazamento de credenciais na plataforma de versionamento.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

@@ -254,3 +254,31 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-06)
+
+**Checklist:**
+- [x] SAST scan via Bandit (Backend)
+- [x] Dependency audit via pip-audit (Backend)
+- [x] Dependency audit via npm audit (Frontend)
+
+**Gaps e Recomendações:**
+- **Bandit (SAST):**
+  - **B112:** Try, Except, Continue detectado mascarando possiveis erros (`app/api/v1/endpoints/rag.py` e outros). Recomendado substituir por logs adequados.
+  - **B310:** Abertura de URL insegura permitindo schemas variados (`app/core/infrastructure/message_broker.py`, `app/core/tools/agent_tools.py`). Recomendada validação rígida de protocolo.
+  - **B404/B603:** Implicações de segurança no módulo `subprocess` sem checagem de input (`app/core/tools/command_sandbox.py`, `app/core/tools/external_cli_tools.py`, `app/core/tools/launcher_tools.py`, `app/services/semantic_commit_service.py`).
+  - **B608:** Risco de Injeção SQL via construção de query baseada em string (`app/services/dedupe_service.py`). Usar parameterization/ORM nativo.
+  - **B105:** Possíveis senhas hardcoded (`app/core/infrastructure/rate_limit_middleware.py`, `app/core/llm/sanitizer.py`). Mover para variáveis de ambiente e gerenciador de segredos.
+  - **B108:** Criação insegura de arquivos temporários (`app/core/memory/log_aware_reflector.py`). Usar `tempfile` com flags seguras.
+  - **B311:** Uso de geradores pseudo-aleatórios padrão (`app/api/v1/endpoints/auto_analysis.py`, etc.). Usar módulo `secrets` para uso sensível.
+  - **B101:** Uso de `assert` que é removido em execução otimizada (`app/core/agents/meta_agent.py`, etc.). Substituir por exceções/validações formais.
+  - **B102:** Uso de `exec` (`app/core/infrastructure/python_sandbox.py`).
+  - **B307:** `ast.literal_eval` alertando sobre `eval` inseguro (`app/core/tools/faulty_tools.py`).
+  - **B405/B314:** Parser XML inseguro (`app/services/document_parser_service.py`). Utilizar `defusedxml`.
+  - **B602:** `subprocess` invocado com `shell=True` (`app/core/tools/launcher_tools.py`).
+
+- **Dependências Backend (pip-audit):**
+  - Atualizar vulnerabilidades em `aiohttp`, `black`, `cryptography`, `pyasn1`, `pygments`, `pypdf`, `requests`.
+
+- **Dependências Frontend (npm audit):**
+  - Atualizar e mitigar alertas em `@angular/*`, `@hono/node-server`, `brace-expansion`, `dompurify`, `express-rate-limit`, `flatted`, `hono`, `immutable`, `lodash-es`, `path-to-regexp`, `picomatch`, `tar`, `vite`.

@@ -90,3 +90,9 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-06)
+
+**Gaps e Recomendações (Foco PII/Privacidade):**
+- **Tratamento Silencioso de Erros (B112):** O uso de `Try, Except, Continue` em arquivos como `app/api/v1/endpoints/rag.py` cria um risco de LGPD. Erros não tratados ou mascarados em processos que manipulam dados (como RAG e serviços de aprendizado) podem causar perda de contexto sem a devida observabilidade, tornando impossível auditar vazamentos ou falhas de processamento de PII. *Recomendação*: Registrar as exceções com loggers seguros, garantindo que o _PII scrubbing_ ocorra antes de salvar o rastreio.
+- **Subprocessos sem Validação de Input (B603):** Ferramentas como `app/core/tools/command_sandbox.py` estão passando entradas para o shell de forma possivelmente insegura. Caso ocorram erros no comando executado, o buffer de saída (stderr/stdout) pode ser lançado nos logs gerais do sistema expondo dados inseridos pelo usuário. *Recomendação*: Garantir uma limpeza proativa (scrubbing) nos retornos/logs de erro antes deles irem para os arquivos da aplicação.
