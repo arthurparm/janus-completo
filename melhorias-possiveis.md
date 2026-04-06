@@ -865,3 +865,8 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+- [ ] **OQ-019:** Testes em scripts de tooling (e.g. `test_debate_system.py`) estão isolados da suíte de integração Pytest/Vitest, contornando execuções no CI de PR. (Priority P1, Effort M).
+- [ ] **SG-040:** Falha de Redação de PII no `log_aware_reflector.py`. Logs crús são carregados na memória do `SafeEvolutionManager` sem chamar `redact_pii_text_only`, replicando vazamento de dados. (Priority P0, Effort M).
+- [ ] **SG-049:** Uso de senhas hardcoded (ex: `SecretStr("password")`) no `backend/tests/verify_secret_management.py` ativando gatilhos do Bandit (B105). (Priority P2, Effort S).
+- [ ] **SG-050:** Script auxiliar do Tailscale (`secure-tailscale-setup.ps1`) salva logs locais de monitoramento (`tailscale-security-monitor.log`) que contêm PII/hostnames do ambiente emparelhado sem ofuscação. (Priority P1, Effort S).

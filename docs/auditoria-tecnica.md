@@ -123,3 +123,37 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-06)
+
+### 12. Testes Isolados Contornando CI (Qualidade)
+**Descrição:** Observou-se a adição de scripts de testes de fluxo e reprodução dentro do diretório de `tooling/` (e.g., `test_debate_system.py`, `seed-repro-scenarios.ps1`) que operam como execuções isoladas ou em containers separados, contornando a esteira padrão automatizada via Pytest e Vitest.
+**Evidências:**
+- `tooling/test_debate_system.py`: Script customizado com `asyncio.run(main())` para testar o sistema de debate sem as marcações de fixtures e injeções do Pytest da suíte `qa/`.
+- `tooling/seed-repro-scenarios.ps1`: Isolado de validação automatizada.
+**Próximos passos:**
+- Migrar esses scripts de demonstração para a suíte de integração no `qa/` garantindo que rodem com timeout, setup and teardown automáticos na CI de Pull Request.
+- Cadastrado como OQ-019 no backlog.
+
+### 13. Logging de Clear Text e LGPD em Monitoramento de Infra (Privacidade)
+**Descrição:** O script auxiliar criado para o setup seguro da VPN (Tailscale) está gerando logs analíticos estendidos e salvando em `tailscale-security-monitor.log`. Este arquivo local expõe hostnames, latências e identidades de instâncias emparelhadas (`Status.Peer`) sem ofuscação.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Escreve `Write-SecurityLog "High latency detected: $Peer.HostName..."` via Add-Content, burlando a central de Redação de PII implementada na aplicação.
+**Próximos passos:**
+- Integrar a injeção de scripts auxiliares ao padrão seguro de log do Daemon e ofuscar PIIs (SG-050).
+
+### 14. PII Data Leakage por Ingestão de Logs em Memória (Privacidade)
+**Descrição:** O serviço central de Autogestão e Reflexão (`LogAwareReflector`) busca por arquivos de log físicos (como `janus.log`) para prover contexto de erros. Porém, esse feed ingere blocos crus limitados à regex de parse, copiando PII vazado outrora para dentro do report interno da LLM sem passar pelo `redact_pii_text_only`.
+**Evidências:**
+- `backend/app/core/memory/log_aware_reflector.py`: O método `_analyze_log_file` lê `f.readlines()[-self.MAX_LOG_LINES :]` e guarda as variáveis em `LogError(message=...)` copiando conteúdo arbitrário da aplicação.
+**Próximos passos:**
+- Sanitizar `parsed["message"]` em tempo de ingestão para garantir a ausência de dados como IP, E-mails ou Senhas na memória da AI de reflexão.
+- Cadastrado SG-040 no backlog.
+
+### 15. Credenciais Hardcoded em Código de Teste (Segurança)
+**Descrição:** Arquivo de testes explícito está acionando alertas do SAST B105 (Hardcoded Passwords) por instanciar diretamente na construção do teste senhas inseguras como fixtures.
+**Evidências:**
+- `backend/tests/verify_secret_management.py`: Em `test_production_environment_logic()`, uso de `"NEO4J_PASSWORD": SecretStr("password")`.
+**Próximos passos:**
+- Modificar os mocks para derivar nomes simulados (`mock_secret_foo`) de forma que as flags estáticas de B105 não sejam disparadas no CI contínuo.
+- Registrado SG-049.
