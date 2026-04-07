@@ -254,3 +254,25 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-07)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada**
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend (Vite e Lodash)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram novas vulnerabilidades além do mapeamento histórico:
+  - `vite` (Alta/Crítica) - Vulnerável a Arbitrary File Read via Vite Dev Server WebSocket, Path Traversal em handling de `.map`, e bypass em `server.fs.deny`.
+  - `lodash-es` (Alta) - Vulnerabilidades de Prototype Pollution em `_.unset`/`_.omit` e Code Injection via `_.template`.
+  - `@hono/node-server`, `dompurify`, `@angular/*`, e `express-rate-limit` seguem com alertas.
+- **Ação Recomendada:** Executar `npm audit fix` para mitigar as cadeias vulneráveis de vite e lodash.
+
+### 33. SQL Injection em Dedupe Service e Subprocess Exec (Histórico)
+- **Caminho:** `backend/app/services/dedupe_service.py` (B608) e `backend/app/core/tools/launcher_tools.py` (B602)
+- **Gravidade:** Alta/Média
+- **Descrição:** Reincidência no log do Bandit evidenciando f-strings em constructs do SQLAlchemy e o uso de `shell=True` no subprocess para Windows.
+- **Ação Recomendada:** Modificar a injeção em banco limitando o escopo de varáveis dinâmicas para a tabela; alterar para format-list em subprocess sem shell=True.

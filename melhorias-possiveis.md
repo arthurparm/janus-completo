@@ -718,6 +718,17 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-041] Vulnerabilidades críticas em novas dependências do Vite e Lodash
+- Problema atual: O Frontend possui novas vulnerabilidades identificadas pelo `npm audit`, com destaque crítico para o Vite (Arbitrary File Read e bypass de FS deny) e Lodash (Prototype Pollution e Code Injection).
+- Solucao proposta: Executar `npm audit fix` ou atualizar as dependências diretamente no `package.json`.
+- Impacto esperado: Mitigação imediata de exploração via cadeias de dev server e utilities globais.
+- Riscos: Breaking changes secundárias no build do Vite.
+- Dependencias: npm ecosystem
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).
