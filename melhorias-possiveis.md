@@ -865,3 +865,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-041] Vulnerabilidades em dependências do backend (pip-audit)
+- Problema atual: A varredura via `pip-audit` detectou vulnerabilidades ativas em pacotes Python utilizados no backend, especificamente em `aiohttp` e `black`.
+- Solucao proposta: Atualizar as dependências listadas no `requirements.txt` e no ambiente (ou `pyproject.toml`) para as versões com patch fornecidas nos relatórios da varredura.
+- Impacto esperado: Resolução de falhas de segurança e injeções conhecidas nestes pacotes, reduzindo a superfície de ataque da API e ferramentas de backend.
+- Riscos: Incompatibilidade de código (breaking changes) decorrente de subidas de versão maiores das libs afetadas.
+- Dependencias: Pipeline de testes nativa de backend para validar as versões.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] Novas vulnerabilidades em dependências do frontend (npm audit)
+- Problema atual: A varredura de dependências identificou novas vulnerabilidades severas na cadeia de ferramentas do frontend, afetando as bibliotecas `@angular/compiler` (XSS via bindings) e `brace-expansion`.
+- Solucao proposta: Atualizar as dependências vulneráveis para as versões mais recentes ou utilizar as ferramentas de mitigação automáticas do npm (ex: `npm audit fix --force` ou substituições pontuais).
+- Impacto esperado: Proteção das camadas do frontend contra ataques cross-site e negação de serviço.
+- Riscos: Atualizações de versões major podem requerer adequações manuais (breaking changes).
+- Dependencias: Testes da pipeline de frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

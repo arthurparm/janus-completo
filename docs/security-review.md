@@ -254,3 +254,26 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-07)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidades em Dependências do Backend (pip-audit)
+- **Caminho:** `backend/requirements.txt` / `pip-audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** O `pip-audit` encontrou vulnerabilidades conhecidas nas dependências do backend, destacando:
+  - `aiohttp` (CVE-2026-25645, etc): injeções e falhas na requisição multipart e bypasses HTTP.
+  - `black` (CVE-2026-32274): criação insegura de caminhos de cache permitindo path traversal local.
+- **Ação Recomendada:** Atualizar as dependências afetadas para as versões corrigidas listadas pelo audit.
+
+### 33. Novas Vulnerabilidades em Dependências do Frontend (npm audit)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** Múltiplas vulnerabilidades severas adicionais (ou atualizações de prévias) na cadeia de build e libs do frontend, como:
+  - `@angular/compiler` (CVE via i18n attribute bindings XSS).
+  - `brace-expansion` e cadeias utilitárias com alertas ativos.
+- **Ação Recomendada:** Executar `npm audit fix` ou fazer override de dependência em `package.json` para corrigir a arvore do Angular e libs utilitárias.
