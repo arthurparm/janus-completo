@@ -865,3 +865,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Falta de Autenticação em endpoints core de Agent e Assistant
+- Problema atual: Os endpoints primários `/execute` em `agent.py` e `/assistant/execute` em `assistant.py` não aplicam validação de injeção `Depends(get_current_user)`.
+- Solucao proposta: Aplicar as dependências apropriadas em ambos os routers e tratar logs de PII que possam estar acoplados à falta de rastreio de identidade.
+- Impacto esperado: Proteção das rotas primárias de raciocínio contra uso indevido e mitigações em conformidade de PII (LGPD).
+- Riscos: Quebra de chamadas por agentes locais sem token.
+- Dependencias: Módulo de `auth.py`.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Lógica perigosa de Purge no banco do LangGraph sem RBAC
+- Problema atual: A rota de administração `/admin/graph/purge_incompatible` inclui lógica de deleção total destrutiva, passível de execução não logada.
+- Solucao proposta: Aplicar o controle estrito de RBAC para contas "admin" exclusivas e exigir confirmações secundárias ou rastreamento em DB.
+- Impacto esperado: Prevenção de perda de threads acidentais.
+- Riscos: Redução da conveniência de manutenções rápidas.
+- Dependencias: Implementação do módulo RBAC.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-017] Atualização frágil de configurações em memória (admin_config.py)
+- Problema atual: A funcionalidade Hot-Reload implementada por `/admin/config` injeta parâmetros dinâmicos de Redis mas não os persiste. Ao reiniciar a instância, configurações vitais seriam perdidas e o sistema reverteria de forma inconsistente.
+- Solucao proposta: Expandir a interface do `ConfigService` para fazer merge e flush no arquivo de `.env` da stack ou numa tabela explícita relacional de configurações ativas, atreladas a reboots no lifecycle (Startup Events).
+- Impacto esperado: Manutenção duradoura de Hot-Reload em deployments.
+- Riscos: Condições de corrida na escrita do arquivo persistente num ambiente docker escalado.
+- Dependencias: Banco de dados relacional (para lock via DB).
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

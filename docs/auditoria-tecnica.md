@@ -123,3 +123,30 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-07)
+
+### 12. Autenticação Bypass e Risco de PII
+**Descrição:** Os endpoints de execução primários para Agentes e Assistentes estão expostos sem a exigência de injeção de dependência de usuário atual (ex: `Depends(get_current_user)`). Isso propicia uso não autorizado, que, combinado à falta de minimização de log identificada em passos anteriores (SG-014), resulta na retenção implícita de PII transacional no `janus.log` por atores não autenticados.
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py`: A função `agent_execute` expõe o POST não autenticado.
+- `backend/app/api/v1/endpoints/assistant.py`: A função `assistant_execute` não possui bloqueios AuthZ.
+**Próximos passos:**
+- Atrelar dependências de validação JWT ou verificação de Header para blindar esses core endpoints.
+- Documentar falha como SG-040.
+
+### 13. Hot-Reload de Configuração Frágil
+**Descrição:** Atualizações dinâmicas na infraestrutura via `/admin/config` manipulam diretamente o dicionário de variáveis de ambiente do Redis e estado da aplicação sem persistir o estado modificado. Se a instância sofrer falha e reiniciar, perde as configurações impostas.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: "Atenção: As mudanças são aplicadas em memória e perdidas no restart".
+**Próximos passos:**
+- Criar mecanismo DB-backed ou file-backed para sincronização do `ConfigService`.
+- Documentar vulnerabilidade operacional OQ-017 no backlog.
+
+### 14. Deleção Destrutiva Sem RBAC
+**Descrição:** O endpoint de manutenção `/admin/graph/purge_incompatible` inclui lógica agressiva de deleção de threads antigas se a flag `force=true` for enviada. Apesar de útil, a falta de Role-Based Access Control restrito expõe a aplicação a um Denial of Service interno ou exclusão maliciosa de contexto.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py`: Comentário `# Warning: This is dangerous.` e função com `force` bool sem permissões administrativas isoladas.
+**Próximos passos:**
+- Atrelar políticas estritas (Role admin e 2FA/approval step) ao endpoint.
+- Registrar risco como SG-041.
