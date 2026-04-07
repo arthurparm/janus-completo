@@ -718,6 +718,39 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-040] Bypass de Autenticação e Vazamento LGPD em Endpoints de Agentes
+- Problema atual: Endpoints críticos (`/execute` em `agent.py` e `/assistant/execute` em `assistant.py`) não exigem autenticação (`Depends(verify_token)` ausente). Além disso, a falta de segurança abre vetor para vazamento de PII (logs transacionais ou via `log_aware_reflector.py` em memória sem redação).
+- Solucao proposta: Implementar checagem restrita de RBAC ou token e unificar limpeza de PII no momento de persistência ou coleta de métricas.
+- Impacto esperado: Bloqueio contra execuções anônimas ou abusos; conformidade LGPD.
+- Riscos: Quebra de fluxos assíncronos não autenticados intencionais de teste.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Exposição de Purga Destrutiva de Banco de Dados via API (admin_graph.py)
+- Problema atual: A rota `/admin/graph/purge_incompatible` permite que invasores não-autenticados que interajam com a API (dada falta de RBAC visível no excerto) executem lógica de drop de dados com flag `force`.
+- Solucao proposta: Adicionar middleware rigoroso de autorização (ex. Admin-only scope) ou delegar a purga de graph migration a scripts offline (CLI).
+- Impacto esperado: Menor risco de Ransomware/Data loss inadvertido.
+- Riscos: Menor agilidade operacional via UI.
+- Dependencias: Camada de autenticação admin centralizada.
+- Prioridade: P0
+- Esforco: L
+- Dono: a definir
+- Status: aberto
+
+### [OQ-017] Configuração Efêmera e Fragilidade em Hot-Reload
+- Problema atual: O endpoint de patching `/admin/config` (em `admin_config.py`) aplica mutações baseadas em inputs arbitrários (um dicionário vago de tipos), propiciando quebras estruturais, mas que somem em reinícios do pod.
+- Solucao proposta: Implementar persistência dos patches no DB ou Redis e reforçar a validação Pydantic dos updates submetidos para evitar type-casting errors silenciosos.
+- Impacto esperado: Estabilidade da infraestrutura entre deployments.
+- Riscos: Complicar o deployment inicial se o estado persistido corromper.
+- Dependencias: Conexão com Redis KV para estado.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

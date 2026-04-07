@@ -123,3 +123,32 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-07)
+
+### 12. Vulnerabilidade de AuthZ e Vazamento LGPD em Endpoints Críticos (Segurança)
+**Descrição:** Observou-se a falta de verificação de autenticação e escopo explícito em rotas de execução da API, além de risco de manipulação do cabeçalho `X-User-Id` em ambientes não restritos. As requisições que transitam nesses fluxos registram rastros inseguros em memória (sem *redaction*).
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py`: Rota `/execute` omite `Depends(verify_token)`.
+- `backend/app/api/v1/endpoints/assistant.py`: Rota `/assistant/execute` exposta publicamente e sem injeção de `get_current_user`.
+- `backend/app/core/infrastructure/auth.py`: Validação de tokens insegura por fallback que confia de modo frágil em `X-User-Id` se a flag default permitir.
+- `backend/app/core/memory/log_aware_reflector.py`: Consome `janus.log` com requisições abertas copiadas para a memória de reflexão, burlando *PII Scrubbing*.
+
+**Próximos passos:**
+- Implementar as restrições e registrar SG-040 no backlog técnico (`melhorias-possiveis.md`).
+
+### 13. Exposição de Rotas de Purga Destrutiva (Segurança/Fragilidade)
+**Descrição:** O endpoint de purga administrativa para migração de *Graph* permite que invasores tentem descartar *threads* em larga escala utilizando uma simples rota exposta da API.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py`: Rota `/admin/graph/purge_incompatible` é um endpoint não autenticado em que um ator externo pode invocar execução condicional de queries destrutivas injetando `force=True`.
+
+**Próximos passos:**
+- Adicionar issue SG-041 e restrigir o componente.
+
+### 14. Fragilidade de Estado: Configuração Hot-Reload Efêmera (Arquitetura)
+**Descrição:** Alterações de configuração via o painel de administração aplicam-se apenas à sessão em execução e somem silenciosamente no próximo *restart*.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: Endpoint `/admin/config` processa atualizações em memória e propaga-as via Redis Pub/Sub, mas carece de uma base ou KV-Store persistente.
+
+**Próximos passos:**
+- Adicionar a issue OQ-017 no backlog e persistir as alterações em DB.
