@@ -123,3 +123,17 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-08)
+
+### 12. Scripts de Teste e Monitoramento Isolados (Arquitetura e Segurança)
+**Descrição:** Observou-se a introdução de scripts de QA e monitoramento de infraestrutura rodando de forma isolada do pipeline principal de CI, apresentando riscos operacionais e de vazamento de dados. Além disso, faltam timeouts em fluxos assíncronos.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Funciona como "Shadow IT" e gera logs (`tailscale-security-monitor.log`) com PII em plain text.
+- `tooling/test_debate_system.py`: Usa chamadas diretas como `asyncio.run()` sem definir timeouts em endpoints ou pipelines, podendo travar CI, além de printar logs puros.
+- `tooling/seed-repro-scenarios.ps1`: Execução de cenários isolada.
+
+**Próximos passos:**
+- Mover os testes para a suíte do `pytest` dentro de `qa/` aplicando os devidos timeouts via decorators do pytest-asyncio.
+- Modificar scripts de powershell para usar o logger oficial aplicando redação de PII (PII Redaction).
+- Registrar OQ-019 e SG-050 no backlog técnico (`melhorias-possiveis.md`).

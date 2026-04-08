@@ -214,6 +214,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 ---
 
+| OQ-019 | Integrar scripts isolados de tooling/ aos pipelines do pytest em qa/ e adicionar timeouts assíncronos (e.g. test_debate_system) | P1 | M | aberto |
+| SG-050 | Adicionar redação de PII (PII Redaction) e centralizar logs no tooling/secure-tailscale-setup.ps1 para evitar vazamentos locais | P1 | M | aberto |
+
 ### [AI-011] Classificador de intencao e risco no chat para roteamento automatico de agentes e guardrails
 - Problema atual: o roteamento de mensagens do chat depende principalmente de regras e contexto bruto, gerando escolhas subotimas de agente em parte das conversas.
 - Solucao proposta: treinar e integrar um classificador leve (intencao + risco + urgencia) no fluxo de entrada do chat para decidir agente, politicas e nivel de verificacao antes da resposta.
@@ -865,3 +868,6 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-019] Integração de Testes de Tooling e Controle de Timeout
+### [SG-050] Vazamento de PII em Scripts PowerShell Locais (Shadow IT)
