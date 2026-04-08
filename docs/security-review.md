@@ -254,3 +254,18 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-08)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado com sucesso no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas). Nenhuma nova vulnerabilidade de severidade Média ou Alta encontrada nos commits recentes.
+
+### 32. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** O frontend segue apresentando múltiplas dependências com vulnerabilidades reportadas (28 dependências afetadas), principalmente originadas das bibliotecas principais. Estão incluídas:
+  - `@angular/*` packages, `hono`, `express-rate-limit`, `flatted`, `tar`, `immutable`, `path-to-regexp`, `picomatch`, e `vite` (Alta).
+  - `dompurify`, `brace-expansion`, e pacotes do construtor `@angular-devkit/*` (Moderada).
+- **Ação Recomendada:** Manter a recomendação de agendar janela para atualização das principais bibliotecas base (Angular 18+, Vite e Hono) por meio de `npm audit fix` ou overrides estratégicos visando sanar os avisos de Protótipo e DoS.
