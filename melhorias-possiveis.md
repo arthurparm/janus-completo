@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### SG-053: Atualizar dependências vulneráveis do Backend (pip-audit)
+- Responsavel: Arquitetura/DevSecOps
+- Problema atual: A varredura via `pip-audit` detectou CVEs críticos em pacotes fundamentais (`aiohttp`, `black`, `cryptography`, `pyasn1`, `pygments`, `pypdf`, `requests`).
+- Solucao proposta: Realizar atualização via poetry para as versões corrigidas listadas e re-gerar o lockfile (`poetry update`).
+- Impacto esperado: Mitigação contra falhas conhecidas nessas bibliotecas.
+- Riscos: Quebras de compatibilidade em major/minor updates. Requer suite de testes completa.
+- Dependencias: CI setup.
+- Prioridade: P1
+- Esforco: S
+- Status: planejado

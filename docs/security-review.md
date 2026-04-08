@@ -254,3 +254,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-08)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram vulnerabilidades (destaque para `hono` com Auth Bypass, injeção de cookie e leitura de diretório). A execução do `npm audit` confirmou riscos persistentes em pacotes como `lodash-es`, `vite`, `tar`, `picomatch`, e `path-to-regexp` com ataques como XSS, Prototype Pollution e DOS.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar dependências vulneráveis para sanear a build.
+
+### 33. Vulnerabilidades em Dependências do Backend
+- **Caminho:** `backend/requirements.txt` / `poetry.lock` / `pip-audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências no backend foram reportadas com CVEs ativos. Destacam-se `aiohttp` com múltiplas CVEs recentes (ex: CVE-2026-34515), `black`, `cryptography` (CVE-2026-34073, CVE-2026-39892), `pyasn1`, `pygments`, `pypdf`, e `requests` (CVE-2026-25645).
+- **Ação Recomendada:** Atualizar os pacotes no ambiente Python/Poetry de acordo com as versões patch mais recentes listadas.
+
+### 34. Persistência de Riscos de SAST (Bandit)
+- **Caminho:** Vários arquivos em `backend/app/` e `backend/scripts/`.
+- **Gravidade:** Média a Crítica
+- **Descrição:** Achados SAST reportados em semanas anteriores persistem, incluindo B602 (`shell=True` no launcher), B108 (insecure temp file), B104 (binding a `0.0.0.0` no agent), B608 (possível injeção SQL no dedupe_service), e B310 (URL schemes inseguros no message_broker).
+- **Ação Recomendada:** Proceder com a resolução dos apontamentos listados no backlog de melhorias.
