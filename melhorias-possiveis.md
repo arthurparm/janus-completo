@@ -865,3 +865,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Bypass de Autenticação e Risco de PII em Endpoints Core
+- Problema atual: Os endpoints `/execute` (`agent.py`) e `/assistant/execute` (`assistant.py`) não possuem dependências de autenticação (ex. `Depends(get_current_user)`). Há também risco de retenção de PII nos logs transacionais e falta de redação em `log_aware_reflector.py`.
+- Solucao proposta: Implementar RBAC ou validação de Token simples nas rotas core e estender padrões de PII Redaction (`_PII_PATTERNS`) para camadas críticas.
+- Impacto esperado: Mitigação de spoofing e conformidade com LGPD na não retenção de PII.
+- Riscos: Quebra de fluxos não-autenticados que dependam desses endpoints.
+- Dependencias: Camadas de autenticação.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] LGPD / 'Shadow IT': Logs Locais no Tailscale Sem Redação
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` atua como monitor de segurança gerando logs locais em `tailscale-security-monitor.log` que expõem hostnames e dados de peers em texto claro.
+- Solucao proposta: Implementar PII Redaction no script ou remover a coleta de dados não essenciais para a operação do Tailscale.
+- Impacto esperado: Conformidade com LGPD na minimização de dados.
+- Riscos: Redução na visibilidade de auditorias locais.
+- Dependencias: Scripts de tooling.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-019] Testes Python Isolados e Falta de Timeouts Assíncronos
+- Problema atual: Scripts de teste em `tooling/` (ex. `test_debate_system.py`) ignoram o pipeline do pytest (isolados da suite `qa/`) e falham ao prover timeouts explícitos em chamadas async, arriscando travamentos em CI. Além de vazar logs soltos em stdout.
+- Solucao proposta: Migrar os testes para dentro de `qa/` e incluir `asyncio.wait_for` em loops.
+- Impacto esperado: Estabilidade da CI, cobertura real nos relatórios e padronização.
+- Riscos: Modificação de scripts vitais de debug local.
+- Dependencias: Ferramentas de QA.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-020] Fragilidade Lógica: Try-Except Silenciosos (Bandit B110)
+- Problema atual: Blocos `try/except: pass` foram identificados via SAST B110 em múltiplos arquivos (ex. `auth.py`, `documents.py`, `productivity.py`), mascarando potenciais erros que prejudicam rastreabilidade.
+- Solucao proposta: Substituir blocos vazios por logs específicos (via structlog) ou levantar a exceção quando crítico, ou aplicar PII redaction antes de logar os falhos.
+- Impacto esperado: Aumento da observabilidade técnica e rastreamento de causa raiz.
+- Riscos: Aumento no volume de logs ou ruído indesejado.
+- Dependencias: Ajustes de logger estruturado.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

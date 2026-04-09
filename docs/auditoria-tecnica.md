@@ -5,6 +5,36 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 
 ## Achados do dia
 
+### 4. Bypasses de Autenticação em Endpoints Core
+**Descrição:** Os endpoints `/execute` e `/assistant/execute` expõem funcionalidades críticas sem exigir token de autenticação (falta de `Depends(get_current_user)`). Isso viabiliza spoofing de identidade ou manipulação indireta do sistema.
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py`: endpoint `agent_execute` não valida sessão.
+- `backend/app/api/v1/endpoints/assistant.py`: endpoint `assistant_execute` não valida sessão.
+**Próximos passos:**
+- Implementar validação via token nestes endpoints (SG-040).
+
+### 5. LGPD: Logs Locais no Tailscale sem Redação (Shadow IT)
+**Descrição:** O script de monitoramento do Tailscale escreve metadados detalhados localmente que incluem dados que podem ser sensíveis.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: escreve no arquivo `tailscale-security-monitor.log`.
+**Próximos passos:**
+- Remover coleta abusiva de PII nesses scripts, ou aplicar redação antes da escrita local (SG-050).
+
+### 6. Masking de Erros (Try/Except/Pass)
+**Descrição:** Vários blocos try-except na API foram mapeados pelo Bandit B110 como ignorando erros de forma silenciosa, o que pode causar inconsistência sistêmica e prejudicar a observabilidade.
+**Evidências:**
+- Identificado nas rotas `auth.py`, `documents.py` e `productivity.py` no pacote `backend/app/api/v1/endpoints/`.
+**Próximos passos:**
+- Realizar logging estruturado do erro ao invés do "pass" explícito (OQ-020).
+
+### 7. Dependências Frontend Vulneráveis
+**Descrição:** O `npm audit` relatou falhas de segurança no `hono`, `@angular/*` e outros.
+**Evidências:**
+- Relatório audit em `frontend/`.
+**Próximos passos:**
+- Manter monitoramento ou forçar `npm audit fix` para as bibliotecas vulneráveis.
+
+
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)
 **Descrição:** Observou-se que múltiplos serviços loggam inputs do usuário, artefatos completos ou prévias de mensagens, o que pode conter Informações Pessoalmente Identificáveis (PII) sensíveis. Não há redação ou ofuscação aplicada nesses fluxos antes da escrita do log.
 **Evidências:**
