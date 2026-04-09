@@ -254,3 +254,22 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-09)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Falhou** (limitação ambiental registrada).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram novas vulnerabilidades, como o `@angular-devkit` e `vite`, aumentando o risco em bibliotecas baseadas em node e ferramentas de build do frontend.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente para mitigar novas CVEs.
+
+### 33. Senhas Hardcoded e Tokens de Autenticação expostos
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py` (linha 18) e `backend/app/core/llm/sanitizer.py` (linha 41)
+- **Gravidade:** Alta (Bandit B105)
+- **Descrição:** Constantes que se assemelham a senhas hardcoded ou padrões regex perigosamente engessados estão expostos dentro do middleware e dos sanitizers. Outros vários scripts de testes possuem tokens reais expostos, o que aumenta a superfície para Supply Chain Attacks ou escalação de privilégios em instâncias comprometidas.
+- **Ação Recomendada:** Remover essas cadeias de caracteres do código-fonte e gerenciar configurações sensíveis exclusivamente por variáveis de ambiente (DotEnv/Secrets Manager). Utilizar constantes que não desencadeiem validações estáticas.

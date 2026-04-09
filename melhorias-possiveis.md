@@ -865,3 +865,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-041] Exposição de senhas hardcoded em código fonte (Bandit B105)
+- Problema atual: Padrões de senhas ou strings sensíveis codificados estaticamente (`B105`) no `rate_limit_middleware.py` (linha 18) e no `sanitizer.py` (linha 41), além de vários scripts de testes possuírem tokens reais (`sk-demo-secret-token-1234567890`, etc).
+- Solucao proposta: Remover as senhas hardcoded e forçar o gerenciamento completo dessas informações confidenciais pelo arquivo `.env` ou pelo `Secret Manager` configurado. Utilizar a modelagem com `SecretStr` em Pydantic ou contornar as validações com ofuscação simples nos scripts de mock/testes.
+- Impacto esperado: Prevenção de roubos de credencial por engenharia reversa no código fonte.
+- Riscos: Refatoração quebrar a compatibilidade dos mock-tests caso dependam estritamente da string testada.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] Mascaramento silencioso de erros prejudicando a LGPD (Bandit B112)
+- Problema atual: Presença da vulnerabilidade `Try, Except, Continue` (B112) em blocos críticos como `backend/app/api/v1/endpoints/rag.py` (linha 690) e `backend/app/core/autonomy/planner.py`. Essas exceções silenciadas dificultam a observabilidade e a descoberta de falhas com PIIs processados indevidamente pelos agentes ou endpoints falhos.
+- Solucao proposta: Adicionar loggers apropriados utilizando a função global customizada de `redact_pii_text_only` nos blocos de `except` para detalhar o erro antes do `continue` ser acionado.
+- Impacto esperado: Melhora considerável na rastreabilidade dos fluxos sem violar a exposição em texto claro dos dados pessoais do usuário.
+- Riscos: Crescimento exponencial em logs se a rotina entrar num loop de falha.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-043] Novas atualizações críticas de dependências frontend (@angular-devkit, vite)
+- Problema atual: Uma nova varredura pelo `npm audit` evidenciou vulnerabilidades associadas ao `vite`, `@angular-devkit/architect`, `@angular-devkit/core` e `@angular-devkit/schematics`, acrescentando vetores de ataque em pipelines de build.
+- Solucao proposta: Executar atualização via `npm audit fix` ou forçar resolução manual dessas bibliotecas de build no `package.json`.
+- Impacto esperado: Menor risco em ataques ao ambiente de build/testes da pipeline frontend.
+- Riscos: Quebra de pipelines se ocorrer imcompatibilidade de versão no ecossistema angular e Node.
+- Dependencias: CI do Frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

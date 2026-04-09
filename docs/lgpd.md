@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-09)
+
+### Lacunas e Impacto
+- **Mascaramento Silencioso de Falhas (Try-Except-Continue):** Endpoints críticos, como os de RAG (`backend/app/api/v1/endpoints/rag.py` linha 690) e o módulo de autonomia (`backend/app/core/autonomy/planner.py`), contêm blocos de tentativa/exceção que falham silenciosamente (Bandit B112). Isso mascara potenciais vazamentos ou falhas de processamento envolvendo dados de identificação pessoal (PII) durante sessões ativas do usuário e prejudica a observabilidade da plataforma. Sem registros adequados da falha, não é possível rastrear quando um fluxo contendo PII gerou erro ou em que estado os dados permaneceram.
+- As falhas antigas envolvendo o binding inseguro do `windows_agent.py` e exposição temporal do ProductivityTools não tiveram atualizações documentadas recentemente, permanecendo abertas e agravando os riscos de acesso global indevido e ausência de minimização na captação local de logs.
+
+### Próximos Passos
+1. **Refatoração de Blocos Try/Except Silenciosos:** Remover blocos de erro silenciosos (pass/continue) nos endpoints que manipulam interações complexas (ex: RAG). Integrar loggers configurados com ofuscamento obrigatório que informem explicitamente quando e porque ocorreram falhas na manipulação de queries e memórias de usuários, sem despejar PIIs reais na console.
+2. **Priorizar Fechamento de Achados Abertos:** Exigir atenção primária para o bind e isolamento do agente desktop (`windows_agent.py`) assim como a limitação das variáveis globais expostas no middleware e productivity_tools.
