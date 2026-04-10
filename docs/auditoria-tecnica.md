@@ -123,3 +123,49 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-10)
+
+### 12. Áreas Simplificáveis e Lógicas Frágeis (Ocultação de Erros)
+**Descrição:** O analisador estático Bandit reportou B110 (Try, Except, Pass detectado) em múltiplos arquivos do backend. A presença contínua de blocos try-except silenciosos masca erros operacionais ou falhas lógicas, dificultando a resolução de bugs e deixando o código mais frágil a edge-cases e cenários de concorrência.
+**Evidências:**
+- `backend/app/repositories/llm_repository.py`: Omissão silenciosa na importação e geração de spans via OpenTelemetry (`except Exception: pass`).
+- `backend/app/services/chat/message_orchestration_service.py`: Em dezenas de instâncias ao interagir com dependências como indexação e persistência de dados.
+- `backend/app/core/infrastructure/auth.py`: Falhas silenciosas ao processar headers JWT e headers arbitrários.
+
+**Próximos passos:**
+- Documentar no backlog técnico (OQ-020).
+- Substituir usos sistemáticos de `pass` por um fallback seguro, log apropriado (ex: `logger.warning()`) ou um Circuit Breaker/Fallback Response robusto que exponha a métrica de erro sem derrubar o request.
+
+### 13. Lógicas Frágeis de Teste Isolado e Ausência de Timeouts
+**Descrição:** Scripts de teste de ferramentas operacionais estão bypassando os pipelines padrão (como o pytest/CI), carecem de timeouts explícitos para suas funções e imprimem diretamente para stdout, arriscando instabilidades de rede prolongadas (hangs) e vazamentos de contexto PII caso rodados fora de um container.
+**Evidências:**
+- `tooling/test_debate_system.py`: Ausência de configuração de timeout assíncrono durante `debate_graph.astream()`, bem como prints diretamente para a saída padrão expondo lógica possivelmente sensível sem minimização via Logger.
+- `tooling/seed-repro-scenarios.ps1`: Isolado em shell ao invés de atrelado a suítes de QA formal que detectem regressões semânticas.
+
+**Próximos passos:**
+- Englobar invocações assíncronas isoladas sob `asyncio.wait_for`.
+- Converter a saída para logging estruturado via `structlog` com redação.
+- Incorporar (OQ-019 e SG-050) no tracking oficial.
+
+### 14. Riscos de LGPD e Privacidade em Observabilidade / Shadow IT
+**Descrição:** Observou-se a presença de monitoramentos paralelos gerando logs textuais em chiaro ('Shadow IT'), expondo identidades de usuários da rede, além da falha de redação PII na camada de autorreflexão evolutiva que expõe transações a vazamentos por conta de leituras brutas em in-memory.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Grava nomes de host, transações de autenticação e falhas em claro dentro de `tailscale-security-monitor.log` via um script Powershell não rastreado, com ausência completa das restrições _PII_PATTERNS.
+- `backend/app/core/memory/log_aware_reflector.py`: Ingere o `janus.log` diretamente para retroalimentar a evolução (`SafeEvolutionManager`) sem rodar o texto nos regexes de mascaramento (PII redaction), o que essencialmente realoca/repassa PII sem consentimento e sem expurgo garantido.
+
+**Próximos passos:**
+- Alterar script de Tailscale para usar output anônimo (hash no nome de host) e rodar via canais padronizados que possuam LGPD Scrubbing.
+- Implementar chamada obrigatória de `redact_pii_text_only` no ingestão de `log_aware_reflector.py`.
+- Mapear os riscos SG-050 e SG-040 para futura mitigação.
+
+### 15. Vulnerabilidades de Injeção de Comando e Contorno de Autenticação
+**Descrição:** Observou-se a presença contínua de vulnerabilidades de Code Injection em ambientes Windows (via `shell=True`) que podem resultar em RCE local, bem como falhas críticas de autenticação em `auth.py` ao depender do header não verificado `X-User-Id`. A vulnerabilidade no `X-User-Id` é agravada pela flag `AUTH_TRUST_X_USER_ID_HEADER=True` nativa no config padrão.
+**Evidências:**
+- `backend/app/core/tools/launcher_tools.py`: Subprocesses executados sob a diretiva insegura `shell=True` para comandos do SO.
+- `backend/app/core/infrastructure/auth.py`: Validação de identidade via header `X-User-Id` sem validação de gateway (Trust por padrão local).
+
+**Próximos passos:**
+- Adicionar validações de injeção aos argumentos ou remover a tag `shell=True`.
+- Forçar `AUTH_TRUST_X_USER_ID_HEADER=False` no default e garantir integridade via JWT (Issue já referenciada como SG-016).
+- Adicionar issue de RCE/Sandbox (SG-051) para os processos de ferramentas locais no backlog.

@@ -865,3 +865,58 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-020] Blocos Try-Except Silenciosos Mascarando Falhas Lógicas (Bandit B110)
+- Problema atual: Presença ampla de blocos de `try-except` capturando `Exception` com o comando `pass` no backend (ex: `llm_repository.py`, `message_orchestration_service.py`, `auth.py`). Essa prática torna a lógica frágil e omite falhas operacionais cruciais de ferramentas de monitoramento.
+- Solucao proposta: Substituir `pass` por fallback explícito, logging de aviso estruturado (`logger.warning`), ou levantar exceções específicas de domínio.
+- Impacto esperado: Maior confiabilidade e rastreabilidade em cenários de concorrência e falhas de infraestrutura.
+- Riscos: Overhead temporário de log.
+- Dependencias: Nenhuma.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-019] Scripts de Ferramentas Bypassando CI/CD e Timeouts
+- Problema atual: Scripts de validação e execução em `tooling/` (como `test_debate_system.py` e `seed-repro-scenarios.ps1`) executam em isolamento sem integração à suíte pytest (`qa/`). Além disso, não definem limites (timeouts) nas invocações assíncronas, resultando em execuções infinitas (hangs) no CI.
+- Solucao proposta: Migrar lógicas críticas para pytest, envelopar rotinas de grafos assíncronos em `asyncio.wait_for()`.
+- Impacto esperado: Pipelines de CI/CD mais determinísticos e cobertura de teste automatizada confiável.
+- Riscos: Refatorações das rotinas isoladas podem quebrar os scripts momentaneamente.
+- Dependencias: Pytest.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Fuga de Redação LGPD na Leitura In-Memory do Reflector
+- Problema atual: A classe `SafeEvolutionManager` (através do `log_aware_reflector.py`) lê os artefatos locais não filtrados de `janus.log` para a memória sem processar a string no método `redact_pii_text_only`. Isso espalha a PII da transação em relatórios internos sem consentimento.
+- Solucao proposta: Aplicar a função de ofuscação (redaction) de imediato após ler os chunks de logs e antes de integrá-los na evolução.
+- Impacto esperado: Estancar a disseminação de PIIs no framework de autonomia e conformidade completa com a minimização de LGPD.
+- Riscos: Pequeno impacto no tempo de parsing de reflexão.
+- Dependencias: Funções do `app.core.memory.security`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Shadow IT e PII Leak em Monitoramento do Tailscale
+- Problema atual: O script `secure-tailscale-setup.ps1` inicializa monitoramento paralelo (Shadow IT) que armazena textualmente hostnames, latências e logins no sistema (`tailscale-security-monitor.log`), fugindo aos filtros de segurança centrais e com prints via stdout.
+- Solucao proposta: Interromper a geração estática do log PowerShell e migrar os eventos de rede para o Message Broker ou usar anonimização explícita nos hosts logados.
+- Impacto esperado: Fechar vazamento local de identidades na rede e assegurar governança de logs.
+- Riscos: Redução de debugging manual imediato em setups Windows.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-051] RCE via OS Command Injection em launcher_tools (Bandit B602)
+- Problema atual: Uso de subprocessos em `backend/app/core/tools/launcher_tools.py` sendo construídos e invocados com `shell=True` recebendo input possivelmente atrelado ao agente. Isso possibilita que escapes maliciosos quebrem o sandbox em ambientes Windows.
+- Solucao proposta: Remover completamente o `shell=True` e repassar os parâmetros de execução nativamente via arrays/listas pro `subprocess.Popen` / `run`.
+- Impacto esperado: Prevenção de Remote Code Execution via evasão de tool de agentes.
+- Riscos: Comandos complexos do Windows embutidos que dependam de variáveis de ambiente do CMD podem parar de funcionar, precisando ser reescritos.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
