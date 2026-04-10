@@ -718,6 +718,50 @@ Copiar e preencher:
 - Dono: a definir
 - Status: aberto
 
+### [SG-040] Autenticação bypass em endpoints de execução de agentes (/execute, /assistant/execute) e Workspace
+- Problema atual: Os endpoints do workspace dependem puramente do injetor de serviços `Depends(get_collaboration_service)` sem invocar validações essenciais de token (`Depends(get_current_user)`). Além disso, endpoints `/execute` em arquivos como `agent.py` carecem de AuthZ.
+- Solucao proposta: Injetar autenticação no middleware da rota correspondente a workspaces e endpoints de execução isolada do agente.
+- Impacto esperado: Prevenção contra spoofing, RCE ou desestabilização do ambiente global via chamadas anônimas.
+- Riscos: Adicionar atrito em testes de integração existentes que não mockam autenticação.
+- Dependencias: Validação transversal de auth.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Senhas hardcoded em scripts e dependências estruturais
+- Problema atual: Bandit reporta Hardcoded passwords (B105) em arquivos como `tests/verify_secret_management.py`, `app/core/infrastructure/rate_limit_middleware.py`, e `app/core/llm/sanitizer.py`. Adicionalmente, `backend/app/config.py` expõe falhas com variáveis default de senha ativadas (ex: `NEO4J_PASSWORD`).
+- Solucao proposta: Usar carregamento dinâmico sem fallbacks críticos para credenciais (strict `.env` requirement), e mover referências de credenciais de middlewares para configs encriptadas.
+- Impacto esperado: Aumento de proteção e conformidade a nível zero-trust.
+- Riscos: Interrupção nos processos de spin-up da infra sem `.env` preenchido.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] Risco de Observabilidade e LGPD via B112 (Try, Except, Continue)
+- Problema atual: Arquivos de infraestrutura e orquestração de endpoints como `app/api/v1/endpoints/rag.py` usam rotinas de tratamento de exceção puramente omissas (`Try, Except, Continue` / `Pass`), limitando a capacidade do sistema em auditar fluxos de dados sensíveis ou interceptar vazamento estrutural durante crashes.
+- Solucao proposta: Adicionar rastreamento explícito com Redação no except, ex: `logger.error("Falha", exc_info=redact(e))`.
+- Impacto esperado: Menor risco de ofuscação de erros graves ou exfiltração não mapeada de dados PII.
+- Riscos: Redução de robustez do handler falho (pode quebrar se o logger falhar).
+- Dependencias: structlog formatters configurados com PII patterns.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-043] Vulnerabilidades de alto impacto em NPM Packages (Frontend)
+- Problema atual: O NPM Audit detectou dezenas de novas vulnerabilidades nas dependências raiz e do build environment do frontend (`hono`, `tar`, `vite`, pacotes `@angular/*`, e `lodash-es`), permitindo riscos potenciais como SSE Control Field Injection e injeções regulares na cadeia de dev.
+- Solucao proposta: Executar override ativo via npm/package.json ou migrar versões das bibliotecas.
+- Impacto esperado: Remediação de alertas ativos no audit.
+- Riscos: Quebra de builds se a versão for incompatível.
+- Dependencias: pipeline de frontend.
+- Prioridade: P1
+- Esforco: L
+- Dono: a definir
+- Status: aberto
+
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
 - Solucao proposta: Utilizar o módulo `tempfile` da biblioteca padrão com flags apropriadas (ou delegar ao `filesystem_manager`).

@@ -83,6 +83,18 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 
 ## Achados do dia (2026-04-01)
 
+## Achados do dia (2026-04-10)
+
+### Vazamento de PII via Productivity Tools
+- **Descrição**: Em `backend/app/core/tools/productivity_tools.py`, a função `send_email` continua emitindo logs através do `structlog` que contêm metadados explícitos de e-mails (`user_id`, `to`, `subject`). Esses logs vão diretamente para `janus.log` ou saídas do container sem estarem mascarados.
+- **Impacto LGPD**: Exposição de identificadores de correio eletrônico que podem ser caracterizados como Dados Pessoais de terceiros/remetentes (Art. 5º da LGPD).
+- **Ação Imediata**: Aplicar um wrapper de sanitização (por exemplo `redact_pii_text_only`) antes da emissão da chamada `logger.info("[EMAIL]", ...)`.
+
+### Falta de Redação PII Global (Structlog)
+- **Descrição**: O `logging_config.py` não integra corretamente a camada de ofuscação/redação do pacote de segurança `memory/security.py`, permitindo que outros rastros sensíveis (ex: logs de erro do RAG silenciosos, inputs em exceções) vazem em clear text. Em arquivos como `backend/app/core/memory/log_aware_reflector.py`, o carregamento e reflexão de logs ocorre inteiramente na RAM, mascarando apenas parcialmente, o que pode exportar os PII para sessões externas.
+- **Impacto LGPD**: O risco de proliferação de PII aumenta, especialmente com as abstrações não tratadas nos workers/agentes.
+- **Ação Imediata**: Refatorar os formatters de `structlog` no `setup_logging` para invocar os processadores de redação em cada evento de log gravado, se o log não for explicitamente categorizado como publicamente seguro.
+
 ### Lacunas e Impacto
 - Nenhuma nova lacuna LGPD ou fluxo de processamento de dados adicional (exposição de PII, novos logs inseguros, processamentos não minimizados) foi introduzida no escopo atualizado desde a última auditoria.
 - As falhas críticas de mitigação LGPD mapeadas anteriormente (logs de áudio do daemon, retenção de sessões na ProductivityTools, metadados não ofuscados em envio de e-mails, e capturas de tela sem consentimento/redação via `windows_agent.py`) permanecem abertas.

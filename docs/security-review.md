@@ -236,6 +236,45 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 
 ## Achados do dia (2026-04-01)
 
+## Achados do dia (2026-04-10)
+
+### 1. Ausência de Rate-Limiter em Endpoints Críticos (DDoS/Brute-Force)
+**Descrição:** Observou-se a ausência de mecanismos de Rate Limiting e middlewares para endpoints fundamentais (como na autenticação `backend/app/api/v1/endpoints/auth.py`). A arquitetura global não emprega `RateLimiter` para impedir ataques de força bruta, expondo o sistema à DoS e Account Takeover.
+**Evidências:**
+- Nenhuma anotação de `@limiter.limit` foi encontrada em `backend/app/api/v1/endpoints/auth.py` ou endpoints similares.
+- Memory: Falta de Rate limit apontada.
+
+**Próximos passos:**
+- Implementar Redis/RateLimiting middlewares no backend/FastAPI, com limite de requisições adequado para rotas `/login`, `/register` e equivalentes (SG-040 não diretamente, mas ligado a prioridade).
+- Registrar mitigação e atualizar endpoints em futuras PRs de arquitetura de rede.
+
+### 2. Bypass de AuthZ em Workspaces e Agent OS
+**Descrição:** Os endpoints do workspace (como `add_artifact` em `backend/app/api/v1/endpoints/workspace.py`) estão injetando serviços base do FastAPI sem validação de tokens (`Depends(get_current_user)` ou RBAC). Adicionalmente, `windows_agent.py` sobe na porta 5001 binding a `0.0.0.0` sem validação de chaves.
+**Evidências:**
+- `workspace.py` não valida AuthZ.
+- `windows_agent.py` usa `host="0.0.0.0"` e não protege rotas que capturam logs do sistema.
+
+**Próximos passos:**
+- Reforçar policies nas rotas do workspace.
+- Fechar porta 5001 ou adicionar middleware de autenticação (SG-032).
+
+### 3. Segredos Hardcoded (Fallback Configuration)
+**Descrição:** O arquivo `backend/app/config.py` expõe falhas com default variables como senhas do Postgres, Neo4j e RabbitMQ sem assert/strict enforcement.
+**Evidências:**
+- `NEO4J_PASSWORD: SecretStr = SecretStr("change_me_neo4j_password")` etc em `backend/app/config.py`.
+
+**Próximos passos:**
+- Bloquear execução se senhas hardcoded estiverem no ambiente em modo produção.
+- Adicionado à fila de SG/LGPD backlog.
+
+### 4. Vulnerabilidades de Frontend (npm audit)
+**Descrição:** O NPM Audit detectou 20 vulnerabilidades High e 8 Moderate em dependências do Frontend.
+**Evidências:**
+- Problemas em pacotes como `@angular/compiler`, `@angular/core`, `@hono/node-server`, `vite`, `tar`, `lodash-es`, etc.
+**Próximos passos:**
+- Atualizar dependências em `frontend/package.json`.
+- Integrado na auditoria diária (SG-043 no backlog).
+
 ### Checklist executado
 - [x] npm audit (frontend)
 - [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
