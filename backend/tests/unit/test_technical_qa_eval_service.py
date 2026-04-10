@@ -19,7 +19,7 @@ def _dataset_payload() -> dict:
             {
                 "id": "T1",
                 "category": "api",
-                "question": "Where is query code endpoint?",
+                "question": "Where is query code endpoint",
                 "expected_keywords": ["endpoint", "query"],
                 "expected_citations": [
                     {"file_path_contains": "backend/app/api/v1/endpoints/knowledge.py", "line_min": 1}
@@ -28,7 +28,7 @@ def _dataset_payload() -> dict:
             {
                 "id": "T2",
                 "category": "service",
-                "question": "Where is evaluator service?",
+                "question": "Where is evaluator service",
                 "expected_keywords": ["evaluator", "service"],
                 "expected_citations": [
                     {

@@ -26,7 +26,7 @@ class TestPromptComposer:
                 Message(role="user", text="Hello"),
                 Message(role="assistant", text="Hi there!"),
             ],
-            current_message="What can you do?",
+            current_message="What can you do",
         )
 
     @pytest.mark.asyncio

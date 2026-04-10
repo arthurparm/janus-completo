@@ -31,7 +31,6 @@ async def test_active_memory_prioritizes_secret_capture(monkeypatch):
 
     result = await svc.maybe_capture_from_message(
         message="Minha senha do Wi-Fi é Abc12345",
-        user_id="u-1",
         conversation_id="c-1",
     )
 

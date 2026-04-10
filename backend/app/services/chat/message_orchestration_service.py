@@ -12,16 +12,14 @@ from app.core.agents.utils import parse_json_lenient
 from app.core.exceptions.chat_exceptions import (
     ChatServiceError,
     ConversationNotFoundError,
-    MessageTooLargeError,
-)
+    MessageTooLargeError)
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
 from app.core.monitoring.chat_metrics import (
     CHAT_LATENCY_SECONDS,
     CHAT_MESSAGES_TOTAL,
     CHAT_SPEND_USD_TOTAL,
-    CHAT_TOKENS_TOTAL,
-)
+    CHAT_TOKENS_TOTAL)
 from app.core.routing import RouteIntent, get_knowledge_routing_policy
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
@@ -29,8 +27,7 @@ from app.repositories.document_manifest_repository import DocumentManifestReposi
 from app.services.chat.chat_citation_service import (
     build_citation_status,
     collect_document_citations,
-    references_uploaded_material,
-)
+    references_uploaded_material)
 from app.services.knowledge_space_service import KnowledgeSpaceService
 from app.services.chat.message_helpers import (
     attach_understanding,
@@ -38,8 +35,7 @@ from app.services.chat.message_helpers import (
     estimate_tokens,
     format_tool_creation_response,
     is_explicit_tool_creation,
-    split_ui,
-)
+    split_ui)
 from app.services.chat.conversation_service import ConversationService
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
@@ -66,8 +62,7 @@ class MessageOrchestrationService:
         agent_loop: ChatAgentLoop,
         conversation_service: ConversationService,
         outbox_service: OutboxService | None = None,
-        manifest_repo: DocumentManifestRepository | None = None,
-    ):
+        manifest_repo: DocumentManifestRepository | None = None):
         self._repo = repo
         self._llm = llm_service
         self._tools = tool_service
@@ -84,8 +79,7 @@ class MessageOrchestrationService:
         *,
         message: str,
         role: ModelRole,
-        understanding: dict[str, Any] | None,
-    ) -> bool:
+        understanding: dict[str, Any] | None) -> bool:
         if role != ModelRole.ORCHESTRATOR:
             return False
         if not understanding or understanding.get("intent") not in {"general", "question"}:
@@ -99,10 +93,8 @@ class MessageOrchestrationService:
         text: str,
         conversation_id: str,
         role: str,
-        user_id: str | None,
         project_id: str | None,
-        identity_source: str,
-    ) -> None:
+        identity_source: str) -> None:
         if not self._rag_service or not text:
             return
 
@@ -110,13 +102,11 @@ class MessageOrchestrationService:
             try:
                 await self._rag_service.maybe_index_message(
                     text=text,
-                    user_id=user_id,
                     conversation_id=conversation_id,
                     role=role,
                     caller_endpoint="/api/v1/chat/message",
                     transport="rest",
-                    identity_source=identity_source,
-                )
+                    identity_source=identity_source)
             except Exception as e:
                 logger.warning(
                     "rag_index_message_failed",
@@ -124,8 +114,7 @@ class MessageOrchestrationService:
                     project_id=project_id,
                     role=role,
                     error_type=type(e).__name__,
-                    error=str(e),
-                )
+                    error=str(e))
 
         asyncio.create_task(_index())
 
@@ -133,27 +122,19 @@ class MessageOrchestrationService:
         self,
         *,
         message: str,
-        user_id: str | None,
-        conversation_id: str,
-    ) -> None:
-        if not user_id or not str(message or "").strip():
-            return
+        conversation_id: str) -> None:
 
         async def _capture() -> None:
             try:
                 await active_memory_service.maybe_capture_from_message(
                     message=message,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                )
+                    conversation_id=conversation_id)
             except Exception as exc:
                 logger.warning(
                     "active_memory_capture_failed",
                     conversation_id=conversation_id,
-                    user_id=user_id,
                     error_type=type(exc).__name__,
-                    error=str(exc),
-                )
+                    error=str(exc))
 
         asyncio.create_task(_capture())
 
@@ -167,25 +148,17 @@ class MessageOrchestrationService:
     def _list_document_manifests(
         self,
         *,
-        user_id: str | None,
-        conversation_id: str,
-    ) -> list[dict[str, Any]]:
-        if not user_id:
-            return []
+        conversation_id: str) -> list[dict[str, Any]]:
         try:
             return self._manifest_repo.list_manifests(
-                user_id=str(user_id),
                 conversation_id=str(conversation_id),
-                limit=50,
-            )
+                limit=50)
         except Exception as exc:
             logger.warning(
                 "document_manifest_lookup_failed",
                 conversation_id=conversation_id,
-                user_id=user_id,
                 error_type=type(exc).__name__,
-                error=str(exc),
-            )
+                error=str(exc))
             return []
 
     @staticmethod
@@ -204,8 +177,7 @@ class MessageOrchestrationService:
         self,
         *,
         manifests: list[dict[str, Any]],
-        requested_knowledge_space_id: str | None,
-    ) -> str | None:
+        requested_knowledge_space_id: str | None) -> str | None:
         explicit = str(requested_knowledge_space_id or "").strip()
         if explicit:
             return explicit
@@ -234,8 +206,7 @@ class MessageOrchestrationService:
                 [
                     str(row.get("file_name") or "").strip(),
                     str(row.get("semantic_summary") or "").strip(),
-                ],
-            )
+                ])
         ).lower()
         primary_patterns = (
             r"\bcore\b",
@@ -249,8 +220,7 @@ class MessageOrchestrationService:
             r"\bprimary source\b",
             r"\bhandbook\b",
             r"\bmanual\b",
-            r"\blivro base\b",
-        )
+            r"\blivro base\b")
         secondary_patterns = (
             r"\bsupplement\b",
             r"\bsuplement",
@@ -267,8 +237,7 @@ class MessageOrchestrationService:
             r"\badvanced\b",
             r"\bavancad",
             r"\bextension\b",
-            r"\bexpansion\b",
-        )
+            r"\bexpansion\b")
         if any(re.search(pattern, title) for pattern in primary_patterns):
             return "base"
         if any(re.search(pattern, title) for pattern in secondary_patterns):
@@ -294,8 +263,7 @@ class MessageOrchestrationService:
         *,
         message: str,
         manifests: list[dict[str, Any]],
-        understanding: dict[str, Any] | None,
-    ) -> bool:
+        understanding: dict[str, Any] | None) -> bool:
         lowered = str(message or "").lower()
         secondary_patterns = (
             r"\bsuplement",
@@ -311,8 +279,7 @@ class MessageOrchestrationService:
             r"\bopcional\b",
             r"\badvanced\b",
             r"\bavancad",
-            r"\bexpansion\b",
-        )
+            r"\bexpansion\b")
         if any(re.search(pattern, lowered) for pattern in secondary_patterns):
             return True
         for row in manifests:
@@ -328,8 +295,7 @@ class MessageOrchestrationService:
     def _message_prefers_primary_only(
         *,
         message: str,
-        understanding: dict[str, Any] | None,
-    ) -> bool:
+        understanding: dict[str, Any] | None) -> bool:
         intent = str((understanding or {}).get("intent") or "").strip().lower()
         if intent in {"comparison", "comparative"}:
             return False
@@ -355,8 +321,7 @@ class MessageOrchestrationService:
             r"\bworkflow\b",
             r"\bsequ[eê]ncia\b",
             r"\bprocesso\b",
-            r"\bdo que precisa\b",
-        )
+            r"\bdo que precisa\b")
         return any(re.search(pattern, lowered) for pattern in operational_patterns)
 
     @classmethod
@@ -366,8 +331,7 @@ class MessageOrchestrationService:
         citations: list[dict[str, Any]],
         manifests: list[dict[str, Any]],
         message: str,
-        understanding: dict[str, Any] | None,
-    ) -> list[dict[str, Any]]:
+        understanding: dict[str, Any] | None) -> list[dict[str, Any]]:
         indexed = [
             row
             for row in manifests
@@ -378,12 +342,10 @@ class MessageOrchestrationService:
         explicit_secondary = cls._message_explicitly_requests_secondary_sources(
             message=message,
             manifests=indexed,
-            understanding=understanding,
-        )
+            understanding=understanding)
         prefer_primary_only = cls._message_prefers_primary_only(
             message=message,
-            understanding=understanding,
-        )
+            understanding=understanding)
         manifest_by_doc_id = {
             str(row.get("doc_id") or "").strip(): row
             for row in indexed
@@ -436,8 +398,7 @@ class MessageOrchestrationService:
             r"\bdependen",
             r"\bpre[- ]?requisito\b",
             r"\bordem\b",
-            r"\bcole[cç][aã]o\b",
-        )
+            r"\bcole[cç][aã]o\b")
         return any(re.search(pattern, lowered) for pattern in patterns)
 
     @staticmethod
@@ -458,8 +419,7 @@ class MessageOrchestrationService:
             r"\btrecho\b",
             r"\bpagina\b",
             r"\bpágina\b",
-            r"\blocaliz",
-        )
+            r"\blocaliz")
         return any(re.search(pattern, lowered) for pattern in patterns)
 
     def _resolve_knowledge_space_mode(
@@ -468,8 +428,7 @@ class MessageOrchestrationService:
         message: str,
         understanding: dict[str, Any] | None,
         requested_knowledge_space_id: str | None,
-        source_scope: dict[str, Any] | None,
-    ) -> str:
+        source_scope: dict[str, Any] | None) -> str:
         return "auto"
 
     async def _generate_knowledge_space_reply(
@@ -480,32 +439,24 @@ class MessageOrchestrationService:
         conversation_id: str,
         message: str,
         role: ModelRole,
-        user_id: str | None,
-        understanding: dict[str, Any] | None,
-    ) -> dict[str, Any] | None:
-        if not user_id:
-            return None
+        understanding: dict[str, Any] | None) -> dict[str, Any] | None:
         knowledge_space_id = self._resolve_knowledge_space_id(
             manifests=manifests,
-            requested_knowledge_space_id=requested_knowledge_space_id,
-        )
+            requested_knowledge_space_id=requested_knowledge_space_id)
         if not knowledge_space_id:
             return None
         service = KnowledgeSpaceService(manifest_repo=self._manifest_repo, llm_service=self._llm)
-        source_scope = service.get_space(knowledge_space_id=knowledge_space_id, user_id=str(user_id))
+        source_scope = service.get_space(knowledge_space_id=knowledge_space_id)
         mode = self._resolve_knowledge_space_mode(
             message=message,
             understanding=understanding,
             requested_knowledge_space_id=requested_knowledge_space_id,
-            source_scope=source_scope,
-        )
+            source_scope=source_scope)
         result = await service.query_space(
             knowledge_space_id=knowledge_space_id,
-            user_id=str(user_id),
             question=message,
             mode=mode,
-            limit=6,
-        )
+            limit=6)
         result["provider"] = "janus"
         result["model"] = "knowledge_space"
         result["role"] = role.value
@@ -535,54 +486,37 @@ class MessageOrchestrationService:
         *,
         conversation_id: str,
         message: str,
-        user_id: str | None,
-        requested_knowledge_space_id: str | None = None,
-    ) -> dict[str, Any] | None:
-        if not user_id:
-            return None
+        requested_knowledge_space_id: str | None = None) -> dict[str, Any] | None:
         manifests = self._list_document_manifests(
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+            conversation_id=conversation_id)
         knowledge_space_id = self._resolve_knowledge_space_id(
             manifests=manifests,
-            requested_knowledge_space_id=requested_knowledge_space_id,
-        )
+            requested_knowledge_space_id=requested_knowledge_space_id)
         if not knowledge_space_id:
             return None
         service = KnowledgeSpaceService(manifest_repo=self._manifest_repo, llm_service=self._llm)
         return service.estimate_query_timing(
             knowledge_space_id=knowledge_space_id,
-            user_id=str(user_id),
             question=message,
-            mode="auto",
-        )
+            mode="auto")
 
     def resolve_active_knowledge_space_id(
         self,
         *,
         conversation_id: str,
-        user_id: str | None,
-        requested_knowledge_space_id: str | None = None,
-    ) -> str | None:
-        if not user_id:
-            return str(requested_knowledge_space_id or "").strip() or None
+        requested_knowledge_space_id: str | None = None) -> str | None:
         manifests = self._list_document_manifests(
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+            conversation_id=conversation_id)
         return self._resolve_knowledge_space_id(
             manifests=manifests,
-            requested_knowledge_space_id=requested_knowledge_space_id,
-        )
+            requested_knowledge_space_id=requested_knowledge_space_id)
 
     def _should_use_document_grounding(
         self,
         *,
         message: str,
         understanding: dict[str, Any] | None,
-        manifests: list[dict[str, Any]],
-    ) -> bool:
+        manifests: list[dict[str, Any]]) -> bool:
         if not manifests:
             return False
         if (understanding or {}).get("intent") == "file_reference":
@@ -596,8 +530,7 @@ class MessageOrchestrationService:
         *,
         message: str,
         manifests: list[dict[str, Any]],
-        role: ModelRole,
-    ) -> dict[str, Any]:
+        role: ModelRole) -> dict[str, Any]:
         processing = [
             row
             for row in manifests
@@ -635,8 +568,7 @@ class MessageOrchestrationService:
         self,
         *,
         message: str,
-        citations: list[dict[str, Any]],
-    ) -> str:
+        citations: list[dict[str, Any]]) -> str:
         evidence_blocks: list[str] = []
         for idx, citation in enumerate(citations, start=1):
             source = (
@@ -683,18 +615,12 @@ class MessageOrchestrationService:
         *,
         message: str,
         role: ModelRole,
-        user_id: str | None,
-        conversation_id: str | None,
-    ) -> dict[str, Any] | None:
-        if not user_id or not secret_memory_service.should_authorize_prompt_recall(message):
-            return None
+        conversation_id: str | None) -> dict[str, Any] | None:
         items = await secret_memory_service.list_secrets(
-            user_id=str(user_id),
             query=message,
             conversation_id=conversation_id,
             limit=1,
-            reveal=True,
-        )
+            reveal=True)
         if not items:
             return {
                 "response": "Nao encontrei um segredo autorizado salvo para esse pedido.",
@@ -734,27 +660,19 @@ class MessageOrchestrationService:
         *,
         assistant_text: str,
         user_message: str,
-        user_id: str | None,
-        conversation_id: str,
-    ) -> str:
-        if not user_id or not str(assistant_text or "").strip():
-            return assistant_text
+        conversation_id: str) -> str:
         try:
             rules = await procedural_memory_service.list_rules(
-                user_id=str(user_id),
                 conversation_id=conversation_id,
                 query=None,
                 limit=10,
-                active_only=True,
-            )
+                active_only=True)
         except Exception as exc:
             logger.warning(
                 "procedural_memory_policy_lookup_failed",
                 conversation_id=conversation_id,
-                user_id=user_id,
                 error_type=type(exc).__name__,
-                error=str(exc),
-            )
+                error=str(exc))
             return assistant_text
 
         normalized_message = str(user_message or "").lower()
@@ -764,8 +682,7 @@ class MessageOrchestrationService:
                 "sem proximos passos",
                 "sem próximos passos",
                 "nao termine com proximos passos",
-                "não termine com próximos passos",
-            )
+                "não termine com próximos passos")
         )
         needs_closing_steps = any(str(rule.get("scope") or "") == "closing" for rule in rules)
         if needs_closing_steps and not disable_next_steps:
@@ -782,8 +699,7 @@ class MessageOrchestrationService:
         self,
         *,
         message: str,
-        citations: list[dict[str, Any]],
-    ) -> str:
+        citations: list[dict[str, Any]]) -> str:
         evidence_blocks: list[str] = []
         for idx, citation in enumerate(citations, start=1):
             source = (
@@ -827,8 +743,7 @@ class MessageOrchestrationService:
     def _is_document_operational_task(
         *,
         message: str,
-        understanding: dict[str, Any] | None,
-    ) -> bool:
+        understanding: dict[str, Any] | None) -> bool:
         intent = str((understanding or {}).get("intent") or "").strip().lower()
         if intent == "action_request":
             return True
@@ -852,16 +767,14 @@ class MessageOrchestrationService:
             r"\bgerar\b",
             r"\bescolha por mim\b",
             r"\bdo que precisa\b",
-            r"\bpasso a passo\b",
-        )
+            r"\bpasso a passo\b")
         return any(re.search(pattern, lowered) for pattern in patterns)
 
     def _build_document_operational_prompt(
         self,
         *,
         message: str,
-        citations: list[dict[str, Any]],
-    ) -> str:
+        citations: list[dict[str, Any]]) -> str:
         grouped: dict[str, list[tuple[int, dict[str, Any]]]] = {}
         for index, citation in enumerate(citations, start=1):
             source = str(citation.get("title") or citation.get("file_path") or citation.get("doc_id") or "Fonte").strip()
@@ -914,8 +827,7 @@ class MessageOrchestrationService:
         self,
         *,
         extraction: dict[str, Any] | None,
-        citations: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
+        citations: list[dict[str, Any]]) -> dict[str, Any] | None:
         if not isinstance(extraction, dict):
             return None
 
@@ -971,8 +883,7 @@ class MessageOrchestrationService:
         self,
         *,
         extraction: dict[str, Any] | None,
-        citations: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
+        citations: list[dict[str, Any]]) -> dict[str, Any] | None:
         if not isinstance(extraction, dict):
             return None
         response = str(extraction.get("response") or "").strip()
@@ -1012,27 +923,21 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
-        user_id: str | None,
-        project_id: str | None,
-    ) -> dict[str, Any] | None:
+        project_id: str | None) -> dict[str, Any] | None:
         prompt = self._build_document_grounding_recheck_prompt(
             message=message,
-            citations=citations,
-        )
+            citations=citations)
         extraction = await self._llm.invoke_llm(
             prompt=prompt,
             role=role,
             priority=priority,
             timeout_seconds=min(int(timeout_seconds or 30), 30),
-            user_id=user_id,
-            project_id=project_id,
-        )
+            project_id=project_id)
         raw_response = str(extraction.get("response") or "")
         parsed = parse_json_lenient(raw_response)
         return self._sanitize_document_grounding_extraction(
             extraction=parsed if isinstance(parsed, dict) else None,
-            citations=citations,
-        )
+            citations=citations)
 
     async def _extract_document_grounding(
         self,
@@ -1042,24 +947,19 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
-        user_id: str | None,
-        project_id: str | None,
-    ) -> dict[str, Any] | None:
+        project_id: str | None) -> dict[str, Any] | None:
         prompt = self._build_document_grounding_prompt(message=message, citations=citations)
         extraction = await self._llm.invoke_llm(
             prompt=prompt,
             role=role,
             priority=priority,
             timeout_seconds=min(int(timeout_seconds or 30), 30),
-            user_id=user_id,
-            project_id=project_id,
-        )
+            project_id=project_id)
         raw_response = str(extraction.get("response") or "")
         parsed = parse_json_lenient(raw_response)
         return self._sanitize_document_grounding_extraction(
             extraction=parsed if isinstance(parsed, dict) else None,
-            citations=citations,
-        )
+            citations=citations)
 
     async def _extract_document_operational_grounding(
         self,
@@ -1069,31 +969,25 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
-        user_id: str | None,
-        project_id: str | None,
-    ) -> dict[str, Any] | None:
+        project_id: str | None) -> dict[str, Any] | None:
         prompt = self._build_document_operational_prompt(message=message, citations=citations)
         extraction = await self._llm.invoke_llm(
             prompt=prompt,
             role=role,
             priority=priority,
             timeout_seconds=min(int(timeout_seconds or 45), 45),
-            user_id=user_id,
-            project_id=project_id,
-        )
+            project_id=project_id)
         raw_response = str(extraction.get("response") or "")
         parsed = parse_json_lenient(raw_response)
         return self._sanitize_document_operational_extraction(
             extraction=parsed if isinstance(parsed, dict) else None,
-            citations=citations,
-        )
+            citations=citations)
 
     def _format_document_grounded_response(
         self,
         *,
         extraction: dict[str, Any] | None,
-        citations: list[dict[str, Any]],
-    ) -> str:
+        citations: list[dict[str, Any]]) -> str:
         if not extraction:
             top_snippets = [
                 self._trim_document_snippet(citation.get("snippet"))
@@ -1150,8 +1044,7 @@ class MessageOrchestrationService:
         self,
         *,
         extraction: dict[str, Any] | None,
-        citations: list[dict[str, Any]],
-    ) -> str:
+        citations: list[dict[str, Any]]) -> str:
         if not extraction:
             top_snippets = [
                 self._trim_document_snippet(citation.get("snippet"))
@@ -1186,31 +1079,24 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
-        user_id: str | None,
         project_id: str | None,
         requested_knowledge_space_id: str | None = None,
-        understanding: dict[str, Any] | None,
-    ) -> dict[str, Any] | None:
+        understanding: dict[str, Any] | None) -> dict[str, Any] | None:
         manifests = self._list_document_manifests(
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+            conversation_id=conversation_id)
         knowledge_space_result = await self._generate_knowledge_space_reply(
             manifests=manifests,
             requested_knowledge_space_id=requested_knowledge_space_id,
             conversation_id=conversation_id,
             message=message,
             role=role,
-            user_id=user_id,
-            understanding=understanding,
-        )
+            understanding=understanding)
         if knowledge_space_result is not None:
             return knowledge_space_result
         if not self._should_use_document_grounding(
             message=message,
             understanding=understanding,
-            manifests=manifests,
-        ):
+            manifests=manifests):
             return None
 
         indexed_manifests = [
@@ -1233,29 +1119,24 @@ class MessageOrchestrationService:
             return self._build_document_processing_result(
                 message=message,
                 manifests=processing_manifests,
-                role=role,
-            )
+                role=role)
 
         citations: list[dict[str, Any]] = []
         retrieval_failed = False
         is_operational_task = self._is_document_operational_task(
             message=message,
-            understanding=understanding,
-        )
+            understanding=understanding)
         retrieval_limit = 10 if is_operational_task else 6
         try:
             citations = await collect_document_citations(
                 message=message,
-                user_id=str(user_id) if user_id is not None else None,
                 conversation_id=conversation_id,
-                limit=retrieval_limit,
-            )
+                limit=retrieval_limit)
             citations = self._apply_document_source_policy(
                 citations=citations,
                 manifests=indexed_manifests,
                 message=message,
-                understanding=understanding,
-            )
+                understanding=understanding)
             if indexed_doc_ids:
                 citations = [
                     citation
@@ -1265,16 +1146,13 @@ class MessageOrchestrationService:
                 if not citations:
                     fallback_citations = await collect_document_citations(
                         message="documento enviado",
-                        user_id=str(user_id) if user_id is not None else None,
                         conversation_id=conversation_id,
-                        limit=retrieval_limit,
-                    )
+                        limit=retrieval_limit)
                     fallback_citations = self._apply_document_source_policy(
                         citations=fallback_citations,
                         manifests=indexed_manifests,
                         message=message,
-                        understanding=understanding,
-                    )
+                        understanding=understanding)
                     citations = [
                         citation
                         for citation in fallback_citations
@@ -1285,16 +1163,13 @@ class MessageOrchestrationService:
             logger.warning(
                 "document_grounding_citation_lookup_failed",
                 conversation_id=conversation_id,
-                user_id=user_id,
                 error_type=type(exc).__name__,
-                error=str(exc),
-            )
+                error=str(exc))
 
         citation_status = build_citation_status(
             message=message,
             citations=citations,
-            retrieval_failed=retrieval_failed,
-        )
+            retrieval_failed=retrieval_failed)
         if not citations:
             response = "Nao encontrei no documento enviado trechos suficientes para responder com seguranca."
             if processing_manifests:
@@ -1324,9 +1199,7 @@ class MessageOrchestrationService:
                     role=role,
                     priority=priority,
                     timeout_seconds=timeout_seconds,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             else:
                 extraction = await self._extract_document_grounding(
                     message=message,
@@ -1334,17 +1207,13 @@ class MessageOrchestrationService:
                     role=role,
                     priority=priority,
                     timeout_seconds=timeout_seconds,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
         except Exception as exc:
             logger.warning(
                 "document_grounding_extraction_failed",
                 conversation_id=conversation_id,
-                user_id=user_id,
                 error_type=type(exc).__name__,
-                error=str(exc),
-            )
+                error=str(exc))
 
         if citations and not is_operational_task and (not extraction or not (extraction.get("supported_points") or [])):
             try:
@@ -1354,30 +1223,24 @@ class MessageOrchestrationService:
                     role=role,
                     priority=priority,
                     timeout_seconds=timeout_seconds,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
                 if rechecked:
                     extraction = rechecked
             except Exception as exc:
                 logger.warning(
                     "document_grounding_recheck_failed",
                     conversation_id=conversation_id,
-                    user_id=user_id,
                     error_type=type(exc).__name__,
-                    error=str(exc),
-                )
+                    error=str(exc))
 
         if is_operational_task:
             response = self._format_document_operational_response(
                 extraction=extraction,
-                citations=citations,
-            )
+                citations=citations)
         else:
             response = self._format_document_grounded_response(
                 extraction=extraction,
-                citations=citations,
-            )
+                citations=citations)
         return {
             "response": response,
             "provider": provider,
@@ -1400,18 +1263,16 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None = None,
-        user_id: str | None = None,
         project_id: str | None = None,
         knowledge_space_id: str | None = None,
-        identity_source: str = "unknown",
-    ) -> dict[str, Any]:
+        identity_source: str = "unknown") -> dict[str, Any]:
         try:
             conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
         except ChatRepositoryError as e:
             raise ConversationNotFoundError(str(e)) from e
 
         self._conversation_service.validate_conversation_access(
-            conversation_id, conv, user_id, project_id
+            conversation_id, conv, project_id
         )
 
         max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
@@ -1426,29 +1287,24 @@ class MessageOrchestrationService:
         use_light_chat = self._should_use_light_chat(
             message=message,
             role=role,
-            understanding=understanding,
-        )
+            understanding=understanding)
 
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         self.schedule_active_memory_capture(
             message=message,
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+            conversation_id=conversation_id)
         self._schedule_rag_index_message(
             text=message,
             conversation_id=conversation_id,
             role="user",
-            user_id=user_id,
             project_id=project_id,
-            identity_source=identity_source,
-        )
+            identity_source=identity_source)
 
         if self._command_handler.is_command(message):
             start_t = _time.time()
             assistant_text = await self._command_handler.handle_command(
-                message, conversation_id, user_id
+                message, conversation_id
             )
             if assistant_text:
                 clean_text, ui = split_ui(assistant_text)
@@ -1493,9 +1349,7 @@ class MessageOrchestrationService:
                         conversation_id,
                         role=role,
                         priority=priority,
-                        user_id=user_id,
-                        project_id=project_id,
-                    )
+                        project_id=project_id)
             except Exception as e:
                 logger.warning("log_warning", message=f"Failed to trigger summary during discovery for {conversation_id}: {e}"
                 )
@@ -1517,9 +1371,7 @@ class MessageOrchestrationService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
@@ -1544,9 +1396,7 @@ class MessageOrchestrationService:
                         conversation_id,
                         role=role,
                         priority=priority,
-                        user_id=user_id,
-                        project_id=project_id,
-                    )
+                        project_id=project_id)
             except Exception:
                 pass
 
@@ -1567,9 +1417,7 @@ class MessageOrchestrationService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
@@ -1594,9 +1442,7 @@ class MessageOrchestrationService:
                         conversation_id,
                         role=role,
                         priority=priority,
-                        user_id=user_id,
-                        project_id=project_id,
-                    )
+                        project_id=project_id)
             except Exception:
                 pass
 
@@ -1617,9 +1463,7 @@ class MessageOrchestrationService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
@@ -1655,9 +1499,7 @@ class MessageOrchestrationService:
                         conversation_id,
                         role=role,
                         priority=priority,
-                        user_id=user_id,
-                        project_id=project_id,
-                    )
+                        project_id=project_id)
             except Exception:
                 pass
 
@@ -1678,9 +1520,7 @@ class MessageOrchestrationService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
@@ -1691,11 +1531,9 @@ class MessageOrchestrationService:
             role=role,
             priority=priority,
             timeout_seconds=timeout_seconds,
-            user_id=user_id,
             project_id=project_id,
             requested_knowledge_space_id=knowledge_space_id,
-            understanding=understanding,
-        )
+            understanding=understanding)
         if grounded_result is not None:
             start_t = _time.time()
             assistant_text = str(grounded_result.get("response") or "")
@@ -1726,18 +1564,15 @@ class MessageOrchestrationService:
                     "citation_status": grounded_result.get("citation_status"),
                     "provider": grounded_result.get("provider"),
                     "model": grounded_result.get("model"),
-                },
-            )
+                })
             out_tokens = estimate_tokens(self._prompt_service, assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
             self._schedule_rag_index_message(
                 text=clean_text or assistant_text,
                 conversation_id=conversation_id,
                 role="assistant",
-                user_id=user_id,
                 project_id=project_id,
-                identity_source=identity_source,
-            )
+                identity_source=identity_source)
 
             result_with_conv = dict(grounded_result)
             result_with_conv["conversation_id"] = conversation_id
@@ -1750,9 +1585,7 @@ class MessageOrchestrationService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=grounded_result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
@@ -1760,17 +1593,14 @@ class MessageOrchestrationService:
         secret_result = await self.generate_secret_recall_reply(
             message=message,
             role=role,
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+            conversation_id=conversation_id)
         if secret_result is not None:
             assistant_text = str(secret_result.get("response") or "")
             await asyncio.to_thread(
                 self._repo.add_message,
                 conversation_id,
                 role="assistant",
-                text=assistant_text,
-            )
+                text=assistant_text)
             result_with_conv = dict(secret_result)
             result_with_conv["conversation_id"] = conversation_id
             try:
@@ -1779,9 +1609,7 @@ class MessageOrchestrationService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=secret_result,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception:
                 pass
             return attach_understanding(result_with_conv, understanding)
@@ -1793,26 +1621,21 @@ class MessageOrchestrationService:
         if self._rag_service and not use_light_chat:
             knowledge_route = get_knowledge_routing_policy().resolve(
                 RouteIntent.CHAT_CONTEXT_RETRIEVAL,
-                user_id=user_id,
                 include_graph=False,
-                query=message,
-            )
+                query=message)
             logger.info(
                 "chat.knowledge_routing_decision",
                 conversation_id=conversation_id,
                 rule_id=knowledge_route.rule_id,
                 primary=knowledge_route.primary.value,
-                fallback=knowledge_route.fallback,
-            )
+                fallback=knowledge_route.fallback)
             relevant_memories = await self._rag_service.retrieve_context(
                 message,
-                user_id=user_id,
                 conversation_id=conversation_id,
                 caller_endpoint="/api/v1/chat/message",
                 transport="rest",
                 identity_source=identity_source,
-                route_decision=knowledge_route,
-            )
+                route_decision=knowledge_route)
 
         prompt = await self._prompt_service.build_prompt(
             persona, history, message, conv.get("summary"), relevant_memories
@@ -1828,9 +1651,7 @@ class MessageOrchestrationService:
                     role=role,
                     priority=priority,
                     timeout_seconds=timeout_seconds,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             else:
                 result = await self._agent_loop.run_loop(
                     conversation_id=conversation_id,
@@ -1840,9 +1661,7 @@ class MessageOrchestrationService:
                     role=role,
                     priority=priority,
                     timeout_seconds=timeout_seconds,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -1859,9 +1678,7 @@ class MessageOrchestrationService:
         assistant_text = await self.apply_response_memory_policies(
             assistant_text=str(result.get("response", "")),
             user_message=message,
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
+            conversation_id=conversation_id)
         clean_text, ui = split_ui(assistant_text)
         await asyncio.to_thread(
             self._repo.add_message, conversation_id, role="assistant", text=assistant_text
@@ -1874,10 +1691,8 @@ class MessageOrchestrationService:
             text=rag_text,
             conversation_id=conversation_id,
             role="assistant",
-            user_id=user_id,
             project_id=project_id,
-            identity_source=identity_source,
-        )
+            identity_source=identity_source)
 
         try:
             provider = result.get("provider", "unknown")
@@ -1886,8 +1701,7 @@ class MessageOrchestrationService:
                 cost = (in_tokens / 1000.0) * float(pricing.input_per_1k_usd) + (
                     out_tokens / 1000.0
                 ) * float(pricing.output_per_1k_usd)
-                if user_id:
-                    CHAT_SPEND_USD_TOTAL.labels(kind="user").inc(cost)
+                CHAT_SPEND_USD_TOTAL.labels(kind="user").inc(cost)
                 if project_id:
                     CHAT_SPEND_USD_TOTAL.labels(kind="project").inc(cost)
         except Exception:
@@ -1899,16 +1713,13 @@ class MessageOrchestrationService:
                     conversation_id,
                     role=role,
                     priority=priority,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
+                    project_id=project_id)
             except Exception as e:
                 logger.warning(
                     "rag_summarization_failed",
                     conversation_id=conversation_id,
                     error_type=type(e).__name__,
-                    error=str(e),
-                )
+                    error=str(e))
 
         result_with_conv = dict(result)
         result_with_conv["conversation_id"] = conversation_id
@@ -1921,9 +1732,7 @@ class MessageOrchestrationService:
                 user_message=message,
                 assistant_text=assistant_text,
                 result=result,
-                user_id=user_id,
-                project_id=project_id,
-            )
+                project_id=project_id)
         except Exception:
             pass
         return attach_understanding(result_with_conv, understanding)
@@ -1934,9 +1743,7 @@ class MessageOrchestrationService:
         user_message: str,
         assistant_text: str,
         result: dict[str, Any],
-        user_id: str | None,
-        project_id: str | None,
-    ) -> None:
+        project_id: str | None) -> None:
         try:
             digest = hashlib.sha256(
                 f"{conversation_id}:{assistant_text}".encode("utf-8")
@@ -1953,7 +1760,7 @@ class MessageOrchestrationService:
                     "provider": result.get("provider"),
                     "model": result.get("model"),
                     "user_message": (user_message or "")[:500],
-                    "user_id": user_id,
+                    
                     "project_id": project_id,
                     "dedupe_key": dedupe_key,
                 },
@@ -1962,8 +1769,7 @@ class MessageOrchestrationService:
                 self._outbox_service.enqueue_consolidation(
                     payload=consolidation_payload,
                     aggregate_id=conversation_id,
-                    dedupe_key=dedupe_key,
-                )
+                    dedupe_key=dedupe_key)
             else:
                 asyncio.create_task(
                     publish_consolidation_task(consolidation_payload, correlation_id=conversation_id)

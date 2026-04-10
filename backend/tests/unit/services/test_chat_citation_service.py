@@ -28,7 +28,6 @@ class _FakeClient:
                         "content": '{"version":1,"createdAt":"2026-02-05"}',
                         "metadata": {
                             "type": "doc_chunk",
-                            "user_id": "u-1",
                             "conversation_id": "conv-1",
                             "doc_id": "doc:u-1:1",
                             "file_name": "genesis-backup-2026-02-05.json",
@@ -63,7 +62,6 @@ async def test_collect_chat_citations_falls_back_to_conversation_documents_for_f
 
     result = await citation_module.collect_chat_citations(
         message="te mandei um arquivo",
-        user_id="u-1",
         conversation_id="conv-1",
         memory_service=_FakeMemory(),
         limit=3,

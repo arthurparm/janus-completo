@@ -38,5 +38,5 @@ def test_extract_secret_normalizes_eh_colon_format():
 def test_should_authorize_prompt_recall_requires_explicit_request():
     svc = SecretMemoryService()
 
-    assert svc.should_authorize_prompt_recall("Qual é a minha senha do Wi-Fi?")
+    assert svc.should_authorize_prompt_recall("Qual é a minha senha do Wi-Fi")
     assert not svc.should_authorize_prompt_recall("Guarde minha senha do Wi-Fi")

@@ -47,7 +47,6 @@ class UserPreferenceMemoryItem(BaseModel):
     instruction_text: str | None = None
     scope: str | None = None
     confidence: float | None = None
-    user_id: str | None = None
     conversation_id: str | None = None
     session_id: str | None = None
     active: bool = True
@@ -68,8 +67,6 @@ class SecretMemoryCreateRequest(BaseModel):
     secret_type: str | None = None
     secret_scope: str | None = None
     conversation_id: str | None = None
-    user_id: str | None = None
-
 
 class SecretMemoryItem(BaseModel):
     id: str | None = None
@@ -251,7 +248,6 @@ async def get_memories_timeline(
     query: str | None = Query(None, description="Semantic text query to filter memories"),
     limit: int = Query(10, ge=1, le=100),
     min_score: float | None = Query(None, ge=0.0, le=1.0),
-    user_id: str | None = Query(None, description="User ID for active memory scope"),
     conversation_id: str | None = Query(None, description="Conversation ID for scoped timeline"),
     service: MemoryService = Depends(get_memory_service),
 ):
@@ -275,7 +271,7 @@ async def get_memories_timeline(
             detail=f"Invalid date format. Use ISO 8601 (e.g., 2023-01-01T12:00:00Z). Error: {e}",
         )
 
-    resolved_user_id = resolve_user_scope_id(request, user_id)
+    resolved_user_id = "default"
 
     if resolved_user_id:
         try:
@@ -314,14 +310,13 @@ async def get_generative_memories(
     query: str = Query(..., description="Query for memory retrieval"),
     limit: int = Query(10, ge=1, le=100),
     type: str | None = Query(None, description="Filter by memory type (episodic|semantic|procedural)"),
-    user_id: str | None = Query(None, description="Filter by user_id"),
     conversation_id: str | None = Query(None, description="Filter by conversation_id"),
 ):
     """
     Retrieves memories using the Generative Agents scoring (Recency * Importance * Relevance).
     """
     try:
-        resolved_user_id = resolve_user_scope_id(request, user_id)
+        resolved_user_id = "default"
         resolved_conversation_id = (
             conversation_id
             or request.headers.get("X-Conversation-Id")
@@ -331,7 +326,7 @@ async def get_generative_memories(
             query,
             limit=limit,
             type_filter=type,
-            user_id=resolved_user_id,
+            user_id="default",
             conversation_id=resolved_conversation_id,
         )
         return memories
@@ -348,7 +343,6 @@ async def add_generative_memory(
     content: str,
     importance: float | None = Query(None, ge=0.0, le=10.0),
     type: str = "episodic",
-    user_id: str | None = Query(None, description="User ID for user-scoped memory mirrors"),
     conversation_id: str | None = Query(None, description="Conversation ID to bind memory"),
     session_id: str | None = Query(None, description="Session ID alias (defaults to conversation_id)"),
 ):
@@ -359,7 +353,7 @@ async def add_generative_memory(
         meta = {}
         if importance is not None:
             meta["importance"] = importance
-        resolved_user_id = resolve_user_scope_id(request, user_id)
+        resolved_user_id = "default"
         resolved_conversation_id = (
             conversation_id or request.headers.get("X-Conversation-Id") or request.headers.get("X-Session-Id")
         )
@@ -385,13 +379,12 @@ async def add_generative_memory(
 @router.get("/preferences", response_model=list[UserPreferenceMemoryItem])
 async def get_user_preferences(
     request: Request,
-    user_id: str | None = Query(None, description="User ID"),
     conversation_id: str | None = Query(None, description="Optional conversation filter"),
     query: str | None = Query(None, description="Optional semantic query"),
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
 ):
-    resolved_user_id = resolve_user_scope_id(request, user_id)
+    resolved_user_id = "default"
     if not resolved_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -417,13 +410,12 @@ async def get_user_preferences(
 @router.get("/secrets", response_model=list[SecretMemoryItem])
 async def get_user_secrets(
     request: Request,
-    user_id: str | None = Query(None, description="User ID"),
     conversation_id: str | None = Query(None, description="Optional conversation filter"),
     query: str | None = Query(None, description="Optional semantic query"),
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
 ):
-    resolved_user_id = resolve_user_scope_id(request, user_id)
+    resolved_user_id = "default"
     if not resolved_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -452,7 +444,7 @@ async def add_user_secret(
     request: Request,
     body: SecretMemoryCreateRequest,
 ):
-    resolved_user_id = resolve_user_scope_id(request, body.user_id)
+    resolved_user_id = "default"
     if not resolved_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

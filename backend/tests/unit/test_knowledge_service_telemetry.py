@@ -64,7 +64,7 @@ async def test_ask_code_with_citations_emits_code_citations_telemetry(monkeypatc
 
     service = KnowledgeService(_FakeRepo())
     result = await service.ask_code_with_citations(
-        question="How does run call helper?", limit=4, citation_limit=2
+        question="How does run call helper", limit=4, citation_limit=2
     )
 
     assert result["answer"] == "answer:How does run call helper?:4"

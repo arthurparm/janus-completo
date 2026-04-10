@@ -112,20 +112,16 @@ class ConversationService:
         self,
         conversation_id: str,
         conv: dict[str, Any],
-        user_id: str | None,
         project_id: str | None,
     ) -> None:
-        conv_user_id = conv.get("user_id")
-        if user_id and conv_user_id and str(conv_user_id) != str(user_id):
-            raise ChatServiceError("Access denied: user_id mismatch")
         conv_project_id = conv.get("project_id")
         if project_id and conv_project_id and str(conv_project_id) != str(project_id):
             raise ChatServiceError("Access denied: project_id mismatch")
 
     def start_conversation(
-        self, persona: str | None, user_id: str | None, project_id: str | None
+        self, persona: str | None, project_id: str | None
     ) -> str:
-        cid = self._repo.start_conversation(persona, user_id, project_id)
+        cid = self._repo.start_conversation(persona, project_id)
         try:
             count = self._repo.count_conversations()
             update_active_conversations(count)
@@ -134,20 +130,19 @@ class ConversationService:
         return cid
 
     async def start_conversation_async(
-        self, persona: str | None, user_id: str | None, project_id: str | None
+        self, persona: str | None, project_id: str | None
     ) -> str:
-        return await asyncio.to_thread(self.start_conversation, persona, user_id, project_id)
+        return await asyncio.to_thread(self.start_conversation, persona, project_id)
 
     def get_history(
         self,
         conversation_id: str,
-        user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         logger.info("log_info", message=f"Getting chat history for conversation: {conversation_id}")
         try:
             conv = self._repo.get_conversation(conversation_id)
-            self.validate_conversation_access(conversation_id, conv, user_id, project_id)
+            self.validate_conversation_access(conversation_id, conv, project_id)
 
             if not isinstance(conv, dict):
                 logger.error("log_error", message=f"Invalid conversation structure for {conversation_id}: expected dict, got {type(conv)}"
@@ -195,7 +190,6 @@ class ConversationService:
         offset: int = 0,
         before_ts: float | None = None,
         after_ts: float | None = None,
-        user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         logger.info("log_info", message=f"Getting paginated chat history for conversation: {conversation_id}, limit: {limit}, offset: {offset}"
@@ -212,7 +206,7 @@ class ConversationService:
                     f"Invalid conversation structure for {conversation_id}"
                 )
 
-            self.validate_conversation_access(conversation_id, conv, user_id, project_id)
+            self.validate_conversation_access(conversation_id, conv, project_id)
 
             result = self._repo.get_history_paginated(
                 conversation_id, limit=limit, offset=offset, before_ts=before_ts, after_ts=after_ts
@@ -250,17 +244,16 @@ class ConversationService:
             )
 
     async def list_conversations(
-        self, user_id: str | None = None, project_id: str | None = None, limit: int = 50
+        self, project_id: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
         return await asyncio.to_thread(
-            self._repo.list_conversations, user_id=user_id, project_id=project_id, limit=limit
+            self._repo.list_conversations, project_id=project_id, limit=limit
         )
 
     async def rename_conversation(
         self,
         conversation_id: str,
         new_title: str,
-        user_id: str | None = None,
         project_id: str | None = None,
     ) -> None:
         try:
@@ -268,20 +261,18 @@ class ConversationService:
                 self._repo.rename_conversation,
                 conversation_id,
                 new_title,
-                user_id=user_id,
                 project_id=project_id,
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e
 
     async def delete_conversation(
-        self, conversation_id: str, user_id: str | None = None, project_id: str | None = None
+        self, conversation_id: str, project_id: str | None = None
     ) -> None:
         try:
             await asyncio.to_thread(
                 self._repo.delete_conversation,
                 conversation_id,
-                user_id=user_id,
                 project_id=project_id,
             )
             try:
@@ -293,7 +284,7 @@ class ConversationService:
             raise ChatServiceError(str(e)) from e
 
     async def update_message(
-        self, conversation_id: str, message_id: int, new_text: str, user_id: str | None = None
+        self, conversation_id: str, message_id: int, new_text: str
     ) -> None:
         try:
             await asyncio.to_thread(
@@ -301,42 +292,39 @@ class ConversationService:
                 conversation_id,
                 message_id,
                 new_text,
-                user_id=user_id,
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e
 
     async def delete_message(
-        self, conversation_id: str, message_id: int, user_id: str | None = None
+        self, conversation_id: str, message_id: int
     ) -> None:
         try:
             await asyncio.to_thread(
-                self._repo.delete_message, conversation_id, message_id, user_id=user_id
+                self._repo.delete_message, conversation_id, message_id
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e
 
     async def replace_last_assistant_message(
-        self, conversation_id: str, new_text: str, user_id: str | None = None
+        self, conversation_id: str, new_text: str
     ) -> None:
         try:
             await asyncio.to_thread(
                 self._repo.replace_last_assistant_message,
                 conversation_id,
                 new_text,
-                user_id,
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e
 
     async def get_last_assistant_message(
-        self, conversation_id: str, user_id: str | None = None
+        self, conversation_id: str
     ) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(
                 self._repo.get_last_assistant_message,
                 conversation_id,
-                user_id,
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e
@@ -346,7 +334,6 @@ class ConversationService:
         conversation_id: str,
         message_id: int,
         patch: dict[str, Any],
-        user_id: str | None = None,
     ) -> dict[str, Any]:
         try:
             return await asyncio.to_thread(
@@ -354,7 +341,6 @@ class ConversationService:
                 conversation_id,
                 message_id,
                 patch,
-                user_id,
             )
         except ChatRepositoryError as e:
             raise ChatServiceError(str(e)) from e

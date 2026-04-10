@@ -14,8 +14,7 @@ from app.db.vector_store import (
     aget_or_create_collection,
     build_deterministic_point_id,
     build_user_secret_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 
 logger = structlog.get_logger(__name__)
 
@@ -32,15 +31,13 @@ class SecretMemoryService:
         "credencial",
         "codigo de acesso",
         "código de acesso",
-        "segredo",
-    )
+        "segredo")
     _EXPLICIT_RECALL_PATTERNS = (
         r"\bqual (?:e|é)\b.*\b(?:senha|token|segredo|codigo de acesso|código de acesso|api key|chave)\b",
         r"\bme lembra\b.*\b(?:senha|token|segredo|codigo de acesso|código de acesso|api key|chave)\b",
         r"\blembra\b.*\b(?:senha|token|segredo|codigo de acesso|código de acesso|api key|chave)\b",
         r"\brecupere\b.*\b(?:senha|token|segredo|codigo de acesso|código de acesso|api key|chave)\b",
-        r"\bmostre\b.*\b(?:senha|token|segredo|codigo de acesso|código de acesso|api key|chave)\b",
-    )
+        r"\bmostre\b.*\b(?:senha|token|segredo|codigo de acesso|código de acesso|api key|chave)\b")
 
     def should_inspect_message(self, message: str) -> bool:
         text = str(message or "").strip().lower()
@@ -62,15 +59,13 @@ class SecretMemoryService:
 
         label_match = re.search(
             r"(?P<label>(?:senha|token|api key|apikey|chave|credencial|codigo de acesso|código de acesso)(?: [^:=]{0,80})?)\s*(?:é|eh|=|:)\s*(?P<value>.+)$",
-            lowered,
-        )
+            lowered)
         if not label_match:
             return None
         value_match = re.search(
             r"(?:é|eh|=|:)\s*(?P<value>.+)$",
             text,
-            flags=re.IGNORECASE,
-        )
+            flags=re.IGNORECASE)
         label = str(label_match.group("label") or "").strip()
         value = self._normalize_secret_value(str((value_match.group("value") if value_match else "") or ""))
         if not label or not value:
@@ -92,44 +87,36 @@ class SecretMemoryService:
         self,
         *,
         message: str,
-        user_id: str | None,
         conversation_id: str | None,
-        threshold: float = 0.9,
-    ) -> dict[str, Any] | None:
-        if not user_id:
-            return None
+        threshold: float = 0.9) -> dict[str, Any] | None:
         extracted = self.extract_secret(message)
         if not extracted or not extracted.get("should_persist"):
             return None
         if float(extracted.get("confidence") or 0.0) < threshold:
             return None
         stored = await self.store_secret(
-            user_id=str(user_id),
             label=str(extracted["secret_label"]),
             value=str(extracted["secret_value"]),
             secret_type=str(extracted["secret_type"]),
             secret_scope=str(extracted["secret_scope"]),
             conversation_id=conversation_id,
-            source="chat.secret_extractor",
-        )
+            source="chat.secret_extractor")
         return {"status": "created", **stored}
 
     async def store_secret(
         self,
         *,
-        user_id: str,
         label: str,
         value: str,
         secret_type: str,
         secret_scope: str | None = None,
         conversation_id: str | None = None,
-        source: str = "memory.secret_api",
-    ) -> dict[str, Any]:
-        collection_name = await aget_or_create_collection(build_user_secret_collection_name(user_id))
+        source: str = "memory.secret_api") -> dict[str, Any]:
+        collection_name = await aget_or_create_collection(build_user_secret_collection_name())
         client = get_async_qdrant_client()
         now_ms = int(time.time() * 1000)
         normalized_label = self._normalize_label(label)
-        point_id = build_deterministic_point_id("user-secret", user_id, secret_type, normalized_label)
+        point_id = build_deterministic_point_id("user-secret", secret_type, normalized_label)
         encrypted_value, enc_method = encrypt_text(str(value))
         summary_text = f"Segredo do usuário: {normalized_label}"
         try:
@@ -140,7 +127,7 @@ class SecretMemoryService:
             "content": encrypted_value,
             "type": "secret",
             "ts_ms": now_ms,
-            "composite_id": f"secret:{user_id}:{point_id}",
+            "composite_id": f"secret:{point_id}",
             "metadata": {
                 "type": "secret",
                 "memory_class": "secret",
@@ -150,7 +137,6 @@ class SecretMemoryService:
                 "stability_score": 0.98,
                 "scope": "user",
                 "source_channel": "chat" if source.startswith("chat.") else "api",
-                "user_id": str(user_id),
                 "conversation_id": str(conversation_id) if conversation_id else None,
                 "secret_type": str(secret_type),
                 "secret_label": normalized_label,
@@ -167,8 +153,7 @@ class SecretMemoryService:
         }
         await client.upsert(
             collection_name=collection_name,
-            points=[qdrant_models.PointStruct(id=point_id, vector=vector, payload=payload)],
-        )
+            points=[qdrant_models.PointStruct(id=point_id, vector=vector, payload=payload)])
         return {
             "id": point_id,
             "secret_label": normalized_label,
@@ -180,34 +165,25 @@ class SecretMemoryService:
     async def list_secrets(
         self,
         *,
-        user_id: str,
         query: str | None = None,
         conversation_id: str | None = None,
         limit: int = 20,
         active_only: bool = True,
-        reveal: bool = False,
-    ) -> list[dict[str, Any]]:
-        collection_name = await aget_or_create_collection(build_user_secret_collection_name(user_id))
+        reveal: bool = False) -> list[dict[str, Any]]:
+        collection_name = await aget_or_create_collection(build_user_secret_collection_name())
         client = get_async_qdrant_client()
-        must: list[qdrant_models.FieldCondition] = [
-            qdrant_models.FieldCondition(
-                key="metadata.user_id",
-                match=qdrant_models.MatchValue(value=str(user_id)),
-            )
-        ]
+        must: list[qdrant_models.FieldCondition] = []
         if active_only:
             must.append(
                 qdrant_models.FieldCondition(
                     key="metadata.active",
-                    match=qdrant_models.MatchValue(value=True),
-                )
+                    match=qdrant_models.MatchValue(value=True))
             )
         if conversation_id:
             must.append(
                 qdrant_models.FieldCondition(
                     key="metadata.conversation_id",
-                    match=qdrant_models.MatchValue(value=str(conversation_id)),
-                )
+                    match=qdrant_models.MatchValue(value=str(conversation_id)))
             )
         qfilter = qdrant_models.Filter(must=must)
 
@@ -220,18 +196,16 @@ class SecretMemoryService:
                     query=vector,
                     limit=max(limit * 3, limit),
                     with_payload=True,
-                    query_filter=qfilter,
-                )
+                    query_filter=qfilter)
                 points = list(getattr(result, "points", result) or [])
             except Exception as exc:
-                logger.warning("secret_memory_query_embed_failed", error=str(exc), user_id=user_id)
+                logger.warning("secret_memory_query_embed_failed", error=str(exc))
         if not points:
             points, _ = await client.scroll(
                 collection_name=collection_name,
                 scroll_filter=qfilter,
                 limit=min(200, max(limit * 5, limit)),
-                with_payload=True,
-            )
+                with_payload=True)
 
         items = [self._point_to_secret_item(point, reveal=reveal) for point in points]
         deduped: dict[str, dict[str, Any]] = {}
@@ -246,27 +220,22 @@ class SecretMemoryService:
     async def build_authorized_prompt_context(
         self,
         *,
-        user_id: str,
         message: str,
         conversation_id: str | None = None,
-        limit: int = 3,
-    ) -> str | None:
+        limit: int = 3) -> str | None:
         if not self.should_authorize_prompt_recall(message):
             return None
         items = await self.list_secrets(
-            user_id=user_id,
             query=message,
             conversation_id=conversation_id,
             limit=limit,
-            reveal=True,
-        )
+            reveal=True)
         if not items:
             return None
         lines = [
             "Segredos Autorizados:",
             "- O usuário pediu explicitamente estes valores nesta resposta.",
-            "- Você pode citá-los literalmente ao responder esta pergunta específica.",
-        ]
+            "- Você pode citá-los literalmente ao responder esta pergunta específica."]
         for item in items[:limit]:
             label = str(item.get("secret_label") or "segredo").strip()
             secret_value = str(item.get("secret_value") or "").strip()

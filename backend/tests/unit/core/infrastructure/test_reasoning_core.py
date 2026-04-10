@@ -67,10 +67,10 @@ async def test_solve_question_uses_async_executor_path(monkeypatch):
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: executor)
 
     session = reasoning_core.ReasoningSession(fake_provider, [])
-    result = await session.solve_question("qual o status?")
+    result = await session.solve_question("qual o status")
 
     assert result == "resposta-async"
-    assert executor.last_payload == {"input": "qual o status?"}
+    assert executor.last_payload == {"input": "qual o status"}
 
 
 @pytest.mark.asyncio
@@ -87,10 +87,10 @@ async def test_solve_question_falls_back_to_sync_invoke(monkeypatch):
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: executor)
 
     session = reasoning_core.ReasoningSession(fake_provider, [])
-    result = await session.solve_question("rodou sync?")
+    result = await session.solve_question("rodou sync")
 
     assert result == "resposta-sync"
-    assert executor.last_payload == {"input": "rodou sync?"}
+    assert executor.last_payload == {"input": "rodou sync"}
 
 
 @pytest.mark.asyncio

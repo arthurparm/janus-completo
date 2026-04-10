@@ -3,7 +3,7 @@ from app.repositories.chat_repository_sql import ChatRepositorySQL
 
 def test_chat_repository_sql_preserves_knowledge_space_metadata_in_fallback():
     repo = ChatRepositorySQL()
-    conversation_id = repo.start_conversation("assistant", None, None)
+    conversation_id = repo.start_conversation("assistant", None)
 
     saved = repo.add_message(
         conversation_id=conversation_id,

@@ -18,44 +18,42 @@ class ActiveMemoryService:
         self,
         *,
         message: str,
-        user_id: str | None,
         conversation_id: str | None,
+        identity_source: str = "unknown",
+        target_entity: str | None = None,
     ) -> dict[str, Any] | None:
-        if not user_id or not str(message or "").strip():
+        if not str(message or "").strip():
             return None
 
         try:
             secret_result = await secret_memory_service.maybe_capture_from_message(
                 message=message,
-                user_id=user_id,
                 conversation_id=conversation_id,
             )
             if secret_result:
                 return {"memory_class": "secret", **secret_result}
         except Exception as exc:
-            logger.warning("active_memory_secret_capture_failed", error=str(exc), user_id=user_id)
+            logger.warning("active_memory_secret_capture_failed", error=str(exc))
 
         try:
             procedural_result = await procedural_memory_service.maybe_capture_from_message(
                 message=message,
-                user_id=user_id,
                 conversation_id=conversation_id,
             )
             if procedural_result:
                 return {"memory_class": "procedural", **procedural_result}
         except Exception as exc:
-            logger.warning("active_memory_procedural_capture_failed", error=str(exc), user_id=user_id)
+            logger.warning("active_memory_procedural_capture_failed", error=str(exc))
 
         try:
             preference_result = await user_preference_memory_service.maybe_capture_from_message(
                 message=message,
-                user_id=user_id,
                 conversation_id=conversation_id,
             )
             if preference_result:
                 return {"memory_class": "semantic", **preference_result}
         except Exception as exc:
-            logger.warning("active_memory_preference_capture_failed", error=str(exc), user_id=user_id)
+            logger.warning("active_memory_preference_capture_failed", error=str(exc))
 
         return None
 

@@ -453,7 +453,6 @@ class ObservabilityService:
 
             try:
                 events = self._repo.get_audit_events(
-                    user_id=None,
                     tool=None,
                     status=None,
                     start_ts=start_ts,
@@ -650,7 +649,6 @@ class ObservabilityService:
 
             try:
                 events = self._repo.get_audit_events(
-                    user_id=None,
                     tool=None,
                     status=None,
                     start_ts=start_ts,
@@ -721,36 +719,36 @@ class ObservabilityService:
             self._observe_operation_success(op, op_start)
             return report
 
-    async def get_user_metrics(self, user_id: str) -> dict[str, Any]:
+    async def get_user_metrics(self) -> dict[str, Any]:
         logger.info(
             "observability_user_metrics_requested",
             operation="user_metrics",
-            user_id=user_id,
+            
         )
         try:
-            return await self._repo.get_user_metrics(user_id)
+            return await self._repo.get_user_metrics()
         except ObservabilityRepositoryError as e:
             logger.exception(
                 "observability_user_metrics_failed",
                 operation="user_metrics",
-                user_id=user_id,
+                
                 error=str(e),
             )
             raise ObservabilityServiceError("Falha ao gerar métricas por usuário.") from e
 
-    def get_user_activity(self, user_id: str) -> dict[str, Any]:
+    def get_user_activity(self) -> dict[str, Any]:
         logger.info(
             "observability_user_activity_requested",
             operation="user_activity",
-            user_id=user_id,
+            
         )
         try:
-            return self._repo.get_user_activity(user_id)
+            return self._repo.get_user_activity()
         except ObservabilityRepositoryError as e:
             logger.exception(
                 "observability_user_activity_failed",
                 operation="user_activity",
-                user_id=user_id,
+                
                 error=str(e),
             )
             raise ObservabilityServiceError("Falha ao gerar atividade por usuário.") from e
@@ -855,7 +853,6 @@ class ObservabilityService:
 
     def get_audit_events(
         self,
-        user_id: str | None,
         tool: str | None,
         status: str | None,
         start_ts: float | None,
@@ -869,7 +866,6 @@ class ObservabilityService:
         logger.info(
             "observability_audit_events_query_requested",
             operation="audit_events_query",
-            user_id=user_id,
             tool=tool,
             status=status,
             endpoint=endpoint,
@@ -886,7 +882,7 @@ class ObservabilityService:
             )
             try:
                 result = self._repo.get_audit_events(
-                    user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
+                    tool, status, start_ts, end_ts, endpoint, limit, offset
                 )
                 self._set_span_attrs(span, **{"observability.event_count": len(result)})
                 self._observe_result_size(op, "events", len(result))
@@ -903,7 +899,6 @@ class ObservabilityService:
 
     def get_audit_events_count(
         self,
-        user_id: str | None,
         tool: str | None,
         status: str | None,
         start_ts: float | None,
@@ -914,14 +909,13 @@ class ObservabilityService:
         logger.info(
             "observability_audit_events_count_requested",
             operation="audit_events_count",
-            user_id=user_id,
             tool=tool,
             status=status,
         )
         with self._span_context("observability.service.audit_events_count") as span:
             self._set_span_attrs(span, **{"observability.operation": op})
             try:
-                count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+                count = self._repo.get_audit_events_count(tool, status, start_ts, end_ts)
                 self._set_span_attrs(span, **{"observability.event_count": count})
                 self._observe_result_size(op, "rows", count)
                 self._observe_operation_success(op, op_start)
@@ -951,10 +945,10 @@ class ObservabilityService:
         )
         try:
             o = self._repo.get_audit_events(
-                None, "openai", "ok", start_ts, end_ts, limit=10000, offset=0
+                "openai", "ok", start_ts, end_ts, limit=10000, offset=0
             )
             g = self._repo.get_audit_events(
-                None, "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0
+                "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0
             )
         except ObservabilityRepositoryError as e:
             self._observe_operation_failure(op, op_start, e)

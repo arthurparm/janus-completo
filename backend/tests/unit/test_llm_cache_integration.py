@@ -28,7 +28,7 @@ def test_llm_client_cache_integration():
         cache_key="orch_high"
     )
 
-    prompt = "What is 2+2?"
+    prompt = "What is 2+2"
 
     # First Call - Should hit invoke
     print("\n[TEST] 1st Call")

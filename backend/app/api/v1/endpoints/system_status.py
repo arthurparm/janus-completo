@@ -43,7 +43,6 @@ class ServiceHealthResponse(BaseModel):
 
 
 class UserStatusResponse(BaseModel):
-    user_id: str
     conversations: int
     messages: int
     approx_in_tokens: int
@@ -158,7 +157,6 @@ async def get_services_health(
 )
 async def get_user_status(
     request: Request,
-    user_id: str | None = None,
     observability: ObservabilityService = Depends(get_observability_service),
 ):
     actor = getattr(request.state, "actor_user_id", None)

@@ -13,10 +13,10 @@ class _FakeManifestRepo:
     def list_manifests(self, **kwargs):
         return list(self.items)
 
-    def get_manifest(self, doc_id, user_id=None):
+    def get_manifest(self, doc_id, ):
         return self.manifest
 
-    def delete_manifest(self, doc_id, user_id=None):
+    def delete_manifest(self, doc_id, ):
         return True
 
 
@@ -66,31 +66,16 @@ def test_upload_document_returns_202_and_accepts_form_user_id(monkeypatch):
     response = client.post(
         "/api/v1/documents/upload",
         files={"file": ("report.txt", b"conteudo", "text/plain")},
-        data={"user_id_form": "u-1", "conversation_id": "conv-1"},
+        data={"conversation_id": "conv-1"},
     )
 
     assert response.status_code == 202
     body = response.json()
-    assert body["doc_id"] == "doc:u-1:queued"
     assert body["status"] == "queued"
-    assert body["status_endpoint"].endswith("doc:u-1:queued")
-    assert service.stage_calls[0]["user_id"] == "u-1"
     assert service.stage_calls[0]["conversation_id"] == "conv-1"
 
 
-def test_upload_document_rejects_conflicting_user_identity(monkeypatch):
-    service = _FakeDocumentService()
-    monkeypatch.setattr(documents_endpoint, "get_request_actor_id", lambda request: None)
-    client = _build_client(service)
 
-    response = client.post(
-        "/api/v1/documents/upload?user_id=u-query",
-        files={"file": ("report.txt", b"conteudo", "text/plain")},
-        data={"user_id_form": "u-form"},
-    )
-
-    assert response.status_code == 422
-    assert "conflitante" in response.text
 
 
 def test_upload_document_returns_413_for_streaming_oversize(monkeypatch):
@@ -144,8 +129,8 @@ def test_document_status_and_list_are_manifest_driven(monkeypatch):
     monkeypatch.setattr(documents_endpoint, "get_async_qdrant_client", lambda: _EmptyQdrantClient())
     client = _build_client(service)
 
-    status_response = client.get("/api/v1/documents/status/doc:u-1:1?user_id=u-1")
-    list_response = client.get("/api/v1/documents/list?user_id=u-1&conversation_id=conv-1")
+    status_response = client.get("/api/v1/documents/status/doc:u-1:1")
+    list_response = client.get("/api/v1/documents/list?conversation_id=conv-1")
 
     assert status_response.status_code == 200
     status_body = status_response.json()

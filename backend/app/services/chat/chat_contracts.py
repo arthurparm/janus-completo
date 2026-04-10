@@ -112,7 +112,6 @@ def _normalize_confirmation_reason(reason: Any) -> str | None:
 
 def maybe_create_fallback_pending_action(
     *,
-    user_id: str | None,
     message: str,
     assistant_response: str | None = None,
     conversation_id: str | None = None,
@@ -123,8 +122,6 @@ def maybe_create_fallback_pending_action(
         return existing_pending_action_id, _normalize_confirmation_reason(
             (understanding or {}).get("confirmation_reason") if isinstance(understanding, dict) else None
         )
-    if not user_id:
-        return None, None
     context = understanding if isinstance(understanding, dict) else {}
     requires_confirmation = bool(context.get("requires_confirmation"))
     normalized_reason = _normalize_confirmation_reason(context.get("confirmation_reason"))
@@ -148,7 +145,6 @@ def maybe_create_fallback_pending_action(
 
         repo = PendingActionRepository()
         pending = repo.create(
-            user_id=str(user_id),
             tool_name="chat_high_risk_request",
             args_json=json.dumps(
                 {

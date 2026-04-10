@@ -21,7 +21,6 @@ class PendingActionDTO(BaseModel):
     action_id: int | None = None
     status: str
     message: str | None
-    user_id: str | None = None
     tool_name: str | None = None
     args_json: str | None = None
     created_at: str | None = None
@@ -427,7 +426,6 @@ async def _resume_graph_execution(thread_id: str, resume_value: str):
 async def list_pending(
     include_graph: bool = True,
     include_sql: bool = False,
-    user_id: str | None = None,
     pending_status: str | None = "pending",
     limit: int = 50,
 ):
@@ -443,7 +441,7 @@ async def list_pending(
             from app.repositories.pending_action_repository import PendingActionRepository
 
             repo = PendingActionRepository()
-            sql_pending = repo.list(user_id=user_id, status=pending_status, limit=limit)
+            sql_pending = repo.list(status=pending_status, limit=limit)
             for item in sql_pending:
                 safe_args_json = _sanitize_pending_args_json(getattr(item, "args_json", None))
                 scope_summary, scope_targets = _extract_pending_scope(safe_args_json)

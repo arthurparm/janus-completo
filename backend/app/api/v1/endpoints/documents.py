@@ -11,8 +11,7 @@ from fastapi import (
     Query,
     Request,
     UploadFile,
-    status,
-)
+    status)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from qdrant_client import models
@@ -23,8 +22,7 @@ from app.db.vector_store import (
     aget_or_create_collection,
     async_count_points,
     build_user_docs_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 from app.services.document_service import DocumentFileTooLargeError, DocumentIngestionService
 
 try:
@@ -76,27 +74,8 @@ def get_doc_service(request: Request) -> DocumentIngestionService:
 
 def _resolve_upload_user_scope(
     request: Request | None,
-    *,
-    user_id_query: str | None,
-    user_id_form: str | None,
 ) -> str | None:
-    candidates: dict[str, str] = {}
-    if user_id_query:
-        candidates["query"] = str(user_id_query)
-    if user_id_form:
-        candidates["form"] = str(user_id_form)
-    actor_id = get_request_actor_id(request)
-    if actor_id is not None:
-        candidates["actor"] = str(actor_id)
-    if not candidates:
-        return None
-    values = {value for value in candidates.values() if value}
-    if len(values) > 1:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="user_id conflitante entre query/form/auth",
-        )
-    return values.pop() if values else None
+    return "default"
 
 
 class UploadResponse(BaseModel):
@@ -114,8 +93,6 @@ class UploadResponse(BaseModel):
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
     file: UploadFile = File(...),
-    user_id: str | None = Query(None),
-    user_id_form: str | None = Form(None),
     request: Request = None,
     service: DocumentIngestionService = Depends(get_doc_service),
     auto_consolidate: bool | None = Form(False),
@@ -126,22 +103,17 @@ async def upload_document(
     doc_role: str | None = Form(None),
     edition_or_version: str | None = Form(None),
     language: str | None = Form(None),
-    parent_collection_id: str | None = Form(None),
-):
+    parent_collection_id: str | None = Form(None)):
     import time as _t
 
     _t0 = _t.perf_counter()
-    uid = _resolve_upload_user_scope(request, user_id_query=user_id, user_id_form=user_id_form)
-    if not uid:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
-        )
+    uid = "default"
     try:
         cm = _tracer.start_as_current_span("docs.upload") if _OTEL else nullcontext()
         with cm:  # type: ignore
             result = await service.stage_upload(
                 file=file,
-                user_id=uid,
+                user_id="default",
                 conversation_id=conversation_id,
                 knowledge_space_id=knowledge_space_id,
                 source_type=source_type,
@@ -150,29 +122,25 @@ async def upload_document(
                 edition_or_version=edition_or_version,
                 language=language,
                 parent_collection_id=parent_collection_id,
-                auto_consolidate=bool(auto_consolidate),
-            )
+                auto_consolidate=bool(auto_consolidate))
     except DocumentFileTooLargeError as exc:
         payload = UploadResponse(
             doc_id=exc.doc_id,
             chunks=0,
             status="file_too_large",
             message=str(exc),
-            status_endpoint=f"/api/v1/documents/status/{exc.doc_id}",
-        )
+            status_endpoint=f"/api/v1/documents/status/{exc.doc_id}")
         _DOC_UPLOAD_REQ.labels("file_too_large").inc()
         _DOC_UPLOAD_LAT.observe(max(0.0, _t.perf_counter() - _t0))
         return JSONResponse(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            content=payload.model_dump(),
-        )
+            content=payload.model_dump())
     except Exception as exc:
         _DOC_UPLOAD_REQ.labels("error").inc()
         _DOC_UPLOAD_LAT.observe(max(0.0, _t.perf_counter() - _t0))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Falha ao enfileirar documento: {exc}",
-        ) from exc
+            detail=f"Falha ao enfileirar documento: {exc}") from exc
 
     _DOC_UPLOAD_REQ.labels(str(result.get("status") or "queued")).inc()
     _DOC_UPLOAD_LAT.observe(max(0.0, _t.perf_counter() - _t0))
@@ -184,8 +152,7 @@ async def upload_document(
         status_endpoint=result.get("status_endpoint"),
         semantic=result.get("semantic"),
         knowledge_space_id=knowledge_space_id,
-        doc_role=doc_role,
-    )
+        doc_role=doc_role)
 
 
 class DocSearchResponse(BaseModel):
@@ -195,17 +162,15 @@ class DocSearchResponse(BaseModel):
 @router.get("/search", response_model=DocSearchResponse)
 async def search_documents(
     query: str = Query(...),
-    user_id: str | None = None,
     doc_id: str | None = None,
     knowledge_space_id: str | None = None,
     limit: int = 5,
     min_score: float | None = None,
-    request: Request = None,
-):
+    request: Request = None):
     import time as _t
 
     _t0 = _t.perf_counter()
-    uid = resolve_user_scope_id(request, user_id)
+    uid = "default"
     if not uid:
         _DOC_SEARCH_REQ.labels("error").inc()
         _DOC_SEARCH_LAT.observe(max(0.0, _t.perf_counter() - _t0))
@@ -213,10 +178,7 @@ async def search_documents(
     vec = await aembed_text(query)
     client = get_async_qdrant_client()
     collection_name = await aget_or_create_collection(build_user_docs_collection_name(uid))
-    must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
-        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-    ]
+    must: list[models.FieldCondition] = [        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk"))]
     if doc_id:
         must.append(
             models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))
@@ -225,8 +187,7 @@ async def search_documents(
         must.append(
             models.FieldCondition(
                 key="metadata.knowledge_space_id",
-                match=models.MatchValue(value=knowledge_space_id),
-            )
+                match=models.MatchValue(value=knowledge_space_id))
         )
     sc_filter = models.Filter(must=must)
     cm = _tracer.start_as_current_span("docs.search") if _OTEL else nullcontext()
@@ -237,8 +198,7 @@ async def search_documents(
             limit=limit,
             with_payload=True,
             query_filter=sc_filter,
-            score_threshold=min_score if isinstance(min_score, float) else None,
-        )
+            score_threshold=min_score if isinstance(min_score, float) else None)
     points = getattr(res, "points", res) or []
     results: list[dict[str, Any]] = []
     for point in points:
@@ -308,29 +268,25 @@ def _build_legacy_doc_list_item(doc_id: str, payload: dict[str, Any]) -> DocList
         last_index_ts=payload.get("last_index_ts"),
         semantic_doc_type=payload.get("semantic_doc_type"),
         semantic_confidence=payload.get("semantic_confidence"),
-        semantic_summary=payload.get("semantic_summary"),
-    )
+        semantic_summary=payload.get("semantic_summary"))
 
 
 @router.get("/list", response_model=DocListResponse)
 async def list_documents(
-    user_id: str | None = None,
     conversation_id: str | None = None,
     knowledge_space_id: str | None = None,
     request: Request = None,
-    limit: int = 100,
-):
-    uid = resolve_user_scope_id(request, user_id)
+    limit: int = 100):
+    uid = "default"
     if not uid:
         return DocListResponse(items=[])
 
     service: DocumentIngestionService = request.app.state.document_service
     manifest_rows = service._manifest_repo.list_manifests(
-        user_id=uid,
+        user_id="default",
         conversation_id=conversation_id,
         knowledge_space_id=knowledge_space_id,
-        limit=limit,
-    )
+        limit=limit)
     items: list[DocListItem] = []
     seen_doc_ids: set[str] = set()
     for row in manifest_rows:
@@ -360,16 +316,13 @@ async def list_documents(
                 semantic_summary=row.get("semantic_summary"),
                 created_at=row.get("created_at"),
                 started_at=row.get("started_at"),
-                completed_at=row.get("completed_at"),
-            )
+                completed_at=row.get("completed_at"))
         )
 
     client = get_async_qdrant_client()
     coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
     must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
-    ]
+        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk"))]
     if conversation_id:
         must.append(
             models.FieldCondition(
@@ -380,16 +333,14 @@ async def list_documents(
         must.append(
             models.FieldCondition(
                 key="metadata.knowledge_space_id",
-                match=models.MatchValue(value=knowledge_space_id),
-            )
+                match=models.MatchValue(value=knowledge_space_id))
         )
     qfilter = models.Filter(must=must)
     scroll_res = await client.scroll(
         collection_name=coll,
         scroll_filter=qfilter,
         limit=limit,
-        with_payload=True,
-    )
+        with_payload=True)
     points = scroll_res[0] if isinstance(scroll_res, tuple) else (scroll_res or [])
     agg: dict[str, dict[str, Any]] = {}
     for hit in points:
@@ -425,33 +376,24 @@ async def list_documents(
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str, user_id: str | None = None, request: Request = None):
-    uid = resolve_user_scope_id(request, user_id)
-    if not uid:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
-        )
+async def delete_document(doc_id: str, request: Request = None):
+    uid = "default"
     client = get_async_qdrant_client()
     coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
     try:
         qfilter = models.Filter(
-            must=[
-                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=uid)),
-                models.FieldCondition(
+            must=[                models.FieldCondition(
                     key="metadata.type", match=models.MatchValue(value="doc_chunk")
                 ),
-                models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id)),
-            ]
+                models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))]
         )
         await client.delete(
             collection_name=coll,
-            points_selector=models.FilterSelector(filter=qfilter),
-        )
+            points_selector=models.FilterSelector(filter=qfilter))
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Falha ao excluir documento: {exc}",
-        ) from exc
+            detail=f"Falha ao excluir documento: {exc}") from exc
 
     service = request.app.state.document_service
     manifest = service._manifest_repo.get_manifest(doc_id, uid)
@@ -473,7 +415,6 @@ class LinkUrlResponse(BaseModel):
 @router.post("/link-url", response_model=LinkUrlResponse)
 async def link_url(
     url: str = Form(...),
-    user_id: str | None = None,
     conversation_id: str | None = Form(None),
     knowledge_space_id: str | None = Form(None),
     source_type: str | None = Form(None),
@@ -483,13 +424,8 @@ async def link_url(
     language: str | None = Form(None),
     parent_collection_id: str | None = Form(None),
     request: Request = None,
-    service: DocumentIngestionService = Depends(get_doc_service),
-):
-    uid = resolve_user_scope_id(request, user_id)
-    if not uid:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
-        )
+    service: DocumentIngestionService = Depends(get_doc_service)):
+    uid = "default"
     import httpx
 
     try:
@@ -502,7 +438,7 @@ async def link_url(
 
     filename = url.split("/")[-1] or "page.html"
     result = await service.ingest_file(
-        user_id=uid,
+        user_id="default",
         filename=filename,
         content_type=content_type,
         data=data,
@@ -513,12 +449,11 @@ async def link_url(
         doc_role=doc_role,
         edition_or_version=edition_or_version,
         language=language,
-        parent_collection_id=parent_collection_id,
-    )
+        parent_collection_id=parent_collection_id)
     if result.get("status") == "indexed":
         service._manifest_repo.create_manifest(
             doc_id=result.get("doc_id"),
-            user_id=uid,
+            user_id="default",
             conversation_id=conversation_id,
             knowledge_space_id=knowledge_space_id,
             source_type=source_type,
@@ -531,29 +466,25 @@ async def link_url(
             content_type=content_type,
             file_size_bytes=len(data or b""),
             status="indexed",
-            storage_path=None,
-        )
+            storage_path=None)
         service._manifest_repo.mark_completed(
             result.get("doc_id"),
             chunks_total=int(result.get("chunks") or 0),
             chunks_indexed=int(result.get("chunks_indexed", result.get("chunks") or 0)),
             semantic_doc_type=(result.get("semantic") or {}).get("doc_type"),
             semantic_summary=(result.get("semantic") or {}).get("summary"),
-            semantic_confidence=(result.get("semantic") or {}).get("confidence"),
-        )
+            semantic_confidence=(result.get("semantic") or {}).get("confidence"))
     return LinkUrlResponse(
         doc_id=result.get("doc_id"),
         status=result.get("status"),
         chunks=result.get("chunks"),
         semantic=result.get("semantic"),
         knowledge_space_id=knowledge_space_id,
-        doc_role=doc_role,
-    )
+        doc_role=doc_role)
 
 
 class DocStatusResponse(BaseModel):
     doc_id: str
-    user_id: str
     knowledge_space_id: str | None = None
     source_type: str | None = None
     source_id: str | None = None
@@ -593,15 +524,11 @@ def _build_doc_samples(points: list[Any]) -> list[dict[str, Any]]:
 
 
 @router.get("/status/{doc_id}", response_model=DocStatusResponse)
-async def document_status(doc_id: str, user_id: str | None = None, request: Request = None):
+async def document_status(doc_id: str, request: Request = None):
     import time as _t
 
     _t0 = _t.perf_counter()
-    uid = resolve_user_scope_id(request, user_id)
-    if not uid:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
-        )
+    uid = "default"
 
     service = request.app.state.document_service
     manifest = service._manifest_repo.get_manifest(doc_id, uid)
@@ -633,15 +560,14 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
                     query=[0.0] * 1536,
                     limit=10,
                     with_payload=True,
-                    query_filter=qfilter,
-                )
+                    query_filter=qfilter)
             samples = _build_doc_samples(getattr(res, "points", res) or [])
 
         _DOC_STATUS_REQ.labels("success").inc()
         _DOC_STATUS_LAT.observe(max(0.0, _t.perf_counter() - _t0))
         return DocStatusResponse(
             doc_id=doc_id,
-            user_id=uid,
+            user_id="default",
             knowledge_space_id=manifest.get("knowledge_space_id"),
             source_type=manifest.get("source_type"),
             source_id=manifest.get("source_id"),
@@ -657,8 +583,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
             started_at=manifest.get("started_at"),
             completed_at=manifest.get("completed_at"),
             samples=samples,
-            semantic=semantic_payload,
-        )
+            semantic=semantic_payload)
 
     client = get_async_qdrant_client()
     coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
@@ -672,8 +597,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
             query=[0.0] * 1536,
             limit=10,
             with_payload=True,
-            query_filter=qfilter,
-        )
+            query_filter=qfilter)
     points = getattr(res, "points", res) or []
     samples = _build_doc_samples(points)
     total = await async_count_points(client, coll, qfilter, exact=True)
@@ -681,7 +605,7 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
     _DOC_STATUS_LAT.observe(max(0.0, _t.perf_counter() - _t0))
     return DocStatusResponse(
         doc_id=doc_id,
-        user_id=uid,
+        user_id="default",
         knowledge_space_id=None,
         source_type=None,
         source_id=None,
@@ -692,5 +616,4 @@ async def document_status(doc_id: str, user_id: str | None = None, request: Requ
         chunks_total=total,
         chunks_indexed=total,
         samples=samples,
-        semantic=None,
-    )
+        semantic=None)

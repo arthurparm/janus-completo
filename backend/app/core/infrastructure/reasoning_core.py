@@ -3,7 +3,6 @@ import json
 import structlog
 from typing import Any, Awaitable, Callable, Dict, Optional
 
-from langchain.agents import create_react_agent
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 
@@ -11,6 +10,12 @@ from app.core.infrastructure.prompt_loader import get_prompt
 from app.core.llm.types import ModelPriority, ModelRole
 
 logger = structlog.get_logger(__name__)
+
+try:
+    from langchain.agents import create_react_agent as create_react_agent
+except Exception:
+    def create_react_agent(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("create_react_agent is not available in this langchain version")
 
 
 async def _resolve_memory_db() -> Any:

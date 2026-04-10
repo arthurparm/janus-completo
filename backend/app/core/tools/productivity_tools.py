@@ -44,35 +44,34 @@ def _subject_fingerprint(subject: str) -> str:
 
 
 @tool
-def list_calendar_events(user_id: str) -> str:
+def list_calendar_events() -> str:
     """
     Lista eventos do calendário do usuário.
     Requer escopo 'calendar.read'.
     """
-    events = _get_context_store(_calendar_events_ctx).get(user_id) or []
+    events = _get_context_store(_calendar_events_ctx).get("default") or []
     return json.dumps(events, ensure_ascii=False)
 
 
 @tool
-def create_calendar_event(user_id: str, title: str, when_ts_ms: int) -> str:
+def create_calendar_event(title: str, when_ts_ms: int) -> str:
     """
     Cria um evento simples no calendário.
     Requer escopo 'calendar.write'.
     """
     ev = {"title": title, "when_ts_ms": int(when_ts_ms)}
-    _get_context_store(_calendar_events_ctx).setdefault(user_id, []).append(ev)
+    _get_context_store(_calendar_events_ctx).setdefault("default", []).append(ev)
     return json.dumps({"status": "created", "event": ev}, ensure_ascii=False)
 
 
 @tool
-def send_email(user_id: str, to: str, subject: str, body: str) -> str:
+def send_email(to: str, subject: str, body: str) -> str:
     """
     Envia um email (stub) para o destinatário.
     Requer escopo 'email.send'.
     """
     logger.info(
         "email_queued",
-        user_id=user_id,
         to_domain=_email_domain(to),
         subject_fingerprint=_subject_fingerprint(subject),
     )
@@ -80,13 +79,13 @@ def send_email(user_id: str, to: str, subject: str, body: str) -> str:
 
 
 @tool
-def create_note(user_id: str, title: str, content: str) -> str:
+def create_note(title: str, content: str) -> str:
     """
     Cria uma nota textual.
     Requer escopo 'notes.write'.
     """
     note = {"title": title, "content": content[:2000]}
-    _get_context_store(_notes_ctx).setdefault(user_id, []).append(note)
+    _get_context_store(_notes_ctx).setdefault("default", []).append(note)
     return json.dumps({"status": "saved", "note": note}, ensure_ascii=False)
 
 

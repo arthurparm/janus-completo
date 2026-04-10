@@ -14,8 +14,7 @@ from app.core.memory.generative_memory import generative_memory_service
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_memory_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 
 logger = structlog.get_logger(__name__)
 
@@ -37,8 +36,7 @@ class UserPreferenceMemoryService:
         "quero que voce",
         "daqui pra frente",
         "lembre",
-        "considere",
-    )
+        "considere")
 
     _DONT_TERMS = (
         "não use",
@@ -49,8 +47,7 @@ class UserPreferenceMemoryService:
         "nao faca",
         "não quero",
         "nao quero",
-        "evite",
-    )
+        "evite")
 
     def should_inspect_message(self, message: str) -> bool:
         text = str(message or "").strip().lower()
@@ -92,13 +89,9 @@ class UserPreferenceMemoryService:
         self,
         *,
         message: str,
-        user_id: str | None,
         conversation_id: str | None,
-        threshold: float = 0.75,
-    ) -> dict[str, Any] | None:
-        if not user_id:
-            return None
-
+        user_id: str,
+        threshold: float = 0.75) -> dict[str, Any] | None:
         extracted = self.extract_preference(message)
         if not extracted:
             return None
@@ -108,21 +101,17 @@ class UserPreferenceMemoryService:
             return None
 
         dedupe_key = self._dedupe_key(
-            user_id=str(user_id),
             preference_kind=str(extracted["preference_kind"]),
-            instruction_text=str(extracted["instruction_text"]),
-        )
-        exists = await self._preference_exists(user_id=str(user_id), dedupe_key=dedupe_key)
+            instruction_text=str(extracted["instruction_text"]))
+        exists = await self._preference_exists(dedupe_key=dedupe_key)
         if exists:
             return {"status": "duplicate", "dedupe_key": dedupe_key, **extracted}
 
         now_ms = int(time.time() * 1000)
         resolved_conversation = str(conversation_id) if conversation_id else None
         await self._deactivate_scope_conflicts(
-            user_id=str(user_id),
             scope=str(extracted["scope"]),
-            keep_dedupe_key=dedupe_key,
-        )
+            keep_dedupe_key=dedupe_key)
         metadata = {
             "type": "user_preference",
             "memory_subtype": "user_preference",
@@ -136,9 +125,9 @@ class UserPreferenceMemoryService:
             "recall_policy": "always",
             "sensitivity": "normal",
             "stability_score": float(extracted.get("stability_score") or 0.88),
-            "user_id": str(user_id),
             "session_id": resolved_conversation,
             "conversation_id": resolved_conversation,
+            "user_id": user_id,
             "source_role": "user",
             "origin": "chat.user_preference_extractor",
             "source_channel": "chat",
@@ -149,8 +138,7 @@ class UserPreferenceMemoryService:
         }
         content = self._build_preference_content(
             preference_kind=str(extracted["preference_kind"]),
-            instruction_text=str(extracted["instruction_text"]),
-        )
+            instruction_text=str(extracted["instruction_text"]))
         try:
             exp = await generative_memory_service.add_memory(content, type="semantic", metadata=metadata)
             return {
@@ -160,31 +148,25 @@ class UserPreferenceMemoryService:
                 **extracted,
             }
         except Exception as exc:
-            logger.warning("user_preference_capture_failed", error=str(exc), user_id=str(user_id))
+            logger.warning("user_preference_capture_failed", error=str(exc))
             return None
 
     async def list_preferences(
         self,
         *,
-        user_id: str,
         conversation_id: str | None = None,
         limit: int = 20,
         active_only: bool = True,
-        query: str | None = None,
-    ) -> list[dict[str, Any]]:
+        query: str | None = None) -> list[dict[str, Any]]:
         collection_name = await aget_or_create_collection(
-            build_user_memory_collection_name(user_id)
+            build_user_memory_collection_name()
         )
         client = get_async_qdrant_client()
 
         must: list[qdrant_models.FieldCondition] = [
             qdrant_models.FieldCondition(
-                key="metadata.user_id", match=qdrant_models.MatchValue(value=str(user_id))
-            ),
-            qdrant_models.FieldCondition(
                 key="metadata.type", match=qdrant_models.MatchValue(value="user_preference")
-            ),
-        ]
+            )]
         if active_only:
             must.append(
                 qdrant_models.FieldCondition(
@@ -195,8 +177,7 @@ class UserPreferenceMemoryService:
             must.append(
                 qdrant_models.FieldCondition(
                     key="metadata.conversation_id",
-                    match=qdrant_models.MatchValue(value=str(conversation_id)),
-                )
+                    match=qdrant_models.MatchValue(value=str(conversation_id)))
             )
         qfilter = qdrant_models.Filter(must=must)
 
@@ -210,8 +191,7 @@ class UserPreferenceMemoryService:
                     query=vec,
                     limit=max(limit * 3, limit),
                     with_payload=True,
-                    query_filter=qfilter,
-                )
+                    query_filter=qfilter)
                 points = getattr(res, "points", res) or []
                 used_vector_query = True
             except Exception as exc:
@@ -221,16 +201,14 @@ class UserPreferenceMemoryService:
                     collection_name=collection_name,
                     scroll_filter=qfilter,
                     limit=scroll_limit,
-                    with_payload=True,
-                )
+                    with_payload=True)
         else:
             scroll_limit = min(200, max(limit * 5, limit))
             points, _ = await client.scroll(
                 collection_name=collection_name,
                 scroll_filter=qfilter,
                 limit=scroll_limit,
-                with_payload=True,
-            )
+                with_payload=True)
 
         items = [self._point_to_preference_item(point) for point in points]
         deduped: dict[str, dict[str, Any]] = {}
@@ -243,8 +221,7 @@ class UserPreferenceMemoryService:
         ranked = sorted(
             deduped.values(),
             key=lambda item: self._preference_rank(item),
-            reverse=True,
-        )
+            reverse=True)
         if query and not used_vector_query:
             qnorm = str(query).lower()
             ranked = [
@@ -274,8 +251,7 @@ class UserPreferenceMemoryService:
 
         lines = [
             "Preferências e Perfil:",
-            "- Use estas preferências para ajustar tom, profundidade e formato da resposta.",
-        ]
+            "- Use estas preferências para ajustar tom, profundidade e formato da resposta."]
         if do_items:
             lines.append("FAZER:")
             lines.extend(f"- {text}" for text in do_items[:5])
@@ -310,11 +286,11 @@ class UserPreferenceMemoryService:
 
     def _normalize_instruction_text(self, text: str) -> str:
         cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
-        cleaned = re.sub(r"^\s*(janus[:,]?\s*)?", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^\s*(janus[:]?\s*)?", "", cleaned, flags=re.IGNORECASE)
         return cleaned[:500]
 
-    def _dedupe_key(self, *, user_id: str, preference_kind: str, instruction_text: str) -> str:
-        base = f"{user_id}:{preference_kind}:{self._normalize_for_hash(instruction_text)}"
+    def _dedupe_key(self, *, preference_kind: str, instruction_text: str) -> str:
+        base = f"{preference_kind}:{self._normalize_for_hash(instruction_text)}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def _normalize_for_hash(self, text: str) -> str:
@@ -322,23 +298,21 @@ class UserPreferenceMemoryService:
         lowered = re.sub(r"[\W_]+", " ", lowered)
         return re.sub(r"\s+", " ", lowered).strip()
 
-    async def _preference_exists(self, *, user_id: str, dedupe_key: str) -> bool:
+    async def _preference_exists(self, *, dedupe_key: str) -> bool:
         try:
-            items = await self.list_preferences(user_id=user_id, limit=50, active_only=True)
+            items = await self.list_preferences(limit=50, active_only=True)
             return any(str(item.get("dedupe_key")) == dedupe_key for item in items)
         except Exception as exc:
-            logger.warning("user_preference_dedupe_check_failed", error=str(exc), user_id=user_id)
+            logger.warning("user_preference_dedupe_check_failed", error=str(exc))
             return False
 
     async def _deactivate_scope_conflicts(
         self,
         *,
-        user_id: str,
         scope: str,
-        keep_dedupe_key: str,
-    ) -> None:
+        keep_dedupe_key: str) -> None:
         try:
-            items = await self.list_preferences(user_id=user_id, limit=50, active_only=True)
+            items = await self.list_preferences(limit=50, active_only=True)
             conflicting_ids = [
                 str(item.get("id") or "").strip()
                 for item in items
@@ -350,7 +324,7 @@ class UserPreferenceMemoryService:
                 return
             client = get_async_qdrant_client()
             collection_name = await aget_or_create_collection(
-                build_user_memory_collection_name(user_id)
+                build_user_memory_collection_name()
             )
             now_ms = int(time.time() * 1000)
             for point_id in conflicting_ids:
@@ -358,8 +332,7 @@ class UserPreferenceMemoryService:
                     collection_name=collection_name,
                     ids=[point_id],
                     with_payload=True,
-                    with_vectors=False,
-                )
+                    with_vectors=False)
                 payload = getattr(existing[0], "payload", {}) if existing else {}
                 metadata = dict((payload or {}).get("metadata") or {})
                 metadata.update(
@@ -372,10 +345,9 @@ class UserPreferenceMemoryService:
                 await client.set_payload(
                     collection_name=collection_name,
                     payload={"metadata": metadata},
-                    points=[point_id],
-                )
+                    points=[point_id])
         except Exception as exc:
-            logger.warning("user_preference_scope_deactivate_failed", error=str(exc), user_id=user_id)
+            logger.warning("user_preference_scope_deactivate_failed", error=str(exc))
 
     def _build_preference_content(self, *, preference_kind: str, instruction_text: str) -> str:
         label = "NÃO FAZER" if preference_kind == "dont" else "FAZER"
@@ -395,7 +367,6 @@ class UserPreferenceMemoryService:
             "instruction_text": meta.get("instruction_text"),
             "scope": meta.get("scope"),
             "confidence": meta.get("confidence"),
-            "user_id": meta.get("user_id"),
             "conversation_id": meta.get("conversation_id") or meta.get("session_id"),
             "session_id": meta.get("session_id"),
             "origin": meta.get("origin"),

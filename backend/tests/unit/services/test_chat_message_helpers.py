@@ -10,7 +10,7 @@ def test_build_understanding_payload_summarizes_uploaded_file_reference():
 
 
 def test_build_understanding_payload_summarizes_question_without_echoing_message():
-    payload = build_understanding_payload("Consegue imaginar uma historia para Frieren?")
+    payload = build_understanding_payload("Consegue imaginar uma historia para Frieren")
 
     assert payload is not None
     assert payload["intent"] == "question"

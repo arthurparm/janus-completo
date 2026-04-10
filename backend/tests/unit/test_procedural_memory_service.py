@@ -24,12 +24,11 @@ async def test_maybe_capture_builds_procedural_metadata(monkeypatch):
     svc = ProceduralMemoryService()
     captured: dict[str, object] = {}
 
-    async def _fake_exists(*, user_id: str, dedupe_key: str) -> bool:
-        captured["checked_user_id"] = user_id
+    async def _fake_exists(*, dedupe_key: str) -> bool:
         captured["checked_dedupe_key"] = dedupe_key
         return False
 
-    async def _fake_deactivate_scope_conflicts(*, user_id: str, scope: str, keep_dedupe_key: str) -> None:
+    async def _fake_deactivate_scope_conflicts(*, scope: str, keep_dedupe_key: str) -> None:
         captured["scope"] = scope
         captured["keep_dedupe_key"] = keep_dedupe_key
 
@@ -48,8 +47,8 @@ async def test_maybe_capture_builds_procedural_metadata(monkeypatch):
 
     result = await svc.maybe_capture_from_message(
         message="Sempre termine com próximos passos objetivos.",
-        user_id="u-1",
         conversation_id="c-1",
+        user_id="1",
     )
 
     assert result is not None

@@ -8,13 +8,12 @@ from app.services.resource_manager import get_user_gpu_usage
 router = APIRouter(tags=["Resources"], prefix="/resources")
 
 
-@router.get("/gpu/usage/{user_id}")
-async def gpu_usage(user_id: str):
+@router.get("/gpu/usage/")
+async def gpu_usage():
     return get_user_gpu_usage(user_id)
 
 
 class BudgetSetRequest(BaseModel):
-    user_id: str
     budget: float
 
 

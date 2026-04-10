@@ -91,7 +91,6 @@ async def test_ingest_file_includes_semantic_metadata_in_payload(monkeypatch):
     )
 
     result = await service.ingest_file(
-        user_id="u-1",
         filename="privacy.txt",
         content_type="text/plain",
         data=b"fake",

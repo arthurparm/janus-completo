@@ -13,13 +13,10 @@ def get_repo() -> ABExperimentRepository:
 
 class ExperimentCreateRequest(BaseModel):
     name: str
-    user_id: str | None = None
-
 
 class ExperimentResponse(BaseModel):
     id: int
     name: str
-    user_id: str | None
     status: str
 
 
@@ -61,7 +58,7 @@ async def add_arm(
 
 @router.get("/experiments", response_model=list[ExperimentResponse])
 async def list_experiments(
-    user_id: str | None = None, repo: ABExperimentRepository = Depends(get_repo)
+    repo: ABExperimentRepository = Depends(get_repo)
 ):
     items = repo.list_experiments(user_id=user_id, limit=100)
     return [

@@ -12,7 +12,7 @@ class _DummyRepo:
 
 
 class _DummyMemory:
-    async def index_interaction(self, content: str, user_id: str, session_id: str, role: str) -> None:
+    async def index_interaction(self, content: str, session_id: str, role: str) -> None:
         return None
 
 
@@ -21,7 +21,7 @@ class _FakeHit:
         self.score = score
         self.payload = {
             "content": content,
-            "metadata": metadata or {"type": "doc_chunk", "user_id": "u-1"},
+            "metadata": metadata or {"type": "doc_chunk"},
         }
 
 
@@ -103,7 +103,7 @@ async def test_retrieve_context_emits_telemetry_with_required_fields(monkeypatch
     monkeypatch.setattr(rag_module, "emit_step_telemetry", _fake_emit)
 
     service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
-    context = await service.retrieve_context("find context", user_id="u-1", conversation_id="c-1")
+    context = await service.retrieve_context("find context", conversation_id="c-1", user_id="u-1")
 
     assert context is not None
     assert "Contexto Recente Relevante:" in context
@@ -131,7 +131,6 @@ async def test_retrieve_context_emits_skip_telemetry_when_user_missing(monkeypat
     service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
     context = await service.retrieve_context(
         "find context",
-        user_id=None,
         conversation_id="c-1",
         caller_endpoint="/api/v1/chat/stream/{conversation_id}",
         transport="sse",
@@ -184,7 +183,7 @@ async def test_retrieve_context_applies_rerank_and_reports_query_limit(monkeypat
     monkeypatch.setattr(rag_module.settings, "RAG_RERANK_CANDIDATE_MULTIPLIER", 3)
 
     service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
-    _ = await service.retrieve_context("find context", user_id="u-1", conversation_id="c-1", limit=2)
+    _ = await service.retrieve_context("find context", conversation_id="c-1", user_id="u-1", limit=2)
 
     assert client.last_limit == 6
     event = emitted[-1]
@@ -215,7 +214,6 @@ async def test_retrieve_context_includes_conversation_document_context_for_uploa
                         '{"version":1}',
                         metadata={
                             "type": "doc_chunk",
-                            "user_id": "u-1",
                             "file_name": "genesis-backup-2026-02-05.json",
                         },
                     )
@@ -230,7 +228,6 @@ async def test_retrieve_context_includes_conversation_document_context_for_uploa
                         '{"version":1,"createdAt":"2026-02-05"}',
                         metadata={
                             "type": "doc_chunk",
-                            "user_id": "u-1",
                             "conversation_id": "c-1",
                             "doc_id": "doc:u-1:1",
                             "file_name": "genesis-backup-2026-02-05.json",
@@ -248,8 +245,8 @@ async def test_retrieve_context_includes_conversation_document_context_for_uploa
     service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
     context = await service.retrieve_context(
         "te mandei um arquivo",
-        user_id="u-1",
         conversation_id="c-1",
+        user_id="u-1",
     )
 
     assert context is not None
@@ -270,8 +267,8 @@ async def test_retrieve_context_skips_when_route_is_not_qdrant(monkeypatch):
     service = RAGService(repo=_DummyRepo(), llm_service=object(), memory_service=_DummyMemory())
     context = await service.retrieve_context(
         "find context",
-        user_id="u-1",
         conversation_id="c-1",
+        user_id="u-1",
         route_decision=RouteDecision(
             primary=RouteTarget.POSTGRES,
             secondary=tuple(),

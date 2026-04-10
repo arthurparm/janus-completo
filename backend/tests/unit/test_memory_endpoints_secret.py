@@ -44,7 +44,7 @@ def test_memory_secrets_endpoint_returns_masked_items(monkeypatch):
     )
 
     client = TestClient(app)
-    resp = client.get("/api/v1/memory/secrets?user_id=u1")
+    resp = client.get("/api/v1/memory/secrets")
 
     assert resp.status_code == 200
     data = resp.json()

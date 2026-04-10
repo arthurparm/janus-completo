@@ -619,10 +619,10 @@ class KnowledgeService:
             raise
 
     async def consolidate_document(
-        self, user_id: str, doc_id: str, limit: int = 50
+        self, doc_id: str, limit: int = 50
     ) -> dict[str, Any]:
         return await knowledge_consolidator.consolidate_document(
-            user_id=user_id, doc_id=doc_id, limit=limit
+            doc_id=doc_id, limit=limit
         )
 
     async def find_related_concepts(

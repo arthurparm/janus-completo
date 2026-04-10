@@ -41,7 +41,7 @@ async def test_ask_code_with_citations_returns_answer_and_citations():
     svc = FakeKnowledgeService(repo)
 
     result = await svc.ask_code_with_citations(
-        question="Como Engine.run chama helper em app/main.py?", limit=7, citation_limit=4
+        question="Como Engine.run chama helper em app/main.py", limit=7, citation_limit=4
     )
 
     assert result["answer"] == "answer:Como Engine.run chama helper em app/main.py?:7"
@@ -57,7 +57,7 @@ async def test_ask_code_with_citations_returns_guard_message_when_no_citations()
     svc = FakeKnowledgeService(repo)
 
     result = await svc.ask_code_with_citations(
-        question="Como Engine.run chama helper em app/main.py?", limit=7, citation_limit=4
+        question="Como Engine.run chama helper em app/main.py", limit=7, citation_limit=4
     )
 
     assert result["citations"] == []
@@ -65,7 +65,7 @@ async def test_ask_code_with_citations_returns_guard_message_when_no_citations()
 
 
 def test_extract_code_tokens_removes_noise_and_dedupes():
-    tokens = KnowledgeService._extract_code_tokens("O que run run faz em app/main.py e helper?")
+    tokens = KnowledgeService._extract_code_tokens("O que run run faz em app/main.py e helper")
 
     assert "run" in tokens
     assert "helper" in tokens

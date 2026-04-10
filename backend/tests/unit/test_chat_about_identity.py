@@ -10,7 +10,7 @@ async def test_about_command_reinforces_janus_identity():
     response = await handler._handle_about(
         args="",
         conversation_id="conv-1",
-        user_id="user-1",
+        user_id="u1",
     )
 
     assert "Sobre o Janus" in response

@@ -31,8 +31,7 @@ from app.db.vector_store import (
     async_count_points,
     build_deterministic_point_id,
     build_user_chat_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -66,8 +65,7 @@ class MemoryService:
         started_at: float,
         confidence: float | None,
         error_code: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        extra: dict[str, Any] | None = None) -> dict[str, Any]:
         latency_ms = int((time.perf_counter() - started_at) * 1000)
         return emit_step_telemetry(
             endpoint="/memory/service",
@@ -77,8 +75,7 @@ class MemoryService:
             latency_ms=latency_ms,
             confidence=confidence,
             error_code=error_code,
-            extra=extra,
-        )
+            extra=extra)
 
     async def add_experience(self, type: str, content: str, metadata: dict[str, Any]) -> Experience:
         """
@@ -128,15 +125,13 @@ class MemoryService:
         query: str | None,
         filters: dict[str, Any],
         limit: int | None = None,
-        min_score: float | None = None,
-    ) -> list[dict[str, Any]]:
+        min_score: float | None = None) -> list[dict[str, Any]]:
         logger.info(
             "Buscando experiÃªncias filtradas",
             query=query,
             filters=filters,
             limit=limit,
-            min_score=min_score,
-        )
+            min_score=min_score)
         start = time.perf_counter()
         try:
             result = await self._repo.search_filtered(
@@ -158,16 +153,14 @@ class MemoryService:
         start_ts_ms: int | None,
         end_ts_ms: int | None,
         limit: int | None = None,
-        min_score: float | None = None,
-    ) -> list[dict[str, Any]]:
+        min_score: float | None = None) -> list[dict[str, Any]]:
         logger.info(
             "Buscando por janela temporal",
             query=query,
             start_ts_ms=start_ts_ms,
             end_ts_ms=end_ts_ms,
             limit=limit,
-            min_score=min_score,
-        )
+            min_score=min_score)
         start = time.perf_counter()
         try:
             result = await self._repo.search_by_timeframe(
@@ -175,8 +168,7 @@ class MemoryService:
                 start_ts_ms=start_ts_ms,
                 end_ts_ms=end_ts_ms,
                 limit=limit,
-                min_score=min_score,
-            )
+                min_score=min_score)
             elapsed = time.perf_counter() - start
             _MEMORY_SERVICE_LATENCY.labels("recall_by_timeframe").observe(elapsed)
             self._emit_step_telemetry(step="recall_by_timeframe", started_at=start, confidence=confidence_from_scores([r.get("score") for r in result if isinstance(r, dict)]), extra={"result_count": len(result)})
@@ -191,14 +183,12 @@ class MemoryService:
         self,
         limit: int | None = 10,
         timeframe_seconds: int | None = None,
-        min_score: float | None = None,
-    ) -> list[dict[str, Any]]:
+        min_score: float | None = None) -> list[dict[str, Any]]:
         logger.debug(
             "Service: recall_recent_failures",
             limit=limit,
             timeframe_seconds=timeframe_seconds,
-            min_score=min_score,
-        )
+            min_score=min_score)
         start = time.perf_counter()
         try:
             result = await self._repo.search_recent_failures(
@@ -218,14 +208,12 @@ class MemoryService:
         self,
         limit: int | None = 10,
         timeframe_seconds: int | None = None,
-        min_score: float | None = None,
-    ) -> list[dict[str, Any]]:
+        min_score: float | None = None) -> list[dict[str, Any]]:
         logger.debug(
             "Service: recall_recent_lessons",
             limit=limit,
             timeframe_seconds=timeframe_seconds,
-            min_score=min_score,
-        )
+            min_score=min_score)
         start = time.perf_counter()
         try:
             result = await self._repo.search_recent_lessons(
@@ -242,16 +230,16 @@ class MemoryService:
             raise MemoryServiceError(f"Erro ao buscar liÃ§Ãµes recentes: {e}")
 
     async def index_interaction(
-        self, content: str, user_id: str, session_id: str, role: str
+        self, content: str, session_id: str, role: str
     ) -> None:
         """Indexa uma interaÃ§Ã£o de chat (async) no Qdrant."""
-        if not content or not user_id:
+        if not content:
             return
 
-        logger.info("Indexando interaÃ§Ã£o no vetor (MemÃ³ria)", user_id=user_id, role=role)
+        logger.info("Indexando interaÃ§Ã£o no vetor (MemÃ³ria)", role=role)
         try:
             collection_name = await aget_or_create_collection(
-                build_user_chat_collection_name(user_id)
+                build_user_chat_collection_name()
             )
             client = get_async_qdrant_client()
 
@@ -261,16 +249,12 @@ class MemoryService:
                 must=[
                     models.FieldCondition(
                         key="metadata.type", match=models.MatchValue(value="chat_msg")
-                    ),
-                    models.FieldCondition(
-                        key="metadata.user_id", match=models.MatchValue(value=str(user_id))
-                    ),
-                ]
+                    )]
             )
 
             current = await async_count_points(client, collection_name, qfilter, exact=True)
             if current >= max_points:
-                logger.warning("Limite de indexaÃ§Ã£o de chat atingido", user_id=user_id)
+                logger.warning("Limite de indexaÃ§Ã£o de chat atingido")
                 return
 
             vec = await aembed_text(content)
@@ -282,16 +266,13 @@ class MemoryService:
                 "ts_ms": now_ms,
                 "composite_id": build_deterministic_point_id(
                     "chat-msg-composite",
-                    user_id,
                     session_id,
                     role,
                     now_ms,
-                    content,
-                ),
+                    content),
                 "metadata": {
                     "type": "chat_msg",
                     "memory_class": "episodic",
-                    "user_id": str(user_id),
                     "session_id": str(session_id),
                     "conversation_id": str(session_id),
                     "role": str(role),
@@ -309,12 +290,10 @@ class MemoryService:
 
             point_id = build_deterministic_point_id(
                 "chat-msg",
-                user_id,
                 session_id,
                 role,
                 now_ms,
-                content,
-            )
+                content)
             point = models.PointStruct(id=point_id, vector=vec, payload=payload)
 
             await client.upsert(collection_name=collection_name, points=[point])

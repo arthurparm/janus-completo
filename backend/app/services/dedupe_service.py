@@ -47,13 +47,13 @@ class DedupeService:
             ).fetchall()
             dup_experiments = s.execute(
                 text(
-                    "SELECT name, user_id, COUNT(*) as cnt FROM experiments GROUP BY name, user_id HAVING COUNT(*) > 1"
+                    "SELECT name, COUNT(*) as cnt FROM experiments GROUP BY name HAVING COUNT(*) > 1"
                 )
             ).fetchall()
             return {
                 "users_by_email": [dict(r) for r in dup_users_email],
                 "users_by_external_id": [dict(r) for r in dup_users_ext],
-                "experiments_by_name_user": [dict(r) for r in dup_experiments],
+                "experiments_by_name": [dict(r) for r in dup_experiments],
             }
         except SQLAlchemyError as e:
             logger.error("Falha ao detectar duplicatas no SQL", exc_info=e)
@@ -79,8 +79,7 @@ class DedupeService:
                     text(
                         "SELECT id, display_name, created_at FROM users WHERE email = :email ORDER BY created_at ASC"
                     ),
-                    {"email": email},
-                ).fetchall()
+                    {"email": email}).fetchall()
 
                 if len(users) < 2:
                     continue
@@ -91,16 +90,14 @@ class DedupeService:
                 # Remapear FKs
                 for table in ["profiles", "sessions", "audit_events"]:
                     s.execute(
-                        text(f"UPDATE {table} SET user_id = :canon WHERE user_id IN :dups"),
-                        {"canon": canonical_id, "dups": tuple(dup_ids)},
-                    )
+                        text(f"UPDATE {table} SET profile_id = :canon WHERE profile_id IN :dups"),
+                        {"canon": canonical_id, "dups": tuple(dup_ids)})
 
                 # Deletar duplicatas de tabelas dependentes
                 for table in ["user_roles", "consents", "oauth_tokens"]:
                     s.execute(
-                        text(f"DELETE FROM {table} WHERE user_id IN :dups"),
-                        {"dups": tuple(dup_ids)},
-                    )
+                        text(f"DELETE FROM {table} WHERE profile_id IN :dups"),
+                        {"dups": tuple(dup_ids)})
 
                 # Deletar usuário duplicado
                 s.execute(text("DELETE FROM users WHERE id IN :dups"), {"dups": tuple(dup_ids)})
@@ -109,21 +106,20 @@ class DedupeService:
                     {"email": email, "canonical_id": canonical_id, "removed": dup_ids}
                 )
 
-            # Experimentos por (name, user_id)
+            # Experimentos por name
             rows = s.execute(
                 text(
-                    "SELECT name, user_id FROM experiments GROUP BY name, user_id HAVING COUNT(*) > 1"
+                    "SELECT name FROM experiments GROUP BY name HAVING COUNT(*) > 1"
                 )
             ).fetchall()
 
             for r in rows:
-                name, user_id = r[0], r[1]
+                name = r[0]
                 exps = s.execute(
                     text(
-                        "SELECT id, created_at FROM experiments WHERE name = :name AND (user_id IS NULL OR user_id = :user_id) ORDER BY created_at ASC"
+                        "SELECT id, created_at FROM experiments WHERE name = :name ORDER BY created_at ASC"
                     ),
-                    {"name": name, "user_id": user_id},
-                ).fetchall()
+                    {"name": name}).fetchall()
 
                 if len(exps) < 2:
                     continue
@@ -136,15 +132,14 @@ class DedupeService:
                         text(
                             f"UPDATE {table} SET experiment_id = :canon WHERE experiment_id IN :dups"
                         ),
-                        {"canon": canon_id, "dups": tuple(dup_ids)},
-                    )
+                        {"canon": canon_id, "dups": tuple(dup_ids)})
 
                 s.execute(
                     text("DELETE FROM experiments WHERE id IN :dups"), {"dups": tuple(dup_ids)}
                 )
 
                 report["experiments"].append(
-                    {"name": name, "user_id": user_id, "canonical_id": canon_id, "removed": dup_ids}
+                    {"name": name, "canonical_id": canon_id, "removed": dup_ids}
                 )
 
             s.commit()
@@ -169,7 +164,7 @@ class DedupeService:
             logger.error("Erro no processo de deduplicação do Grafo", exc_info=e)
             raise DedupeError(f"Falha no Grafo: {e}") from e
 
-    async def detect_qdrant_duplicates(self, user_id: str | None = None) -> dict[str, Any]:
+    async def detect_qdrant_duplicates(self) -> dict[str, Any]:
         try:
             client = get_async_qdrant_client()
             summary: dict[str, Any] = {"collections": []}
@@ -194,12 +189,6 @@ class DedupeService:
                         key="metadata.content_hash", match=_models.MatchAny(any=["*"])
                     )
                 ]
-                if user_id:
-                    filt.append(
-                        _models.FieldCondition(
-                            key="metadata.user_id", match=_models.MatchValue(value=str(user_id))
-                        )
-                    )
                 qf = _models.Filter(must=filt)
 
                 try:

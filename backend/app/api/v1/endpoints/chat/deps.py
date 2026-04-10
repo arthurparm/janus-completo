@@ -147,7 +147,7 @@ def resolve_authenticated_user_context(
                 )
             if explicit and explicit == actor:
                 return ChatIdentityResolution(
-                    user_id=actor,
+                    user_id=explicit,
                     identity_source="explicit",
                     auth_present=True,
                     authenticated=True,
@@ -169,7 +169,7 @@ def resolve_authenticated_user_context(
     if actor and auth_present:
         if explicit and explicit == actor:
             return ChatIdentityResolution(
-                user_id=actor,
+                user_id=explicit,
                 identity_source="explicit",
                 auth_present=True,
                 authenticated=True,
@@ -270,7 +270,7 @@ def require_actor_user_id(http: Request | None) -> str:
     """
     ctx = resolve_authenticated_user_context(
         http,
-        explicit_user_id=None,
+        None,
         allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat",
     )
@@ -291,7 +291,7 @@ def resolve_authenticated_user_id(http: Request | None, explicit_user_id: str | 
     """
     ctx = resolve_authenticated_user_context(
         http,
-        explicit_user_id=explicit_user_id,
+        explicit_user_id,
         allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat",
     )
@@ -311,10 +311,10 @@ def _channel_limit(channel: SSEChannel) -> int:
     return max(1, int(os.getenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", legacy_limit)))
 
 
-async def acquire_sse_slot(user_id: str | None, *, channel: SSEChannel) -> str:
+async def acquire_sse_slot(*, channel: SSEChannel) -> str:
     max_per_user_channel = _channel_limit(channel)
     max_global = max(1, int(os.getenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "250")))
-    slot_user = str(user_id or "anonymous")
+    slot_user = "system"
     if is_chat_unlimited_user(slot_user):
         return f"unlimited:{slot_user}"
 
@@ -333,7 +333,6 @@ async def acquire_sse_slot(user_id: str | None, *, channel: SSEChannel) -> str:
 
                 structlog.get_logger(__name__).warning(
                     "chat_sse_capacity_exceeded_per_user_channel",
-                    user_id=slot_user,
                     channel=channel,
                     limit=max_per_user_channel,
                     current_slots=current_channel_slots,

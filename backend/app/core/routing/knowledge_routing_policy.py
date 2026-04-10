@@ -53,29 +53,12 @@ class KnowledgeRoutingPolicy:
         self,
         intent: RouteIntent | str,
         *,
-        user_id: str | None = None,
         include_graph: bool = True,
         query: str | None = None,
     ) -> RouteDecision:
         del query
         key = _normalize_intent(intent)
         decision = self._rules.get(key, self._default_decision)
-
-        if (
-            self._mode == "deterministic"
-            and not user_id
-            and _intent_requires_user_scope(key)
-            and decision.primary == RouteTarget.QDRANT
-            and RouteTarget.POSTGRES in decision.secondary
-        ):
-            # Deterministic fallback for requests that cannot be user-scoped in vector storage.
-            return RouteDecision(
-                primary=RouteTarget.POSTGRES,
-                secondary=tuple(target for target in decision.secondary if target != RouteTarget.POSTGRES),
-                reason="Missing user_id for vector route; fallback to structured storage.",
-                rule_id=f"{decision.rule_id}.missing_user_fallback",
-                mode=self._mode,
-            )
 
         if not include_graph and RouteTarget.NEO4J in decision.secondary:
             return RouteDecision(
@@ -93,14 +76,6 @@ def _normalize_intent(intent: RouteIntent | str) -> str:
     if isinstance(intent, RouteIntent):
         return intent.value
     return str(intent or "").strip().lower()
-
-
-def _intent_requires_user_scope(intent: str) -> bool:
-    return intent in {
-        RouteIntent.CHAT_CONTEXT_RETRIEVAL.value,
-        RouteIntent.RAG_USER_CHAT_SEARCH.value,
-        RouteIntent.RAG_PRODUCTIVITY_SEARCH.value,
-    }
 
 
 def _parse_target(raw: Any, *, fallback: RouteTarget) -> RouteTarget:

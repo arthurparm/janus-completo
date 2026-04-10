@@ -6,14 +6,12 @@ from app.config import settings  # Added settings for feature flag
 from .endpoints import (
     agent,
     assistant,
-    auth,
     auto_analysis,
     autonomy,
     autonomy_admin,
     autonomy_history,
     chat,
     collaboration,
-    consents,
     context,
     deployment,
     documents,
@@ -28,7 +26,6 @@ from .endpoints import (
     optimization,
     pending_actions,
     productivity,
-    profiles,
     rag,
     reflexion,
     admin_config,
@@ -37,7 +34,6 @@ from .endpoints import (
     system_status,
     tasks,
     tools,
-    users,
     workers,
 )
 
@@ -46,17 +42,13 @@ api_router = APIRouter()
 if getattr(settings, "PUBLIC_API_MINIMAL", False):
     # Minimal public API: expose only chat and autonomy endpoints
     api_router.include_router(chat.router, prefix="/chat")
-    api_router.include_router(users.router)
-    api_router.include_router(profiles.router)
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
     api_router.include_router(autonomy_admin.router, prefix="/autonomy/admin")
     api_router.include_router(assistant.router)
     api_router.include_router(autonomy_history.router, prefix="/autonomy/history")
-    api_router.include_router(consents.router)
     api_router.include_router(pending_actions.router)
     api_router.include_router(evaluation.router)
     api_router.include_router(deployment.router)
-    api_router.include_router(auth.router)
     api_router.include_router(auto_analysis.router, prefix="/auto-analysis")  # Auto-análise simples
     api_router.include_router(feedback.router)  # Quick Win: Feedback loop
 else:
@@ -92,18 +84,14 @@ else:
         meta_agent.router, prefix="/meta-agent"
     )  # Sprint 13: Meta-Agent proactive consciousness
     api_router.include_router(chat.router, prefix="/chat")
-    api_router.include_router(users.router)
-    api_router.include_router(profiles.router)
     api_router.include_router(autonomy.router, prefix="/autonomy")  # Autonomy Loop & Goals
     api_router.include_router(autonomy_admin.router, prefix="/autonomy/admin")
     api_router.include_router(workers.router, prefix="/workers")  # Workers orchestration controls
     api_router.include_router(assistant.router)
     api_router.include_router(autonomy_history.router, prefix="/autonomy/history")
-    api_router.include_router(consents.router)
     api_router.include_router(pending_actions.router)
     api_router.include_router(evaluation.router)
     api_router.include_router(deployment.router)
-    api_router.include_router(auth.router)
     api_router.include_router(
         auto_analysis.router, prefix="/auto-analysis"
     )  # Auto-análise do sistema

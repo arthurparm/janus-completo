@@ -22,7 +22,7 @@ def test_build_confirmation_payload_requires_real_pending_action() -> None:
 def test_normalize_understanding_clears_false_positive_confirmation() -> None:
     understanding = {
         "intent": "knowledge_query",
-        "summary": "Onde está a documentação da API?",
+        "summary": "Onde está a documentação da API",
         "requires_confirmation": True,
         "confirmation_reason": None,
     }
@@ -60,7 +60,6 @@ def test_maybe_create_fallback_pending_action_from_pending_marker(monkeypatch) -
     )
 
     pending_id, reason = maybe_create_fallback_pending_action(
-        user_id="9",
         message="gere uma acao pendente",
         assistant_response="pending_action_id: clean_tmp_001",
         conversation_id="conv-123",
@@ -74,7 +73,6 @@ def test_maybe_create_fallback_pending_action_from_pending_marker(monkeypatch) -
 
 def test_maybe_create_fallback_pending_action_does_not_create_for_low_confidence_only() -> None:
     pending_id, reason = maybe_create_fallback_pending_action(
-        user_id="9",
         message="explique a documentação da API",
         assistant_response="",
         conversation_id="conv-123",

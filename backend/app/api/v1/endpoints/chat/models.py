@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class ChatStartRequest(BaseModel):
     persona: str | None = Field(None)
-    user_id: str | None = Field(None)
+
     project_id: str | None = Field(None)
     title: str | None = Field(None)
 
@@ -20,7 +20,6 @@ class ChatMessageRequest(BaseModel):
     role: str = Field("auto")
     priority: str = Field("fast_and_cheap")
     timeout_seconds: int | None = None
-    user_id: str | None = Field(None)
     project_id: str | None = Field(None)
     knowledge_space_id: str | None = Field(None)
 
@@ -157,7 +156,6 @@ class ChatHistoryPaginatedResponse(BaseModel):
 
 class ChatRenameRequest(BaseModel):
     new_title: str = Field(..., min_length=1)
-    user_id: str | None = Field(None)
     project_id: str | None = Field(None)
 
 

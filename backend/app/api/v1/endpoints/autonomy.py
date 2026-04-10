@@ -18,7 +18,6 @@ logger = structlog.get_logger(__name__)
 
 class AutonomyStartRequest(BaseModel):
     interval_seconds: int = Field(60, ge=1, le=3600)
-    user_id: str | None = None
     project_id: str | None = None
     risk_profile: str = Field("balanced", description="conservative|balanced|aggressive")
     auto_confirm: bool = False
@@ -149,7 +148,7 @@ async def start_autonomy(
 
     config = AutonomyConfig(
         interval_seconds=request.interval_seconds,
-        user_id=request.user_id,
+        user_id="default",
         project_id=request.project_id,
         risk_profile=request.risk_profile,
         auto_confirm=request.auto_confirm,

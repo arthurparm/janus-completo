@@ -75,7 +75,7 @@ class DocumentIngestionService:
         value = getattr(settings, "DOC_UPLOAD_STORAGE_DIR", "/app/data/document_uploads")
         return Path(str(value)).expanduser()
 
-    def resolve_storage_path(self, *, user_id: str, doc_id: str, filename: str) -> Path:
+    def resolve_storage_path(self, *, doc_id: str, filename: str) -> Path:
         safe_name = Path(filename or "document").name or "document"
         return self.storage_root() / str(user_id) / str(doc_id) / safe_name
 
@@ -97,7 +97,6 @@ class DocumentIngestionService:
         self,
         *,
         file: UploadFile,
-        user_id: str,
         conversation_id: str | None,
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
@@ -108,10 +107,10 @@ class DocumentIngestionService:
         parent_collection_id: str | None = None,
         auto_consolidate: bool = False,
     ) -> dict[str, Any]:
-        doc_id = self.build_doc_id(user_id)
+        doc_id = self.build_doc_id("system")
         filename = Path(file.filename or "document").name or "document"
         content_type = (file.content_type or "application/octet-stream").strip()
-        storage_path = self.resolve_storage_path(user_id=user_id, doc_id=doc_id, filename=filename)
+        storage_path = self.resolve_storage_path(doc_id=doc_id, filename=filename)
         storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         manifest = self._manifest_repo.create_manifest(
@@ -344,7 +343,6 @@ class DocumentIngestionService:
         logger.warning(
             "document_ingestion_recovered_without_staged_file",
             doc_id=doc_id,
-            user_id=user_id,
             chunks_indexed=existing_chunks,
         )
         return {
@@ -368,7 +366,6 @@ class DocumentIngestionService:
 
     async def ingest_file(
         self,
-        user_id: str,
         filename: str,
         content_type: str,
         data: bytes,
@@ -382,8 +379,7 @@ class DocumentIngestionService:
         parent_collection_id: str | None = None,
     ) -> dict[str, Any]:
         return await self._ingest_payload(
-            doc_id=self.build_doc_id(user_id),
-            user_id=user_id,
+            doc_id=self.build_doc_id("system"),
             filename=filename,
             content_type=content_type,
             data=data,
@@ -402,7 +398,6 @@ class DocumentIngestionService:
         self,
         *,
         doc_id: str,
-        user_id: str,
         filename: str,
         content_type: str,
         data: bytes,
@@ -462,22 +457,22 @@ class DocumentIngestionService:
                 logger.debug("otel_chunk_count_failed", error=str(exc))
 
         if not chunks:
-            self._metrics.record_ingest_status("empty", user_id)
+            self._metrics.record_ingest_status("empty", "system")
             return {"doc_id": doc_id, "chunks": 0, "chunks_indexed": 0, "status": "empty"}
 
-        collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name("system"))
         client = get_async_qdrant_client()
         qfilter_user = models.Filter(
             must=[
                 models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value="system")),
             ]
         )
         max_points_user = int(getattr(settings, "DOC_INDEX_MAX_POINTS_PER_USER", 500000) or 500000)
         try:
             current_points = await async_count_points(client, collection_name, qfilter_user, exact=True)
             if current_points + chunk_count > max_points_user:
-                self._metrics.record_ingest_status("quota_exceeded", user_id)
+                self._metrics.record_ingest_status("quota_exceeded", "system")
                 return {
                     "doc_id": doc_id,
                     "chunks": chunk_count,
@@ -486,9 +481,9 @@ class DocumentIngestionService:
                     "error": f"Quota excedida para o usuário ({current_points} + {chunk_count} > {max_points_user})",
                 }
         except Exception as exc:
-            logger.warning("quota_check_failed", user_id=user_id, error=str(exc))
+            logger.warning("quota_check_failed", error=str(exc))
 
-        await self._delete_doc_points(user_id=user_id, doc_id=doc_id)
+        await self._delete_doc_points(doc_id=doc_id)
         if progress_cb is not None:
             await progress_cb(
                 chunks_total=chunk_count,
@@ -510,14 +505,14 @@ class DocumentIngestionService:
                 chunk_index = offset + batch_index
                 norm = re.sub(r"\s+", " ", batch_chunks[batch_index]).strip().lower()
                 content_hash = hashlib.sha256(norm.encode("utf-8")).hexdigest()
-                pid = build_deterministic_point_id("doc-chunk", user_id, doc_id, chunk_index, content_hash)
+                pid = build_deterministic_point_id("doc-chunk", "system", doc_id, chunk_index, content_hash)
                 payload = {
                     "type": "doc_chunk",
                     "ts_ms": ts_ms,
-                    "composite_id": f"doc:{user_id}:{doc_id}:{chunk_index}:{content_hash}",
+                    "composite_id": f"doc:system:{doc_id}:{chunk_index}:{content_hash}",
                     "metadata": {
                         "type": "doc_chunk",
-                        "user_id": str(user_id),
+                        "user_id": "system",
                         "doc_id": doc_id,
                         "file_name": filename,
                         "knowledge_space_id": knowledge_space_id,
@@ -555,11 +550,11 @@ class DocumentIngestionService:
                 )
 
         self._metrics.record_ingest_latency(time.perf_counter() - ingest_started_at)
-        self._metrics.record_ingest_success("indexed", indexed, user_id)
+        self._metrics.record_ingest_success("indexed", indexed, "system")
         try:
             record_audit_event_direct(
                 {
-                    "user_id": int(user_id) if str(user_id).isdigit() else None,
+                    "user_id": None,
                     "endpoint": "doc:ingest",
                     "action": "ingest",
                     "tool": "documents",
@@ -579,12 +574,12 @@ class DocumentIngestionService:
             "semantic": semantic.to_dict(),
         }
 
-    async def _delete_doc_points(self, *, user_id: str, doc_id: str) -> None:
+    async def _delete_doc_points(self, *, doc_id: str) -> None:
         client = get_async_qdrant_client()
-        collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name("system"))
         qfilter = models.Filter(
             must=[
-                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
+                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value="system")),
                 models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=str(doc_id))),
             ]
         )

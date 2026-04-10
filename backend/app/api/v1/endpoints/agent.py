@@ -1,6 +1,6 @@
 import structlog
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from starlette.requests import Request
 
 from app.core.infrastructure import AgentType
@@ -16,8 +16,9 @@ class AgentExecutionRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=10000)
     agent_type: AgentType = Field(default=AgentType.TOOL_USER)
 
-    @validator("question")
-    def question_must_not_be_empty(cls, v):
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_empty(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("A pergunta não pode ser vazia.")
         return v.strip()

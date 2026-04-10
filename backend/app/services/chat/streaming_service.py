@@ -108,7 +108,7 @@ class StreamingService:
         try:
             conv = self._repo.get_conversation(conversation_id)
             self._conversation_service.validate_conversation_access(
-                conversation_id, conv, user_id, project_id
+                conversation_id, conv, project_id
             )
         except ChatRepositoryError:
             err = json.dumps(
@@ -161,7 +161,6 @@ class StreamingService:
         self._repo.add_message(conversation_id, role="user", text=message)
         self._message_orchestration_service.schedule_active_memory_capture(
             message=message,
-            user_id=user_id,
             conversation_id=conversation_id,
         )
         ack = json.dumps({"conversation_id": conversation_id}, ensure_ascii=False)
@@ -661,7 +660,6 @@ class StreamingService:
             try:
                 citation_result = await collect_chat_citations(
                     message=message,
-                    user_id=str(user_id) if user_id is not None else None,
                     conversation_id=conversation_id,
                     memory_service=getattr(self._rag_service, "_memory", None),
                     limit=5,

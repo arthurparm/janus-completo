@@ -17,8 +17,7 @@ from app.db.vector_store import (
     aget_or_create_collection,
     build_user_chat_collection_name,
     build_user_docs_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 from app.repositories.chat_repository import ChatRepository
 from app.services.procedural_memory_service import procedural_memory_service
 from app.services.secret_memory_service import secret_memory_service
@@ -79,8 +78,7 @@ class RAGService:
         self,
         repo: ChatRepository,
         llm_service: LLMService,
-        memory_service: Optional[MemoryService] = None,
-    ):
+        memory_service: Optional[MemoryService] = None):
         self._repo = repo
         self._llm = llm_service
         self._memory = memory_service
@@ -145,8 +143,7 @@ class RAGService:
             lines.append(f"- {prefix}{preview}")
         guidance = [
             "- Use este bloco como contexto situacional recente.",
-            "- Não deixe fatos episódicos sobreporem instruções persistentes do usuário.",
-        ]
+            "- Não deixe fatos episódicos sobreporem instruções persistentes do usuário."]
         return self._format_memory_block("Contexto Recente Relevante:", [*guidance, *lines])
 
     def _merge_memory_sections(self, sections: list[str | None]) -> str | None:
@@ -159,8 +156,7 @@ class RAGService:
         self,
         item: dict[str, Any],
         *,
-        conversation_id: str | None,
-    ) -> float:
+        conversation_id: str | None) -> float:
         metadata = item.get("metadata") or {}
         score = float(item.get("score") or 0.0)
         if conversation_id and str(metadata.get("conversation_id") or "") == str(conversation_id):
@@ -177,10 +173,8 @@ class RAGService:
         self,
         *,
         message: str,
-        user_id: str,
         conversation_id: str | None,
-        limit: int,
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        limit: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         vec = await aembed_text(message)
         client = get_async_qdrant_client()
         candidate_multiplier = max(1, int(getattr(settings, "RAG_RERANK_CANDIDATE_MULTIPLIER", 3)))
@@ -189,20 +183,13 @@ class RAGService:
             if bool(getattr(settings, "RAG_RERANK_ENABLED", True))
             else int(limit)
         )
-        coll = await aget_or_create_collection(build_user_chat_collection_name(str(user_id)))
+        coll = await aget_or_create_collection(build_user_chat_collection_name())
         res = await client.query_points(
             collection_name=coll,
             query=vec,
             limit=query_limit,
             with_payload=True,
-            query_filter=qdrant_models.Filter(
-                must=[
-                    qdrant_models.FieldCondition(
-                        key="metadata.user_id",
-                        match=qdrant_models.MatchValue(value=str(user_id)),
-                    )
-                ]
-            ),
+            query_filter=qdrant_models.Filter(must=[])
         )
         hits = list(getattr(res, "points", res) or [])
         memories = [
@@ -226,8 +213,7 @@ class RAGService:
         ranked = sorted(
             memories,
             key=lambda item: self._score_episodic_memory(item, conversation_id=conversation_id),
-            reverse=True,
-        )[:limit]
+            reverse=True)[:limit]
         return ranked, {
             "query_limit": int(query_limit),
             "rerank_applied": rerank_applied,
@@ -240,32 +226,24 @@ class RAGService:
         self,
         *,
         message: str,
-        user_id: str,
-        limit: int,
-    ) -> tuple[list[dict[str, Any]], str | None]:
+        limit: int) -> tuple[list[dict[str, Any]], str | None]:
         items = await user_preference_memory_service.list_preferences(
-            user_id=str(user_id),
             query=message,
             limit=min(5, max(1, limit)),
-            active_only=True,
-        )
+            active_only=True)
         return items, user_preference_memory_service.format_preference_context(items)
 
     async def _retrieve_procedural_context(
         self,
         *,
         message: str,
-        user_id: str,
         conversation_id: str | None,
-        limit: int,
-    ) -> tuple[list[dict[str, Any]], str | None]:
+        limit: int) -> tuple[list[dict[str, Any]], str | None]:
         items = await procedural_memory_service.list_rules(
-            user_id=str(user_id),
             conversation_id=conversation_id,
             query=message,
             limit=min(5, max(1, limit)),
-            active_only=True,
-        )
+            active_only=True)
         return items, procedural_memory_service.format_procedural_context(items)
 
     def _references_uploaded_material(self, message: str) -> bool:
@@ -280,40 +258,29 @@ class RAGService:
             r"\bte mandei\b",
             r"\battachment\b",
             r"\battached\b",
-            r"\bsent\b",
-        )
+            r"\bsent\b")
         return any(re.search(pattern, text) for pattern in patterns)
 
     async def _conversation_document_context(
         self,
         *,
-        user_id: str,
         conversation_id: str,
-        limit: int = 3,
-    ) -> str | None:
+        limit: int = 3) -> str | None:
         client = get_async_qdrant_client()
-        collection_name = await aget_or_create_collection(build_user_docs_collection_name(str(user_id)))
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name())
         scroll_res = await client.scroll(
             collection_name=collection_name,
             scroll_filter=qdrant_models.Filter(
                 must=[
                     qdrant_models.FieldCondition(
                         key="metadata.type",
-                        match=qdrant_models.MatchValue(value="doc_chunk"),
-                    ),
-                    qdrant_models.FieldCondition(
-                        key="metadata.user_id",
-                        match=qdrant_models.MatchValue(value=str(user_id)),
-                    ),
+                        match=qdrant_models.MatchValue(value="doc_chunk")),
                     qdrant_models.FieldCondition(
                         key="metadata.conversation_id",
-                        match=qdrant_models.MatchValue(value=str(conversation_id)),
-                    ),
-                ]
+                        match=qdrant_models.MatchValue(value=str(conversation_id)))]
             ),
             limit=max(limit * 8, limit),
-            with_payload=True,
-        )
+            with_payload=True)
         points = scroll_res[0] if isinstance(scroll_res, tuple) else (scroll_res or [])
         docs: dict[str, dict[str, Any]] = {}
         for point in points:
@@ -353,8 +320,7 @@ class RAGService:
         db: str,
         confidence: float | None,
         error_code: str | None = None,
-        extra: dict[str, Any] | None = None,
-    ) -> None:
+        extra: dict[str, Any] | None = None) -> None:
         emit_step_telemetry(
             endpoint=endpoint,
             step=step,
@@ -363,28 +329,24 @@ class RAGService:
             latency_ms=(time.perf_counter() - started_at) * 1000,
             confidence=confidence,
             error_code=error_code,
-            extra=extra,
-        )
+            extra=extra)
 
     async def retrieve_context(
         self,
         message: str,
         limit: int = 5,
-        user_id: str | None = None,
         conversation_id: str | None = None,
+        user_id: str | None = None,
         caller_endpoint: str = "/chat/rag",
         transport: str = "unknown",
         identity_source: str = "unknown",
-        route_decision: RouteDecision | None = None,
-    ) -> Optional[str]:
+        route_decision: RouteDecision | None = None) -> Optional[str]:
         """Retrieves relevant memories for the current message."""
         start = time.perf_counter()
         resolved_route = route_decision or get_knowledge_routing_policy().resolve(
             RouteIntent.CHAT_CONTEXT_RETRIEVAL,
-            user_id=user_id,
             include_graph=False,
-            query=message,
-        )
+            query=message)
         route_meta = {
             "route.rule_id": resolved_route.rule_id,
             "route.primary": resolved_route.primary.value,
@@ -393,10 +355,22 @@ class RAGService:
         telemetry_base = {
             "transport": transport,
             "identity_source": identity_source,
-            "user_id_present": bool(user_id),
             "conversation_id_present": bool(conversation_id),
+            "user_id_present": bool(user_id),
             **route_meta,
         }
+        if not user_id:
+            _RAG_SKIPPED.labels("retrieve_context", "missing_user_id").inc()
+            _RAG_OPS.labels("retrieve_context", "skipped").inc()
+            self._emit_step_telemetry(
+                endpoint=caller_endpoint,
+                step="retrieve_context",
+                started_at=start,
+                db="qdrant",
+                confidence=0.0,
+                error_code="SKIPPED_MISSING_USER_ID",
+                extra=telemetry_base)
+            return None
         if not self._memory:
             _RAG_SKIPPED.labels("retrieve_context", "no_memory_service").inc()
             _RAG_OPS.labels("retrieve_context", "skipped").inc()
@@ -407,8 +381,7 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_NO_MEMORY_SERVICE",
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
             return None
         if not message:
             _RAG_SKIPPED.labels("retrieve_context", "empty_message").inc()
@@ -420,22 +393,7 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_EMPTY_MESSAGE",
-                extra=telemetry_base,
-            )
-            return None
-        if not user_id:
-            logger.debug("RAG context skipped: missing user_id")
-            _RAG_SKIPPED.labels("retrieve_context", "missing_user_id").inc()
-            _RAG_OPS.labels("retrieve_context", "skipped").inc()
-            self._emit_step_telemetry(
-                endpoint=caller_endpoint,
-                step="retrieve_context",
-                started_at=start,
-                db="qdrant",
-                confidence=0.0,
-                error_code="SKIPPED_MISSING_USER_ID",
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
             return None
         if resolved_route.primary != RouteTarget.QDRANT:
             _RAG_SKIPPED.labels("retrieve_context", "route_not_supported").inc()
@@ -447,60 +405,46 @@ class RAGService:
                 db=resolved_route.primary.value,
                 confidence=0.0,
                 error_code="SKIPPED_ROUTE_UNSUPPORTED",
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
             return None
 
         try:
             episodic_items, episodic_meta = await self._retrieve_episodic_context(
                 message=message,
-                user_id=str(user_id),
                 conversation_id=conversation_id,
-                limit=limit,
-            )
+                limit=limit)
             semantic_items, semantic_context = await self._retrieve_semantic_context(
                 message=message,
-                user_id=str(user_id),
-                limit=limit,
-            )
+                limit=limit)
             procedural_items, procedural_context = await self._retrieve_procedural_context(
                 message=message,
-                user_id=str(user_id),
                 conversation_id=conversation_id,
-                limit=limit,
-            )
+                limit=limit)
             episodic_context = self._format_episodic_context(episodic_items)
             secret_context = None
             secret_items: list[dict[str, Any]] = []
             if secret_memory_service.should_authorize_prompt_recall(message):
                 secret_context = await secret_memory_service.build_authorized_prompt_context(
-                    user_id=str(user_id),
                     message=message,
                     conversation_id=conversation_id,
-                    limit=min(3, max(1, limit)),
-                )
+                    limit=min(3, max(1, limit)))
                 secret_items = await secret_memory_service.list_secrets(
-                    user_id=str(user_id),
                     query=message,
                     conversation_id=conversation_id,
                     limit=min(3, max(1, limit)),
-                    reveal=False,
-                )
+                    reveal=False)
 
             combined_context = self._merge_memory_sections(
                 [
                     secret_context,
                     procedural_context,
                     semantic_context,
-                    episodic_context,
-                ]
+                    episodic_context]
             )
             if conversation_id and self._references_uploaded_material(message):
                 try:
                     conversation_doc_context = await self._conversation_document_context(
-                        user_id=str(user_id),
-                        conversation_id=str(conversation_id),
-                    )
+                        conversation_id=str(conversation_id))
                 except Exception as doc_exc:
                     logger.warning("rag_conversation_document_context_failed", error=str(doc_exc))
                     conversation_doc_context = None
@@ -534,8 +478,7 @@ class RAGService:
                         "user_preferences_count": len(semantic_items),
                         "procedural_memory_count": len(procedural_items),
                         "authorized_secret_count": len(secret_items),
-                    },
-                )
+                    })
                 return combined_context
 
             _RAG_LATENCY.labels("retrieve_context").observe(time.perf_counter() - start)
@@ -557,8 +500,7 @@ class RAGService:
                     "user_preferences_count": len(semantic_items),
                     "procedural_memory_count": len(procedural_items),
                     "authorized_secret_count": len(secret_items),
-                },
-            )
+                })
             return None
         except Exception as e:
             _RAG_OPS.labels("retrieve_context", "error").inc()
@@ -571,8 +513,7 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code=type(e).__name__,
-                extra={**telemetry_base, "limit": int(limit)},
-            )
+                extra={**telemetry_base, "limit": int(limit)})
             logger.warning("Failed to retrieve memories for prompt enrichment", error=str(e))
             # We don't raise here to prevent blocking the chat response if memory fails
             return None
@@ -587,18 +528,15 @@ class RAGService:
     async def maybe_index_message(
         self,
         text: str,
-        user_id: Optional[str],
         conversation_id: str,
         role: str,
         caller_endpoint: str = "/chat/rag",
         transport: str = "unknown",
-        identity_source: str = "unknown",
-    ) -> None:
+        identity_source: str = "unknown") -> None:
         start = time.perf_counter()
         telemetry_base = {
             "transport": transport,
             "identity_source": identity_source,
-            "user_id_present": bool(user_id),
             "conversation_id_present": bool(conversation_id),
         }
         if not text:
@@ -611,21 +549,7 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_EMPTY_TEXT",
-                extra=telemetry_base,
-            )
-            return
-        if not user_id:
-            _RAG_SKIPPED.labels("index_message", "missing_user_id").inc()
-            _RAG_OPS.labels("index_message", "skipped").inc()
-            self._emit_step_telemetry(
-                endpoint=caller_endpoint,
-                step="index_message",
-                started_at=start,
-                db="qdrant",
-                confidence=0.0,
-                error_code="SKIPPED_MISSING_USER_ID",
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
             return
         if not self._memory:
             _RAG_SKIPPED.labels("index_message", "no_memory_service").inc()
@@ -637,14 +561,13 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code="SKIPPED_NO_MEMORY_SERVICE",
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
             return
 
         # Delegate to MemoryService (SRP)
         try:
             await self._memory.index_interaction(
-                content=text, user_id=user_id, session_id=conversation_id, role=role
+                content=text, session_id=conversation_id, role=role
             )
             _RAG_OPS.labels("index_message", "success").inc()
             self._emit_step_telemetry(
@@ -653,8 +576,7 @@ class RAGService:
                 started_at=start,
                 db="qdrant",
                 confidence=1.0,
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
         except Exception as e:
             _RAG_OPS.labels("index_message", "error").inc()
             _RAG_ERRORS.labels("index_message", type(e).__name__).inc()
@@ -665,8 +587,7 @@ class RAGService:
                 db="qdrant",
                 confidence=0.0,
                 error_code=type(e).__name__,
-                extra=telemetry_base,
-            )
+                extra=telemetry_base)
             # Nao quebrar fluxo do chat se indexacao falhar, mas logar o erro
             logger.warning(
                 "Failed to index message for RAG", conversation_id=conversation_id, error=str(e)
@@ -679,10 +600,8 @@ class RAGService:
         conversation_id: str,
         role: ModelRole,
         priority: ModelPriority,
-        user_id: Optional[str],
         project_id: Optional[str],
-        threshold_messages: int = 80,
-    ) -> None:
+        threshold_messages: int = 80) -> None:
         start = time.perf_counter()
         try:
             conv = self._repo.get_conversation(conversation_id)
@@ -696,8 +615,7 @@ class RAGService:
                     started_at=start,
                     db="llm+chat_repository",
                     confidence=0.0,
-                    error_code="SKIPPED_BELOW_THRESHOLD",
-                )
+                    error_code="SKIPPED_BELOW_THRESHOLD")
                 return
             # ja possui summary recente?
             if conv.get("summary"):
@@ -709,8 +627,7 @@ class RAGService:
                     started_at=start,
                     db="llm+chat_repository",
                     confidence=0.0,
-                    error_code="SKIPPED_ALREADY_SUMMARIZED",
-                )
+                    error_code="SKIPPED_ALREADY_SUMMARIZED")
                 return
             # montar texto para sumarizacao
             snippet = []
@@ -729,23 +646,19 @@ class RAGService:
                     started_at=start,
                     db="llm+chat_repository",
                     confidence=0.0,
-                    error_code="SKIPPED_EMPTY_SNIPPET",
-                )
+                    error_code="SKIPPED_EMPTY_SNIPPET")
                 return
 
             sum_prompt = await get_formatted_prompt(
                 "rag_conversation_summary",
-                conversation="\n".join(snippet),
-            )
+                conversation="\n".join(snippet))
 
             res = await self._llm.invoke_llm(
                 prompt=sum_prompt,
                 role=ModelRole.KNOWLEDGE_CURATOR,
                 priority=ModelPriority.FAST_AND_CHEAP,
                 timeout_seconds=30,
-                user_id=user_id,
-                project_id=project_id,
-            )
+                project_id=project_id)
             summary_text = res.get("response", "")
 
             # Using to_thread for synchronous repository call
@@ -757,8 +670,7 @@ class RAGService:
                 started_at=start,
                 db="llm+chat_repository",
                 confidence=1.0 if str(summary_text or "").strip() else 0.0,
-                extra={"message_count": len(msgs), "threshold_messages": int(threshold_messages)},
-            )
+                extra={"message_count": len(msgs), "threshold_messages": int(threshold_messages)})
             logger.info("Conversation summarized successfully", conversation_id=conversation_id)
 
         except Exception as e:
@@ -771,8 +683,7 @@ class RAGService:
                 db="llm+chat_repository",
                 confidence=0.0,
                 error_code=type(e).__name__,
-                extra={"threshold_messages": int(threshold_messages)},
-            )
+                extra={"threshold_messages": int(threshold_messages)})
             logger.error("log_error", message=f"Failed to summarize conversation {conversation_id}: {e}", exc_info=True)
             # Fail silently but log it - summarization is optional
         finally:

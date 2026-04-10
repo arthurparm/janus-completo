@@ -150,7 +150,6 @@ async def stream_message(
                 raise
 
         slot_user = await acquire_sse_slot(
-            str(user_id) if user_id is not None else None,
             channel="chat_stream",
         )
         gen = service.stream_message(
@@ -206,6 +205,7 @@ async def get_conversation_trace(
     chat_service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
+    return service.get_trace(conversation_id)
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
@@ -313,7 +313,6 @@ async def stream_agent_events(
                     )
                 raise
         slot_user = await acquire_sse_slot(
-            str(user_id) if user_id is not None else None,
             channel="agent_events",
         )
         gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)

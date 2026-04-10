@@ -239,7 +239,6 @@ async def graph_quarantine_promote(
 
 
 class UserSummaryResponse(BaseModel):
-    user_id: str
     conversations_count: int
     last_conversation_updated_at: float | None
     vector_points_count: int | None
@@ -248,7 +247,9 @@ class UserSummaryResponse(BaseModel):
 @router.get(
     "/user_summary", response_model=UserSummaryResponse, summary="Resumo de uso por usuário"
 )
-async def user_summary(user_id: str, request: Request):
+async def user_summary(request: Request, user_id: str | None = None):
+    if user_id is None:
+        user_id = getattr(request.state, "actor_user_id", "default_user")
     chat_repo = getattr(request.app.state, "chat_repo", None)
     items = []
     if chat_repo is not None:
@@ -277,7 +278,6 @@ async def user_summary(user_id: str, request: Request):
 
 
 class UserMetricsResponse(BaseModel):
-    user_id: str
     conversations: int
     messages: int
     approx_in_tokens: int
@@ -369,9 +369,9 @@ async def request_pipeline_dashboard(
 
 @router.get("/audit/export", summary="Exporta eventos de auditoria")
 async def export_audit_events(
+    user_id: str | None = None,
     format: str = "csv",
     fields: str | None = None,
-    user_id: str | None = None,
     tool: str | None = None,
     status: str | None = None,
     start_ts: float | None = None,
@@ -441,14 +441,14 @@ async def export_audit_events(
     "/metrics/user", response_model=UserMetricsResponse, summary="Métricas agregadas por usuário"
 )
 async def user_metrics(
-    user_id: str, service: ObservabilityService = Depends(get_observability_service)
+    user_id: str | None = None,
+    service: ObservabilityService = Depends(get_observability_service)
 ):
     m = await service.get_user_metrics(user_id)
     return UserMetricsResponse(**m)
 
 
 class UserActivityResponse(BaseModel):
-    user_id: str
     autonomy_runs: int
     autonomy_steps: int
     avg_step_duration_seconds: float
@@ -458,7 +458,8 @@ class UserActivityResponse(BaseModel):
     "/activity/user", response_model=UserActivityResponse, summary="Atividade agregada por usuário"
 )
 async def user_activity(
-    user_id: str, service: ObservabilityService = Depends(get_observability_service)
+    user_id: str | None = None,
+    service: ObservabilityService = Depends(get_observability_service)
 ):
     a = service.get_user_activity(user_id)
     return UserActivityResponse(**a)

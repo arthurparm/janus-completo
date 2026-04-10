@@ -399,13 +399,12 @@ class KnowledgeSpaceService:
         self._space_repo = space_repo or KnowledgeSpaceRepository()
         self._llm = llm_service
 
-    def build_space_id(self, user_id: str) -> str:
+    def build_space_id(self) -> str:
         return f"ks:{user_id}:{uuid4().hex}"
 
     def create_space(
         self,
         *,
-        user_id: str,
         name: str,
         source_type: str = "documentation",
         source_id: str | None = None,
@@ -422,7 +421,6 @@ class KnowledgeSpaceService:
             )
         return self._space_repo.create_space(
             knowledge_space_id=self.build_space_id(user_id),
-            user_id=str(user_id),
             name=str(name or "").strip() or "Knowledge Space",
             source_type=normalized_source_type,
             source_id=source_id,
@@ -432,19 +430,18 @@ class KnowledgeSpaceService:
             description=description,
         )
 
-    def list_spaces(self, *, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
-        return self._space_repo.list_spaces(user_id=str(user_id), limit=limit)
+    def list_spaces(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        return self._space_repo.list_spaces(limit=limit)
 
-    def get_space(self, *, knowledge_space_id: str, user_id: str) -> dict[str, Any]:
-        row = self._space_repo.get_space(knowledge_space_id=str(knowledge_space_id), user_id=str(user_id))
+    def get_space(self, *, knowledge_space_id: str) -> dict[str, Any]:
+        row = self._space_repo.get_space(knowledge_space_id=str(knowledge_space_id))
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="knowledge_space não encontrado")
         return row
 
-    def get_space_status(self, *, knowledge_space_id: str, user_id: str) -> dict[str, Any]:
-        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+    def get_space_status(self, *, knowledge_space_id: str) -> dict[str, Any]:
+        space = self.get_space(knowledge_space_id=knowledge_space_id)
         manifests = self._manifest_repo.list_manifests(
-            user_id=str(user_id),
             knowledge_space_id=str(knowledge_space_id),
             limit=500,
         )
@@ -516,8 +513,8 @@ class KnowledgeSpaceService:
         )
         return reconciled or knowledge_space
 
-    def mark_consolidation_requested(self, *, knowledge_space_id: str, user_id: str) -> dict[str, Any]:
-        self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+    def mark_consolidation_requested(self, *, knowledge_space_id: str) -> dict[str, Any]:
+        self.get_space(knowledge_space_id=knowledge_space_id)
         return self._space_repo.mark_consolidation(
             knowledge_space_id,
             status="processing",
@@ -537,7 +534,7 @@ class KnowledgeSpaceService:
         language: str | None = None,
         parent_collection_id: str | None = None,
     ) -> dict[str, Any]:
-        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        space = self.get_space(knowledge_space_id=knowledge_space_id)
         manifest = self._manifest_repo.get_manifest(doc_id, user_id)
         if manifest is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="documento não encontrado")
@@ -552,24 +549,22 @@ class KnowledgeSpaceService:
             parent_collection_id=parent_collection_id or space.get("parent_collection_id"),
         )
         updated = self._manifest_repo.update_manifest(doc_id, **scope_payload)
-        await self._sync_doc_scope_payload(user_id=str(user_id), doc_id=str(doc_id), scope_payload=scope_payload)
+        await self._sync_doc_scope_payload(doc_id=str(doc_id), scope_payload=scope_payload)
         return updated or manifest
 
     async def consolidate_space(
         self,
         *,
         knowledge_space_id: str,
-        user_id: str,
         limit_docs: int = 20,
     ) -> dict[str, Any]:
-        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        space = self.get_space(knowledge_space_id=knowledge_space_id)
         self._space_repo.mark_consolidation(
             knowledge_space_id,
             status="processing",
             summary="Consolidação estrutural em andamento.",
         )
         manifests = self._manifest_repo.list_manifests(
-            user_id=str(user_id),
             knowledge_space_id=str(knowledge_space_id),
             limit=max(1, int(limit_docs)),
             statuses=["indexed"],
@@ -593,7 +588,6 @@ class KnowledgeSpaceService:
         documents_processed = 0
         for manifest in manifests:
             points = await self._load_document_points(
-                user_id=str(user_id),
                 doc_id=str(manifest["doc_id"]),
                 knowledge_space_id=str(knowledge_space_id),
             )
@@ -622,7 +616,6 @@ class KnowledgeSpaceService:
         )
 
         canonical_points = await self._index_canonical_sections(
-            user_id=str(user_id),
             knowledge_space=space,
             sections=sections,
         )
@@ -647,7 +640,6 @@ class KnowledgeSpaceService:
         )
         try:
             await self._persist_structure_graph(
-                user_id=str(user_id),
                 knowledge_space=space,
                 manifests=manifests,
                 sections=sections,
@@ -656,7 +648,6 @@ class KnowledgeSpaceService:
             logger.warning(
                 "knowledge_space_graph_persist_failed",
                 knowledge_space_id=str(knowledge_space_id),
-                user_id=str(user_id),
                 error=str(exc),
             )
             summary = f"{summary} Persistência de grafo ficou parcial: {exc}"
@@ -688,7 +679,6 @@ class KnowledgeSpaceService:
         self,
         *,
         knowledge_space_id: str,
-        user_id: str,
         question: str,
         mode: str = "auto",
         limit: int = 5,
@@ -697,14 +687,12 @@ class KnowledgeSpaceService:
         if normalized_mode not in _QUERY_MODES:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="mode inválido")
 
-        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        space = self.get_space(knowledge_space_id=knowledge_space_id)
         manifests = self._manifest_repo.list_manifests(
-            user_id=str(user_id),
             knowledge_space_id=str(knowledge_space_id),
             limit=200,
         )
         active_manifests = self._manifest_repo.list_manifests(
-            user_id=str(user_id),
             knowledge_space_id=str(knowledge_space_id),
             limit=200,
             statuses=["indexed"],
@@ -740,7 +728,6 @@ class KnowledgeSpaceService:
         if normalized_mode == "auto" and prefer_locator:
             quick = await self._query_quick_lookup(
                 knowledge_space=space,
-                user_id=str(user_id),
                 question=question,
                 limit=limit,
                 active_doc_ids=active_doc_ids,
@@ -761,7 +748,6 @@ class KnowledgeSpaceService:
                 canonical = await asyncio.wait_for(
                     self._query_canonical(
                         knowledge_space=space,
-                        user_id=str(user_id),
                         question=question,
                         limit=limit,
                         active_doc_ids=active_doc_ids,
@@ -783,7 +769,6 @@ class KnowledgeSpaceService:
 
         quick = await self._query_quick_lookup(
             knowledge_space=space,
-            user_id=str(user_id),
             question=question,
             limit=limit,
             active_doc_ids=active_doc_ids,
@@ -795,11 +780,10 @@ class KnowledgeSpaceService:
         self,
         *,
         knowledge_space_id: str,
-        user_id: str,
         question: str,
         mode: str = "auto",
     ) -> dict[str, Any]:
-        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        space = self.get_space(knowledge_space_id=knowledge_space_id)
         normalized_mode = str(mode or "auto").strip().lower()
         if normalized_mode not in _QUERY_MODES:
             normalized_mode = "auto"
@@ -909,7 +893,6 @@ class KnowledgeSpaceService:
     async def _sync_doc_scope_payload(
         self,
         *,
-        user_id: str,
         doc_id: str,
         scope_payload: dict[str, Any],
     ) -> None:
@@ -940,7 +923,6 @@ class KnowledgeSpaceService:
     async def _load_document_points(
         self,
         *,
-        user_id: str,
         doc_id: str,
         knowledge_space_id: str,
     ) -> list[dict[str, Any]]:
@@ -2250,7 +2232,6 @@ class KnowledgeSpaceService:
     async def _index_canonical_sections(
         self,
         *,
-        user_id: str,
         knowledge_space: dict[str, Any],
         sections: list[dict[str, Any]],
     ) -> int:
@@ -2421,7 +2402,6 @@ class KnowledgeSpaceService:
     async def _persist_structure_graph(
         self,
         *,
-        user_id: str,
         knowledge_space: dict[str, Any],
         manifests: list[dict[str, Any]],
         sections: list[dict[str, Any]],
@@ -2827,11 +2807,11 @@ class KnowledgeSpaceService:
         self,
         *,
         knowledge_space: dict[str, Any],
-        user_id: str,
         question: str,
         limit: int,
         active_doc_ids: set[str] | None = None,
     ) -> dict[str, Any]:
+        user_id = knowledge_space.get("user_id", "system")
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         vector = await aembed_text(question)
@@ -2915,7 +2895,6 @@ class KnowledgeSpaceService:
                 selected=selected,
                 retrieval_strategy=retrieval_strategy,
                 knowledge_space=knowledge_space,
-                user_id=user_id,
                 question=question,
                 limit=limit,
                 active_doc_ids=active_doc_ids,
@@ -3074,13 +3053,13 @@ class KnowledgeSpaceService:
         self,
         *,
         knowledge_space: dict[str, Any],
-        user_id: str,
         question: str,
         limit: int,
         active_doc_ids: set[str] | None,
         selected_sections: list[dict[str, Any]] | None = None,
         support_plan: dict[str, Any] | None = None,
     ) -> list[Any]:
+        user_id = knowledge_space.get("user_id", "system")
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         query_profile = self._build_query_profile(question)
@@ -3554,7 +3533,6 @@ class KnowledgeSpaceService:
         selected: list[dict[str, Any]],
         retrieval_strategy: str,
         knowledge_space: dict[str, Any],
-        user_id: str,
         question: str,
         limit: int,
         active_doc_ids: set[str] | None,
@@ -3569,7 +3547,6 @@ class KnowledgeSpaceService:
         )
         support_points = await self._collect_operational_support_points(
             knowledge_space=knowledge_space,
-            user_id=user_id,
             question=question,
             limit=limit,
             active_doc_ids=active_doc_ids,
@@ -4271,7 +4248,6 @@ class KnowledgeSpaceService:
         self,
         *,
         knowledge_space: dict[str, Any],
-        user_id: str,
         question: str,
         limit: int,
         active_doc_ids: set[str] | None = None,

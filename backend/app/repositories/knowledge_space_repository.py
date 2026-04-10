@@ -17,7 +17,6 @@ class KnowledgeSpaceRepository:
         self,
         *,
         knowledge_space_id: str,
-        user_id: str,
         name: str,
         source_type: str,
         source_id: str | None = None,
@@ -30,7 +29,6 @@ class KnowledgeSpaceRepository:
         try:
             row = KnowledgeSpace(
                 knowledge_space_id=str(knowledge_space_id),
-                user_id=str(user_id),
                 name=str(name),
                 source_type=str(source_type or "documentation"),
                 source_id=str(source_id) if source_id else None,
@@ -49,14 +47,12 @@ class KnowledgeSpaceRepository:
         finally:
             session.close()
 
-    def get_space(self, knowledge_space_id: str, user_id: str | None = None) -> dict[str, Any] | None:
+    def get_space(self, knowledge_space_id: str) -> dict[str, Any] | None:
         session = db.get_session_direct()
         try:
             query = session.query(KnowledgeSpace).filter(
                 KnowledgeSpace.knowledge_space_id == str(knowledge_space_id)
             )
-            if user_id is not None:
-                query = query.filter(KnowledgeSpace.user_id == str(user_id))
             row = query.first()
             return self._serialize(row) if row is not None else None
         finally:
@@ -65,13 +61,12 @@ class KnowledgeSpaceRepository:
     def list_spaces(
         self,
         *,
-        user_id: str,
         statuses: Iterable[str] | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         session = db.get_session_direct()
         try:
-            query = session.query(KnowledgeSpace).filter(KnowledgeSpace.user_id == str(user_id))
+            query = session.query(KnowledgeSpace)
             if statuses:
                 query = query.filter(KnowledgeSpace.consolidation_status.in_([str(item) for item in statuses]))
             rows = (
@@ -138,7 +133,6 @@ class KnowledgeSpaceRepository:
         return {
             "id": int(row.id),
             "knowledge_space_id": str(row.knowledge_space_id),
-            "user_id": str(row.user_id),
             "name": row.name,
             "source_type": row.source_type,
             "source_id": row.source_id,

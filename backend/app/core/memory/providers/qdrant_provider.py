@@ -9,7 +9,7 @@ from qdrant_client.http.models import PayloadSchemaType
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
 from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
-from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.infrastructure.logging_config import TRACE_ID
 from app.db.vector_store import aensure_collection
 from app.models.schemas import VectorCollection
 
@@ -65,8 +65,7 @@ class QdrantProvider:
             ),
             recovery_timeout=int(
                 getattr(self.settings, "LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT", 30) or 30
-            ),
-        )
+            ))
 
     async def initialize(self):
         """Garante que a coleção exista com retry logic."""
@@ -78,8 +77,7 @@ class QdrantProvider:
                 await aensure_collection(
                     self.client,
                     collection_name=self.collection_name,
-                    vector_size=self._vector_size,
-                )
+                    vector_size=self._vector_size)
                 self._offline = False
                 return
             except Exception as e:
@@ -87,8 +85,7 @@ class QdrantProvider:
                 if is_last:
                     logger.warning(
                         "Qdrant indisponível após várias tentativas. Modo offline ativado.",
-                        exc_info=e,
-                    )
+                        exc_info=e)
                     self._offline = True
                     return
                 else:
@@ -106,7 +103,7 @@ class QdrantProvider:
             "metadata.consolidation_status": PayloadSchemaType.KEYWORD,
             "metadata.file_path": PayloadSchemaType.KEYWORD,
             "metadata.sha_after": PayloadSchemaType.KEYWORD,
-            "metadata.user_id": PayloadSchemaType.KEYWORD,
+            
             "metadata.conversation_id": PayloadSchemaType.KEYWORD,
             "metadata.strong_memory": PayloadSchemaType.BOOL,
             "metadata.captured_at": PayloadSchemaType.INTEGER,
@@ -117,15 +114,13 @@ class QdrantProvider:
                 await self.client.create_payload_index(
                     collection_name=self.collection_name,
                     field_name=field_name,
-                    field_schema=schema,
-                )
+                    field_schema=schema)
             except Exception:
                 logger.debug(
                     "qdrant_payload_index_ensure_failed",
                     field_name=field_name,
                     collection=self.collection_name,
-                    exc_info=True,
-                )
+                    exc_info=True)
 
     async def try_revive(self) -> bool:
         """Tenta reconectar se estiver offline."""
@@ -173,8 +168,7 @@ class QdrantProvider:
         query_vector: list[float],
         limit: int,
         query_filter: models.Filter = None,
-        operation_name: str = "qdrant_search",
-    ) -> list[models.ScoredPoint]:
+        operation_name: str = "qdrant_search") -> list[models.ScoredPoint]:
         """Realiza busca vetorial com resiliência."""
 
         if self._offline:
@@ -202,8 +196,7 @@ class QdrantProvider:
                     limit=limit,
                     with_payload=True,
                     query_filter=query_filter,
-                    timeout=int(base_timeout),
-                )
+                    timeout=int(base_timeout))
 
             result = await _execute_search()
             return result.points
@@ -227,8 +220,7 @@ class QdrantProvider:
                     collection_name=self.collection_name,
                     scroll_filter=scroll_filter,
                     limit=limit,
-                    with_payload=True,
-                )
+                    with_payload=True)
                 return points
 
             return await _execute_scroll()

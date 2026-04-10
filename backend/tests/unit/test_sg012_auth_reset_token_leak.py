@@ -15,7 +15,7 @@ class _RepoStub:
     def get_by_email(self, _email: str):
         return self._user
 
-    def set_reset_token(self, _user_id: int, token_hash: str | None, expires_at=None):
+    def set_reset_token(self, _token_hash: str | None, expires_at=None):
         self.saved_token_hash = token_hash
         self.saved_expires_at = expires_at
         return True

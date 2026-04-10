@@ -148,17 +148,17 @@ def test_infer_doc_role_detects_supplement_by_filename():
 def test_detect_answer_strategy_prefers_comparative_and_sequence():
     service = KnowledgeSpaceService()
 
-    assert service._detect_answer_strategy("Como o suplemento amplia a regra base?") == "comparative"
-    assert service._detect_answer_strategy("Qual a sequência passo a passo para criar o personagem?") == "sequence"
+    assert service._detect_answer_strategy("Como o suplemento amplia a regra base") == "comparative"
+    assert service._detect_answer_strategy("Qual a sequência passo a passo para criar o personagem") == "sequence"
     assert (
         service._detect_answer_strategy(
-            "Qual a sequência para criar um personagem usando o livro base e em que etapa o suplemento adiciona opções?"
+            "Qual a sequência para criar um personagem usando o livro base e em que etapa o suplemento adiciona opções"
         )
         == "sequence"
     )
     assert (
         service._detect_answer_strategy(
-            "Na criação de personagem, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+            "Na criação de personagem, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas"
         )
         == "sequence"
     )
@@ -167,7 +167,7 @@ def test_detect_answer_strategy_prefers_comparative_and_sequence():
 def test_detect_answer_strategy_prefers_locator_for_trecho_questions():
     service = KnowledgeSpaceService()
 
-    assert service._detect_answer_strategy("Em que trecho ou seção o livro fala sobre novas opções de raças?") == "locator"
+    assert service._detect_answer_strategy("Em que trecho ou seção o livro fala sobre novas opções de raças") == "locator"
 
 
 def test_build_query_profile_flags_task_execution_for_grounded_creation():
@@ -183,7 +183,7 @@ def test_build_query_profile_flags_task_execution_for_grounded_creation():
 def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile(
-        "Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções?"
+        "Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções"
     )
     points = [
         SimpleNamespace(
@@ -274,7 +274,7 @@ def test_select_canonical_candidates_keeps_supplement_for_sequence_questions():
 
     selected = service._select_canonical_candidates(
         points=points,
-        question="Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções?",
+        question="Qual a sequência para criar um personagem e em que etapa o suplemento adiciona opções",
         query_profile=query_profile,
         answer_strategy="sequence",
         limit=2,
@@ -314,7 +314,7 @@ def test_render_sequence_answer_lists_base_before_supplement_extensions():
 
 def test_select_quick_lookup_points_boosts_explicit_supplement_match():
     service = KnowledgeSpaceService()
-    query_profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças?")
+    query_profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças")
     points = [
         SimpleNamespace(
             id="base",
@@ -344,7 +344,7 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
 
     selected = service._select_quick_lookup_points(
         points=points,
-        question="Em que trecho o livro fala sobre novas opções de raças?",
+        question="Em que trecho o livro fala sobre novas opções de raças",
         query_profile=query_profile,
         limit=1,
     )
@@ -355,7 +355,7 @@ def test_select_quick_lookup_points_boosts_explicit_supplement_match():
 
 def test_select_quick_lookup_points_prefers_exact_topic_phrase_when_available():
     service = KnowledgeSpaceService()
-    query_profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças?")
+    query_profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças")
     points = [
         SimpleNamespace(
             id="generic-racas",
@@ -385,7 +385,7 @@ def test_select_quick_lookup_points_prefers_exact_topic_phrase_when_available():
 
     selected = service._select_quick_lookup_points(
         points=points,
-        question="Em que trecho Heróis de Arton fala sobre novas raças?",
+        question="Em que trecho Heróis de Arton fala sobre novas raças",
         query_profile=query_profile,
         limit=2,
     )
@@ -405,7 +405,7 @@ def test_table_of_contents_chunk_is_detected_as_noise_for_locator():
 def test_build_query_profile_separates_source_and_topic_terms():
     service = KnowledgeSpaceService()
 
-    profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças?")
+    profile = service._build_query_profile("Em que trecho Heróis de Arton fala sobre novas raças")
 
     assert "herois" in profile["source_terms"]
     assert "arton" in profile["source_terms"]
@@ -554,7 +554,7 @@ def test_should_scroll_canonical_point_type_focuses_by_strategy():
 def test_select_canonical_candidates_rejects_editorial_base_for_creation_sequence():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile(
-        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas"
     )
     points = [
         SimpleNamespace(
@@ -624,7 +624,7 @@ def test_select_canonical_candidates_rejects_editorial_base_for_creation_sequenc
 
     selected = service._select_canonical_candidates(
         points=points,
-        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?",
+        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas",
         query_profile=query_profile,
         answer_strategy="sequence",
         limit=2,
@@ -638,7 +638,7 @@ def test_select_canonical_candidates_rejects_editorial_base_for_creation_sequenc
 def test_select_canonical_candidates_rejects_flavor_base_for_creation_sequence():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile(
-        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas"
     )
     points = [
         SimpleNamespace(
@@ -708,7 +708,7 @@ def test_select_canonical_candidates_rejects_flavor_base_for_creation_sequence()
 
     selected = service._select_canonical_candidates(
         points=points,
-        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?",
+        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas",
         query_profile=query_profile,
         answer_strategy="sequence",
         limit=2,
@@ -722,7 +722,7 @@ def test_select_canonical_candidates_rejects_flavor_base_for_creation_sequence()
 def test_select_canonical_candidates_prefers_creation_supplement_over_optional_rules():
     service = KnowledgeSpaceService()
     query_profile = service._build_query_profile(
-        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?"
+        "Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas"
     )
     points = [
         SimpleNamespace(
@@ -792,7 +792,7 @@ def test_select_canonical_candidates_prefers_creation_supplement_over_optional_r
 
     selected = service._select_canonical_candidates(
         points=points,
-        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas?",
+        question="Na criação de personagem de Tormenta20, o que o livro base define primeiro e em que ponto Heróis de Arton acrescenta opções novas",
         query_profile=query_profile,
         answer_strategy="sequence",
         limit=2,
@@ -1241,7 +1241,6 @@ def test_render_operational_answer_uses_ollama_only_and_returns_llm_response():
                 ],
             retrieval_strategy="sequence",
             knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
-            user_id="user-1",
             question="Crie uma ficha completa usando as regras do livro.",
             limit=4,
             active_doc_ids={"doc-1"},
@@ -1342,7 +1341,6 @@ def test_collect_operational_support_points_skips_conflicting_specific_option_fo
         result = asyncio.run(
             service._collect_operational_support_points(
                 knowledge_space={"knowledge_space_id": "ks-1"},
-                user_id="user-1",
                 question="Crie uma ficha de Tormenta20 nível 1 para um cavaleiro usando o suplemento.",
                 limit=4,
                 active_doc_ids={"supp-doc"},
@@ -1748,7 +1746,6 @@ def test_render_operational_answer_falls_back_when_llm_response_is_low_informati
             ],
             retrieval_strategy="sequence",
             knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
-            user_id="user-1",
             question="Crie uma ficha de Tormenta20 nível 1 para um cavaleiro.",
             limit=4,
             active_doc_ids={"doc-1"},
@@ -1870,7 +1867,6 @@ def test_query_canonical_returns_task_strategy_for_execution_queries():
         result = asyncio.run(
             service._query_canonical(
                 knowledge_space={"knowledge_space_id": "ks-1", "name": "KS"},
-                user_id="user-1",
                 question="Crie uma ficha completa usando as regras do livro.",
                 limit=4,
                 active_doc_ids={"doc-1"},
@@ -1942,7 +1938,6 @@ def test_collect_operational_support_points_targets_selected_docs_without_scroll
         result = asyncio.run(
             service._collect_operational_support_points(
                 knowledge_space={"knowledge_space_id": "ks-1"},
-                user_id="user-1",
                 question="Crie uma ficha completa com base nas regras do livro.",
                 limit=4,
                 active_doc_ids={"base-doc", "supp-doc"},
@@ -2001,8 +1996,7 @@ def test_query_space_skips_auto_canonical_when_ready_space_has_no_canonical_metr
     result = asyncio.run(
         service.query_space(
             knowledge_space_id="ks-1",
-            user_id="user-1",
-            question="Como o suplemento amplia a regra base?",
+            question="Como o suplemento amplia a regra base",
             mode="auto",
             limit=5,
         )
@@ -2047,7 +2041,6 @@ def test_query_space_falls_back_when_canonical_times_out():
         result = asyncio.run(
             service.query_space(
                 knowledge_space_id="ks-1",
-                user_id="user-1",
                 question="Modo canônico explícito",
                 mode="canonical_answer",
                 limit=5,
@@ -2111,7 +2104,6 @@ def test_query_space_uses_extended_timeout_for_task_execution_queries():
         result = asyncio.run(
             service.query_space(
                 knowledge_space_id="ks-1",
-                user_id="user-1",
                 question="Crie uma ficha completa usando as regras do livro.",
                 mode="canonical_answer",
                 limit=5,
@@ -2139,7 +2131,6 @@ def test_estimate_query_timing_marks_task_queries_as_deep_and_slow():
 
     hint = service.estimate_query_timing(
         knowledge_space_id="ks-1",
-        user_id="user-1",
         question="Crie uma ficha completa usando o livro base e o suplemento.",
         mode="auto",
     )

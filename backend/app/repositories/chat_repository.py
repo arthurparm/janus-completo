@@ -21,7 +21,6 @@ class ChatRepository:
     {
         conversation_id: {
             "persona": Optional[str],
-            "user_id": Optional[str],
             "project_id": Optional[str],
             "title": str,
             "created_at": float,
@@ -100,7 +99,6 @@ class ChatRepository:
     def start_conversation(
         self,
         persona: str | None,
-        user_id: str | None,
         project_id: str | None,
         title: str | None = None,
     ) -> str:
@@ -108,13 +106,11 @@ class ChatRepository:
         logger.info(
             "Starting new conversation",
             conversation_id=conversation_id,
-            user_id=user_id,
             project_id=project_id,
         )
         now = time()
         self._conversations[conversation_id] = {
             "persona": persona,
-            "user_id": user_id,
             "project_id": project_id,
             "title": title or "Nova Conversa",
             "created_at": now,
@@ -184,12 +180,10 @@ class ChatRepository:
         return messages[-limit:] if limit > 0 else messages
 
     def list_conversations(
-        self, user_id: str | None = None, project_id: str | None = None, limit: int = 50
+        self, project_id: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for cid, conv in self._conversations.items():
-            if user_id and conv.get("user_id") != user_id:
-                continue
             if project_id and conv.get("project_id") != project_id:
                 continue
             items.append(
@@ -210,14 +204,11 @@ class ChatRepository:
         self,
         conversation_id: str,
         new_title: str,
-        user_id: str | None = None,
         project_id: str | None = None,
     ) -> None:
         conv = self._conversations.get(conversation_id)
         if conv is None:
             raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
-        if user_id and conv.get("user_id") != user_id:
-            raise ChatRepositoryError("Access denied: user_id mismatch")
         if project_id and conv.get("project_id") != project_id:
             raise ChatRepositoryError("Access denied: project_id mismatch")
         conv["title"] = new_title
@@ -225,13 +216,11 @@ class ChatRepository:
         self._save()
 
     def delete_conversation(
-        self, conversation_id: str, user_id: str | None = None, project_id: str | None = None
+        self, conversation_id: str, project_id: str | None = None
     ) -> None:
         conv = self._conversations.get(conversation_id)
         if conv is None:
             raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
-        if user_id and conv.get("user_id") != user_id:
-            raise ChatRepositoryError("Access denied: user_id mismatch")
         if project_id and conv.get("project_id") != project_id:
             raise ChatRepositoryError("Access denied: project_id mismatch")
         del self._conversations[conversation_id]
@@ -246,13 +235,11 @@ class ChatRepository:
         self._save()
 
     def replace_last_assistant_message(
-        self, conversation_id: str, new_text: str, user_id: str | None = None
+        self, conversation_id: str, new_text: str
     ) -> None:
         conv = self._conversations.get(conversation_id)
         if conv is None:
             raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
-        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
-            raise ChatRepositoryError("Access denied: user_id mismatch")
 
         messages = conv.get("messages") or []
         for msg in reversed(messages):
@@ -264,13 +251,11 @@ class ChatRepository:
         raise ChatRepositoryError("Assistant message not found")
 
     def get_last_assistant_message(
-        self, conversation_id: str, user_id: str | None = None
+        self, conversation_id: str
     ) -> dict[str, Any]:
         conv = self._conversations.get(conversation_id)
         if conv is None:
             raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
-        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
-            raise ChatRepositoryError("Access denied: user_id mismatch")
         for msg in reversed(conv.get("messages") or []):
             if str(msg.get("role")) == "assistant":
                 return self._normalize_message(msg)
@@ -281,13 +266,10 @@ class ChatRepository:
         conversation_id: str,
         message_id: int,
         patch: dict[str, Any],
-        user_id: str | None = None,
     ) -> dict[str, Any]:
         conv = self._conversations.get(conversation_id)
         if conv is None:
             raise ChatRepositoryError(f"Conversation not found: {conversation_id}")
-        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
-            raise ChatRepositoryError("Access denied: user_id mismatch")
         for msg in conv.get("messages") or []:
             if int(msg.get("id") or 0) != int(message_id):
                 continue

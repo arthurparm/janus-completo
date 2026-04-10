@@ -12,7 +12,6 @@ def get_autonomy_repo(request: Request) -> AutonomyRepository:
 
 class RunSummary(BaseModel):
     id: int
-    user_id: str | None
     project_id: str | None
     status: str
     cycles: int
@@ -50,7 +49,6 @@ class EnqueueLedgerItem(BaseModel):
 
 @router.get("/runs", response_model=list[RunSummary], summary="Lista execuções do AutonomyLoop")
 async def list_runs(
-    user_id: str | None = None,
     project_id: str | None = None,
     limit: int = 50,
     repo: AutonomyRepository = Depends(get_autonomy_repo),

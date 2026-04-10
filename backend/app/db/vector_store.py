@@ -61,23 +61,19 @@ def _sanitize_user_fragment(user_id: str) -> str:
     return sanitized
 
 
-def build_user_chat_collection_name(user_id: str) -> str:
-    return f"user_chat_{_sanitize_user_fragment(user_id)}"
+def build_user_chat_collection_name(user_id: str | None = None) -> str:
+    return "global_chat"
 
+def build_user_docs_collection_name(user_id: str | None = None) -> str:
+    return "global_docs"
 
-def build_user_docs_collection_name(user_id: str) -> str:
-    return f"user_docs_{_sanitize_user_fragment(user_id)}"
+def build_user_memory_collection_name(user_id: str | None = None) -> str:
+    return "global_memory"
 
+def build_user_secret_collection_name(user_id: str | None = None) -> str:
+    return "global_secret"
 
-def build_user_memory_collection_name(user_id: str) -> str:
-    return f"user_memory_{_sanitize_user_fragment(user_id)}"
-
-
-def build_user_secret_collection_name(user_id: str) -> str:
-    return f"user_secret_{_sanitize_user_fragment(user_id)}"
-
-
-def get_user_collection_names(user_id: str) -> dict[str, str]:
+def get_user_collection_names(user_id: str | None = None) -> dict[str, str]:
     return {
         "chat": build_user_chat_collection_name(user_id),
         "docs": build_user_docs_collection_name(user_id),
@@ -102,7 +98,6 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
         "metadata.neo4j_sync_status": PayloadSchemaType.KEYWORD,
         "metadata.file_path": PayloadSchemaType.KEYWORD,
         "metadata.sha_after": PayloadSchemaType.KEYWORD,
-        "metadata.user_id": PayloadSchemaType.KEYWORD,
         "metadata.conversation_id": PayloadSchemaType.KEYWORD,
         "metadata.memory_key": PayloadSchemaType.KEYWORD,
         "metadata.summary_version": PayloadSchemaType.KEYWORD,
@@ -134,12 +129,11 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
             ),
             payload_indexes=episodic_indexes,
         )
-    if collection_name.startswith("user_chat_"):
+    if collection_name.startswith("global_chat") or collection_name.startswith("user_chat_"):
         return CollectionSpec(
             name=collection_name,
             payload_indexes={
                 "metadata.type": PayloadSchemaType.KEYWORD,
-                "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.session_id": PayloadSchemaType.KEYWORD,
                 "metadata.conversation_id": PayloadSchemaType.KEYWORD,
                 "metadata.role": PayloadSchemaType.KEYWORD,
@@ -147,12 +141,11 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
                 "metadata.timestamp": PayloadSchemaType.INTEGER,
             },
         )
-    if collection_name.startswith("user_docs_"):
+    if collection_name.startswith("global_docs") or collection_name.startswith("user_docs_"):
         return CollectionSpec(
             name=collection_name,
             payload_indexes={
                 "metadata.type": PayloadSchemaType.KEYWORD,
-                "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.doc_id": PayloadSchemaType.KEYWORD,
                 "metadata.knowledge_space_id": PayloadSchemaType.KEYWORD,
                 "metadata.source_type": PayloadSchemaType.KEYWORD,
@@ -175,13 +168,12 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
                 "metadata.timestamp": PayloadSchemaType.INTEGER,
             },
         )
-    if collection_name.startswith("user_memory_"):
+    if collection_name.startswith("global_memory") or collection_name.startswith("user_memory_"):
         return CollectionSpec(
             name=collection_name,
             payload_indexes={
                 "metadata.type": PayloadSchemaType.KEYWORD,
                 "metadata.memory_class": PayloadSchemaType.KEYWORD,
-                "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.conversation_id": PayloadSchemaType.KEYWORD,
                 "metadata.session_id": PayloadSchemaType.KEYWORD,
                 "metadata.origin": PayloadSchemaType.KEYWORD,
@@ -195,11 +187,10 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
                 "metadata.timestamp": PayloadSchemaType.INTEGER,
             },
         )
-    if collection_name.startswith("user_secret_"):
+    if collection_name.startswith("global_secret") or collection_name.startswith("user_secret_"):
         return CollectionSpec(
             name=collection_name,
             payload_indexes={
-                "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.conversation_id": PayloadSchemaType.KEYWORD,
                 "metadata.secret_type": PayloadSchemaType.KEYWORD,
                 "metadata.secret_label": PayloadSchemaType.KEYWORD,
@@ -215,7 +206,6 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
             name=collection_name,
             payload_indexes={
                 "metadata.type": PayloadSchemaType.KEYWORD,
-                "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.origin": PayloadSchemaType.KEYWORD,
                 "metadata.status": PayloadSchemaType.KEYWORD,
                 "metadata.timestamp": PayloadSchemaType.INTEGER,

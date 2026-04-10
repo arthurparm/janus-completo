@@ -43,7 +43,6 @@ def test_emit_step_telemetry_records_audit_payload(monkeypatch):
         confidence=0.81,
         error_code=None,
         extra={"result_count": 2},
-        user_id="123",
         trace_id="trace-1",
     )
 

@@ -180,13 +180,13 @@ async def test_index_interaction_uses_chat_collection_and_deterministic_point_id
     monkeypatch.setattr("app.services.memory_service.get_async_qdrant_client", lambda: DummyClient())
     monkeypatch.setattr("app.services.memory_service.time.time", lambda: 1234.567)
 
-    await service.index_interaction("hello", "u1", "sess-1", "user")
+    await service.index_interaction("hello", "sess-1", "user")
     first_point = captured["points"][0]
 
-    await service.index_interaction("hello", "u1", "sess-1", "user")
+    await service.index_interaction("hello", "sess-1", "user")
     second_point = captured["points"][0]
 
-    assert captured["collection_name"] == "user_chat_u1"
+    assert captured["collection_name"] == "global_chat"
     assert first_point.id == second_point.id
     assert first_point.payload["metadata"]["origin"] == "chat.index_interaction"
     assert first_point.payload["metadata"]["conversation_id"] == "sess-1"

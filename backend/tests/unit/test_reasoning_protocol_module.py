@@ -21,7 +21,7 @@ async def test_prompt_composer_omits_reasoning_protocol_for_questions():
             Message(role="user", text="Oi"),
             Message(role="assistant", text="Olá"),
         ],
-        current_message="Consegue imaginar uma historia para Frieren?",
+        current_message="Consegue imaginar uma historia para Frieren",
     )
 
     compiled = await composer.compose(IntentType.QUESTION, context)

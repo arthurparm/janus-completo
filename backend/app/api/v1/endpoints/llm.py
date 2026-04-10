@@ -27,7 +27,6 @@ class LLMInvokeRequest(BaseModel):
     policy_overrides: dict[str, Any] | None = Field(
         None, description="Overrides de politica/LLM para esta chamada"
     )
-    user_id: str | None = Field(None, description="Identificador do usuário (orçamentação)")
     project_id: str | None = Field(None, description="Identificador do projeto (orçamentação)")
 
 

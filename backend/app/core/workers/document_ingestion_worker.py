@@ -71,12 +71,10 @@ async def process_document_ingestion_task(task: TaskMessage) -> None:
                         llm_service=getattr(kernel, "llm_service", None),
                     ).consolidate_space(
                         knowledge_space_id=knowledge_space_id,
-                        user_id=str(manifest.get("user_id")),
                         limit_docs=20,
                     )
                 else:
                     await knowledge_service.consolidate_document(
-                        user_id=str(manifest.get("user_id")),
                         doc_id=doc_id,
                         limit=50,
                     )

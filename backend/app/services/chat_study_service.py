@@ -170,7 +170,6 @@ class ChatStudyService:
         await _progress(30, "document_scan", "Verificando documentos anexados a esta conversa.")
         doc_retrieval = await collect_chat_citations(
             message=question,
-            user_id=user_id,
             conversation_id=conversation_id,
             memory_service=None,
             limit=_MAX_CANDIDATES,

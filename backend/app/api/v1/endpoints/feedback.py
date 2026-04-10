@@ -92,7 +92,7 @@ class FeedbackStatsResponse(BaseModel):
 
 
 @router.post("/", response_model=FeedbackResponse)
-async def record_feedback(request: FeedbackRequest, user_id: str | None = Query(None)):
+async def record_feedback(request: FeedbackRequest):
     """
     Registra feedback do usuário sobre uma mensagem ou conversa.
 
@@ -124,7 +124,7 @@ async def record_feedback(request: FeedbackRequest, user_id: str | None = Query(
 
 
 @router.post("/thumbs-up", response_model=FeedbackResponse)
-async def thumbs_up(request: QuickFeedbackRequest, user_id: str | None = Query(None)):
+async def thumbs_up(request: QuickFeedbackRequest):
     """
     Registra feedback positivo (👍) para uma mensagem.
 
@@ -150,7 +150,7 @@ async def thumbs_up(request: QuickFeedbackRequest, user_id: str | None = Query(N
 
 
 @router.post("/thumbs-down", response_model=FeedbackResponse)
-async def thumbs_down(request: QuickFeedbackRequest, user_id: str | None = Query(None)):
+async def thumbs_down(request: QuickFeedbackRequest):
     """
     Registra feedback negativo (👎) para uma mensagem.
 
@@ -196,7 +196,6 @@ async def get_feedback_stats():
 
 @router.get("/report", response_model=SatisfactionReportResponse)
 async def get_satisfaction_report(
-    user_id: str | None = Query(None, description="Filtrar por usuário"),
     hours: int = Query(24, description="Janela de tempo em horas", ge=1, le=720),
 ):
     """

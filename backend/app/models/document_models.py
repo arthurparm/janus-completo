@@ -9,7 +9,6 @@ class DocumentManifest(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     doc_id = Column(String(255), nullable=False, unique=True)
-    user_id = Column(String(128), nullable=False)
     conversation_id = Column(String(128), nullable=True)
     knowledge_space_id = Column(String(255), nullable=True)
     source_type = Column(String(64), nullable=True)
@@ -41,7 +40,7 @@ class DocumentManifest(Base):
     )
 
     __table_args__ = (
-        Index("idx_document_manifests_user_status", "user_id", "status"),
-        Index("idx_document_manifests_user_conversation", "user_id", "conversation_id"),
-        Index("idx_document_manifests_space", "user_id", "knowledge_space_id"),
+        Index("idx_document_manifests_status", "status"),
+        Index("idx_document_manifests_conversation", "conversation_id"),
+        Index("idx_document_manifests_space", "knowledge_space_id"),
     )

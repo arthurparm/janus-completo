@@ -44,8 +44,7 @@ from app.db.vector_store import (
     aget_or_create_collection,
     build_user_chat_collection_name,
     build_user_memory_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 
 try:
     from opentelemetry import trace  # type: ignore
@@ -71,8 +70,7 @@ def _emit_rag_step(
     scores: list[Any] | None = None,
     confidence: float | None = None,
     error_code: str | None = None,
-    extra: dict[str, Any] | None = None,
-) -> None:
+    extra: dict[str, Any] | None = None) -> None:
     derived_confidence = confidence if confidence is not None else confidence_from_scores(scores or [])
     emit_step_telemetry(
         endpoint=endpoint,
@@ -82,8 +80,7 @@ def _emit_rag_step(
         latency_ms=(time.perf_counter() - started_at) * 1000,
         confidence=derived_confidence,
         error_code=error_code,
-        extra=extra,
-    )
+        extra=extra)
 
 
 class RAGSearchResponse(BaseModel):
@@ -94,8 +91,7 @@ class RAGSearchResponse(BaseModel):
 @router.get(
     "/search",
     response_model=RAGSearchResponse,
-    summary="Busca baseada em fatos com memória vetorial",
-)
+    summary="Busca baseada em fatos com memória vetorial")
 async def rag_search(
     query: str = Query(..., description="Pergunta ou texto de busca"),
     type: str | None = Query(None, description="Filtrar por tipo da experiência"),
@@ -104,14 +100,12 @@ async def rag_search(
     file_path: str | None = Query(None, description="Filtrar por metadata.file_path"),
     limit: int | None = Query(5, ge=1, le=10),
     min_score: float | None = Query(None, ge=0.0, le=1.0),
-    service: MemoryService = Depends(get_memory_service),
-):
+    service: MemoryService = Depends(get_memory_service)):
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_SEARCH,
         user_id=None,
         include_graph=False,
-        query=query,
-    )
+        query=query)
     route_meta = {
         "route.rule_id": route_decision.rule_id,
         "route.primary": route_decision.primary.value,
@@ -189,8 +183,7 @@ async def rag_search(
         started_at=_start,
         scores=[r.get("score") for r in results if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(results), **route_meta},
-    )
+        extra={"result_count": len(results), **route_meta})
 
     return RAGSearchResponse(answer=answer, citations=citations)
 
@@ -203,25 +196,22 @@ class RAGUserChatResponse(BaseModel):
 @router.get(
     "/user-chat",
     response_model=RAGUserChatResponse,
-    summary="Busca em mensagens pessoais indexadas por usuário",
-)
+    summary="Busca em mensagens pessoais indexadas por usuário")
 async def rag_user_chat_search(
     query: str = Query(..., description="Pergunta ou texto de busca"),
-    user_id: str = Query(..., description="ID do usuário"),
     session_id: str | None = Query(None, description="ID da conversa para filtrar"),
     role: str | None = Query(None, description="Filtrar por role (user|assistant)"),
     limit: int | None = Query(5, ge=1, le=10),
-    min_score: float | None = Query(None, ge=0.0, le=1.0),
+    min_score: float | None = Query(None, ge=0.0, le=1.0)
 ):
     from qdrant_client import models
 
     started_at = time.perf_counter()
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_USER_CHAT_SEARCH,
-        user_id=user_id,
+        user_id="default",
         include_graph=False,
-        query=query,
-    )
+        query=query)
     route_meta = {
         "route.rule_id": route_decision.rule_id,
         "route.primary": route_decision.primary.value,
@@ -243,8 +233,7 @@ async def rag_user_chat_search(
             started_at=started_at,
             confidence=0.0,
             error_code=type(e).__name__,
-            extra=route_meta,
-        )
+            extra=route_meta)
         return RAGUserChatResponse(answer="Erro na busca.", citations=[])
 
     must: list[models.FieldCondition] = []
@@ -271,8 +260,7 @@ async def rag_user_chat_search(
                 query=vec,
                 limit=limit or 5,
                 with_payload=True,
-                query_filter=qfilter,
-            )
+                query_filter=qfilter)
         hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("user_chat", "success").inc()
         _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
@@ -337,8 +325,7 @@ async def rag_user_chat_search(
         started_at=_start,
         scores=[r.get("score") for r in items if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(items), **route_meta},
-    )
+        extra={"result_count": len(items), **route_meta})
     return RAGUserChatResponse(answer=answer, citations=citations)
 
 
@@ -350,24 +337,21 @@ class RAGProductivityResponse(BaseModel):
 @router.get(
     "/productivity",
     response_model=RAGProductivityResponse,
-    summary="Busca em itens de produtividade (calendar/mail/notes) do usuário",
-)
+    summary="Busca em itens de produtividade (calendar/mail/notes) do usuário")
 async def rag_productivity_search(
     query: str = Query(..., description="Consulta"),
-    user_id: str = Query(..., description="ID do usuário"),
     type: str | None = Query(None, description="calendar_event|email_message|note_item"),
     limit: int | None = Query(5, ge=1, le=10),
-    min_score: float | None = Query(None, ge=0.0, le=1.0),
+    min_score: float | None = Query(None, ge=0.0, le=1.0)
 ):
     from qdrant_client import models
 
     started_at = time.perf_counter()
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_PRODUCTIVITY_SEARCH,
-        user_id=user_id,
+        user_id="default",
         include_graph=False,
-        query=query,
-    )
+        query=query)
     route_meta = {
         "route.rule_id": route_decision.rule_id,
         "route.primary": route_decision.primary.value,
@@ -385,13 +369,10 @@ async def rag_productivity_search(
             started_at=started_at,
             confidence=0.0,
             error_code=e.__class__.__name__,
-            extra=route_meta,
-        )
+            extra=route_meta)
         return RAGProductivityResponse(answer="Erro em serviços.", citations=[])
 
-    must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id))
-    ]
+    must: list[models.FieldCondition] = [    ]
     if type:
         must.append(models.FieldCondition(key="metadata.type", match=models.MatchValue(value=type)))
     # Evitar pontos marcados como duplicados
@@ -415,8 +396,7 @@ async def rag_productivity_search(
                 query=vec,
                 limit=limit or 5,
                 with_payload=True,
-                query_filter=qfilter,
-            )
+                query_filter=qfilter)
         hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("productivity", "success").inc()
         _RAG_LAT.labels("productivity", "success").observe(max(0.0, _t.perf_counter() - _start))
@@ -480,8 +460,7 @@ async def rag_productivity_search(
         started_at=_start,
         scores=[r.get("score") for r in items if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(items), **route_meta},
-    )
+        extra={"result_count": len(items), **route_meta})
     return RAGProductivityResponse(answer=answer, citations=citations)
 
 
@@ -497,16 +476,14 @@ class RAGUserChatResponseV2(BaseModel):
 )
 async def rag_user_chat_search_v2(
     query: str,
-    user_id: str | None = None,
     session_id: str | None = None,
     start_ts_ms: int | None = None,
     end_ts_ms: int | None = None,
     limit: int = 5,
     min_score: float | None = None,
-    http: Request = None,
-):
+    http: Request = None):
     started_at = time.perf_counter()
-    user_id = resolve_user_scope_id(http, user_id)
+    user_id = "default"
     if not user_id:
         _emit_rag_step(
             endpoint="/rag/user_chat",
@@ -515,8 +492,7 @@ async def rag_user_chat_search_v2(
             db="qdrant",
             started_at=started_at,
             confidence=0.0,
-            error_code="SKIPPED_MISSING_USER_ID",
-        )
+            error_code="SKIPPED_MISSING_USER_ID")
         return RAGUserChatResponseV2(results=[])
 
     try:
@@ -533,14 +509,11 @@ async def rag_user_chat_search_v2(
             db="qdrant",
             started_at=started_at,
             confidence=0.0,
-            error_code=type(e).__name__,
-        )
+            error_code=type(e).__name__)
         return RAGUserChatResponseV2(results=[])
 
     # Filtro por payload
-    must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id))
-    ]
+    must: list[models.FieldCondition] = [    ]
     if session_id:
         must.append(
             models.FieldCondition(
@@ -575,8 +548,7 @@ async def rag_user_chat_search_v2(
                 limit=limit,
                 with_payload=True,
                 query_filter=sc_filter,
-                score_threshold=min_score if isinstance(min_score, float) else None,
-            )
+                score_threshold=min_score if isinstance(min_score, float) else None)
         _RAG_REQ.labels("user_chat_v2", "success").inc()
         _RAG_LAT.labels("user_chat_v2", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception as e:
@@ -613,8 +585,7 @@ async def rag_user_chat_search_v2(
         started_at=_start,
         scores=[r.get("score") for r in results if isinstance(r, dict)],
         error_code=error_code,
-        extra={"result_count": len(results)},
-    )
+        extra={"result_count": len(results)})
     return RAGUserChatResponseV2(results=results)
 
 
@@ -626,23 +597,19 @@ class RAGHybridResponse(BaseModel):
 @router.get(
     "/hybrid_search",
     response_model=RAGHybridResponse,
-    summary="Busca híbrida de código (lexical + vetor + grafo)",
-)
+    summary="Busca híbrida de código (lexical + vetor + grafo)")
 async def rag_hybrid_search(
     query: str,
-    user_id: str | None = None,
     limit: int = 5,
     min_score: float | None = None,
-    http: Request = None,
-):
+    http: Request = None):
     started_at = time.perf_counter()
-    uid = resolve_user_scope_id(http, user_id)
+    uid = "default"
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_HYBRID_SEARCH,
-        user_id=uid,
+        user_id="default",
         include_graph=True,
-        query=query,
-    )
+        query=query)
     route_meta = {
         "route.rule_id": route_decision.rule_id,
         "route.primary": route_decision.primary.value,
@@ -660,9 +627,8 @@ async def rag_hybrid_search(
                 query=query,
                 limit=limit,
                 min_score=min_score,
-                user_id=uid,
-                route_decision=route_decision,
-            )
+                user_id="default",
+                route_decision=route_decision)
         _RAG_REQ.labels("hybrid", "success").inc()
         _RAG_LAT.labels("hybrid", "success").observe(max(0.0, time.perf_counter() - started_at))
     except Exception as exc:
@@ -695,8 +661,7 @@ async def rag_hybrid_search(
             if isinstance(citation, dict) and citation.get("source") == "lexical"
         ],
         error_code=result_errors.get("lexical") if graph_enabled else "SKIPPED_BY_ROUTE_POLICY",
-        extra={"result_count": int(metrics.get("lexical_count", 0) or 0), **route_meta},
-    )
+        extra={"result_count": int(metrics.get("lexical_count", 0) or 0), **route_meta})
     _emit_rag_step(
         endpoint="/rag/hybrid_search",
         step="vector_retrieval",
@@ -709,8 +674,7 @@ async def rag_hybrid_search(
             if isinstance(citation, dict) and citation.get("source") == "vector"
         ],
         error_code=result_errors.get("vector") if vector_enabled else "SKIPPED_BY_ROUTE_POLICY",
-        extra={"result_count": int(metrics.get("vector_count", 0) or 0), **route_meta},
-    )
+        extra={"result_count": int(metrics.get("vector_count", 0) or 0), **route_meta})
     _emit_rag_step(
         endpoint="/rag/hybrid_search",
         step="graph_retrieval",
@@ -723,8 +687,7 @@ async def rag_hybrid_search(
             if isinstance(citation, dict) and citation.get("source") == "graph"
         ],
         error_code=result_errors.get("graph") if graph_enabled else "SKIPPED_BY_ROUTE_POLICY",
-        extra={"result_count": int(metrics.get("graph_count", 0) or 0), **route_meta},
-    )
+        extra={"result_count": int(metrics.get("graph_count", 0) or 0), **route_meta})
     _emit_rag_step(
         endpoint="/rag/hybrid_search",
         step="merge_results",
@@ -743,8 +706,7 @@ async def rag_hybrid_search(
             "citation_count": len(citations),
             "user_id_present": bool(uid),
             **route_meta,
-        },
-    )
+        })
     try:
         _RAG_RESULTS_TOTAL.labels("hybrid").inc(len(citations))
         for citation in citations:

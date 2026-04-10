@@ -27,11 +27,11 @@ async def test_sse_slot_limit_per_channel_user(monkeypatch):
     monkeypatch.setenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", "1")
     monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "10")
 
-    event_slot = await acquire_sse_slot("subrouter-user", channel="agent_events")
-    chat_slot = await acquire_sse_slot("subrouter-user", channel="chat_stream")
+    event_slot = await acquire_sse_slot(channel="agent_events")
+    chat_slot = await acquire_sse_slot(channel="chat_stream")
     try:
         with pytest.raises(HTTPException) as exc:
-            await acquire_sse_slot("subrouter-user", channel="chat_stream")
+            await acquire_sse_slot(channel="chat_stream")
         assert exc.value.status_code == 429
     finally:
         await release_sse_slot(chat_slot, channel="chat_stream")
@@ -44,10 +44,10 @@ async def test_sse_slot_limit_global_across_channels(monkeypatch):
     monkeypatch.setenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", "5")
     monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "1")
 
-    slot = await acquire_sse_slot("subrouter-user-1", channel="agent_events")
+    slot = await acquire_sse_slot(channel="agent_events")
     try:
         with pytest.raises(HTTPException) as exc:
-            await acquire_sse_slot("subrouter-user-2", channel="chat_stream")
+            await acquire_sse_slot(channel="chat_stream")
         assert exc.value.status_code == 429
     finally:
         await release_sse_slot(slot, channel="agent_events")
@@ -58,13 +58,13 @@ async def test_sse_slot_bypasses_unlimited_user(monkeypatch):
     monkeypatch.setenv("CHAT_SSE_MAX_CHAT_STREAMS_PER_USER", "1")
     monkeypatch.setenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", "1")
     monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "1")
-    monkeypatch.setattr("app.api.v1.endpoints.chat.deps.is_chat_unlimited_user", lambda user_id: str(user_id) == "2")
+    monkeypatch.setattr("app.api.v1.endpoints.chat.deps.is_chat_unlimited_user", lambda _: True)
 
-    first_slot = await acquire_sse_slot("2", channel="chat_stream")
-    second_slot = await acquire_sse_slot("2", channel="chat_stream")
+    first_slot = await acquire_sse_slot(channel="chat_stream")
+    second_slot = await acquire_sse_slot(channel="chat_stream")
     try:
-        assert first_slot == "unlimited:2"
-        assert second_slot == "unlimited:2"
+        assert first_slot == "unlimited:anonymous"
+        assert second_slot == "unlimited:anonymous"
     finally:
         await release_sse_slot(second_slot, channel="chat_stream")
         await release_sse_slot(first_slot, channel="chat_stream")

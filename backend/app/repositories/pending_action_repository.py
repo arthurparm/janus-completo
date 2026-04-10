@@ -18,7 +18,6 @@ class PendingActionRepository:
 
     def create(
         self,
-        user_id: str,
         tool_name: str,
         args_json: str,
         run_id: int | None,
@@ -30,7 +29,6 @@ class PendingActionRepository:
         s = self._get_session()
         try:
             p = PendingAction(
-                user_id=user_id,
                 tool_name=tool_name,
                 args_json=args_json,
                 run_id=run_id,
@@ -48,13 +46,11 @@ class PendingActionRepository:
                 s.close()
 
     def list(
-        self, user_id: str | None = None, status: str | None = "pending", limit: int = 50
+        self, status: str | None = "pending", limit: int = 50
     ) -> list[PendingAction]:
         s = self._get_session()
         try:
             q = s.query(PendingAction)
-            if user_id:
-                q = q.filter(PendingAction.user_id == user_id)
             if status:
                 q = q.filter(PendingAction.status == status)
             return q.order_by(desc(PendingAction.created_at)).limit(limit).all()

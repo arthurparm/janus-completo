@@ -376,6 +376,21 @@ class ObservabilityRepository:
         finally:
             s.close()
 
+    def export_audit_events_json(self, sanitize: bool = True, **kwargs) -> str:
+        import json
+        events = self.get_audit_events(**kwargs)
+        if sanitize:
+            from app.core.security.redaction import redact_sensitive_payload
+            events = [redact_sensitive_payload(ev) for ev in events]
+            for ev in events:
+                if isinstance(ev.get("details_json"), str):
+                    try:
+                        parsed = json.loads(ev["details_json"])
+                        ev["details_json"] = json.dumps(redact_sensitive_payload(parsed))
+                    except Exception:
+                        pass
+        return json.dumps({"events": events}, default=str)
+
     def get_audit_events(
         self,
         user_id: str | None,

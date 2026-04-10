@@ -223,7 +223,6 @@ async def chat_history_paginated(
     summary="Lista conversas com filtros de RBAC",
 )
 async def list_conversations(
-    user_id: str | None = None,
     project_id: str | None = None,
     limit: int = 50,
     service: ChatService = Depends(get_chat_service),

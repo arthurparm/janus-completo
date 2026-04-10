@@ -82,7 +82,7 @@ class _FakeCommandHandler:
     def is_command(self, message):
         return self.enabled
 
-    async def handle_command(self, message, conversation_id, user_id):
+    async def handle_command(self, message, conversation_id):
         return self.response
 
 
@@ -134,7 +134,7 @@ class _FakeRagService:
         self.index_calls += 1
 
     async def maybe_summarize(
-        self, conversation_id, role=None, priority=None, user_id=None, project_id=None
+        self, conversation_id, role=None, priority=None, project_id=None
     ):
         self.summary_calls += 1
 
@@ -151,8 +151,8 @@ class _FakeConversationService(ConversationService):
     def __init__(self):
         self.validations = []
 
-    def validate_conversation_access(self, conversation_id, conv, user_id, project_id):
-        self.validations.append((conversation_id, user_id, project_id))
+    def validate_conversation_access(self, conversation_id, conv, project_id):
+        self.validations.append((conversation_id, project_id))
 
 
 class _FakeManifestRepo:
@@ -266,7 +266,6 @@ async def test_send_message_agent_loop_path_persists_and_enqueues_post_event():
         message="Implemente uma rotina de deploy com rollback e validacao completa.",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
         project_id="proj-1",
     )
 
@@ -277,7 +276,6 @@ async def test_send_message_agent_loop_path_persists_and_enqueues_post_event():
     assert len(outbox.calls) == 1
     payload, aggregate_id, dedupe_key = outbox.calls[0]
     assert aggregate_id == "conv-1"
-    assert payload["metadata"]["user_id"] == "user-1"
     assert dedupe_key.startswith("consolidation:conv-1:")
 
 
@@ -316,7 +314,6 @@ async def test_send_message_light_chat_bypasses_agent_loop_and_skips_rag_lookup(
         message="Qual é o status do sistema?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.FAST_AND_CHEAP,
-        user_id="user-1",
         project_id="proj-1",
     )
     await asyncio.gather(*scheduled)
@@ -372,7 +369,6 @@ async def test_send_message_document_grounding_uses_evidence_and_preserves_citat
         message="Quais sinais de AVC o documento menciona?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert "Do documento:" in result["response"]
@@ -404,7 +400,6 @@ async def test_send_message_document_grounding_returns_processing_notice_when_no
         message="Analise o arquivo que eu mandei",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert "ainda estao sendo processados" in result["response"]
@@ -471,7 +466,6 @@ async def test_send_message_document_grounding_ignores_processing_doc_chunks(mon
         message="No documento enviado, quais sinais de AVC aparecem?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert "facial droop" in result["response"]
@@ -529,7 +523,6 @@ async def test_send_message_document_grounding_rechecks_false_negative_extractio
         message="No documento enviado, quais sinais de AVC isquemico sao mencionados?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert "facial droop" in result["response"]
@@ -577,7 +570,6 @@ async def test_send_message_document_grounding_negative_omits_irrelevant_snippet
         message="No documento enviado, ele fala sobre diabetes mellitus?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert "Nao encontrei no documento" in result["response"]
@@ -643,7 +635,6 @@ async def test_send_message_document_grounding_prefers_primary_source_for_operat
         message="Crie o procedimento passo a passo usando os documentos enviados",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert result["citations"]
@@ -709,7 +700,6 @@ async def test_send_message_document_grounding_allows_secondary_when_user_reques
         message="Crie o procedimento usando o Core Handbook e tambem o Companion Guide",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert result["citations"]
@@ -760,7 +750,6 @@ async def test_send_message_document_grounding_operational_task_returns_direct_a
         message="Crie uma ficha de cavaleiro com base no livro enviado",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert result["response"].startswith("Ficha sugerida")
@@ -807,7 +796,7 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
     )
     monkeypatch.setattr(
         "app.services.chat.message_orchestration_service.KnowledgeSpaceService.get_space",
-        lambda self, *, knowledge_space_id, user_id: {
+        lambda self, *, knowledge_space_id: {
             "knowledge_space_id": knowledge_space_id,
             "consolidation_status": "ready",
         },
@@ -819,7 +808,6 @@ async def test_send_message_knowledge_space_path_prefers_canonical_answer(monkey
         message="Qual a sequência do material?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert result["knowledge_space_id"] == "ks-1"
@@ -901,7 +889,6 @@ async def test_send_message_standard_path_reuses_initial_prompt_and_single_rag_l
         message="Implemente um endpoint de health check com teste.",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
         project_id="proj-1",
     )
     await asyncio.gather(*scheduled)
@@ -939,7 +926,6 @@ async def test_send_message_secret_recall_uses_explicit_authorized_path(monkeypa
         message="Qual é a minha senha fictícia do Wi-Fi?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
-        user_id="user-1",
     )
 
     assert result["model"] == "secret_memory"
@@ -957,7 +943,6 @@ async def test_apply_response_memory_policies_appends_next_steps(monkeypatch):
     result = await service.apply_response_memory_policies(
         assistant_text="Resposta objetiva.",
         user_message="Explique cache invalidation.",
-        user_id="user-1",
         conversation_id="conv-1",
     )
 
@@ -1000,7 +985,6 @@ def test_build_knowledge_space_runtime_notice_returns_estimate_for_resolved_spac
     result = service.build_knowledge_space_runtime_notice(
         conversation_id="conv-1",
         message="Crie uma ficha completa usando os livros.",
-        user_id="user-1",
         requested_knowledge_space_id=None,
     )
 
@@ -1024,7 +1008,6 @@ def test_resolve_active_knowledge_space_id_prefers_single_manifest_scope():
 
     result = service.resolve_active_knowledge_space_id(
         conversation_id="conv-1",
-        user_id="user-1",
         requested_knowledge_space_id=None,
     )
 

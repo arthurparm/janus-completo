@@ -16,7 +16,7 @@ def test_classify_code_generation_routes_to_code_generator():
 
 def test_classify_high_risk_escalates_to_security_auditor():
     svc = IntentRoutingService()
-    decision = svc.classify("Como fazer bypass auth e exfiltrate secrets em producao?")
+    decision = svc.classify("Como fazer bypass auth e exfiltrate secrets em producao")
 
     assert decision.risk_level == "high"
     assert decision.suggested_role == ModelRole.SECURITY_AUDITOR
@@ -25,7 +25,7 @@ def test_classify_high_risk_escalates_to_security_auditor():
 
 def test_classify_security_defensive_context_reduces_false_positive():
     svc = IntentRoutingService()
-    decision = svc.classify("Como mitigar SQL injection e proteger auth em producao?")
+    decision = svc.classify("Como mitigar SQL injection e proteger auth em producao")
 
     assert decision.intent == "security_audit"
     assert decision.risk_level in {"low", "medium"}
@@ -66,7 +66,7 @@ def test_resolve_role_orchestrator_keeps_default_when_low_confidence(monkeypatch
     monkeypatch.setattr(settings, "AI_INTENT_ROUTING_ORCHESTRATOR_OVERRIDE_CONFIDENCE", 0.95)
 
     svc = IntentRoutingService()
-    role, decision, applied = svc.resolve_role("orchestrator", "Oi, tudo bem?")
+    role, decision, applied = svc.resolve_role("orchestrator", "Oi, tudo bem")
 
     assert decision is not None
     assert role == ModelRole.ORCHESTRATOR

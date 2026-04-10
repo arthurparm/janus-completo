@@ -78,7 +78,6 @@ async def chat_health(service: ChatService = Depends(get_chat_service)):
 @router.delete("/{conversation_id}", summary="Apaga uma conversa")
 async def delete_conversation(
     conversation_id: str,
-    user_id: str | None = None,
     project_id: str | None = None,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,

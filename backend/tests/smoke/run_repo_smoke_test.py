@@ -55,7 +55,6 @@ def main():
         print(f"[FAIL] /api/v1/auth/local/register -> {code} {body}")
         sys.exit(1)
     token = str(body["token"])
-    user_id = int(body["user"]["id"])
     auth_headers = {"Authorization": f"Bearer {token}"}
     print(f"[OK] register user id={user_id}")
 
@@ -73,7 +72,6 @@ def main():
 
     # 4. Adicionar evento de calendário
     evt = {
-        "user_id": user_id,
         "event": {
             "title": "Smoke Event",
             "start_ts": time.time() + 60,
@@ -90,9 +88,7 @@ def main():
     print("[OK] calendar add queued")
 
     # 5. Listar eventos (pode estar vazio, não falha)
-    code, body = _req(
-        "GET", f"/api/v1/productivity/calendar/events?user_id={user_id}", headers=auth_headers
-    )
+    code, body = _req("GET", "/api/v1/productivity/calendar/events", headers=auth_headers)
     if code != 200:
         print(f"[WARN] calendar list -> {code} {body}")
     else:

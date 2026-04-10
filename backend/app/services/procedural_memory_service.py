@@ -14,8 +14,7 @@ from app.core.memory.generative_memory import generative_memory_service
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_memory_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 
 logger = structlog.get_logger(__name__)
 
@@ -37,8 +36,7 @@ class ProceduralMemoryService:
         "quero que você",
         "me entregue",
         "nos proximos pedidos",
-        "nos próximos pedidos",
-    )
+        "nos próximos pedidos")
 
     def should_inspect_message(self, message: str) -> bool:
         text = str(message or "").strip().lower()
@@ -75,13 +73,9 @@ class ProceduralMemoryService:
         self,
         *,
         message: str,
-        user_id: str | None,
         conversation_id: str | None,
-        threshold: float = 0.8,
-    ) -> dict[str, Any] | None:
-        if not user_id:
-            return None
-
+        user_id: str,
+        threshold: float = 0.8) -> dict[str, Any] | None:
         extracted = self.extract_rule(message)
         if not extracted or not extracted.get("should_persist"):
             return None
@@ -89,18 +83,14 @@ class ProceduralMemoryService:
             return None
 
         dedupe_key = self._dedupe_key(
-            user_id=str(user_id),
             scope=str(extracted["scope"]),
-            instruction_text=str(extracted["instruction_text"]),
-        )
-        if await self._rule_exists(user_id=str(user_id), dedupe_key=dedupe_key):
+            instruction_text=str(extracted["instruction_text"]))
+        if await self._rule_exists(dedupe_key=dedupe_key):
             return {"status": "duplicate", "dedupe_key": dedupe_key, **extracted}
 
         await self._deactivate_scope_conflicts(
-            user_id=str(user_id),
             scope=str(extracted["scope"]),
-            keep_dedupe_key=dedupe_key,
-        )
+            keep_dedupe_key=dedupe_key)
         now_ms = int(time.time() * 1000)
         resolved_conversation = str(conversation_id) if conversation_id else None
         metadata = {
@@ -116,9 +106,9 @@ class ProceduralMemoryService:
             "recall_policy": "always",
             "sensitivity": "normal",
             "stability_score": float(extracted.get("stability_score") or 0.9),
-            "user_id": str(user_id),
             "session_id": resolved_conversation,
             "conversation_id": resolved_conversation,
+            "user_id": user_id,
             "source_role": "user",
             "origin": "chat.procedural_extractor",
             "source_channel": "chat",
@@ -132,8 +122,7 @@ class ProceduralMemoryService:
             exp = await generative_memory_service.add_memory(
                 content,
                 type="procedural",
-                metadata=metadata,
-            )
+                metadata=metadata)
             return {
                 "status": "created",
                 "id": getattr(exp, "id", None),
@@ -141,44 +130,34 @@ class ProceduralMemoryService:
                 **extracted,
             }
         except Exception as exc:
-            logger.warning("procedural_memory_capture_failed", error=str(exc), user_id=str(user_id))
+            logger.warning("procedural_memory_capture_failed", error=str(exc))
             return None
 
     async def list_rules(
         self,
         *,
-        user_id: str,
         conversation_id: str | None = None,
         limit: int = 10,
         active_only: bool = True,
-        query: str | None = None,
-    ) -> list[dict[str, Any]]:
-        collection_name = await aget_or_create_collection(build_user_memory_collection_name(user_id))
+        query: str | None = None) -> list[dict[str, Any]]:
+        collection_name = await aget_or_create_collection(build_user_memory_collection_name())
         client = get_async_qdrant_client()
 
         must: list[qdrant_models.FieldCondition] = [
             qdrant_models.FieldCondition(
-                key="metadata.user_id",
-                match=qdrant_models.MatchValue(value=str(user_id)),
-            ),
-            qdrant_models.FieldCondition(
                 key="metadata.type",
-                match=qdrant_models.MatchValue(value="procedural_rule"),
-            ),
-        ]
+                match=qdrant_models.MatchValue(value="procedural_rule"))]
         if active_only:
             must.append(
                 qdrant_models.FieldCondition(
                     key="metadata.active",
-                    match=qdrant_models.MatchValue(value=True),
-                )
+                    match=qdrant_models.MatchValue(value=True))
             )
         if conversation_id:
             must.append(
                 qdrant_models.FieldCondition(
                     key="metadata.conversation_id",
-                    match=qdrant_models.MatchValue(value=str(conversation_id)),
-                )
+                    match=qdrant_models.MatchValue(value=str(conversation_id)))
             )
         qfilter = qdrant_models.Filter(must=must)
 
@@ -192,8 +171,7 @@ class ProceduralMemoryService:
                     query=vec,
                     limit=max(limit * 3, limit),
                     with_payload=True,
-                    query_filter=qfilter,
-                )
+                    query_filter=qfilter)
                 points = getattr(res, "points", res) or []
                 used_vector_query = True
             except Exception as exc:
@@ -203,8 +181,7 @@ class ProceduralMemoryService:
                 collection_name=collection_name,
                 scroll_filter=qfilter,
                 limit=min(200, max(limit * 5, limit)),
-                with_payload=True,
-            )
+                with_payload=True)
 
         items = [self._point_to_rule_item(point) for point in points]
         deduped: dict[str, dict[str, Any]] = {}
@@ -230,31 +207,28 @@ class ProceduralMemoryService:
         lines = [
             "Instruções de Trabalho:",
             "- Estas são instruções persistentes do usuário.",
-            "- Siga-as por padrão, salvo se a mensagem atual pedir algo diferente.",
-        ]
+            "- Siga-as por padrão, salvo se a mensagem atual pedir algo diferente."]
         for item in items[:5]:
             instruction = str(item.get("instruction_text") or item.get("content") or "").strip()
             if instruction:
                 lines.append(f"- {instruction}")
         return "\n".join(lines) if len(lines) > 1 else None
 
-    async def _rule_exists(self, *, user_id: str, dedupe_key: str) -> bool:
+    async def _rule_exists(self, *, dedupe_key: str) -> bool:
         try:
-            items = await self.list_rules(user_id=user_id, limit=50, active_only=True)
+            items = await self.list_rules(limit=50, active_only=True)
             return any(str(item.get("dedupe_key")) == dedupe_key for item in items)
         except Exception as exc:
-            logger.warning("procedural_memory_dedupe_check_failed", error=str(exc), user_id=user_id)
+            logger.warning("procedural_memory_dedupe_check_failed", error=str(exc))
             return False
 
     async def _deactivate_scope_conflicts(
         self,
         *,
-        user_id: str,
         scope: str,
-        keep_dedupe_key: str,
-    ) -> None:
+        keep_dedupe_key: str) -> None:
         try:
-            items = await self.list_rules(user_id=user_id, limit=50, active_only=True)
+            items = await self.list_rules(limit=50, active_only=True)
             conflicting_ids = [
                 str(item.get("id") or "").strip()
                 for item in items
@@ -265,15 +239,14 @@ class ProceduralMemoryService:
             if not conflicting_ids:
                 return
             client = get_async_qdrant_client()
-            collection_name = await aget_or_create_collection(build_user_memory_collection_name(user_id))
+            collection_name = await aget_or_create_collection(build_user_memory_collection_name())
             now_ms = int(time.time() * 1000)
             for point_id in conflicting_ids:
                 existing = await client.retrieve(
                     collection_name=collection_name,
                     ids=[point_id],
                     with_payload=True,
-                    with_vectors=False,
-                )
+                    with_vectors=False)
                 payload = getattr(existing[0], "payload", {}) if existing else {}
                 metadata = dict((payload or {}).get("metadata") or {})
                 metadata.update(
@@ -286,14 +259,13 @@ class ProceduralMemoryService:
                 await client.set_payload(
                     collection_name=collection_name,
                     payload={"metadata": metadata},
-                    points=[point_id],
-                )
+                    points=[point_id])
         except Exception as exc:
-            logger.warning("procedural_memory_scope_deactivate_failed", error=str(exc), user_id=user_id)
+            logger.warning("procedural_memory_scope_deactivate_failed", error=str(exc))
 
     def _normalize_instruction_text(self, text: str) -> str:
         cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
-        cleaned = re.sub(r"^\s*(janus[:,]?\s*)?", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^\s*(janus[:]?\s*)?", "", cleaned, flags=re.IGNORECASE)
         return cleaned[:500]
 
     def _infer_scope(self, lowered_text: str) -> str:
@@ -323,8 +295,8 @@ class ProceduralMemoryService:
         lowered = re.sub(r"[\W_]+", " ", lowered)
         return re.sub(r"\s+", " ", lowered).strip()
 
-    def _dedupe_key(self, *, user_id: str, scope: str, instruction_text: str) -> str:
-        base = f"{user_id}:{scope}:{self._normalize_for_hash(instruction_text)}"
+    def _dedupe_key(self, *, scope: str, instruction_text: str) -> str:
+        base = f"{scope}:{self._normalize_for_hash(instruction_text)}"
         return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
     def _point_to_rule_item(self, point: Any) -> dict[str, Any]:
@@ -341,7 +313,6 @@ class ProceduralMemoryService:
             "procedure_kind": meta.get("procedure_kind"),
             "scope": meta.get("scope"),
             "confidence": meta.get("confidence"),
-            "user_id": meta.get("user_id"),
             "conversation_id": meta.get("conversation_id") or meta.get("session_id"),
             "session_id": meta.get("session_id"),
             "origin": meta.get("origin"),

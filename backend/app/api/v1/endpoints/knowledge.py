@@ -124,7 +124,6 @@ class ConsolidationResponse(BaseModel):
 
 class KnowledgeSpaceCreateRequest(BaseModel):
     name: str
-    user_id: str | None = None
     source_type: str = "documentation"
     source_id: str | None = None
     edition_or_version: str | None = None
@@ -135,7 +134,6 @@ class KnowledgeSpaceCreateRequest(BaseModel):
 
 class KnowledgeSpaceResponse(BaseModel):
     knowledge_space_id: str
-    user_id: str
     name: str
     source_type: str
     source_id: str | None = None
@@ -169,7 +167,6 @@ class KnowledgeSpaceListResponse(BaseModel):
 
 
 class AttachDocumentRequest(BaseModel):
-    user_id: str | None = None
     source_type: str | None = None
     source_id: str | None = None
     doc_role: str | None = None
@@ -179,12 +176,10 @@ class AttachDocumentRequest(BaseModel):
 
 
 class KnowledgeSpaceConsolidationRequest(BaseModel):
-    user_id: str | None = None
     limit_docs: int = 20
 
 
 class KnowledgeSpaceQueryRequest(BaseModel):
-    user_id: str | None = None
     question: str
     mode: str = "auto"
     limit: int = 5
@@ -421,7 +416,6 @@ async def publish_consolidation(request: ConsolidationRequest):
 
 
 class DocConsolidationRequest(BaseModel):
-    user_id: str
     doc_id: str
     limit: int = 50
 
@@ -435,7 +429,7 @@ async def consolidate_document(
     request: DocConsolidationRequest, service: KnowledgeService = Depends(get_knowledge_service)
 ):
     stats = await service.consolidate_document(
-        user_id=request.user_id, doc_id=request.doc_id, limit=request.limit
+        user_id="default", doc_id=request.doc_id, limit=request.limit
     )
     return ConsolidationResponse(message="Consolidação de documento concluída.", stats=stats)
 
@@ -572,12 +566,7 @@ async def create_knowledge_space(
     request: Request,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    user_id = resolve_user_scope_id(request, payload.user_id)
-    if not user_id:
-        raise HTTPException(
-            status_code=422,
-            detail="user_id necessário",
-        )
+    user_id = "default"
     row = service.create_space(
         user_id=str(user_id),
         name=payload.name,
@@ -598,11 +587,10 @@ async def create_knowledge_space(
 )
 async def list_knowledge_spaces(
     request: Request,
-    user_id: str | None = None,
     limit: int = 100,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    resolved_user_id = resolve_user_scope_id(request, user_id)
+    resolved_user_id = "default"
     if not resolved_user_id:
         raise HTTPException(status_code=422, detail="user_id necessário")
     rows = service.list_spaces(user_id=str(resolved_user_id), limit=limit)
@@ -617,15 +605,13 @@ async def list_knowledge_spaces(
 async def get_knowledge_space_status(
     knowledge_space_id: str,
     request: Request,
-    user_id: str | None = None,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    resolved_user_id = resolve_user_scope_id(request, user_id)
+    resolved_user_id = "default"
     if not resolved_user_id:
         raise HTTPException(status_code=422, detail="user_id necessário")
     row = service.get_space_status(
         knowledge_space_id=knowledge_space_id,
-        user_id=str(resolved_user_id),
     )
     return KnowledgeSpaceStatusResponse(**row)
 
@@ -642,9 +628,7 @@ async def attach_document_to_space(
     request: Request,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    user_id = resolve_user_scope_id(request, payload.user_id)
-    if not user_id:
-        raise HTTPException(status_code=422, detail="user_id necessário")
+    user_id = "default"
     row = await service.attach_document(
         knowledge_space_id=knowledge_space_id,
         doc_id=doc_id,
@@ -670,10 +654,8 @@ async def consolidate_knowledge_space(
     request: Request,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    user_id = resolve_user_scope_id(request, payload.user_id)
-    if not user_id:
-        raise HTTPException(status_code=422, detail="user_id necessário")
-    service.mark_consolidation_requested(knowledge_space_id=knowledge_space_id, user_id=str(user_id))
+    user_id = "default"
+    service.mark_consolidation_requested(knowledge_space_id=knowledge_space_id)
     stats = await publish_consolidation_task(
         {
             "mode": "knowledge_space",
@@ -683,7 +665,7 @@ async def consolidate_knowledge_space(
         },
         correlation_id=knowledge_space_id,
     )
-    stats["status_url"] = f"/api/v1/knowledge/spaces/{knowledge_space_id}?user_id={user_id}"
+    stats["status_url"] = f"/api/v1/knowledge/spaces/{knowledge_space_id}?user_id="
     return ConsolidationResponse(message="Consolidação estrutural publicada.", stats=stats)
 
 
@@ -698,12 +680,9 @@ async def query_knowledge_space(
     request: Request,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    user_id = resolve_user_scope_id(request, payload.user_id)
-    if not user_id:
-        raise HTTPException(status_code=422, detail="user_id necessário")
+    user_id = "default"
     result = await service.query_space(
         knowledge_space_id=knowledge_space_id,
-        user_id=str(user_id),
         question=payload.question,
         mode=payload.mode,
         limit=payload.limit,

@@ -32,14 +32,14 @@ class _FakeRepo:
 
 
 class _FakeLLM:
-    def select_provider(self, role, priority, user_id=None, project_id=None):
+    def select_provider(self, role, priority, project_id=None):
         return {"provider": "dummy", "model": "m"}
 
     def is_provider_open(self, provider: str) -> bool:
         return False
 
     def invoke_llm(
-        self, prompt, role, priority, timeout_seconds=None, user_id=None, project_id=None
+        self, prompt, role, priority, timeout_seconds=None, project_id=None
     ):
         return {"response": "ok from llm", "provider": "dummy", "model": "m"}
 
@@ -78,15 +78,14 @@ class _FakeMessageOrchestration:
     async def generate_document_grounded_reply(self, **kwargs):
         return self.grounded_result
 
-    def schedule_active_memory_capture(self, *, message: str, user_id: str | None, conversation_id: str) -> None:
+    def schedule_active_memory_capture(self, message, conversation_id, project_id, identity_source):
         return None
 
     def build_knowledge_space_runtime_notice(
         self,
         *,
         conversation_id: str,
-        message: str,
-        user_id: str | None,
+        message: str | None,
         requested_knowledge_space_id: str | None = None,
     ):
         return None
@@ -97,8 +96,7 @@ class _FakeMessageOrchestration:
     async def apply_response_memory_policies(
         self,
         assistant_text: str,
-        user_message: str,
-        user_id: str | None,
+        user_message: str | None,
         conversation_id: str,
     ) -> str:
         return assistant_text
@@ -106,14 +104,13 @@ class _FakeMessageOrchestration:
     def resolve_active_knowledge_space_id(
         self,
         *,
-        conversation_id: str,
-        user_id: str | None,
+        conversation_id: str | None,
         requested_knowledge_space_id: str | None = None,
     ):
         return requested_knowledge_space_id
 
     def trigger_post_response_events(
-        self, conversation_id, user_message, assistant_text, result, user_id, project_id
+        self, conversation_id, user_message, assistant_text, result, project_id
     ):
         self.calls += 1
 
@@ -219,7 +216,6 @@ async def test_streaming_service_sse_high_risk_emits_confirmation_and_waiting_st
             message="execute deploy in production now",
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
-            user_id="1",
             requested_role="auto",
             routing_decision=_FakeRoutingDecision(risk_level="high"),
             route_applied=True,
@@ -271,7 +267,6 @@ async def test_streaming_service_sse_non_risk_does_not_emit_confirmation(monkeyp
             message="hello docs",
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
-            user_id="1",
             requested_role="auto",
             routing_decision=_FakeRoutingDecision(risk_level="low"),
             route_applied=True,
@@ -312,10 +307,9 @@ async def test_streaming_service_missing_required_citations_emits_and_persists_g
         line
         async for line in streaming.stream_message(
             conversation_id="conv-1",
-            message="Onde está a documentação da API?",
+            message="Onde está a documentação da API",
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
-            user_id="1",
         )
     ]
     events = _parse_sse_chunks(chunks)
@@ -378,7 +372,6 @@ async def test_streaming_service_missing_required_citations_with_knowledge_space
             message="Monte uma ficha usando o livro",
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
-            user_id="1",
             knowledge_space_id="ks-1",
         )
     ]
@@ -434,10 +427,9 @@ async def test_streaming_service_document_grounding_short_circuits_llm():
             line
             async for line in streaming.stream_message(
                 conversation_id="conv-1",
-                message="Quais sinais o documento cita?",
+                message="Quais sinais o documento cita",
                 role=ModelRole.ORCHESTRATOR,
                 priority=ModelPriority.HIGH_QUALITY,
-                user_id="1",
             )
         ]
     )

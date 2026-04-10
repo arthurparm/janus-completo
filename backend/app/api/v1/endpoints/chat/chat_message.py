@@ -65,26 +65,9 @@ async def start_chat(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    identity_ctx = resolve_authenticated_user_context(
-        http,
-        request.user_id,
-        allow_anonymous_fallback=True,
-        endpoint_label="/api/v1/chat/start",
-    )
-    user_id = identity_ctx.user_id
-    if user_id is None and is_chat_auth_enforced():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=chat_http_error_detail(
-                code="CHAT_AUTH_REQUIRED",
-                message="Authentication required",
-                category="auth",
-                retryable=False,
-                http_status=status.HTTP_401_UNAUTHORIZED,
-            ),
-        )
+    ctx = resolve_authenticated_user_context(http, None, allow_anonymous_fallback=True, endpoint_label="/api/v1/chat/start")
     conversation_id = await service.start_conversation_async(
-        request.persona, user_id, request.project_id
+        request.persona, ctx.user_id or "default", request.project_id
     )
     return ChatStartResponse(conversation_id=conversation_id)
 
@@ -100,27 +83,10 @@ async def send_message(
     http: Request = None,
     memory: MemoryService = Depends(get_memory_service),
 ):
-    identity_ctx = resolve_authenticated_user_context(
-        http,
-        payload.user_id,
-        allow_anonymous_fallback=True,
-        endpoint_label="/api/v1/chat/message",
-    )
-    user_id = identity_ctx.user_id
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=chat_http_error_detail(
-                code="CHAT_AUTH_REQUIRED",
-                message="Authentication required",
-                category="auth",
-                retryable=False,
-                http_status=status.HTTP_401_UNAUTHORIZED,
-            ),
-        )
+    ctx = resolve_authenticated_user_context(http, None, allow_anonymous_fallback=True, endpoint_label="/api/v1/chat/message")
     active_knowledge_space_id = service.resolve_active_knowledge_space_id(
         conversation_id=payload.conversation_id,
-        user_id=user_id,
+        user_id=ctx.user_id or "default",
         requested_knowledge_space_id=payload.knowledge_space_id,
     )
     routing_service = get_intent_routing_service()
@@ -161,10 +127,10 @@ async def send_message(
             role=role,
             priority=priority,
             timeout_seconds=payload.timeout_seconds,
-            user_id=user_id,
+            user_id=ctx.user_id or "default",
             project_id=payload.project_id,
             knowledge_space_id=active_knowledge_space_id,
-            identity_source=identity_ctx.identity_source,
+            identity_source="default",
         )
     except ConversationNotFoundError:
         raise HTTPException(
@@ -218,7 +184,6 @@ async def send_message(
         try:
             citation_result = await collect_chat_citations(
                 message=payload.message,
-                user_id=str(user_id) if user_id is not None else None,
                 conversation_id=str(result.get("conversation_id") or payload.conversation_id),
                 memory_service=memory,
                 limit=5,
@@ -287,7 +252,7 @@ async def send_message(
                 try:
                     last_assistant_message = await service.get_last_assistant_message(
                         conversation_id=payload.conversation_id,
-                        user_id=user_id,
+                        user_id="default",
                     )
                 except Exception as e:
                     logger.warning(
@@ -310,7 +275,7 @@ async def send_message(
                             "provider": result.get("provider"),
                             "model": result.get("model"),
                         },
-                        user_id=user_id,
+                        user_id="default",
                     )
                     result["message_id"] = str(last_assistant_message.get("id"))
                 except Exception as e:
@@ -340,7 +305,7 @@ async def send_message(
             try:
                 last_assistant_message = await service.get_last_assistant_message(
                     conversation_id=payload.conversation_id,
-                    user_id=user_id,
+                    user_id="default",
                 )
             except Exception as e:
                 logger.warning(
@@ -362,7 +327,7 @@ async def send_message(
                         "provider": result.get("provider"),
                         "model": result.get("model"),
                     },
-                    user_id=user_id,
+                    user_id="default",
                 )
                 result["message_id"] = str(last_assistant_message.get("id"))
                 jobs = _get_chat_study_job_service(http, service)
@@ -370,7 +335,7 @@ async def send_message(
                     conversation_id=payload.conversation_id,
                     message_id=str(last_assistant_message.get("id")),
                     question=payload.message,
-                    user_id=user_id,
+                    user_id="default",
                     placeholder_message=placeholder_text,
                 )
                 result["study_job"] = {
@@ -412,13 +377,12 @@ async def send_message(
                 )
 
     pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
-        user_id=str(user_id) if user_id is not None else None,
-        message=payload.message,
-        assistant_response=str(result.get("response") or ""),
-        conversation_id=str(result.get("conversation_id") or payload.conversation_id),
-        existing_pending_action_id=pending_action_id,
-        understanding=understanding if isinstance(understanding, dict) else None,
-    )
+            message=payload.message,
+            assistant_response=str(result.get("response") or ""),
+            conversation_id=str(result.get("conversation_id") or payload.conversation_id),
+            existing_pending_action_id=pending_action_id,
+            understanding=understanding if isinstance(understanding, dict) else None,
+        )
     if fallback_reason and isinstance(understanding, dict) and not understanding.get("confirmation_reason"):
         understanding["confirmation_reason"] = fallback_reason
 
@@ -449,7 +413,7 @@ async def send_message(
         try:
             last_assistant_message = await service.get_last_assistant_message(
                 conversation_id=payload.conversation_id,
-                user_id=user_id,
+                user_id="default",
             )
         except Exception:
             last_assistant_message = None
@@ -471,7 +435,7 @@ async def send_message(
                     "provider": result.get("provider"),
                     "model": result.get("model"),
                 },
-                user_id=user_id,
+                user_id="default",
             )
             result["message_id"] = str(last_assistant_message.get("id"))
         except Exception as e:

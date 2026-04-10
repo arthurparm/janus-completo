@@ -9,8 +9,7 @@ from app.core.embeddings.embedding_manager import aembed_text
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_docs_collection_name,
-    get_async_qdrant_client,
-)
+    get_async_qdrant_client)
 
 MANDATORY_CITATION_GUARD_TEXT = (
     "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
@@ -34,8 +33,7 @@ _CITATION_REQUIRED_PATTERNS = (
     r"\bendpoint\b",
     r"\.py\b",
     r"\.ts\b",
-    r"\.js\b",
-)
+    r"\.js\b")
 
 _UPLOADED_MATERIAL_PATTERNS = (
     r"\barquivo\b",
@@ -47,8 +45,7 @@ _UPLOADED_MATERIAL_PATTERNS = (
     r"\bte mandei\b",
     r"\battachment\b",
     r"\battached\b",
-    r"\bsent\b",
-)
+    r"\bsent\b")
 
 
 def requires_mandatory_citations(message: str) -> bool:
@@ -100,8 +97,7 @@ def build_citation_status(
     *,
     message: str,
     citations: list[dict[str, Any]],
-    retrieval_failed: bool = False,
-) -> dict[str, Any]:
+    retrieval_failed: bool = False) -> dict[str, Any]:
     required = requires_mandatory_citations(message)
     mode = "required" if required else "optional"
     if retrieval_failed:
@@ -143,8 +139,7 @@ def _dedupe_citations(citations: list[dict[str, Any]], limit: int) -> list[dict[
             citation.get("url"),
             citation.get("title"),
             citation.get("line_start"),
-            citation.get("snippet"),
-        )
+            citation.get("snippet"))
         if key in seen:
             continue
         seen.add(key)
@@ -179,61 +174,49 @@ def _map_document_hits(points: list[Any]) -> list[dict[str, Any]]:
 async def _query_document_citations(
     *,
     message: str,
-    user_id: str,
     conversation_id: str | None,
-    limit: int,
-) -> list[dict[str, Any]]:
+    limit: int) -> list[dict[str, Any]]:
     client = get_async_qdrant_client()
-    collection_name = await aget_or_create_collection(build_user_docs_collection_name(str(user_id)))
+    collection_name = await aget_or_create_collection(build_user_docs_collection_name())
     query = (message or "").strip() or "documento"
     vector = await aembed_text(query)
     must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
-    ]
+        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk"))]
     if conversation_id:
         must.append(
             models.FieldCondition(
                 key="metadata.conversation_id",
-                match=models.MatchValue(value=str(conversation_id)),
-            )
+                match=models.MatchValue(value=str(conversation_id)))
         )
     result = await client.query_points(
         collection_name=collection_name,
         query=vector,
         limit=limit,
         with_payload=True,
-        query_filter=models.Filter(must=must),
-    )
+        query_filter=models.Filter(must=must))
     points = getattr(result, "points", result) or []
     return _map_document_hits(list(points))
 
 
 async def _recent_document_citations(
     *,
-    user_id: str,
     conversation_id: str | None,
-    limit: int,
-) -> list[dict[str, Any]]:
+    limit: int) -> list[dict[str, Any]]:
     client = get_async_qdrant_client()
-    collection_name = await aget_or_create_collection(build_user_docs_collection_name(str(user_id)))
+    collection_name = await aget_or_create_collection(build_user_docs_collection_name())
     must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-        models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=str(user_id))),
-    ]
+        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk"))]
     if conversation_id:
         must.append(
             models.FieldCondition(
                 key="metadata.conversation_id",
-                match=models.MatchValue(value=str(conversation_id)),
-            )
+                match=models.MatchValue(value=str(conversation_id)))
         )
     scroll_result = await client.scroll(
         collection_name=collection_name,
         scroll_filter=models.Filter(must=must),
         limit=max(limit * 4, limit),
-        with_payload=True,
-    )
+        with_payload=True)
     points = scroll_result[0] if isinstance(scroll_result, tuple) else (scroll_result or [])
     return _map_document_hits(list(points)[:limit])
 
@@ -241,52 +224,39 @@ async def _recent_document_citations(
 async def collect_document_citations(
     *,
     message: str,
-    user_id: str | None,
     conversation_id: str | None,
-    limit: int = 5,
-) -> list[dict[str, Any]]:
-    if not user_id:
-        return []
+    limit: int = 5) -> list[dict[str, Any]]:
     doc_citations = await _query_document_citations(
         message=message,
-        user_id=str(user_id),
         conversation_id=conversation_id,
-        limit=limit,
-    )
+        limit=limit)
     if not doc_citations and references_uploaded_material(message):
         doc_citations = await _recent_document_citations(
-            user_id=str(user_id),
             conversation_id=conversation_id,
-            limit=limit,
-        )
+            limit=limit)
     return _dedupe_citations(doc_citations, limit=limit)
 
 
 async def collect_chat_citations(
     *,
     message: str,
-    user_id: str | None,
     conversation_id: str | None,
     memory_service: Any | None = None,
-    limit: int = 5,
-) -> dict[str, Any]:
+    limit: int = 5) -> dict[str, Any]:
     citations: list[dict[str, Any]] = []
     attempted_lookups = 0
     successful_lookups = 0
 
-    if user_id:
-        attempted_lookups += 1
-        try:
-            doc_citations = await collect_document_citations(
-                message=message,
-                user_id=str(user_id),
-                conversation_id=conversation_id,
-                limit=limit,
-            )
-            citations.extend(doc_citations)
-            successful_lookups += 1
-        except Exception:
-            pass
+    attempted_lookups += 1
+    try:
+        doc_citations = await collect_document_citations(
+            message=message,
+            conversation_id=conversation_id,
+            limit=limit)
+        citations.extend(doc_citations)
+        successful_lookups += 1
+    except Exception:
+        pass
 
     if memory_service is not None:
         attempted_lookups += 1
@@ -294,14 +264,11 @@ async def collect_chat_citations(
             filters: dict[str, Any] = {"status_not": "duplicate"}
             if conversation_id:
                 filters["metadata.session_id"] = conversation_id
-            if user_id:
-                filters["metadata.user_id"] = str(user_id)
             memory_hits = await memory_service.recall_filtered(
                 query=message,
                 filters=filters,
                 limit=limit,
-                min_score=0.1,
-            )
+                min_score=0.1)
             citations.extend(map_citation_hits(memory_hits))
             successful_lookups += 1
         except Exception:

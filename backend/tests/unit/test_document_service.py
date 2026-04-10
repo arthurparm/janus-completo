@@ -11,7 +11,6 @@ from app.services.document_service import DocumentIngestionService
 def test_process_staged_document_recovers_when_points_already_indexed(monkeypatch):
     manifest = {
         "doc_id": "doc-1",
-        "user_id": "user-1",
         "storage_path": "/tmp/does-not-exist.pdf",
         "chunks_indexed": 0,
         "semantic_doc_type": "book",

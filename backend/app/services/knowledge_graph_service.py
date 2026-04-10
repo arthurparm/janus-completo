@@ -105,7 +105,7 @@ class KnowledgeGraphService:
         )
 
     async def persist_experience_node(
-        self, experience: Experience, user_id: str | None = None
+        self, experience: Experience
     ) -> str | None:
         """
         Cria um nó de Experience no grafo e o conecta ao fluxo de memória (NEXT).
@@ -133,7 +133,6 @@ class KnowledgeGraphService:
             props["preference_kind"] = meta.get("preference_kind")
             props["preference_scope"] = meta.get("scope")
             props["preference_confidence"] = meta.get("confidence")
-            props["user_id"] = str(meta.get("user_id")) if meta.get("user_id") is not None else None
             props["conversation_id"] = str(meta.get("conversation_id")) if meta.get("conversation_id") is not None else None
             if meta.get("instruction_text"):
                 props["instruction_text"] = str(meta.get("instruction_text"))[:500]
@@ -144,25 +143,8 @@ class KnowledgeGraphService:
         cypher = """
         MERGE (e:Experience {id: $props.id})
         SET e += $props
+        RETURN elementId(e) as id
         """
-
-        if user_id:
-            params["user_id"] = user_id
-            # Conectar ao User e ao fluxo (NEXT)
-            cypher += """
-            WITH e
-            MERGE (u:User {name: $user_id})
-            MERGE (u)-[:HAS_EXPERIENCE]->(e)
-            WITH e, u
-            MATCH (u)-[:HAS_EXPERIENCE]->(prev:Experience)
-            WHERE prev.id <> e.id AND prev.timestamp < e.timestamp
-            WITH e, prev
-            ORDER BY prev.timestamp DESC
-            LIMIT 1
-            MERGE (prev)-[:NEXT]->(e)
-            """
-
-        cypher += " RETURN elementId(e) as id"
 
         try:
             result = await db.query(cypher, params)

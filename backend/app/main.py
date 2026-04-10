@@ -253,10 +253,7 @@ if API_KEY:
 
 @app.middleware("http")
 async def actor_binding(request: Request, call_next):
-    try:
-        request.state.actor_user_id = get_actor_user_id(request)
-    except Exception:
-        request.state.actor_user_id = None
+    request.state.actor_user_id = "system"
     return await call_next(request)
 
 

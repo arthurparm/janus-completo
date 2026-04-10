@@ -31,52 +31,44 @@ async def test_retrieve_memories_reads_user_scoped_collection(monkeypatch):
                             "timestamp": "2026-03-06T17:00:00+00:00",
                             "ts_ms": 1772787600000,
                             "metadata": {
-                                "user_id": "9",
                                 "conversation_id": "6",
                                 "importance": 8,
                                 "last_accessed_at": 1772787600000,
                                 "access_count": 1,
                                 "origin": "frontend.generative_memory_panel",
                             },
-                        },
-                    )
+                        })
                 ]
             )
 
     monkeypatch.setattr(
         "app.core.memory.generative_memory.aembed_text",
-        fake_embed_text,
-    )
+        fake_embed_text)
     monkeypatch.setattr(
         "app.core.memory.generative_memory.aget_or_create_collection",
-        fake_aget_or_create_collection,
-    )
+        fake_aget_or_create_collection)
     monkeypatch.setattr(
         "app.core.memory.generative_memory.get_async_qdrant_client",
-        lambda: FakeClient(),
-    )
+        lambda: FakeClient())
 
     service = GenerativeMemoryService()
     result = await service.retrieve_memories(
         "objetivas",
-        user_id="9",
         conversation_id="6",
-        limit=5,
-    )
+        limit=5)
 
-    assert captured["collection_name"] == "user_memory_9"
+    assert captured["collection_name"] == "global_memory"
     query_kwargs = captured["query_kwargs"]
-    assert query_kwargs["collection_name"] == "user_memory_9"
+    assert query_kwargs["collection_name"] == "global_memory"
     assert query_kwargs["limit"] == 25
 
     must = query_kwargs["query_filter"].must
     filter_keys = {condition.key for condition in must}
-    assert filter_keys == {"metadata.user_id", "metadata.conversation_id"}
+    assert filter_keys == { "metadata.conversation_id"}
 
     assert len(result) == 1
     memory = result[0]
     assert memory.id == "exp-9-1"
-    assert memory.metadata["user_id"] == "9"
     assert memory.metadata["origin"] == "frontend.generative_memory_panel"
     assert memory.score is not None
     assert memory.score > 0.91

@@ -137,11 +137,10 @@ async def process_consolidation_task(task: TaskMessage) -> None:
             from app.services.knowledge_space_service import KnowledgeSpaceService
 
             knowledge_space_id = str(payload.get("knowledge_space_id") or "").strip()
-            user_id = str(payload.get("user_id") or "").strip()
             limit_docs = int(payload.get("limit_docs", 20) or 20)
-            if not knowledge_space_id or not user_id:
+            if not knowledge_space_id:
                 raise ValueError(
-                    "knowledge_space_id e user_id são obrigatórios para modo 'knowledge_space'"
+                    "knowledge_space_id é obrigatório para modo 'knowledge_space'"
                 )
 
             kernel = Kernel.get_instance()
@@ -150,7 +149,6 @@ async def process_consolidation_task(task: TaskMessage) -> None:
                 llm_service=getattr(kernel, "llm_service", None),
             ).consolidate_space(
                 knowledge_space_id=knowledge_space_id,
-                user_id=user_id,
                 limit_docs=limit_docs,
             )
 
@@ -168,8 +166,7 @@ async def process_consolidation_task(task: TaskMessage) -> None:
     except Exception as e:
         if consolidation_mode == "knowledge_space":
             knowledge_space_id = str(payload.get("knowledge_space_id") or "").strip()
-            user_id = str(payload.get("user_id") or "").strip()
-            if knowledge_space_id and user_id:
+            if knowledge_space_id:
                 try:
                     from app.services.knowledge_space_service import KnowledgeSpaceService
 

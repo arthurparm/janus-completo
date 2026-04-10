@@ -19,7 +19,6 @@ class AutonomyRepository:
 
     def create_run(
         self,
-        user_id: str | None,
         project_id: str | None,
         risk_profile: str,
         auto_confirm: bool,
@@ -32,7 +31,6 @@ class AutonomyRepository:
         s = self._get_session()
         try:
             run = AutonomyRun(
-                user_id=user_id,
                 project_id=project_id,
                 risk_profile=risk_profile,
                 auto_confirm=str(bool(auto_confirm)),
@@ -113,14 +111,12 @@ class AutonomyRepository:
                 s.close()
 
     def get_active_run(
-        self, user_id: str | None = None, project_id: str | None = None
+        self, project_id: str | None = None
     ) -> AutonomyRun | None:
         """Recupera a run ativa mais recente (status='running') para permitir restauração após reinício."""
         s = self._get_session()
         try:
             q = s.query(AutonomyRun).filter(AutonomyRun.status == "running")
-            if user_id:
-                q = q.filter(AutonomyRun.user_id == user_id)
             if project_id:
                 q = q.filter(AutonomyRun.project_id == project_id)
             return q.order_by(desc(AutonomyRun.started_at)).first()
@@ -129,13 +125,11 @@ class AutonomyRepository:
                 s.close()
 
     def list_runs(
-        self, user_id: str | None, project_id: str | None, limit: int = 50
+        self, project_id: str | None, limit: int = 50
     ) -> list[AutonomyRun]:
         s = self._get_session()
         try:
             q = s.query(AutonomyRun)
-            if user_id:
-                q = q.filter(AutonomyRun.user_id == user_id)
             if project_id:
                 q = q.filter(AutonomyRun.project_id == project_id)
             return q.order_by(desc(AutonomyRun.started_at)).limit(limit).all()

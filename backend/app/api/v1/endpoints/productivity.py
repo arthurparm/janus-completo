@@ -68,7 +68,6 @@ router = APIRouter(tags=["Productivity"], prefix="/productivity")
 
 
 class OAuthStartRequest(BaseModel):
-    user_id: int
     scopes: list[str] | None = None
 
 
@@ -78,32 +77,30 @@ class OAuthStartResponse(BaseModel):
 
 
 class OAuthCallbackRequest(BaseModel):
-    user_id: int
     code: str
 
 
 class OAuthRefreshRequest(BaseModel):
-    user_id: int
     provider: str
 
 
 def get_consent_repo(request: Request) -> ConsentRepository:
     return ConsentRepository()
 
-def _is_unlimited_user(user_id: int) -> bool:
+def _is_unlimited_user() -> bool:
     unlimited = getattr(settings, "PRODUCTIVITY_UNLIMITED_USERS", []) or []
     if not unlimited:
         return False
     try:
-        user = UserRepository().get_user(int(user_id))
+        user = UserRepository().get_user(0)
         email = (user.email or "").strip().lower() if user else ""
         return bool(email) and email in {u.lower() for u in unlimited}
     except Exception:
         return False
 
 
-def _ensure_consent(repo: ConsentRepository, user_id: int, scope: str) -> None:
-    if not repo.has_consent(user_id, scope):
+def _ensure_consent(repo: ConsentRepository, scope: str) -> None:
+    if not repo.has_consent("default", scope):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=f"Consent required: {scope}"
         )
@@ -118,7 +115,6 @@ class CalendarEvent(BaseModel):
 
 
 class CalendarAddRequest(BaseModel):
-    user_id: int
     event: CalendarEvent
     index: bool | None = False
 
@@ -130,20 +126,17 @@ async def calendar_add_event(
 ):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    _ensure_consent(repo, payload.user_id, "calendar.write")
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        if not _is_unlimited_user(payload.user_id):
+        if not _is_unlimited_user("default"):
             max_per_day = int(
                 getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("calendar.write", 0)
             )
             if max_per_day > 0:
                 evts = svc.get_audit_events(
-                    str(payload.user_id),
+                    "default",
                     tool="calendar_add_event",
                     status="ok",
                     start_ts=start_ts,
@@ -167,12 +160,12 @@ async def calendar_add_event(
     )
     async with cm:  # type: ignore
         task_id = await publish_google_calendar_add_event(
-            user_id=payload.user_id, event=payload.event.model_dump(), index=bool(payload.index)
+            user_id="default", event=payload.event.model_dump(), index=bool(payload.index)
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("calendar_add_event", "queued").inc()
             _PROD_REQUESTS_USER_TOTAL.labels(
-                str(payload.user_id), "calendar_add_event", "queued"
+                "default", "calendar_add_event", "queued"
             ).inc()
         except Exception:
             pass
@@ -180,12 +173,12 @@ async def calendar_add_event(
         if bool(payload.index):
             client = get_async_qdrant_client()
             coll = await aget_or_create_collection(
-                build_user_memory_collection_name(str(payload.user_id))
+                build_user_memory_collection_name("default")
             )
             evt = payload.event.model_dump()
             content = f"{evt.get('title', '')} @ {evt.get('location', '')}"
             vec = await aembed_text(content)
-            pid = f"calendar:{payload.user_id}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
+            pid = f"calendar:{"default"}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
             payload_q = {
                 "content": content,
                 "type": "calendar_event",
@@ -193,7 +186,7 @@ async def calendar_add_event(
                 "composite_id": pid,
                 "metadata": {
                     "type": "calendar_event",
-                    "user_id": str(payload.user_id),
+                    "user_id": "default",
                     "timestamp": int(evt.get("start_ts") or 0),
                     "ts_ms": int(evt.get("start_ts") or 0),
                     "origin": "productivity.calendar.endpoint",
@@ -203,7 +196,7 @@ async def calendar_add_event(
             await client.upsert(collection_name=coll, points=[point])
             try:
                 _PROD_REQUESTS_TOTAL.labels("calendar_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels(str(payload.user_id), "calendar_index", "ok").inc()
+                _PROD_REQUESTS_USER_TOTAL.labels("default", "calendar_index", "ok").inc()
             except Exception:
                 pass
     except Exception:
@@ -212,7 +205,7 @@ async def calendar_add_event(
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": str(payload.user_id),
+                "user_id": "default",
                 "tool": "calendar_add_event",
                 "status": "queued",
                 "detail": {"task_id": task_id},
@@ -231,8 +224,6 @@ async def calendar_add_event(
 async def oauth_google_start(payload: OAuthStartRequest, request: Request):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     try:
         _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
     except Exception:
@@ -250,23 +241,21 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
         "response_type": "code",
         "scope": scope,
         "access_type": "offline",
-        "state": f"user:{payload.user_id}:scope:custom",
+        "state": f"user:{"default"}:scope:custom",
         "include_granted_scopes": "true",
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
-    return OAuthStartResponse(authorize_url=url, state=str(payload.user_id))
+    return OAuthStartResponse(authorize_url=url, state="default")
 
 
 @router.get("/calendar/events")
 async def calendar_list_events(
-    user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
+    request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    _ensure_consent(repo, user_id, "calendar.read")
-    path = f"workspace/productivity/calendar_{user_id}.json"
+        
+    path = f"workspace/productivity/calendar_.json"
     raw = read_file(path)
     try:
         if raw and not raw.startswith("Erro:"):
@@ -285,7 +274,6 @@ class MailMessage(BaseModel):
 
 
 class MailSendRequest(BaseModel):
-    user_id: int
     message: MailMessage
     index: bool | None = False
 
@@ -296,18 +284,15 @@ async def mail_send(
 ):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    _ensure_consent(repo, payload.user_id, "mail.send")
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        if not _is_unlimited_user(payload.user_id):
+        if not _is_unlimited_user("default"):
             max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("mail.send", 0))
             if max_per_day > 0:
                 evts = svc.get_audit_events(
-                    str(payload.user_id),
+                    "default",
                     tool="mail_send",
                     status="ok",
                     start_ts=start_ts,
@@ -329,11 +314,11 @@ async def mail_send(
     cm = _tracer.start_as_current_span("productivity.mail_send") if _OTEL else nullcontext()
     async with cm:  # type: ignore
         task_id = await publish_google_mail_send(
-            user_id=payload.user_id, message=payload.message.model_dump(), index=bool(payload.index)
+            user_id="default", message=payload.message.model_dump(), index=bool(payload.index)
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("mail_send", "queued").inc()
-            _PROD_REQUESTS_USER_TOTAL.labels(str(payload.user_id), "mail_send", "queued").inc()
+            _PROD_REQUESTS_USER_TOTAL.labels("default", "mail_send", "queued").inc()
         except Exception:
             pass
     # Indexação opcional será tratada pelo worker em uma versão futura
@@ -341,7 +326,7 @@ async def mail_send(
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": str(payload.user_id),
+                "user_id": "default",
                 "tool": "mail_send",
                 "status": "queued",
                 "detail": {"task_id": task_id},
@@ -358,14 +343,12 @@ async def mail_send(
 
 @router.get("/mail/messages")
 async def mail_list(
-    user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
+    request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    _ensure_consent(repo, user_id, "mail.read")
-    path = f"workspace/productivity/mail_{user_id}.json"
+        
+    path = f"workspace/productivity/mail_.json"
     raw = read_file(path)
     try:
         if raw and not raw.startswith("Erro:"):
@@ -383,7 +366,6 @@ class NoteItem(BaseModel):
 
 
 class NoteAddRequest(BaseModel):
-    user_id: int
     note: NoteItem
     index: bool | None = False
 
@@ -394,18 +376,15 @@ async def notes_add(
 ):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(payload.user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    _ensure_consent(repo, payload.user_id, "notes.write")
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        if not _is_unlimited_user(payload.user_id):
+        if not _is_unlimited_user("default"):
             max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("notes.write", 0))
             if max_per_day > 0:
                 evts = svc.get_audit_events(
-                    str(payload.user_id),
+                    "default",
                     tool="notes_add",
                     status="ok",
                     start_ts=start_ts,
@@ -425,7 +404,7 @@ async def notes_add(
     cm = _tracer.start_as_current_span("productivity.notes_add") if _OTEL else nullcontext()
     async with cm:  # type: ignore
         pass
-    path = f"workspace/productivity/notes_{payload.user_id}.json"
+    path = f"workspace/productivity/notes_{"default"}.json"
     try:
         raw = read_file(path)
     except Exception:
@@ -451,14 +430,14 @@ async def notes_add(
         if bool(payload.index):
             client = get_async_qdrant_client()
             coll = await aget_or_create_collection(
-                build_user_memory_collection_name(str(payload.user_id))
+                build_user_memory_collection_name("default")
             )
             content = f"{note.get('title', '')}\n{note.get('content', '')}"
             vec = await aembed_text(content)
             now_ts_ms = int(__import__("time").time() * 1000)
             pid = build_deterministic_point_id(
                 "productivity-note",
-                payload.user_id,
+                "default",
                 note.get("title", ""),
                 content,
             )
@@ -469,7 +448,7 @@ async def notes_add(
                 "composite_id": pid,
                 "metadata": {
                     "type": "note_item",
-                    "user_id": str(payload.user_id),
+                    "user_id": "default",
                     "timestamp": now_ts_ms,
                     "ts_ms": now_ts_ms,
                     "origin": "productivity.notes.endpoint",
@@ -479,7 +458,7 @@ async def notes_add(
             await client.upsert(collection_name=coll, points=[point])
             try:
                 _PROD_REQUESTS_TOTAL.labels("notes_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels(str(payload.user_id), "notes_index", "ok").inc()
+                _PROD_REQUESTS_USER_TOTAL.labels("default", "notes_index", "ok").inc()
             except Exception:
                 pass
     except Exception:
@@ -488,7 +467,7 @@ async def notes_add(
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": str(payload.user_id),
+                "user_id": "default",
                 "tool": "notes_add",
                 "status": "ok",
                 "detail": {"title": payload.note.title},
@@ -496,7 +475,7 @@ async def notes_add(
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("notes_add", "ok").inc()
-            _PROD_REQUESTS_USER_TOTAL.labels(str(payload.user_id), "notes_add", "ok").inc()
+            _PROD_REQUESTS_USER_TOTAL.labels("default", "notes_add", "ok").inc()
         except Exception:
             pass
     except Exception:
@@ -510,14 +489,12 @@ async def notes_add(
 
 @router.get("/notes")
 async def notes_list(
-    user_id: int, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
+    request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
     actor = require_authenticated_actor_id(request)
     ur = UserRepository()
-    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    _ensure_consent(repo, user_id, "notes.read")
-    path = f"workspace/productivity/notes_{user_id}.json"
+        
+    path = f"workspace/productivity/notes_.json"
     raw = read_file(path)
     try:
         if raw and not raw.startswith("Erro:"):
@@ -530,19 +507,14 @@ async def notes_list(
 
 
 @router.get("/limits/status")
-async def limits_status(request: Request, user_id: int | None = None):
+async def limits_status(request: Request):
     actor = require_authenticated_actor_id(request)
     try:
-        actor_id = int(actor)
+        actor_id = actor
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     from app.repositories.user_repository import UserRepository
 
-    target_user_id = int(user_id) if user_id is not None else actor_id
-    if target_user_id != actor_id:
-        ur = UserRepository()
-        if not ur.is_admin(actor_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     svc: ObservabilityService = request.app.state.observability_service
     start_ts = float(__import__("time").time()) - 86400.0
     quotas = getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}) or {}
@@ -552,14 +524,14 @@ async def limits_status(request: Request, user_id: int | None = None):
         "notes.write": "notes_add",
     }
     usage: dict[str, Any] = {}
-    unlimited = _is_unlimited_user(target_user_id)
+    unlimited = _is_unlimited_user()
     for scope, max_per_day in quotas.items():
         tool = mapping.get(scope)
         count = 0
         if tool:
             try:
                 evts = svc.get_audit_events(
-                    str(target_user_id),
+                    str(actor_id),
                     tool=tool,
                     status="ok",
                     start_ts=start_ts,
@@ -583,17 +555,15 @@ async def limits_status(request: Request, user_id: int | None = None):
                 "used": int(count),
                 "remaining": max(0, int(max_per_day) - int(count)),
             }
-    return {"user_id": str(target_user_id), "limits": usage}
+    return {"limits": usage}
 
 
 @router.get("/oauth/google/start")
-async def google_oauth_start(user_id: int, request: Request, scope: str = "calendar"):
+async def google_oauth_start(request: Request, scope: str = "calendar"):
     actor = require_authenticated_actor_id(request)
     from app.repositories.user_repository import UserRepository
 
     ur = UserRepository()
-    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
     redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
     if not client_id or not str(client_id):
@@ -612,7 +582,7 @@ async def google_oauth_start(user_id: int, request: Request, scope: str = "calen
         "response_type": "code",
         "access_type": "offline",
         "include_granted_scopes": "true",
-        "state": f"user:{user_id}:scope:{scope}",
+        "state": f"user::scope:{scope}",
         "scope": scopes_map.get(scope, scopes_map["calendar"]),
         "prompt": "consent",
     }
@@ -621,7 +591,7 @@ async def google_oauth_start(user_id: int, request: Request, scope: str = "calen
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": str(user_id),
+                "user_id": "default",
                 "tool": "google_oauth_start",
                 "status": "ok",
                 "detail": {"scope": scope},
@@ -677,7 +647,7 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
     # persiste token
     repo_tok = OAuthTokenRepository()
     repo_tok.upsert(
-        user_id=int(actor),
+        user_id=actor,
         provider="google",
         access_token=str(access_token or ""),
         refresh_token=str(refresh_token or "") if refresh_token else None,
@@ -690,15 +660,15 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
         if scope:
             cons_repo = ConsentRepository()
             cons_repo.add_consent(
-                user_id=int(actor), scope=f"{scope}.read", granted=True, expires_at=None
+                user_id=actor, scope=f"{scope}.read", granted=True, expires_at=None
             )
             if scope in ("calendar", "notes"):
                 cons_repo.add_consent(
-                    user_id=int(actor), scope=f"{scope}.write", granted=True, expires_at=None
+                    user_id=actor, scope=f"{scope}.write", granted=True, expires_at=None
                 )
             if scope == "mail":
                 cons_repo.add_consent(
-                    user_id=int(actor), scope="mail.send", granted=True, expires_at=None
+                    user_id=actor, scope="mail.send", granted=True, expires_at=None
                 )
     except Exception:
         pass
@@ -718,15 +688,13 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 
 
 @router.post("/oauth/google/refresh")
-async def google_oauth_refresh(user_id: int, request: Request):
+async def google_oauth_refresh(request: Request):
     actor = require_authenticated_actor_id(request)
     from app.repositories.user_repository import UserRepository
 
     ur = UserRepository()
-    if (int(actor) != int(user_id) and not ur.is_admin(int(actor))):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     repo_tok = OAuthTokenRepository()
-    tok = repo_tok.get(user_id=int(user_id), provider="google")
+    tok = repo_tok.get(user_id=0, provider="google")
     if not tok or not tok.refresh_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No refresh token")
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
@@ -759,7 +727,7 @@ async def google_oauth_refresh(user_id: int, request: Request):
                 datetime.utcnow() + timedelta(seconds=int(expires_in or 0)) if expires_in else None
             )
             repo_tok.upsert(
-                user_id=int(user_id),
+                user_id=0,
                 provider="google",
                 access_token=str(access_token or ""),
                 refresh_token=tok.refresh_token,
@@ -770,7 +738,7 @@ async def google_oauth_refresh(user_id: int, request: Request):
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
-            {"user_id": str(user_id), "tool": "google_oauth_refresh", "status": "ok"}
+            {"user_id": "default", "tool": "google_oauth_refresh", "status": "ok"}
         )
     except Exception:
         pass

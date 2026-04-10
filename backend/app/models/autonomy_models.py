@@ -18,7 +18,6 @@ from app.models.config_models import Base
 class AutonomyRun(Base):
     __tablename__ = "autonomy_runs"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), nullable=True)
     project_id = Column(String(100), nullable=True)
     risk_profile = Column(String(20), default="balanced")
     auto_confirm = Column(String(5), default="True")
@@ -32,7 +31,7 @@ class AutonomyRun(Base):
     started_at = Column(DateTime, default=func.current_timestamp())
     stopped_at = Column(DateTime, nullable=True)
     steps = relationship("AutonomyStep", back_populates="run", cascade="all, delete-orphan")
-    __table_args__ = (Index("idx_autonomy_run_user", "user_id", "project_id", "status"),)
+    __table_args__ = (Index("idx_autonomy_run_project_status", "project_id", "status"),)
 
 
 class AutonomyGoal(Base):

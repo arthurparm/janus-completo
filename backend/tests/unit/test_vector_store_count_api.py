@@ -38,9 +38,9 @@ async def test_async_count_points_defaults_missing_count_to_zero():
 
 
 def test_user_collection_helpers_build_scoped_names():
-    assert vector_store.build_user_chat_collection_name("9") == "user_chat_9"
-    assert vector_store.build_user_docs_collection_name("9") == "user_docs_9"
-    assert vector_store.build_user_memory_collection_name("9") == "user_memory_9"
+    assert vector_store.build_user_chat_collection_name("9") == "global_chat"
+    assert vector_store.build_user_docs_collection_name("9") == "global_docs"
+    assert vector_store.build_user_memory_collection_name("9") == "global_memory"
 
 
 def test_deterministic_point_id_is_stable():

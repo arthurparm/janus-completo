@@ -27,7 +27,7 @@ def test_extract_preference_dont():
 
 def test_extract_preference_ignores_regular_message():
     svc = UserPreferenceMemoryService()
-    assert svc.extract_preference("Qual é o status do sistema?") is None
+    assert svc.extract_preference("Qual é o status do sistema") is None
 
 
 @pytest.mark.asyncio
@@ -35,12 +35,11 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
     svc = UserPreferenceMemoryService()
     captured: dict[str, object] = {}
 
-    async def _fake_exists(*, user_id: str, dedupe_key: str) -> bool:
-        captured["checked_user_id"] = user_id
+    async def _fake_exists(*, dedupe_key: str) -> bool:
         captured["checked_dedupe_key"] = dedupe_key
         return False
 
-    async def _fake_deactivate_scope_conflicts(*, user_id: str, scope: str, keep_dedupe_key: str) -> None:
+    async def _fake_deactivate_scope_conflicts(*, scope: str, keep_dedupe_key: str) -> None:
         captured["deactivated_scope"] = scope
         captured["deactivated_dedupe_key"] = keep_dedupe_key
 
@@ -59,8 +58,8 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
 
     result = await svc.maybe_capture_from_message(
         message="Não use emojis nas respostas para mim. [PREF-DONT-TEST]",
-        user_id="1",
         conversation_id="42",
+        user_id="1",
     )
 
     assert result is not None
