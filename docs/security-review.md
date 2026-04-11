@@ -254,3 +254,20 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-11)
+
+### Lacunas e Impacto
+- **Arbitrary Code Execution (B102):** `backend/app/core/infrastructure/python_sandbox.py` utiliza `exec()` como fallback para execução local de código Python, abrindo precedente para escape de sandbox.
+- **SQL Injection Risk (B608):** O Bandit apontou risco na construção de consultas SQL no arquivo `backend/app/services/dedupe_service.py` na utilização de interpolação `f-strings` dentro de `execute(text(...))`.
+- **SSRF Risk (B310):** `backend/app/core/tools/agent_tools.py` permite requisições via `urllib.request.urlopen` sem validar previamente o protocolo para restringir a HTTP/HTTPS.
+- **Vulnerabilidade em Dependências Frontend:** O ecossistema Angular (`@angular/cli`, `@angular/compiler`, `@angular/core`, etc.) possui vulnerabilidades moderadas e altas reportadas no `npm audit`.
+- **Bypass de AuthZ no Workspace:** Endpoints não possuem `Depends(get_current_user)` (ex. em `backend/app/api/v1/endpoints/workspace.py`), abrindo margem para vazamentos.
+- **Default Hardcoded Secrets:** Variáveis sensíveis no `backend/app/config.py` (como `POSTGRES_PASSWORD`, `NEO4J_PASSWORD`, `RABBITMQ_PASSWORD`) são definidas de maneira hardcoded.
+
+### Próximos Passos
+1. Refatorar `python_sandbox.py` para isolar estritamente ou desabilitar o fallback de `exec()` host.
+2. Validar construções de consultas dinâmicas e evitar f-strings em consultas SQL no SQLAlchemy (`dedupe_service.py`).
+3. Adicionar validação de esquema estrita (`http://` ou `https://`) antes de requisições `urllib` no `agent_tools.py`.
+4. Atualizar pacotes npm vulneráveis identificados no ecossistema (`npm audit fix`).
+5. Adicionar `Depends(get_current_user)` nos endpoints de workspace expostos via API.

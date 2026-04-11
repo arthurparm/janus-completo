@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-11)
+
+### Lacunas e Impacto
+- **Exposição de Impersonation via Header:** `backend/app/api/v1/endpoints/auth.py` (e endpoints como os de usuários, consentimentos, produtividade) acessam ou confiam implicitamente no header `X-User-Id`, o que propicia falsificação de identidade para vazamento de dados, especialmente no caso de `AUTH_TRUST_X_USER_ID_HEADER=True`.
+- **Dados de Workspace Desprotegidos:** Ausência de checagens de usuário nos endpoints do `workspace.py` permite acesso anônimo para injetar ou retirar dados em ambientes colaborativos que devem manter controle estrito.
+
+### Próximos Passos
+1. Desativar a confiança indiscriminada no `X-User-Id` em `config.py` limitando-o a um mecanismo de testes isolado.
+2. Aplicar AuthZ em `workspace.py` impedindo manipulação anônima de metadados colaborativos de sessões do usuário.

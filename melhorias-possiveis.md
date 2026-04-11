@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-052] Risco de Injeção SQL via f-strings em dedupe_service (B608)
+- Problema atual: O Bandit (B608) reportou uso de f-strings dinâmicas na construção do objeto `text()` no SQLAlchemy em `backend/app/services/dedupe_service.py`, resultando em um vetor teórico de injeção SQL, como visto em `UPDATE {table} SET ...`.
+- Solucao proposta: Remover a injeção via f-string e adaptar as consultas ou iterar estaticamente sobre chaves predefinidas.
+- Impacto esperado: Evitar bypass ou corrupção acidental em query injection dinâmico.
+- Riscos: Refatoração indevida pode invalidar lógicas de cascade delete no dedupe_service.
+- Dependencias: Pytest no módulo de serviços e modelagem SQLAlchemy.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
