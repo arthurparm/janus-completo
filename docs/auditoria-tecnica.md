@@ -123,3 +123,28 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-11)
+
+### 12. Falta de Timeout em Scripts de QA/Tooling
+**Descrição:** Scripts de teste de QA, como `tooling/test_debate_system.py`, não implementam timeouts explícitos para execução assíncrona, podendo causar bloqueios (hangs) em pipelines de CI se o LangGraph entrar em loop. Além disso, usam funções `print()` diretamente, correndo o risco de vazar segredos ou PII.
+**Evidências:**
+- `tooling/test_debate_system.py`: Utiliza loop infinito implícito via `async for output in debate_graph.astream(initial_state)` sem wrappar com `asyncio.wait_for`. Uso indiscriminado de `print(f"Preview: {state_update['code'][:100]}...")`.
+**Próximos passos:**
+- Adicionar issue OQ-019 (Timeouts ausentes) e SG-050 (Vazamento PII QA) no backlog.
+- Implementar wrappers de timeout (ex. `asyncio.wait_for(task, timeout=30)`) e substituir `print` pelo logger padrão de segurança da aplicação.
+
+### 13. Shadow IT - Monitoramento Externo
+**Descrição:** O script `tooling/secure-tailscale-setup.ps1` atua como um mecanismo paralelo (Shadow IT) para coletar e logar dados de rede localmente (`tailscale-security-monitor.log`), o que ignora os controles centrais de auditoria e anonimização de PII do Janus. Hostnames e metadados de sessão ficam expostos em clear text.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: Grava `$Status.Peer` com HostName e outras métricas em disco sem anonimização (e.g. `Write-SecurityLog "High latency detected: $($Peer.HostName)...`).
+**Próximos passos:**
+- Adicionar issue SG-050 no backlog ativo de LGPD.
+- Revisar a necessidade desse monitoramento ou acoplá-lo ao `ObservabilityService` oficial usando a estrutura centralizada e segura.
+
+### 14. Execução de subprocessos Windows
+**Descrição:** Verificou-se que potenciais chamadas a scripts externos no backend usando `subprocess` podem expor à injeção se `shell=True` estiver ativo, o que já foi alertado pelo SAST Bandit anteriormente (B602/B603).
+**Evidências:**
+- Memory reporta que o Windows Agent / ferramentas continuam com uso problemático (Bandit B602 e B404).
+**Próximos passos:**
+- Adicionar issue SG-051 ao backlog ativo para mitigar `shell=True` no `launcher_tools.py` e correlatos.
