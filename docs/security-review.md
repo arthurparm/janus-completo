@@ -234,6 +234,31 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
   - `express-rate-limit`, `@hono/node-server`, `hono`, `flatted`, `tar`, `immutable` e `dompurify` seguem com avisos pré-existentes ou atualizados de Auth Bypass, ReDoS, Path Traversal e Prototype Pollution.
 - **Ação Recomendada:** Priorizar atualização crítica (`npm audit fix` ou via override manual no `package.json`) especificamente para corrigir as cadeias do Angular, `picomatch` e `path-to-regexp` para versões mitigadas.
 
+## Achados do dia (2026-04-12)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 31. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend foram identificadas como vulneráveis pelo `npm audit`, incluindo pacotes da suite `@angular` (`@angular-devkit/architect`, `@angular-devkit/core`, `@angular-devkit/schematics`, `@angular/animations`, `@angular/build`, `@angular/cli`).
+- **Ação Recomendada:** Executar `npm audit fix` para tratar e resolver as issues pendentes.
+
+### 32. Risco de SSRF em uso de requests sem validação (Bandit B310)
+- **Caminho:** Diversos arquivos, incluindo `app/core/infrastructure/message_broker.py` e `app/core/tools/agent_tools.py`
+- **Gravidade:** Alta
+- **Descrição:** Abertura de URLs não validadas em `requests` permitindo esquemas não permitidos como `file://`, abrindo risco de Server-Side Request Forgery.
+- **Ação Recomendada:** Adicionar validação estrita para prefixos de URL (`http://` e `https://`).
+
+### 33. Segredos Hardcoded (Bandit B105)
+- **Caminho:** `app/core/infrastructure/rate_limit_middleware.py`, `app/core/llm/sanitizer.py`, e `tests/verify_secret_management.py`
+- **Gravidade:** Alta
+- **Descrição:** Presença de strings que parecem senhas ou tokens hardcoded diretamente no código-fonte, violando políticas de gestão de segredos.
+- **Ação Recomendada:** Substituir valores hardcoded por variáveis de ambiente ou secrets gerenciados através de `.env`.
+
 ## Achados do dia (2026-04-01)
 
 ### Checklist executado
