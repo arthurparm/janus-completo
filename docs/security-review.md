@@ -47,6 +47,13 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
 
+
+
+## Achados do dia (2026-04-13)
+- **Checklist Executado:** Revisão de dependências Frontend (npm audit).
+- **Gaps e Severidade:** Nenhuma alteração de código identificada nas últimas 24h. A auditoria do frontend identificou vulnerabilidades nas dependências `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`, `@hono/node-server`, `express-rate-limit`, `flatted`, `hono`, `immutable`, `lodash-es`, `path-to-regexp`, `picomatch`, `tar`, e `vite` (Severidade Alta); além de `@angular-devkit/architect`, `@angular-devkit/core`, `@angular-devkit/schematics`, `@angular/build`, `@angular/cli`, `@schematics/angular`, `brace-expansion`, e `dompurify` (Severidade Moderada).
+- **Ações Recomendadas:** Revisar as vulnerabilidades rastreadas no backlog (incluindo dependências como `hono`, `vite`, `tar`, `lodash-es`, `picomatch`, `path-to-regexp`) e proceder com a atualização para mitigar os riscos reportados.
+
 ## Achados do dia (2026-03-08)
 
 ### Checklist executado

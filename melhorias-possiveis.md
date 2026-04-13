@@ -865,3 +865,12 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+
+### [SG-054] Atualizar dependências frontend vulneráveis apontadas no NPM Audit
+- Problema atual: A varredura de `npm audit` evidenciou vulnerabilidades de Severidade Alta ou Moderada nas bibliotecas `@angular/animations`, `@angular/common`, `@angular/compiler`, `@angular/compiler-cli`, `@angular/core`, `@angular/forms`, `@angular/platform-browser`, `@angular/platform-browser-dynamic`, `@angular/router`, `@angular/service-worker`, `@hono/node-server`, `express-rate-limit`, `flatted`, `hono`, `immutable`, `lodash-es`, `path-to-regexp`, `picomatch`, `tar`, e `vite` (Alta); e `@angular-devkit/architect`, `@angular-devkit/core`, `@angular-devkit/schematics`, `@angular/build`, `@angular/cli`, `@schematics/angular`, `brace-expansion`, e `dompurify` (Moderada).
+- Solucao proposta: Revisar as vulnerabilidades rastreadas no backlog e proceder com a atualização para mitigar os riscos reportados.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

@@ -27,6 +27,18 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
 
+
+
+## Achados do dia (2026-04-13)
+- **Checklist Executado:** Mapeamento incremental de fluxos de dados sensíveis e PII (últimas 24h).
+- **Lacunas e Impacto:** Nenhuma alteração de código ou novos fluxos de dados identificados na janela de análise. Nenhum novo risco de LGPD/PII introduzido.
+- **Próximos Passos:** Manter monitoramento contínuo das melhorias já propostas no backlog.
+
+## Achados do dia (2026-04-13)
+- **Checklist Executado:** Mapeamento incremental de fluxos de dados sensíveis e PII (últimas 24h).
+- **Lacunas e Impacto:** Nenhuma alteração de código ou novos fluxos de dados identificados na janela de análise. Nenhum novo risco de LGPD/PII introduzido.
+- **Próximos Passos:** Manter monitoramento contínuo das melhorias já propostas no backlog.
+
 ## Achados do dia (2026-03-08)
 
 ### Lacunas e Impacto
