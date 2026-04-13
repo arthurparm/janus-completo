@@ -123,3 +123,36 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-13)
+
+### 12. Bypass de CI por Scripts de Teste Isolados
+**Descrição:** Scripts de teste em `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) executam testes importantes de fluxo, porém de forma isolada, não se integrando à suíte `qa/` via Pytest, o que limita a validação de regressão automatizada do CI.
+**Evidências:**
+- `tooling/test_debate_system.py`
+- `tooling/seed-repro-scenarios.ps1`
+**Próximos passos:**
+- Migrar scripts soltos para `qa/` padronizando como testes Pytest ou E2E documentados. Adicionar issue OQ-019 ao backlog.
+
+### 13. Supressão Silenciosa de Erros de Negócio
+**Descrição:** Numerosos blocos `try-except` capturam exceções e aplicam `pass` ou continuam sem logging adequado, mascarando potenciais falhas de negócios em módulos centrais e tornando o debugging frágil.
+**Evidências:**
+- Reporte SAST Bandit B110 em múltiplos arquivos do backend (ex: `llm_repository.py`, `message_orchestration_service.py`, `auth.py`).
+**Próximos passos:**
+- Refatorar blocos `try-except` e adicionar log explícito das exceções com PII redaction. Adicionar issue OQ-020 ao backlog.
+
+### 14. LGPD: Monitoramento "Shadow IT" e PII em Logs
+**Descrição:** O script `secure-tailscale-setup.ps1` atua como um monitor de segurança do Tailscale mas gera logs locais contendo hostnames e dados de peers em texto puro. Essa prática burla a política de PII redaction e expõe rastros sensíveis dos usuários (Shadow IT).
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`
+**Próximos passos:**
+- Ofuscar/sanitizar informações capturadas das saídas dos comandos Tailscale antes de escrever os logs locais. Adicionar issue SG-050.
+
+### 15. Injeção de Código, Senhas Hardcoded e SSRF (Vulnerabilidades Críticas)
+**Descrição:** O scanner de segurança listou injeções de subprocessos Windows, SSRF por validação deficiente de URL schema e credenciais cravadas no código.
+**Evidências:**
+- Bandit B602 (shell=True): Subprocessos no Windows em `backend/app/core/tools/launcher_tools.py`.
+- Bandit B310: Acesso a URIs com esquema arbitrário ou nulo implicando risco SSRF (SSRF Risk SG-052).
+- Bandit B105: Senhas cravadas (`hardcoded`) identificadas em `tests/verify_secret_management.py`, `app/core/infrastructure/rate_limit_middleware.py` e `app/core/llm/sanitizer.py`.
+**Próximos passos:**
+- Adicionar questões SG-051, SG-052 e SG-053 ao backlog e programar correção prioritária (`P0`).

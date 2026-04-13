@@ -130,6 +130,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| OQ-019 | Migrar testes isolados de tooling para a suíte pytests em qa/ | P1 | M | aberto |
+| OQ-020 | Refatorar supressão silenciosa de erros (Bandit B110) | P1 | S | aberto |
+| SG-050 | Risco LGPD em ofuscação de hostnames no log do Tailscale | P1 | S | aberto |
+| SG-051 | Mitigar Code Injection no launcher_tools.py (Windows subprocesses) | P0 | S | aberto |
+| SG-052 | Mitigar risco de SSRF validando scheme de requisições de rede | P0 | S | aberto |
+| SG-053 | Remover senhas hardcoded e credenciais inseguras detectadas (B105) | P0 | S | aberto |
 
 ---
 
@@ -717,6 +723,30 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-050] Risco LGPD em ofuscação de hostnames no log do Tailscale
+- Impacto: LGPD / Medio. Shadow IT expõe rastros sensíveis dos usuários.
+- Solucao proposta: Ofuscar/sanitizar informações capturadas das saídas dos comandos Tailscale (IPs, Hostnames) antes de escrever os logs locais em `secure-tailscale-setup.ps1`.
+
+### [SG-051] Mitigar Code Injection no launcher_tools.py (Windows subprocesses)
+- Impacto: Alto (Vulnerabilidade Crítica - B602).
+- Solucao proposta: Substituir execução via `shell=True` por chamadas explícitas seguras nos submódulos do Windows no `launcher_tools.py`.
+
+### [SG-052] Mitigar risco de SSRF validando scheme de requisições de rede
+- Impacto: Alto (Vulnerabilidade Crítica - B310).
+- Solucao proposta: Adicionar checagem restrita de `scheme` (ex: apenas http/https) onde requests dinâmicos de URL são feitos.
+
+### [SG-053] Remover senhas hardcoded e credenciais inseguras detectadas (B105)
+- Impacto: Alto (Vulnerabilidade Crítica - B105).
+- Solucao proposta: Remover segredos estáticos de `tests/verify_secret_management.py`, `app/core/infrastructure/rate_limit_middleware.py` e `app/core/llm/sanitizer.py`, substituindo por injeção via `.env`.
+
+### [OQ-019] Migrar testes isolados de tooling para a suíte pytests em qa/
+- Impacto: Médio. Quebra CI regression chain.
+- Solucao proposta: Mover arquivos do diretório `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) para o escopo coberto do `qa/`.
+
+### [OQ-020] Refatorar supressão silenciosa de erros (Bandit B110)
+- Impacto: Médio. Mascara falhas de negócio.
+- Solucao proposta: Remover blocos `except: pass` e implementar logging explícito com redação PII.
 
 ### [SG-027] Criação Insegura de Arquivos Temporários
 - Problema atual: Caminhos temporários hardcoded (`/tmp`) no arquivo `backend/app/core/memory/log_aware_reflector.py` podem causar vazamento ou serem explorados via Time-of-check to time-of-use (TOCTOU).
