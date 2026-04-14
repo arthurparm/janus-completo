@@ -147,7 +147,7 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: janus_postgres_exporter
     environment:
-      - DATA_SOURCE_NAME=postgresql://janus:${POSTGRES_PASSWORD:-janus}@janus_postgres_pc1:5432/janus_db?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://janus:${POSTGRES_PASSWORD:-janus}@postgres:5432/janus_db?sslmode=disable
     restart: unless-stopped
     mem_limit: 256m
     cpus: "0.25"
@@ -160,7 +160,7 @@ services:
     image: oliver006/redis_exporter:v1.61.0
     container_name: janus_redis_exporter
     environment:
-      - REDIS_ADDR=redis://janus_redis_pc1:6379
+      - REDIS_ADDR=redis://redis:6379
     restart: unless-stopped
     mem_limit: 128m
     cpus: "0.25"
@@ -171,7 +171,7 @@ services:
     image: kbudde/rabbitmq-exporter:v1.0.0-RC19
     container_name: janus_rabbitmq_exporter
     environment:
-      - RABBIT_URL=http://janus_rabbitmq_pc1:15672
+      - RABBIT_URL=http://rabbitmq:15672
       - RABBIT_USER=${RABBITMQ_USER:-janus}
       - RABBIT_PASSWORD=${RABBITMQ_PASSWORD:-janus}
       - PUBLISH_PORT=9419
@@ -185,6 +185,7 @@ services:
 networks:
   janus-pc1-net:
     external: true
+    name: ${JANUS_PC1_NETWORK:-janus-completo_janus-pc1-net}
 
 volumes:
   prometheus_data:

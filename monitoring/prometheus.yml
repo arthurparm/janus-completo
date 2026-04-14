@@ -31,7 +31,7 @@ scrape_configs:
   - job_name: 'janus-api'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['janus_api_pc1:8000']
+      - targets: ['janus-api:8000']
 
   - job_name: 'postgres-exporter'
     static_configs:

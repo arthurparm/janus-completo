@@ -5,10 +5,15 @@ set -euo pipefail
 
 KNOWN_CONTAINERS=(
   janus_api_pc1
+  janus_api
   janus_frontend_pc1
+  janus_frontend
   janus_postgres_pc1
+  janus_postgres
   janus_redis_pc1
+  janus_redis
   janus_rabbitmq_pc1
+  janus_rabbitmq
   janus_prometheus
   janus_grafana
   janus_loki
