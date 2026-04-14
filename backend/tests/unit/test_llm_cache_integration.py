@@ -1,5 +1,5 @@
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,10 +14,11 @@ def clean_cache():
     yield
     response_cache.invalidate()
 
-def test_llm_client_cache_integration():
+@pytest.mark.asyncio
+async def test_llm_client_cache_integration():
     # Mock Base LLM
     mock_base = MagicMock()
-    mock_base.invoke.return_value.content = "Cached Response"
+    mock_base.ainvoke = AsyncMock(return_value=MagicMock(content="Cached Response"))
 
     # Init Client
     client = LLMClient(
@@ -32,15 +33,15 @@ def test_llm_client_cache_integration():
 
     # First Call - Should hit invoke
     print("\n[TEST] 1st Call")
-    res1 = client.send(prompt)
+    res1 = await client.asend(prompt)
     assert res1 == "Cached Response"
-    assert mock_base.invoke.call_count == 1
+    assert mock_base.ainvoke.await_count == 1
 
     # Second Call - Should hit cache (invoke count remains 1)
     print("\n[TEST] 2nd Call")
-    res2 = client.send(prompt)
+    res2 = await client.asend(prompt)
     assert res2 == "Cached Response"
-    assert mock_base.invoke.call_count == 1 # Still 1!
+    assert mock_base.ainvoke.await_count == 1 # Still 1!
 
     print("[SUCCESS] Cache Hit Verified!")
 

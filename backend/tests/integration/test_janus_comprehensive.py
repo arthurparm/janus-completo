@@ -373,7 +373,7 @@ class TestLLMFallback:
         with patch("app.core.llm.client.get_llm", return_value=mock_fallback_llm):
             # This should trigger fallback
             try:
-                result = await client.send("Test prompt")
+                result = await client.asend("Test prompt")
                 # If fallback works, we get a result
                 print(f"✓ LLM fallback returned: {result[:50]}...")
             except Exception as e:

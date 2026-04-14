@@ -1,7 +1,8 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 import sys
 import os
+import asyncio
 
 # Ajusta path para rodar dentro do container ou local
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -26,15 +27,14 @@ class TestReasoningExtraction(unittest.TestCase):
             cache_key="test_cache"
         )
         
-        # Mock send() to return text with think tags
-        client.send = MagicMock(return_value="<think>Step 1: Analyze input.\nStep 2: Generate output.</think>\nHere is the result.")
+        client.asend = AsyncMock(return_value="<think>Step 1: Analyze input.\nStep 2: Generate output.</think>\nHere is the result.")
         client.provider = "ollama"
         client.model = "deepseek-r1"
         client.role = MagicMock()
         client.role.value = "coder"
 
         # Execute send_enriched
-        result = client.send_enriched("test prompt")
+        result = asyncio.run(client.send_enriched("test prompt"))
         
         # Verify reasoning extraction
         print(f"\n{'='*50}\nTEST CASE 1: Reasoning Extraction (DeepSeek/Ollama)\n{'='*50}")
@@ -67,15 +67,14 @@ class TestReasoningExtraction(unittest.TestCase):
             cache_key="test_cache"
         )
         
-        # Mock send() without tags
-        client.send = MagicMock(return_value="Just a normal response.")
+        client.asend = AsyncMock(return_value="Just a normal response.")
         client.provider = "openai"
         client.model = "gpt-4"
         client.role = MagicMock()
         client.role.value = "coder"
 
         # Execute send_enriched
-        result = client.send_enriched("test prompt")
+        result = asyncio.run(client.send_enriched("test prompt"))
         
         # Verify None
         print(f"\n{'='*50}\nTEST CASE 2: Negative Test (No Tags)\n{'='*50}")

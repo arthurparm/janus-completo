@@ -79,20 +79,6 @@ async def test_asend_prefere_ainvoke_e_reutiliza_cache():
     mock_base.invoke.assert_not_called()
     rate_limiter.register_usage.assert_called_once()
 
-
-def test_send_legado_redireciona_para_asend():
+def test_llm_client_nao_exporta_mais_send():
     client = _build_client(MagicMock())
-    client.asend = AsyncMock(return_value="compat-ok")  # type: ignore[method-assign]
-
-    result = client.send("prompt legado", timeout_s=5)
-
-    assert result == "compat-ok"
-    client.asend.assert_awaited_once_with("prompt legado", 5)
-
-
-@pytest.mark.asyncio
-async def test_send_legado_falha_em_loop_ativo():
-    client = _build_client(MagicMock())
-
-    with pytest.raises(RuntimeError, match="event loop ativo"):
-        client.send("prompt")
+    assert not hasattr(client, "send")

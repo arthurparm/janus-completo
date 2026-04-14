@@ -258,8 +258,7 @@ async def run_demo():
     llm = ChaosHarness.create_llm_client(cfg_cb)
 
     try:
-        # Use timeout_s=0 to avoid threads hiding exceptions
-        llm.send("Hello", timeout_s=0)
+        await llm.asend("Hello", timeout_s=0)
         print("Result: Success (Unexpected!)")
     except CircuitOpenError:
         print("Result: Success (Caught CircuitOpenError as expected)")

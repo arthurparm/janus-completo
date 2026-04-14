@@ -1,6 +1,5 @@
 import asyncio
 import time
-import warnings
 from typing import Any
 
 import structlog
@@ -30,10 +29,6 @@ from .sanitizer import ContentSanitizer
 from .types import ModelPriority, ModelRole
 
 logger = structlog.get_logger(__name__)
-_SEND_DEPRECATION_MESSAGE = (
-    "LLMClient.send() está obsoleto e existe apenas para compatibilidade. "
-    "Prefira `await LLMClient.asend(...)`."
-)
 
 try:
     from langchain_ollama import ChatOllama
@@ -414,35 +409,10 @@ class LLMClient:
         """Envia um prompt para o LLM pelo caminho primário assíncrono."""
         return await self._execute_async(prompt, timeout_s)
 
-    def send(self, prompt: str, timeout_s: int | None = None) -> str:
-        """Shim síncrono legado para chamadores que ainda não migraram para async."""
-        warnings.simplefilter("always", DeprecationWarning)
-        warnings.warn(_SEND_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
-        logger.warning("log_warning", message=_SEND_DEPRECATION_MESSAGE)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(self.asend(prompt, timeout_s))
-        raise RuntimeError(
-            "LLMClient.send() não pode ser usado dentro de um event loop ativo. Use `await asend()`."
-        )
-
     async def send_enriched(self, prompt: str, timeout_s: int | None = None) -> dict[str, Any]:
         """Versão enriquecida que retorna metadados além da resposta."""
         text = await self.asend(prompt, timeout_s)
 
-        # Tenta recuperar o objeto result original do adapter ou cache se possivel
-        # Como send() retorna str, precisamos de uma forma de acessar o objeto completo se quisermos reasoning que não está no texto.
-        # PORÉM, LLMClient.send() atualmente engole o objeto result.
-        # Refatoração necessária: send() deve persistir metadados temporariamente ou send_enriched deve chamar logica interna.
-        # Para evitar reescrever tudo, vamos assumir que o reasoning pode vir no texto (Ollama) ou vamos alterar o send() levemente.
-        # Melhor abordagem: O send() já faz o invoke e pega o content.
-        # Vamos fazer um "hack" limpo: se o adapter tiver suporte a capturar o ultimo resultado, ou melhor:
-        # Vamos alterar o _invoke para retornar o objeto completo e o send() tratar.
-        # Mas send() tem decorators de resiliencia.
-        #
-        # SOLUÇÃO IMEDIATA: Parsing de <think> tags se presente no texto (comum em Ollama/DeepSeek destilado)
-        # Parsing de <think> tags se presente no texto (DeepSeek/Ollama)
         import re
 
         reasoning = None

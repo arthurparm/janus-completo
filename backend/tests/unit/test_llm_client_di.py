@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,11 +14,12 @@ async def test_llm_client_dependency_injection():
         print(f"DEBUG: invoke called with {args}")
         return MagicMock(content="Mock response")
     mock_base.invoke.side_effect = side_effect
+    mock_base.ainvoke = AsyncMock(side_effect=side_effect)
 
     mock_cb = MagicMock()
-    # CircuitBreaker is called as a decorator: cb(func).
-    # Must return func (or wrapper) to execute original function.
-    mock_cb.side_effect = lambda f: f
+    async def _call_async(coro_func, operation=None):
+        return await coro_func()
+    mock_cb.call_async = AsyncMock(side_effect=_call_async)
 
     class MockSettings:
         LLM_MAX_PROMPT_LENGTH = 1000
@@ -51,12 +52,11 @@ async def test_llm_client_dependency_injection():
     assert client.circuit_breaker is mock_cb
     assert client.settings is mock_settings
 
-    # 4. Invoke send and verify dependencies are used
-    # Use timeout_s=0 to avoid ThreadPoolExecutor and run synchronously for easier mock verification
-    response = client.send("Hello world", timeout_s=0)
+    # 4. Invoke asend and verify dependencies are used
+    response = await client.asend("Hello world", timeout_s=0)
 
-    # Assert base model was called
-    mock_base.invoke.assert_called_once()
+    # Assert base model was called pelo caminho assíncrono
+    mock_base.ainvoke.assert_awaited_once()
 
     # Assert settings were accessed (implicit by execution success)
     assert response == "Mock response"
