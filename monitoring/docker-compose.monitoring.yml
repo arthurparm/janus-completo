@@ -168,7 +168,7 @@ services:
       - janus-pc1-net
 
   rabbitmq-exporter:
-    image: kbudde/rabbitmq-exporter:v1.0.0-RC19
+    image: kbudde/rabbitmq-exporter:latest
     container_name: janus_rabbitmq_exporter
     environment:
       - RABBIT_URL=http://rabbitmq:15672
