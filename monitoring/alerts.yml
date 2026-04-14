@@ -1,0 +1,92 @@
+groups:
+  - name: janus_infrastructure_alerts
+    interval: 30s
+    rules:
+      - alert: HighAPIErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="janus-api",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total{job="janus-api"}[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API error rate ({{ $value | humanizePercentage }})"
+          description: "API error rate exceeded 5% on {{ $labels.instance }}"
+
+      - alert: APILatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="janus-api"}[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency ({{ $value }}s)"
+          description: "95th percentile API latency exceeded 1s"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool near capacity"
+          description: "{{ $value }} connections in use (capacity: 100)"
+
+      - alert: RedisMemoryUsageHigh
+        expr: redis_memory_used_bytes / clamp_min(redis_config_maxmemory, 1) > 0.9 and redis_config_maxmemory > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high ({{ $value | humanizePercentage }})"
+          description: "Redis is consuming {{ $value | humanizePercentage }} of max memory"
+
+      - alert: RedisEvictions
+        expr: rate(redis_evicted_keys_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis keys are being evicted"
+          description: "Keys are being evicted due to memory pressure"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage ({{ $value | humanize }}%)"
+          description: "CPU usage on {{ $labels.instance }} exceeded 80%"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage ({{ $value | humanize }}%)"
+          description: "Memory usage on {{ $labels.instance }} exceeded 85%"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype=~"ext4|xfs"} / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space running low"
+          description: "Less than 10% disk space available on {{ $labels.mountpoint }}"
+
+      - alert: ServiceDown
+        expr: up{job=~"janus-api|postgres-exporter|redis-exporter|rabbitmq-exporter|cadvisor|node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for 1 minute"

@@ -1,0 +1,193 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: janus_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/custom-alerts/infrastructure.yml:ro
+      - ../backend/prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: "1.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: janus_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-janus-monitoring-dev}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=info
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../backend/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../backend/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: "0.5"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: janus_loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yml
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: "0.5"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: janus_promtail
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.25"
+    depends_on:
+      - loki
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: janus_alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--config.expand-env'
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: janus_cadvisor
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "0.5"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - janus-pc1-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: janus_node_exporter
+    command:
+      - '--path.rootfs=/host'
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: "0.25"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - janus-pc1-net
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: janus_postgres_exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://janus:${POSTGRES_PASSWORD:-janus}@janus_postgres_pc1:5432/janus_db?sslmode=disable
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: "0.25"
+    depends_on:
+      - prometheus
+    networks:
+      - janus-pc1-net
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.61.0
+    container_name: janus_redis_exporter
+    environment:
+      - REDIS_ADDR=redis://janus_redis_pc1:6379
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: "0.25"
+    networks:
+      - janus-pc1-net
+
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter:v1.0.0-RC19
+    container_name: janus_rabbitmq_exporter
+    environment:
+      - RABBIT_URL=http://janus_rabbitmq_pc1:15672
+      - RABBIT_USER=${RABBITMQ_USER:-janus}
+      - RABBIT_PASSWORD=${RABBITMQ_PASSWORD:-janus}
+      - PUBLISH_PORT=9419
+      - OUTPUT_FORMAT=TTY
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: "0.25"
+    networks:
+      - janus-pc1-net
+
+networks:
+  janus-pc1-net:
+    external: true
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
