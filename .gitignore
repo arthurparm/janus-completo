@@ -129,3 +129,14 @@ evidencia.txt
 .playwright-cli/*
 output/*
 .trae/*
+
+# One-off reports / local audit dumps
+compile_output*.txt
+pytest_output*.txt
+pytest_final*.txt
+bandit_report.txt
+npm_audit.json
+neo4j-distinct.json
+neo4j-noise-audit*.json
+janus.log
+janus-errors.log
