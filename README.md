@@ -23,6 +23,14 @@ O repositorio `janus-completo` organiza um sistema agentico de IA com duas parte
 - **Stack:** FastAPI, SQLAlchemy, RabbitMQ, Redis, Neo4j, Qdrant, Postgres
 - **Entry Point:** `backend/app/main.py`
 
+### Operational Layout
+
+- **Tooling:** `tooling/` centraliza bootstrap, QA e utilitários manuais.
+- **Monitoring:** `monitoring/` concentra a stack de observabilidade do PC1.
+- **Operational scripts:** `scripts/ops/` agrupa utilitários de operação e referência de ambiente.
+- **Docker helpers:** `scripts/docker/` agrupa build, scan e comparação de imagens.
+- **Planning docs:** `documentation/planning/` concentra backlog técnico e artefatos de planejamento.
+
 ## Getting Started
 
 ### One-Command Local Bootstrap (Recommended)
@@ -86,9 +94,10 @@ Comprehensive documentation is available in the `documentation/` directory:
 - [Deployment Split PC1/PC2](documentation/deployment-split-pc1-pc2.md)
 - [API Endpoint Matrix (Live)](documentation/qa/api-endpoint-matrix.md)
 - [API Test Playbook](documentation/qa/api-test-playbook.md)
-- [Incident Response Playbook](documentation/qa/incident-response-playbook.md)
+- [Incident Response Runbook](documentation/operations/incident-response-runbook.md)
 - [Postmortem Template](documentation/qa/postmortem-template.md)
 - [Domain SLOs and Alerts](documentation/qa/domain-slo-alerts.md)
+- [Technical Backlog](documentation/planning/technical-backlog.md)
 
 ## Roadmap / Backlog
 
@@ -110,5 +119,7 @@ Consolidated from prior planning artifacts.
 | JNS-012 | P2 | Governança adaptativa + learning loop contínuo | PM + Architect | Evolução contínua do super agente |
 
 ---
+
+Manual smoke helper: `python tooling/manual/test_scenario1_apis.py`
 
 _Project documentation maintained in `documentation/` folder._

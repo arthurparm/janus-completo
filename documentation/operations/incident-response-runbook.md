@@ -286,7 +286,7 @@ Thank you for your patience.
    python tooling/dev.py doctor
    
    # Test critical endpoints
-   python test_scenario1_apis.py
+   python tooling/manual/test_scenario1_apis.py
    
    # Monitor for 30 minutes
    watch -n 30 'curl -sf http://localhost:8000/health'

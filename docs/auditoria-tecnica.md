@@ -16,7 +16,7 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 
 **Próximos passos:**
 - Estender os padrões de Redação (PII Redaction) de `backend/app/core/memory/security.py` (_PII_PATTERNS) para toda a camada do logger.
-- Registrar SG-014 no backlog técnico (`melhorias-possiveis.md`) e acoplar com as definições em `lgpd.md`.
+- Registrar SG-014 no backlog técnico (`documentation/planning/technical-backlog.md`) e acoplar com as definições em `lgpd.md`.
 
 ### 2. Endpoints Não Autenticados (Segurança)
 **Descrição:** Os endpoints do workspace dependem puramente do injetor de serviços `get_collaboration_service` e dispensam camadas de AuthN/AuthZ. Atores não-autenticados poderiam subverter os workspaces e inclusive forçar um desligamento do sistema (Shutdown).
@@ -59,7 +59,7 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Remover valores default no `config.py` para credenciais e exigir injeção nas variáveis de ambiente.
 - Refatorar `chat_agent_loop.py` para depender do `Settings`.
-- Inserir itens SG-018 e OQ-015 no roadmap (`melhorias-possiveis.md`).
+- Inserir itens SG-018 e OQ-015 no roadmap (`documentation/planning/technical-backlog.md`).
 
 ### 6. Isolamento e Dependências no Build / Testes
 **Descrição:** O pipeline de build do backend e os testes do frontend apresentam riscos de quebra pela falta de restrições em ferramentas do ecossistema e estado compartilhado entre requisições.
@@ -72,4 +72,4 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 - Congelar versões introduzindo pip-compile (lockfile).
 - Refatorar a store de `productivity_tools.py` para uso de um serviço ou banco de dados com escopo por usuário/sessão.
 - Refatorar testes do `AuthService` com `HttpTestingController`.
-- Inserir PL-011, SG-019 e OQ-016 no roadmap (`melhorias-possiveis.md`).
+- Inserir PL-011, SG-019 e OQ-016 no roadmap (`documentation/planning/technical-backlog.md`).

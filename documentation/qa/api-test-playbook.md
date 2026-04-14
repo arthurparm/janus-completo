@@ -63,7 +63,7 @@ This generates:
 ### 4) Run API smoke scenario
 
 ```bash
-python test_scenario1_apis.py
+python tooling/manual/test_scenario1_apis.py
 ```
 
 This updates `outputs/qa/api_test_results.json`.

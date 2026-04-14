@@ -1,7 +1,8 @@
-import requests
 import json
 import sys
 from pathlib import Path
+
+import requests
 
 BASE_URL = "http://localhost:8000/api/v1"
 
