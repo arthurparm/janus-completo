@@ -13,6 +13,11 @@ def mock_settings():
     with patch("app.core.llm.router.settings") as mock:
         mock.LLM_POOL_TTL_SECONDS = 3600
         mock.LLM_POOL_MAX_SIZE = 4
+        mock.LLM_MAX_COST_PER_REQUEST_USD = {"orchestrator": 100.0}
+        mock.LLM_EXPECTED_KTOKENS_BY_ROLE = {"orchestrator": 1.0}
+        mock.LLM_EXPLORATION_PERCENT = 0.0
+        mock.LLM_ECONOMY_POLICY = "balanced"
+        mock.LLM_CLOUD_MODEL_CANDIDATES = {}
         # Defaults
         mock.OLLAMA_HOST = "http://localhost:11434"
         mock.OLLAMA_ORCHESTRATOR_MODEL = "llama3"
@@ -31,20 +36,20 @@ def mock_pricing():
         with patch.dict(_provider_spend_usd, {"openai": 0.0, "google_gemini": 0.0, "ollama": 0.0}, clear=True):
             yield
 
-def test_get_llm_local_only(mock_settings, mock_pool):
-    with patch("app.core.llm.router.ChatOllama") as MockOllama:
+@pytest.mark.asyncio
+async def test_get_llm_local_only(mock_settings, mock_pool):
+    with patch("app.core.llm.router.create_ollama_llm") as mock_create:
         mock_instance = MagicMock()
-        MockOllama.return_value = mock_instance
-        # Mock health check to pass
+        mock_create.return_value = mock_instance
         with patch("app.core.llm.router._health_check_ollama", return_value=True):
-            llm = get_llm(role=ModelRole.ORCHESTRATOR, priority=ModelPriority.LOCAL_ONLY)
+            llm = await get_llm(
+                role=ModelRole.ORCHESTRATOR, priority=ModelPriority.LOCAL_ONLY
+            )
             assert llm == mock_instance
-            MockOllama.assert_called()
-            # Verify model name used
-            args, kwargs = MockOllama.call_args
-            assert kwargs['model'] == "llama3"
+            mock_create.assert_called_once_with("llama3", temperature=None, model_kwargs={})
 
-def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_pricing):
+@pytest.mark.asyncio
+async def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_pricing):
     # Mock cloud catalog to have valid providers
     with patch("app.core.llm.router._validate_openai_key", return_value=True), \
          patch("app.core.llm.router._validate_gemini_key", return_value=True), \
@@ -78,7 +83,10 @@ def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_
                 mock_settings.OPENAI_MODEL_NAME = "gpt-4"
 
                 # Execute
-                llm = get_llm(priority=ModelPriority.FAST_AND_CHEAP)
+                llm = await get_llm(
+                    role=ModelRole.ORCHESTRATOR,
+                    priority=ModelPriority.FAST_AND_CHEAP,
+                )
 
                 # Should select Gemini because it's cheaper (score logic favors lower cost in balanced/strict mode)
                 # Ensure we didn't pick OpenAI

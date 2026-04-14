@@ -36,6 +36,26 @@ WORKER_NAMES: list[str] = [
     "codex_worker",
 ]
 
+NODE_PROFILE_WORKERS: dict[str, set[str]] = {
+    "INFERENCE_HEAVY": {
+        "neural_training",
+        "reflexion",
+        "thinker_agent",
+        "code_agent",
+    },
+    "INTELLIGENCE_AGILE": {
+        "knowledge_consolidation",
+        "document_ingestion",
+        "distillation",
+    },
+    "CORE_INFRA": {
+        "memory_maintenance",
+        "auto_scaler",
+        "auto_healer",
+        "router",
+    },
+}
+
 
 def get_orchestrator_worker_names() -> list[str]:
     return list(WORKER_NAMES)
@@ -47,6 +67,35 @@ class DisabledWorkerHandle:
 
     reason: str = "disabled_by_config"
     detail: str | None = None
+
+
+def _normalize_node_profile(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().upper()
+    return normalized or None
+
+
+def _get_active_node_profile() -> str | None:
+    profile = _normalize_node_profile(getattr(settings, "JANUS_NODE_PROFILE", None))
+    if profile is None:
+        return None
+    if profile not in NODE_PROFILE_WORKERS:
+        logger.warning(
+            "log_warning",
+            message=(
+                f"JANUS_NODE_PROFILE='{profile}' é inválido. "
+                "Iniciando todos os workers por compatibilidade."
+            ),
+        )
+        return None
+    return profile
+
+
+def _is_worker_enabled_for_profile(worker_name: str, profile: str | None) -> bool:
+    if profile is None:
+        return True
+    return worker_name in NODE_PROFILE_WORKERS.get(profile, set())
 
 
 async def start_all_workers():
@@ -78,94 +127,73 @@ async def start_all_workers():
     from app.core.workers.thinker_agent_worker import start_thinker_agent_worker
     from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
 
-    logger.info("Iniciando orquestrador de workers...")
+    active_profile = _get_active_node_profile()
+    logger.info(
+        "Iniciando orquestrador de workers...",
+        node_profile=active_profile or "ALL",
+    )
 
     workers: list[Any] = []
+    async def _start_memory_maintenance():
+        await memory_maintenance_worker.start()
+        return memory_maintenance_worker.task
 
-    # Worker de manutenção de memória (Generative Memory)
-    await memory_maintenance_worker.start()
-    workers.append(memory_maintenance_worker.task)
-
-    # Worker de consolidação de conhecimento
-    consolidation_worker = await start_consolidation_worker()
-    workers.append(consolidation_worker)
-
-    document_ingestion_worker = await start_document_ingestion_worker()
-    workers.append(document_ingestion_worker)
-
-    # Worker de tarefas de agente
-    agent_worker = await start_agent_tasks_worker()
-    workers.append(agent_worker)
-
-    # Worker de treinamento neural
-    neural_worker = await start_neural_training_worker()
-    workers.append(neural_worker)
-
-    # Worker de Reflexion (consome janus.tasks.reflexion)
-    reflexion_worker = await start_reflexion_worker()
-    workers.append(reflexion_worker)
-
-    # Worker de ciclo do Meta-Agente
-    meta_agent_worker = await start_meta_agent_worker()
-    workers.append(meta_agent_worker)
-
-    # Meta-Agent orientado a eventos (consome janus.failure.detected)
-    failure_consumer = await start_failure_event_consumer()
-    workers.append(failure_consumer)
-
-    # Auto-Scaler de filas (background task)
-    auto_scaler_task = await start_auto_scaler()
-    workers.append(auto_scaler_task)
-
-    # Auto-Healer de componentes (background task)
-    healer_task = await start_auto_healer()
-    workers.append(healer_task)
-
-    # === Novos workers do Parlamento ===
-    router_task = await start_router_worker()
-    workers.append(router_task)
-
-    code_agent_task = await start_code_agent_worker()
-    workers.append(code_agent_task)
-
-    red_team_task = await start_red_team_agent_worker()
-    workers.append(red_team_task)
-
-    professor_agent_task = await start_professor_agent_worker()
-    workers.append(professor_agent_task)
-
-    sandbox_agent_task = await start_sandbox_agent_worker()
-    workers.append(sandbox_agent_task)
-
-    thinker_agent_task = await start_thinker_agent_worker()
-    workers.append(thinker_agent_task)
-
-    distillation_task = await start_distillation_worker()
-    workers.append(distillation_task)
-
-    if getattr(settings, "ENABLE_GOOGLE_PRODUCTIVITY_WORKER", False):
+    async def _start_google_productivity():
         from app.core.workers.google_productivity_worker import start_google_productivity_consumer
 
-        google_productivity_task = await start_google_productivity_consumer()
-        workers.append(google_productivity_task)
-    else:
-        workers.append(
-            DisabledWorkerHandle(
-                detail="ENABLE_GOOGLE_PRODUCTIVITY_WORKER=false",
+        return await start_google_productivity_consumer()
+
+    worker_starters: dict[str, Any] = {
+        "memory_maintenance": _start_memory_maintenance,
+        "knowledge_consolidation": start_consolidation_worker,
+        "document_ingestion": start_document_ingestion_worker,
+        "agent_tasks": start_agent_tasks_worker,
+        "neural_training": start_neural_training_worker,
+        "reflexion": start_reflexion_worker,
+        "meta_agent": start_meta_agent_worker,
+        "failure_consumer": start_failure_event_consumer,
+        "auto_scaler": start_auto_scaler,
+        "auto_healer": start_auto_healer,
+        "router": start_router_worker,
+        "code_agent": start_code_agent_worker,
+        "red_team_agent": start_red_team_agent_worker,
+        "professor_agent": start_professor_agent_worker,
+        "sandbox_agent": start_sandbox_agent_worker,
+        "thinker_agent": start_thinker_agent_worker,
+        "distillation": start_distillation_worker,
+        "google_productivity": _start_google_productivity,
+        "debate_proponent": start_debate_proponent_worker,
+        "debate_critic": start_debate_critic_worker,
+        "codex_worker": start_codex_worker,
+    }
+
+    for worker_name in WORKER_NAMES:
+        if not _is_worker_enabled_for_profile(worker_name, active_profile):
+            workers.append(
+                DisabledWorkerHandle(
+                    reason="disabled_by_profile",
+                    detail=f"JANUS_NODE_PROFILE={active_profile}",
+                )
             )
-        )
-        logger.info("Worker google_productivity desativado por configuracao.")
+            logger.info(
+                f"Worker {worker_name} desativado por perfil de nó.",
+                node_profile=active_profile,
+            )
+            continue
 
-    # Debate System Workers
-    debate_proponent = await start_debate_proponent_worker()
-    workers.append(debate_proponent)
+        if worker_name == "google_productivity" and not getattr(
+            settings, "ENABLE_GOOGLE_PRODUCTIVITY_WORKER", False
+        ):
+            workers.append(
+                DisabledWorkerHandle(
+                    detail="ENABLE_GOOGLE_PRODUCTIVITY_WORKER=false",
+                )
+            )
+            logger.info("Worker google_productivity desativado por configuracao.")
+            continue
 
-    debate_critic = await start_debate_critic_worker()
-    workers.append(debate_critic)
-
-    # Codex Worker (CLI Tools)
-    codex_worker = await start_codex_worker()
-    workers.append(codex_worker)
+        starter = worker_starters[worker_name]
+        workers.append(await starter())
 
     logger.info("log_info", message=f"✓ {len(workers)} workers iniciados pelo orquestrador.")
     return workers

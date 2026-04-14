@@ -1,5 +1,6 @@
+import asyncio
 import time
-from concurrent.futures import TimeoutError as FuturesTimeoutError
+import warnings
 from typing import Any
 
 import structlog
@@ -29,6 +30,10 @@ from .sanitizer import ContentSanitizer
 from .types import ModelPriority, ModelRole
 
 logger = structlog.get_logger(__name__)
+_SEND_DEPRECATION_MESSAGE = (
+    "LLMClient.send() está obsoleto e existe apenas para compatibilidade. "
+    "Prefira `await LLMClient.asend(...)`."
+)
 
 try:
     from langchain_ollama import ChatOllama
@@ -103,8 +108,8 @@ class LLMClient:
                 f"Prompt excede o tamanho máximo de {self.settings.LLM_MAX_PROMPT_LENGTH} caracteres."
             )
 
-    def _invoke(self, prompt: str) -> Any:
-        return self.adapter.invoke(prompt)
+    async def _invoke_async(self, prompt: str) -> Any:
+        return await self.adapter.ainvoke(prompt)
 
     async def _compute_output_limit(self, prompt: str) -> int:
         pricing = _get_model_pricing(self.provider, self.model)
@@ -167,47 +172,86 @@ class LLMClient:
         except Exception as e:
             logger.error("log_error", message=f"Error handling rate limit: {e}", exc_info=True)
 
-    def _run_async(self, coro):
-        import asyncio
-        import concurrent.futures
-
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            # Thread sem loop: executa a coro no loop principal do Redis quando disponível
-            # para evitar uso de conexões async em event loops diferentes.
-            try:
-                from app.core.infrastructure.redis_manager import get_redis_manager
-
-                bridge_loop = get_redis_manager().event_loop
-            except Exception:
-                bridge_loop = None
-
-            if bridge_loop and bridge_loop.is_running():
-                return asyncio.run_coroutine_threadsafe(coro, bridge_loop).result()
-            return asyncio.run(coro)
-        # Loop já está em execução: executa em um thread separado para evitar nested loop.
-        def _runner():
-            return asyncio.run(coro)
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(_runner).result()
-
-    async def asend(self, prompt: str, timeout_s: int | None = None) -> str:
-        """Envia um prompt para o LLM de forma assíncrona."""
-        import asyncio
-
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.send, prompt, timeout_s)
-
-    def send(self, prompt: str, timeout_s: int | None = None) -> str:
-        """Envia um prompt para o LLM com resiliência, observabilidade e cache."""
-        # 1. Check cache first
-        # Extract priority from cache_key or just use a derived one.
-        priority_val = "unknown"
+    def _cache_priority(self) -> str:
         if "_" in self.cache_key:
-            priority_val = self.cache_key.split("_", 1)[1]
+            return self.cache_key.split("_", 1)[1]
+        return "unknown"
 
+    def _get_circuit_breaker(self, timeout: float) -> CircuitBreaker:
+        circuit_breaker = self.circuit_breaker or _provider_circuit_breakers.get(
+            self.provider, _provider_circuit_breakers["unknown"]
+        )
+        try:
+            circuit_breaker.update_params(recovery_timeout=int(max(1, timeout)))
+        except Exception as e:
+            logger.warning("log_warning", message=f"Failed to update circuit breaker params: {e}")
+        return circuit_breaker
+
+    def _mark_pool_success(self) -> None:
+        key = _pool_key(self.provider, self.model)
+        for item in _llm_pool.get(key, []):
+            if item.instance is self.base:
+                item.consecutive_failures = 0
+                break
+
+    def _mark_pool_failure(self) -> None:
+        key = _pool_key(self.provider, self.model)
+        for item in _llm_pool.get(key, []):
+            if item.instance is self.base:
+                item.consecutive_failures += 1
+                break
+
+    async def _invoke_with_fallback(self, prompt: str) -> str:
+        if not _OLLAMA_AVAILABLE or ChatOllama is None:
+            logger.warning("Fallback Ollama requested but langchain_ollama is not installed.")
+            raise RuntimeError("langchain_ollama is not installed.")
+
+        logger.info("Tentando fallback para Ollama...")
+        fallback_model = getattr(
+            self.settings,
+            "OLLAMA_ORCHESTRATOR_MODEL",
+            getattr(self.settings, "OLLAMA_MODEL", "llama3"),
+        )
+
+        mk: dict[str, Any] = {}
+        if getattr(self.settings, "OLLAMA_NUM_CTX", None):
+            mk["num_ctx"] = self.settings.OLLAMA_NUM_CTX
+        if getattr(self.settings, "OLLAMA_NUM_THREAD", None):
+            mk["num_thread"] = self.settings.OLLAMA_NUM_THREAD
+        if getattr(self.settings, "OLLAMA_NUM_BATCH", None):
+            mk["num_batch"] = self.settings.OLLAMA_NUM_BATCH
+        if getattr(self.settings, "OLLAMA_GPU_LAYERS", None):
+            mk["num_gpu"] = self.settings.OLLAMA_GPU_LAYERS
+        if getattr(self.settings, "OLLAMA_KEEP_ALIVE", None):
+            mk["keep_alive"] = self.settings.OLLAMA_KEEP_ALIVE
+
+        fallback_llm = ChatOllama(
+            base_url=getattr(self.settings, "OLLAMA_HOST", "http://localhost:11434"),
+            model=fallback_model,
+            temperature=0,
+            model_kwargs=mk,
+        )
+
+        is_healthy = await asyncio.to_thread(_health_check_ollama, fallback_llm, 120)
+        if not is_healthy:
+            logger.warning("Fallback Ollama falhou no health check.")
+            raise RuntimeError("Fallback Ollama failed health check.")
+
+        logger.info(
+            "log_info",
+            message=f"Fallback Ollama ({fallback_model}) saudável. Invocando...",
+        )
+        result = await fallback_llm.ainvoke(prompt)
+        output_text = getattr(result, "content", None) or str(result)
+        sanitized_text = self.sanitizer.sanitize(output_text)
+
+        LLM_REQUESTS.labels("ollama", fallback_model, self.role.value, "fallback_success", "").inc()
+        self._last_provider = "ollama"
+        self._last_model = fallback_model
+        return sanitized_text
+
+    async def _execute_async(self, prompt: str, timeout_s: int | None = None) -> str:
+        priority_val = self._cache_priority()
         cached_entry = response_cache.get(prompt, self.role.value, priority_val)
         if cached_entry:
             logger.info("log_info", message=f"LLM Cache HIT for {self.provider}/{self.model}")
@@ -220,21 +264,7 @@ class LLMClient:
         operation = f"llm_send_{self.provider}"
         base_timeout = timeout_s or self.settings.LLM_DEFAULT_TIMEOUT_SECONDS
         timeout = get_timeout_recommendation(f"llm_{self.provider}", float(base_timeout))
-
-        # Use injected CB or fallback to global provider mapping
-        if self.circuit_breaker:
-            circuit_breaker = self.circuit_breaker
-        else:
-            circuit_breaker = _provider_circuit_breakers.get(
-                self.provider, _provider_circuit_breakers["unknown"]
-            )
-
-        try:
-            circuit_breaker.update_params(recovery_timeout=int(max(1, timeout)))
-        except Exception as e:
-            logger.warning("log_warning", message=f"Failed to update circuit breaker params: {e}")
-
-        # Decorate the adapter-based invoke
+        circuit_breaker = self._get_circuit_breaker(timeout)
         decorated_invoke = resilient(
             max_attempts=self.settings.LLM_RETRY_MAX_ATTEMPTS,
             initial_backoff=self.settings.LLM_RETRY_INITIAL_BACKOFF_SECONDS,
@@ -242,63 +272,48 @@ class LLMClient:
             circuit_breaker=circuit_breaker,
             retry_on=(Exception,),
             operation_name=operation,
-        )(self._invoke)
+        )(self._invoke_async)
 
         start = time.perf_counter()
         pricing = _get_model_pricing(self.provider, self.model)
         self._last_provider = self.provider
         self._last_model = self.model
+        tokens_in_est = self._estimate_tokens(prompt)
+        tokens_out_est = 0
 
         try:
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "attempt", "").inc()
 
-            allowed_out = self._run_async(self._compute_output_limit(prompt))
+            allowed_out = await self._compute_output_limit(prompt)
             if allowed_out < 1:
-                logger.warning("log_warning", message=f"Orçamento insuficiente para {self.provider} (tokens={allowed_out}). Acionando fallback."
+                logger.warning(
+                    "log_warning",
+                    message=(
+                        f"Orçamento insuficiente para {self.provider} "
+                        f"(tokens={allowed_out}). Acionando fallback."
+                    ),
                 )
                 raise RuntimeError(f"Orçamento insuficiente ou esgotado para {self.provider}.")
 
-            # Use Adapter for limit application
             self.adapter.apply_output_limit(allowed_out)
-
-            # NOTE: self._invoke is likely wrapping a sync call (langchain invoke).
-            # If we want true async, we should use ainvoke if available, or run_in_executor.
-            # However, resilient decorator might expect sync? checking...
-            # resilient decorator in python is usually sync or async aware.
-            # Assuming _invoke is sync (calls adapter.invoke).
-            # Ideally we should use adapter.ainvoke if possible.
-            # For now, we wrap the resilient decorated call in executor if explicit async needed,
-            # BUT resilient decorator usually handles retry logic.
-            # If resilient is sync, we must run it in thread pool.
-
-            result = decorated_invoke(prompt)
+            result = await decorated_invoke(prompt)
 
             elapsed = time.perf_counter() - start
             LLM_LATENCY.labels(self.provider, self.model, self.role.value, "success").observe(
                 elapsed
             )
             LLM_REQUESTS.labels(self.provider, self.model, self.role.value, "success", "").inc()
-
-            key = _pool_key(self.provider, self.model)
-            for item in _llm_pool.get(key, []):
-                if item.instance is self.base:
-                    item.consecutive_failures = 0
-                    break
+            self._mark_pool_success()
 
             output_text = getattr(result, "content", None) or str(result)
-
-            # Use Sanitizer
             sanitized_text = self.sanitizer.sanitize(output_text)
 
-            # 2. Store in cache & Calc Cost
             try:
-                # Tenta extrair uso real da resposta (LangChain standard or provider specific)
                 input_tokens = 0
                 output_tokens = 0
                 cache_read_tokens = 0
                 usage_found = False
 
-                # 1. Tenta usage_metadata (LangChain 0.2+)
                 def _safe_int(value, default: int = 0) -> int:
                     try:
                         return int(value)
@@ -309,11 +324,8 @@ class LLMClient:
                 if isinstance(usage_meta, dict):
                     input_tokens = _safe_int(usage_meta.get("input_tokens", 0))
                     output_tokens = _safe_int(usage_meta.get("output_tokens", 0))
-                    # Verifica detalhes de cache (DeepSeek/OpenAI pattern)
-                    # DeepSeek injects directly into openai response object, accessed via response_metadata
                     usage_found = True
 
-                # 2. Se não achou ou quer detalhes extras (cache), olha response_metadata
                 resp_meta = getattr(result, "response_metadata", {})
                 if not usage_found and isinstance(resp_meta, dict) and "token_usage" in resp_meta:
                     tu = resp_meta["token_usage"] or {}
@@ -322,29 +334,19 @@ class LLMClient:
                         output_tokens = _safe_int(tu.get("completion_tokens", 0))
                     usage_found = True
 
-                # Tenta extrair cache hits específico do DeepSeek/OpenAI
-                # DeepSeek: usage.prompt_tokens_details.cached_tokens
                 if isinstance(resp_meta, dict):
                     tu = resp_meta.get("token_usage", {})
                     ptd = tu.get("prompt_tokens_details") if isinstance(tu, dict) else None
                     if isinstance(ptd, dict):
                         cache_read_tokens = _safe_int(ptd.get("cached_tokens", 0))
 
-                # Fallback se não encontrou nada
                 if not usage_found:
                     input_tokens = self._estimate_tokens(prompt)
                     output_tokens = self._estimate_tokens(sanitized_text)
                     cache_read_tokens = 0
 
-                # Cálculo de custo (com suporte a cache pricing)
-                # Nota: input_tokens geralmente inclui o cached. Pricing aplica ao "miss" e "hit" separadamente.
-                # DeepSeek logic: Total Input = Cache Miss + Cache Hit.
-                # Cost = (Input - Hit)*PriceIn + Hit*PriceCache + Output*PriceOut
-
-                # Garantir que não subtraímos mais do que o total (sanity check)
                 cache_read_tokens = min(cache_read_tokens, input_tokens)
                 non_cached_input = input_tokens - cache_read_tokens
-
                 cost = (
                     (non_cached_input / 1000.0) * pricing.input_per_1k_usd
                     + (cache_read_tokens / 1000.0) * pricing.cache_read_per_1k_usd
@@ -378,7 +380,6 @@ class LLMClient:
             except Exception as e:
                 logger.warning("log_warning", message=f"Failed to cache LLM response: {e}")
 
-            # 3. Register usage with rate limiter
             try:
                 tokens_total = tokens_in_est + tokens_out_est
                 get_rate_limiter().register_usage(
@@ -389,93 +390,42 @@ class LLMClient:
 
             return sanitized_text
 
-        except (TimeoutError, CircuitOpenError, FuturesTimeoutError, Exception) as e:
-            # Handle Rate Limits
+        except (TimeoutError, CircuitOpenError, Exception) as e:
             self._handle_rate_limit_error(e)
-
-            # Update pool failure count
-            key = _pool_key(self.provider, self.model)
-            for item in _llm_pool.get(key, []):
-                if item.instance is self.base:
-                    item.consecutive_failures += 1
-                    break
-
-            # Record failure metric
+            self._mark_pool_failure()
             LLM_REQUESTS.labels(
                 self.provider, self.model, self.role.value, "failure", type(e).__name__
             ).inc()
             logger.warning("log_warning", message=f"Erro ao enviar prompt para LLM ({type(e).__name__}): {e}")
 
-            # Fallback to Ollama if configured and current provider is not already Ollama
             should_fallback = (
                 self.provider != "ollama"
                 and not isinstance(e, ValueError)
                 and getattr(self.settings, "LLM_FALLBACK_ENABLED", True)
             )
-
             if should_fallback:
                 try:
-                    if not _OLLAMA_AVAILABLE or ChatOllama is None:
-                        logger.warning(
-                            "Fallback Ollama requested but langchain_ollama is not installed."
-                        )
-                        raise RuntimeError("langchain_ollama is not installed.")
-
-                    logger.info("Tentando fallback para Ollama...")
-                    fallback_model = getattr(
-                        self.settings,
-                        "OLLAMA_ORCHESTRATOR_MODEL",
-                        getattr(self.settings, "OLLAMA_MODEL", "llama3"),
-                    )
-
-                    # Setup Ollama params reusing factory logic
-                    mk: dict[str, Any] = {}
-                    if getattr(self.settings, "OLLAMA_NUM_CTX", None):
-                        mk["num_ctx"] = self.settings.OLLAMA_NUM_CTX
-                    if getattr(self.settings, "OLLAMA_NUM_THREAD", None):
-                        mk["num_thread"] = self.settings.OLLAMA_NUM_THREAD
-                    if getattr(self.settings, "OLLAMA_NUM_BATCH", None):
-                        mk["num_batch"] = self.settings.OLLAMA_NUM_BATCH
-                    if getattr(self.settings, "OLLAMA_GPU_LAYERS", None):
-                        mk["num_gpu"] = self.settings.OLLAMA_GPU_LAYERS
-                    if getattr(self.settings, "OLLAMA_KEEP_ALIVE", None):
-                        mk["keep_alive"] = self.settings.OLLAMA_KEEP_ALIVE
-
-                    fallback_llm = ChatOllama(
-                        base_url=getattr(self.settings, "OLLAMA_HOST", "http://localhost:11434"),
-                        model=fallback_model,
-                        temperature=0,
-                        model_kwargs=mk,
-                    )
-
-                    # Quick health check
-                    # _health_check_ollama is sync, run in thread
-                    # For simplicity, just run it sync as fallback is rare
-                    if _health_check_ollama(fallback_llm, timeout_s=120):
-                        logger.info("log_info", message=f"Fallback Ollama ({fallback_model}) saudável. Invocando...")
-                        result = fallback_llm.invoke(prompt)
-
-                        # Process success equivalent to main flow
-                        output_text = getattr(result, "content", None) or str(result)
-                        # Use Sanitizer for fallback too
-                        sanitized_text = self.sanitizer.sanitize(output_text)
-
-                        LLM_REQUESTS.labels(
-                            "ollama", fallback_model, self.role.value, "fallback_success", ""
-                        ).inc()
-                        self._last_provider = "ollama"
-                        self._last_model = fallback_model
-                        return sanitized_text
-                    else:
-                        logger.warning("Fallback Ollama falhou no health check.")
-
+                    return await self._invoke_with_fallback(prompt)
                 except Exception as fb_err:
                     logger.error("log_error", message=f"Falha crítica no fallback Ollama: {fb_err}")
-
-            # If fallback didn't return, re-raise original exception
             raise
-        finally:
-            pass
+
+    async def asend(self, prompt: str, timeout_s: int | None = None) -> str:
+        """Envia um prompt para o LLM pelo caminho primário assíncrono."""
+        return await self._execute_async(prompt, timeout_s)
+
+    def send(self, prompt: str, timeout_s: int | None = None) -> str:
+        """Shim síncrono legado para chamadores que ainda não migraram para async."""
+        warnings.simplefilter("always", DeprecationWarning)
+        warnings.warn(_SEND_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+        logger.warning("log_warning", message=_SEND_DEPRECATION_MESSAGE)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.asend(prompt, timeout_s))
+        raise RuntimeError(
+            "LLMClient.send() não pode ser usado dentro de um event loop ativo. Use `await asend()`."
+        )
 
     async def send_enriched(self, prompt: str, timeout_s: int | None = None) -> dict[str, Any]:
         """Versão enriquecida que retorna metadados além da resposta."""

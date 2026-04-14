@@ -1,5 +1,6 @@
 import structlog
 from abc import ABC, abstractmethod
+from inspect import isawaitable
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -22,6 +23,16 @@ class LLMAdapter(ABC):
         """Invokes the underlying model."""
         return self.base_model.invoke(prompt, **kwargs)
 
+    async def ainvoke(self, prompt: str, **kwargs) -> Any:
+        """Prefere o caminho assíncrono nativo do LangChain quando disponível."""
+        async_invoke = getattr(self.base_model, "ainvoke", None)
+        if callable(async_invoke):
+            result = async_invoke(prompt, **kwargs)
+            if isawaitable(result):
+                return await result
+            return result
+        return self.invoke(prompt, **kwargs)
+
 
 class OpenAIAdapter(LLMAdapter):
     def invoke(self, prompt: str, **kwargs) -> Any:
@@ -31,6 +42,13 @@ class OpenAIAdapter(LLMAdapter):
                 kwargs["response_format"] = {"type": "json_object"}
 
         return super().invoke(prompt, **kwargs)
+
+    async def ainvoke(self, prompt: str, **kwargs) -> Any:
+        if kwargs.pop("strict", False):
+            if "response_format" not in kwargs:
+                kwargs["response_format"] = {"type": "json_object"}
+
+        return await super().ainvoke(prompt, **kwargs)
 
     def apply_output_limit(self, max_output_tokens: int) -> None:
         try:
