@@ -865,3 +865,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-020] Uso generalizado de Try-Except silencioso (Bandit B110, B112)
+- Problema atual: A análise com Bandit reportou 233 instâncias de `try_except_pass` (B110) e 11 de `try_except_continue` (B112) espalhadas pelos módulos do backend, incluindo rotas como `app/api/v1/endpoints/auth.py` e `app/api/v1/endpoints/rag.py`. Essa prática silenciosamente oculta exceções em vez de logar ou tratá-las de forma correta, degradando fortemente a observabilidade.
+- Solucao proposta: Substituir todos os `except Exception: pass` ou `continue` por capturas específicas do tipo de erro esperado e inserir chamadas para o sistema de logging do backend.
+- Impacto esperado: Maior confiabilidade, logs claros para depuração em tempo real e eliminação dos pontos cegos onde erros críticos são engolidos silenciosamente.
+- Riscos: Aumento no volume de logs, necessitando ajustar a verbosidade. Algumas funções podem falhar se dependiam desse comportamento de fail-open.
+- Dependencias: Subsistema de logging central.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Vulnerabilidades Críticas em Novas Dependências do Frontend
+- Problema atual: A varredura `npm audit` evidenciou vulnerabilidades altas e críticas em pacotes fundamentais (`express-rate-limit`, `hono`, `tar`, `immutable`). Esses problemas expõem o ambiente a vulnerabilidades como injeções, negação de serviço e outras falhas.
+- Solucao proposta: Executar a atualização para as versões "patched" ou forçar a resolução no `package.json` para mitigar as CVEs relatadas de forma similar ao SG-038.
+- Impacto esperado: Prevenção contra vetores de ataque em nível de runtime ou ferramenta, mantendo a superfície de ataque minimizada e auditável.
+- Riscos: Quebra de compatibilidade com outros pacotes do frontend e problemas de compilação.
+- Dependencias: Suíte de testes do frontend para validar a ausência de regressões.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-053] Exposição de Senhas e Segredos Hardcoded (Bandit B105)
+- Problema atual: O relatório de análise estática identificou uso de strings que se assemelham a senhas hardcoded em ferramentas críticas e scripts de teste, particularmente em `app/core/infrastructure/rate_limit_middleware.py` (senhas vazias e inseguras) e `app/core/llm/sanitizer.py`.
+- Solucao proposta: Limpar strings fixas e utilizar o gerenciador de variáveis de ambiente (`Settings`) ou mecanismos de injeção de secrets dinâmicos para a inicialização e verificação de limites.
+- Impacto esperado: Remoção da brecha de vazamento via hardcode e adesão estrita aos controles de segurança de injeção externa.
+- Riscos: Dificuldade na inicialização do serviço caso a integração com o gerenciador de segredos falhe.
+- Dependencias: Módulo de Settings Centralizado.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto

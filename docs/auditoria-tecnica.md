@@ -1,5 +1,25 @@
 # Auditoria Técnica Diária - Janus
 
+## Achados do dia (2026-04-03)
+
+### 12. Try-Except Silencioso generalizado (Qualidade/Confiabilidade)
+**Descrição:** O analisador estático (Bandit) identificou 233 instâncias de `try...except...pass` (Bandit B110) e 11 de `try...except...continue` (Bandit B112) pela base de código (e.g. `app/api/v1/endpoints/auth.py`, `app/api/v1/endpoints/rag.py`). Essa prática mascara erros reais e dificulta o debug de fluxos críticos.
+**Evidências:**
+- Relatório de Sast/Bandit revela 233 `B110:try_except_pass` (ex: `app/api/v1/endpoints/auth.py:250`).
+- Bandit revela 11 `B112:try_except_continue` (ex: `app/api/v1/endpoints/rag.py:690`, `app/core/autonomy/planner.py:103`).
+**Próximos passos:**
+- Substituir suppressões genéricas por tratamento de exceção explícito e gerar logs adequados em caso de falha.
+- Adicionar OQ-020 no `melhorias-possiveis.md`.
+
+### 13. Vulnerabilidades Críticas no Frontend e Tooling (Segurança)
+**Descrição:** A auditoria NPM relata vulnerabilidades Críticas/Altas (ex. `express-rate-limit`, `hono`, `tar`, `immutable`). Adicionalmente, chamadas subprocess inseguras e geração randômica fraca continuam pendentes no backend (B603, B311, B404, B105).
+**Evidências:**
+- `npm audit` revela exploits nos pacotes acima.
+- `Bandit` relata senhas hardcoded vazias/fracas (`app/core/infrastructure/rate_limit_middleware.py`), e execuções shell inseguras (B603) em `command_sandbox.py` e `external_cli_tools.py`.
+**Próximos passos:**
+- Atualizar versões afetadas e mapear SG-040 para dependências frontend novas.
+- Tratar SG-053 para remover senhas hardcoded.
+
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
 
