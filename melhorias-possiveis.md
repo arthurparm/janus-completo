@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Adicional Atualização de Vulnerabilidades do Frontend via npm audit
+- Problema atual: Novos pacotes do frontend identificados com vulnerabilidades via varredura recente (como `vite`, `hono`, `express-rate-limit`, `lodash-es` e `dompurify` adicionais às listadas anteriormente).
+- Solucao proposta: Executar override ativo via npm/package.json ou atualizar de imediato as dependências patcheadas mais recentes para corrigir os novos gaps detectados de XSS e injection.
+- Impacto esperado: Estabilidade da aplicação Web contra ataques Client-Side.
+- Riscos: Quebra de interfaces e build devido a novas major versions.
+- Dependencias: Pipeline de Testes do Frontend.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

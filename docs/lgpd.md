@@ -90,3 +90,7 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-14)
+Nenhum novo achado crítico referente a vazamento de PII (Personally Identifiable Information) ou falha de privacidade direta detectado pelas ferramentas estáticas `bandit` ou `npm audit` fora do escopo já documentado previamente para a LGPD (como logs do daemon e logs de productivity_tools).
+As varreduras reforçam a necessidade contínua de sanitização dos dados antes de submeter ao shell local ou avaliador lógico (ver B602 e B102).

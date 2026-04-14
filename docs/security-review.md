@@ -254,3 +254,23 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-14)
+
+### 1. Dependências do Frontend Vulneráveis
+- **Caminho:** `frontend/package.json`
+- **Gravidade:** Alta
+- **Descrição:** O `npm audit` identificou novas vulnerabilidades de segurança severas em diversas bibliotecas do ecossistema front-end. Em particular, `vite`, `hono`, `express-rate-limit`, `dompurify`, `lodash-es`, `tar` e `@angular/*` continuam a demonstrar riscos como injeções, XSS ou Prototype Pollution.
+- **Ação Recomendada:** Realizar a atualização imediata (ou overrides) das bibliotecas para suas respectivas versões patcheadas no `package.json`.
+
+### 2. Uso do exec detectado (Bandit B102)
+- **Caminho:** `backend/app/core/infrastructure/python_sandbox.py`
+- **Gravidade:** Média (escalável para Crítica se não isolada)
+- **Descrição:** O uso explícito de `exec` expõe o sistema a code injection não filtrada por inputs arbitrários.
+- **Ação Recomendada:** Substituir por abordagens que não dependam da interpretação built-in de strings, ou segregar o sandbox em gVisor/seccomp de forma rígida.
+
+### 3. Subprocess com shell=True (Bandit B602)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Alta
+- **Descrição:** O `subprocess` instanciado com a flag `shell=True` facilita ataques de Command Injection via inputs de agentes e usuários maliciosos.
+- **Ação Recomendada:** Substituir por uso restrito passando os argumentos numa lista, sem ativar um shell subjacente.
