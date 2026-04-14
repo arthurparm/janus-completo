@@ -101,7 +101,6 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
-      - '--config.expand-env'
     restart: unless-stopped
     mem_limit: 512m
     cpus: "0.25"
