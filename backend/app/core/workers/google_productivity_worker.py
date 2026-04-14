@@ -6,15 +6,10 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 import httpx
 import structlog
 
-from app.core.embeddings.embedding_manager import aembed_text
 from app.core.infrastructure.logging_config import TRACE_ID
 from app.core.infrastructure.message_broker import get_broker
-from app.db.vector_store import (
-    aget_or_create_collection,
-    build_user_memory_collection_name,
-    get_async_qdrant_client,
-)
 from app.models.schemas import TaskMessage
+from app.planes.knowledge import get_knowledge_facade
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.user_repository import OAuthTokenRepository
 
@@ -287,14 +282,9 @@ async def start_google_productivity_consumer():
                 if do_index and user_id is not None:
                     try:
                         _t0 = __import__("time").perf_counter()
-                        client = get_async_qdrant_client()
-                        coll = await aget_or_create_collection(
-                            build_user_memory_collection_name(str(user_id))
-                        )
                         title = str(ev.get("title", ""))
                         loc = str(ev.get("location", ""))
                         content = f"{title} @ {loc}"
-                        vec = await aembed_text(content)
                         pid = f"calendar:{user_id}:{int(ev.get('start_ts', 0))}:{int(ev.get('end_ts', 0))}"
                         payload_q = {
                             "content": content,
@@ -310,10 +300,12 @@ async def start_google_productivity_consumer():
                                 "ts_ms": int(ev.get("start_ts") or 0),
                             },
                         }
-                        from qdrant_client import models as _m
-
-                        point = _m.PointStruct(id=pid, vector=vec, payload=payload_q)
-                        await client.upsert(collection_name=coll, points=[point])
+                        await get_knowledge_facade().index_memory_event(
+                            user_id=str(user_id),
+                            content=content,
+                            point_id=pid,
+                            payload=payload_q,
+                        )
                         try:
                             _GOOGLE_CALENDAR_EVENTS_INDEXED.inc()
                             _PROD_WORKER_USER_EVENTS.labels(
@@ -438,12 +430,7 @@ async def start_google_productivity_consumer():
                     if do_index and user_id is not None:
                         try:
                             _t0 = __import__("time").perf_counter()
-                            client = get_async_qdrant_client()
-                            coll = await aget_or_create_collection(
-                                build_user_memory_collection_name(str(user_id))
-                            )
                             content = f"To: {msg.get('to', '')!s}\nSubject: {msg.get('subject', '')!s}\n{msg.get('body', '')!s}"
-                            vec = await aembed_text(content)
                             composite_id = (
                                 f"mail:{user_id}:{msg.get('to', '')!s}:{msg.get('subject', '')!s}:{content}"
                             )
@@ -462,10 +449,12 @@ async def start_google_productivity_consumer():
                                     "ts_ms": int(__import__("time").time() * 1000),
                                 },
                             }
-                            from qdrant_client import models as _m
-
-                            point = _m.PointStruct(id=pid, vector=vec, payload=payload_q)
-                            await client.upsert(collection_name=coll, points=[point])
+                            await get_knowledge_facade().index_memory_event(
+                                user_id=str(user_id),
+                                content=content,
+                                point_id=pid,
+                                payload=payload_q,
+                            )
                             try:
                                 _PROD_WORKER_USER_EVENTS.labels(
                                     str(user_id), "mail_index", "ok"

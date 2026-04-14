@@ -6,14 +6,12 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.core.security.request_guard import require_admin_actor
-from app.repositories.deployment_repository import DeploymentRepository
-from app.services.bias_check_service import BiasCheckService
 
 router = APIRouter(tags=["Deployment"], prefix="/deployment")
 
 
-def get_repo() -> DeploymentRepository:
-    return DeploymentRepository()
+def get_inference_facade(request: Request):
+    return request.app.state.inference_facade
 
 
 class StageRequest(BaseModel):
@@ -23,14 +21,14 @@ class StageRequest(BaseModel):
 
 @router.post("/stage")
 async def stage(
-    req: StageRequest, request: Request, repo: DeploymentRepository = Depends(get_repo)
+    req: StageRequest, request: Request, inference = Depends(get_inference_facade)
 ):
     require_admin_actor(request)
-    return repo.stage(req.model_id, req.rollout_percent)
+    return inference.stage_model(model_id=req.model_id, rollout_percent=req.rollout_percent)
 
 
 @router.post("/publish")
-async def publish(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
+async def publish(model_id: str, request: Request, inference = Depends(get_inference_facade)):
     require_admin_actor(request)
     try:
         meta_path = os.path.join("/app", "workspace", "models", model_id, "metadata.json")
@@ -48,8 +46,7 @@ async def publish(model_id: str, request: Request, repo: DeploymentRepository = 
     except Exception:
         pass
     try:
-        svc = BiasCheckService()
-        res = svc.run_precheck(model_id)
+        res = inference.precheck(model_id=model_id)
         if not res.get("precheck_passed"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -59,16 +56,15 @@ async def publish(model_id: str, request: Request, repo: DeploymentRepository = 
         raise
     except Exception:
         pass
-    return repo.publish(model_id)
+    return inference.publish_model(model_id=model_id)
 
 
 @router.post("/precheck")
-async def precheck(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
+async def precheck(model_id: str, request: Request, inference = Depends(get_inference_facade)):
     require_admin_actor(request)
-    svc = BiasCheckService()
-    res = svc.run_precheck(model_id)
+    res = inference.precheck(model_id=model_id)
     try:
-        repo.stage(model_id, percent=0)
+        inference.stage_model(model_id=model_id, rollout_percent=0)
         # Atualiza campos de precheck no registro
         # Nota: em uma versão futura, usar método dedicado; aqui retornamos os dados para persistência externa
     except Exception:
@@ -77,6 +73,6 @@ async def precheck(model_id: str, request: Request, repo: DeploymentRepository =
 
 
 @router.post("/rollback")
-async def rollback(model_id: str, request: Request, repo: DeploymentRepository = Depends(get_repo)):
+async def rollback(model_id: str, request: Request, inference = Depends(get_inference_facade)):
     require_admin_actor(request)
-    return repo.rollback(model_id)
+    return inference.rollback_model(model_id=model_id)

@@ -262,6 +262,11 @@ class AppSettings(BaseSettings):
     RAG_RERANK_CANDIDATE_MULTIPLIER: int = 3
     RAG_RERANK_MAX_CONTENT_CHARS: int = 1200
 
+    # Knowledge Plane retrieval routing
+    KNOWLEDGE_RETRIEVAL_BACKEND: str = "baseline_qdrant"
+    KNOWLEDGE_RETRIEVAL_SHADOW_MODE: bool = False
+    KNOWLEDGE_EXPERIMENTAL_COLLECTION_SUFFIX: str | None = None
+
     # Preço por 1k tokens (USD) por provedor
     # Valores padrão conservadores para evitar fallback indevido por teto de custo.
     OPENAI_COST_PER_1K_INPUT_USD: float = 0.005

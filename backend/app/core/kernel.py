@@ -23,6 +23,8 @@ from app.core.workers.knowledge_consolidator_worker import knowledge_consolidato
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.workers.neural_training_worker import start_neural_training_worker
 from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
+from app.planes.inference import InferenceFacade
+from app.planes.knowledge import KnowledgeFacade, set_knowledge_facade
 
 # from app.core.infrastructure.auth import get_actor_user_id
 from app.db import db
@@ -135,6 +137,8 @@ class Kernel:
         self.prompt_service: PromptService | None = None
         self.tool_executor: ToolExecutorService | None = None
         self.rag_service: RAGService | None = None
+        self.knowledge_facade: KnowledgeFacade | None = None
+        self.inference_facade: InferenceFacade | None = None
 
         # Core
         self.goal_manager: GoalManager | None = None
@@ -395,6 +399,14 @@ class Kernel:
             self.prompt_builder_service = PromptBuilderService(self.prompt_service)
             self.tool_executor = ToolExecutorService()
             self.rag_service = RAGService(self.chat_repo, self.llm_service, self.memory_service)
+            self.knowledge_facade = KnowledgeFacade(
+                memory_service=self.memory_service,
+                knowledge_service=self.knowledge_service,
+                document_service=self.document_service,
+                rag_service=self.rag_service,
+            )
+            self.inference_facade = InferenceFacade(llm_service=self.llm_service)
+            set_knowledge_facade(self.knowledge_facade)
             self.chat_service = ChatService(
                 self.chat_repo,
                 self.llm_service,

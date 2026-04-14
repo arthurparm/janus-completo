@@ -23,8 +23,17 @@ class DummyPoint:
         self.score = score
 
 
-class DummyClient:
-    async def scroll(self, *args, **kwargs):
+class DummyKnowledgeFacade:
+    async def load_user_timeline_points(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str | None,
+        query: str | None,
+        start_ts: int | None,
+        end_ts: int | None,
+        limit: int,
+    ):
         points = [
             DummyPoint(
                 {
@@ -41,10 +50,13 @@ class DummyClient:
                 }
             ),
         ]
-        return points, None
-
-    async def query_points(self, *args, **kwargs):
-        return type("Res", (), {"points": []})()
+        if conversation_id:
+            points = [
+                point
+                for point in points
+                if (point.payload.get("metadata") or {}).get("conversation_id") == conversation_id
+            ]
+        return points[:limit]
 
 
 @pytest.fixture()
@@ -52,20 +64,13 @@ def client(monkeypatch):
     app = FastAPI()
     app.include_router(memory_router, prefix="/api/v1/memory")
     app.dependency_overrides[get_memory_service] = lambda: DummyMemoryService()
-
-    import app.api.v1.endpoints.memory as memory_module
-
-    async def _fake_collection(name: str, *args, **kwargs):
-        return name
-
-    monkeypatch.setattr(memory_module, "aget_or_create_collection", _fake_collection)
-    monkeypatch.setattr(memory_module, "get_async_qdrant_client", lambda: DummyClient())
+    app.state.knowledge_facade = DummyKnowledgeFacade()
 
     return TestClient(app)
 
 
-def test_user_memory_timeline_sorted(client):
-    resp = client.get("/api/v1/memory/timeline?user_id=u1&limit=2")
+def test_memory_timeline_sorted(client):
+    resp = client.get("/api/v1/memory/timeline?limit=2")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
@@ -73,8 +78,8 @@ def test_user_memory_timeline_sorted(client):
     assert data[0]["ts_ms"] == 2000
 
 
-def test_user_memory_timeline_filters_by_conversation_id(client):
-    resp = client.get("/api/v1/memory/timeline?user_id=u1&conversation_id=c-1&limit=5")
+def test_memory_timeline_filters_by_conversation_id(client):
+    resp = client.get("/api/v1/memory/timeline?conversation_id=c-1&limit=5")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1

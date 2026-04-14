@@ -2,16 +2,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from qdrant_client import models
 
-from app.core.embeddings.embedding_manager import aembed_text
 from app.core.infrastructure.filesystem_manager import read_file, write_file
-from app.db.vector_store import (
-    aget_or_create_collection,
-    build_deterministic_point_id,
-    build_user_memory_collection_name,
-    get_async_qdrant_client,
-)
+from app.db.vector_store import build_deterministic_point_id
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository, UserRepository
 from app.services.observability_service import ObservabilityService
 
@@ -87,7 +80,11 @@ class OAuthRefreshRequest(BaseModel):
 def get_consent_repo(request: Request) -> ConsentRepository:
     return ConsentRepository()
 
-def _is_unlimited_user() -> bool:
+def get_knowledge_facade(request: Request):
+    return request.app.state.knowledge_facade
+
+
+def _is_unlimited_user(user_id: str | None = None) -> bool:
     unlimited = getattr(settings, "PRODUCTIVITY_UNLIMITED_USERS", []) or []
     if not unlimited:
         return False
@@ -123,9 +120,9 @@ async def calendar_add_event(
     payload: CalendarAddRequest,
     request: Request,
     repo: ConsentRepository = Depends(get_consent_repo),
+    knowledge = Depends(get_knowledge_facade),
 ):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
+    require_authenticated_actor_id(request)
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
@@ -158,7 +155,7 @@ async def calendar_add_event(
     cm = (
         _tracer.start_as_current_span("productivity.calendar_add_event") if _OTEL else nullcontext()
     )
-    async with cm:  # type: ignore
+    with cm:  # type: ignore
         task_id = await publish_google_calendar_add_event(
             user_id="default", event=payload.event.model_dump(), index=bool(payload.index)
         )
@@ -171,14 +168,9 @@ async def calendar_add_event(
             pass
     try:
         if bool(payload.index):
-            client = get_async_qdrant_client()
-            coll = await aget_or_create_collection(
-                build_user_memory_collection_name("default")
-            )
             evt = payload.event.model_dump()
             content = f"{evt.get('title', '')} @ {evt.get('location', '')}"
-            vec = await aembed_text(content)
-            pid = f"calendar:{"default"}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
+            pid = f"calendar:default:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
             payload_q = {
                 "content": content,
                 "type": "calendar_event",
@@ -192,8 +184,12 @@ async def calendar_add_event(
                     "origin": "productivity.calendar.endpoint",
                 },
             }
-            point = models.PointStruct(id=pid, vector=vec, payload=payload_q)
-            await client.upsert(collection_name=coll, points=[point])
+            await knowledge.index_memory_event(
+                user_id="default",
+                content=content,
+                point_id=pid,
+                payload=payload_q,
+            )
             try:
                 _PROD_REQUESTS_TOTAL.labels("calendar_index", "ok").inc()
                 _PROD_REQUESTS_USER_TOTAL.labels("default", "calendar_index", "ok").inc()
@@ -222,8 +218,7 @@ async def calendar_add_event(
 
 @router.post("/oauth/google/start")
 async def oauth_google_start(payload: OAuthStartRequest, request: Request):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
+    require_authenticated_actor_id(request)
     try:
         _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
     except Exception:
@@ -241,7 +236,7 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
         "response_type": "code",
         "scope": scope,
         "access_type": "offline",
-        "state": f"user:{"default"}:scope:custom",
+        "state": "user:default:scope:custom",
         "include_granted_scopes": "true",
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
@@ -252,10 +247,8 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
 async def calendar_list_events(
     request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
-        
-    path = f"workspace/productivity/calendar_.json"
+    require_authenticated_actor_id(request)
+    path = "workspace/productivity/calendar_.json"
     raw = read_file(path)
     try:
         if raw and not raw.startswith("Erro:"):
@@ -282,8 +275,7 @@ class MailSendRequest(BaseModel):
 async def mail_send(
     payload: MailSendRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
+    require_authenticated_actor_id(request)
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
@@ -312,7 +304,7 @@ async def mail_send(
     from app.core.workers.google_productivity_worker import publish_google_mail_send
 
     cm = _tracer.start_as_current_span("productivity.mail_send") if _OTEL else nullcontext()
-    async with cm:  # type: ignore
+    with cm:  # type: ignore
         task_id = await publish_google_mail_send(
             user_id="default", message=payload.message.model_dump(), index=bool(payload.index)
         )
@@ -345,10 +337,8 @@ async def mail_send(
 async def mail_list(
     request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
-        
-    path = f"workspace/productivity/mail_.json"
+    require_authenticated_actor_id(request)
+    path = "workspace/productivity/mail_.json"
     raw = read_file(path)
     try:
         if raw and not raw.startswith("Erro:"):
@@ -372,10 +362,12 @@ class NoteAddRequest(BaseModel):
 
 @router.post("/notes/add")
 async def notes_add(
-    payload: NoteAddRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
+    payload: NoteAddRequest,
+    request: Request,
+    repo: ConsentRepository = Depends(get_consent_repo),
+    knowledge = Depends(get_knowledge_facade),
 ):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
+    require_authenticated_actor_id(request)
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
@@ -402,9 +394,9 @@ async def notes_add(
     except Exception:
         pass
     cm = _tracer.start_as_current_span("productivity.notes_add") if _OTEL else nullcontext()
-    async with cm:  # type: ignore
+    with cm:  # type: ignore
         pass
-    path = f"workspace/productivity/notes_{"default"}.json"
+    path = "workspace/productivity/notes_default.json"
     try:
         raw = read_file(path)
     except Exception:
@@ -428,12 +420,7 @@ async def notes_add(
     await loop.run_in_executor(None, write_file, path, text, False)
     try:
         if bool(payload.index):
-            client = get_async_qdrant_client()
-            coll = await aget_or_create_collection(
-                build_user_memory_collection_name("default")
-            )
             content = f"{note.get('title', '')}\n{note.get('content', '')}"
-            vec = await aembed_text(content)
             now_ts_ms = int(__import__("time").time() * 1000)
             pid = build_deterministic_point_id(
                 "productivity-note",
@@ -454,8 +441,12 @@ async def notes_add(
                     "origin": "productivity.notes.endpoint",
                 },
             }
-            point = models.PointStruct(id=pid, vector=vec, payload=payload_q)
-            await client.upsert(collection_name=coll, points=[point])
+            await knowledge.index_memory_event(
+                user_id="default",
+                content=content,
+                point_id=pid,
+                payload=payload_q,
+            )
             try:
                 _PROD_REQUESTS_TOTAL.labels("notes_index", "ok").inc()
                 _PROD_REQUESTS_USER_TOTAL.labels("default", "notes_index", "ok").inc()
@@ -491,10 +482,8 @@ async def notes_add(
 async def notes_list(
     request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
-        
-    path = f"workspace/productivity/notes_.json"
+    require_authenticated_actor_id(request)
+    path = "workspace/productivity/notes_default.json"
     raw = read_file(path)
     try:
         if raw and not raw.startswith("Erro:"):
@@ -513,7 +502,6 @@ async def limits_status(request: Request):
         actor_id = actor
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-    from app.repositories.user_repository import UserRepository
 
     svc: ObservabilityService = request.app.state.observability_service
     start_ts = float(__import__("time").time()) - 86400.0
@@ -560,10 +548,7 @@ async def limits_status(request: Request):
 
 @router.get("/oauth/google/start")
 async def google_oauth_start(request: Request, scope: str = "calendar"):
-    actor = require_authenticated_actor_id(request)
-    from app.repositories.user_repository import UserRepository
-
-    ur = UserRepository()
+    require_authenticated_actor_id(request)
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
     redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
     if not client_id or not str(client_id):
@@ -689,10 +674,7 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 
 @router.post("/oauth/google/refresh")
 async def google_oauth_refresh(request: Request):
-    actor = require_authenticated_actor_id(request)
-    from app.repositories.user_repository import UserRepository
-
-    ur = UserRepository()
+    require_authenticated_actor_id(request)
     repo_tok = OAuthTokenRepository()
     tok = repo_tok.get(user_id=0, provider="google")
     if not tok or not tok.refresh_token:

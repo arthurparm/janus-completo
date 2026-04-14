@@ -112,9 +112,11 @@ async def lifespan(app: FastAPI):
     app.state.optimization_service = kernel.optimization_service
     app.state.autonomy_service = kernel.autonomy_service
     app.state.llm_service = kernel.llm_service
+    app.state.inference_facade = kernel.inference_facade
     app.state.chat_service = kernel.chat_service
     app.state.assistant_service = kernel.assistant_service
     app.state.outbox_service = kernel.outbox_service
+    app.state.knowledge_facade = kernel.knowledge_facade
     app.state.goal_manager = kernel.goal_manager
     try:
         from app.services.autonomy_admin_service import AutonomyAdminService

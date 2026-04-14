@@ -2,15 +2,13 @@
 Auto-análise do Janus - Um jeito simples do sistema se entender melhor
 """
 
-from datetime import datetime
 import secrets
+from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.repositories.llm_repository import LLMRepository, get_llm_repository
-from app.services.llm_service import LLMService, get_llm_service
 from app.services.observability_service import ObservabilityService, get_observability_service
 
 router = APIRouter(tags=["Auto Analysis"])
@@ -33,9 +31,7 @@ class AutoAnalysisResponse(BaseModel):
 
 @router.get("/health-check", response_model=AutoAnalysisResponse, summary="Janus se analisa")
 async def auto_analyze(
-    llm_service: LLMService = Depends(get_llm_service),
     observability: ObservabilityService = Depends(get_observability_service),
-    llm_repo: LLMRepository = Depends(get_llm_repository),
 ) -> AutoAnalysisResponse:
     """
     O Janus olha para si mesmo e diz: "Como estou me saindo?"
@@ -48,7 +44,7 @@ async def auto_analyze(
 
     try:
         # Análise 1: Gastos com APIs
-        recent_costs = await _analyze_api_costs(llm_repo)
+        recent_costs = await _analyze_api_costs()
         if recent_costs:
             insights.append(recent_costs)
 
@@ -58,7 +54,7 @@ async def auto_analyze(
             insights.append(performance)
 
         # Análise 3: Qualidade das respostas
-        response_quality = await _analyze_response_quality(llm_repo)
+        response_quality = await _analyze_response_quality()
         if response_quality:
             insights.append(response_quality)
 
@@ -92,7 +88,7 @@ async def auto_analyze(
         )
 
 
-async def _analyze_api_costs(llm_repo: LLMRepository) -> HealthInsight | None:
+async def _analyze_api_costs() -> HealthInsight | None:
     """Analisa gastos recentes com APIs usando dados reais do sistema"""
     try:
         from app.core.llm.pricing import _provider_spend_usd
@@ -159,7 +155,7 @@ async def _analyze_performance(observability: ObservabilityService) -> HealthIns
         return None
 
 
-async def _analyze_response_quality(llm_repo: LLMRepository) -> HealthInsight | None:
+async def _analyze_response_quality() -> HealthInsight | None:
     """Analisa qualidade das respostas"""
     try:
         return HealthInsight(

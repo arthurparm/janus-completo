@@ -1,21 +1,11 @@
-import structlog
 from datetime import datetime
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
-from qdrant_client import models
 
-from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.generative_memory import generative_memory_service
-from app.core.security.request_guard import resolve_user_scope_id
-from app.db.vector_store import (
-    aget_or_create_collection,
-    build_user_chat_collection_name,
-    build_user_docs_collection_name,
-    build_user_memory_collection_name,
-    get_async_qdrant_client,
-)
 from app.models.schemas import Experience, ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.secret_memory_service import secret_memory_service
@@ -147,81 +137,8 @@ def _point_to_item(point: Any) -> MemoryTimelineItem:
     )
 
 
-def _timeline_user_collections(user_id: str) -> list[str]:
-    return [
-        build_user_memory_collection_name(user_id),
-        build_user_chat_collection_name(user_id),
-        build_user_docs_collection_name(user_id),
-    ]
-
-
-def _matches_conversation_scope(point: Any, conversation_id: str) -> bool:
-    payload = getattr(point, "payload", None) or {}
-    metadata = payload.get("metadata") or {}
-    target = str(conversation_id or "").strip()
-    if not target:
-        return True
-    candidates = [
-        metadata.get("conversation_id"),
-        metadata.get("session_id"),
-        metadata.get("thread_id"),
-        metadata.get("task_id"),
-        payload.get("composite_id"),
-    ]
-    for candidate in candidates:
-        if candidate is None:
-            continue
-        value = str(candidate).strip()
-        if value == target:
-            return True
-        if candidate == payload.get("composite_id"):
-            parts = [part.strip() for part in value.replace("/", ":").replace("|", ":").split(":")]
-            if target in [part for part in parts if part]:
-                return True
-    return False
-
-
-async def _load_user_timeline_points(
-    *,
-    user_id: str,
-    conversation_id: str | None,
-    query: str | None,
-    start_ts: int | None,
-    end_ts: int | None,
-    limit: int,
-) -> list[Any]:
-    client = get_async_qdrant_client()
-    vector = await aembed_text(query) if query else None
-    points: list[Any] = []
-    for collection_name in _timeline_user_collections(user_id):
-        coll = await aget_or_create_collection(collection_name)
-        must: list[models.FieldCondition] = []
-        if start_ts is not None or end_ts is not None:
-            rng = models.Range(gte=start_ts, lte=end_ts)
-            must.append(models.FieldCondition(key="metadata.timestamp", range=rng))
-        qfilter = models.Filter(must=must) if must else None
-        if vector is not None:
-            res = await client.query_points(
-                collection_name=coll,
-                query=vector,
-                limit=limit,
-                with_payload=True,
-                query_filter=qfilter,
-            )
-            coll_points = list(getattr(res, "points", res) or [])
-        else:
-            coll_points, _ = await client.scroll(
-                collection_name=coll,
-                scroll_filter=qfilter,
-                limit=limit,
-                with_payload=True,
-            )
-        if conversation_id:
-            coll_points = [
-                point for point in coll_points if _matches_conversation_scope(point, conversation_id)
-            ]
-        points.extend(coll_points)
-    return points
+def get_knowledge_facade(request: Request):
+    return request.app.state.knowledge_facade
 
 
 def _sort_and_dedupe_timeline(items: list[MemoryTimelineItem], limit: int) -> list[MemoryTimelineItem]:
@@ -250,6 +167,7 @@ async def get_memories_timeline(
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     conversation_id: str | None = Query(None, description="Conversation ID for scoped timeline"),
     service: MemoryService = Depends(get_memory_service),
+    knowledge = Depends(get_knowledge_facade),
 ):
     """
     Retrieves memories within a specific timeframe ("Time Travel").
@@ -276,7 +194,7 @@ async def get_memories_timeline(
     if resolved_user_id:
         try:
             fetch_limit = min(500, max(limit * 5, limit))
-            points = await _load_user_timeline_points(
+            points = await knowledge.load_user_timeline_points(
                 user_id=str(resolved_user_id),
                 conversation_id=conversation_id,
                 query=query,
@@ -316,7 +234,6 @@ async def get_generative_memories(
     Retrieves memories using the Generative Agents scoring (Recency * Importance * Relevance).
     """
     try:
-        resolved_user_id = "default"
         resolved_conversation_id = (
             conversation_id
             or request.headers.get("X-Conversation-Id")

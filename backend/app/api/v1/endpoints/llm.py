@@ -1,11 +1,10 @@
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.core.llm import ModelPriority, ModelRole
 from app.services.llm_service import LLMService, LLMServiceError, get_llm_service
 
 router = APIRouter(tags=["LLM"])
@@ -27,7 +26,9 @@ class LLMInvokeRequest(BaseModel):
     policy_overrides: dict[str, Any] | None = Field(
         None, description="Overrides de politica/LLM para esta chamada"
     )
+    user_id: str | None = Field(None, description="Identificador do usuário para orçamento/AB")
     project_id: str | None = Field(None, description="Identificador do projeto (orçamentação)")
+    objective_id: str | None = Field(None, description="Identificador do objetivo/autonomia")
 
 
 class LLMInvokeResponse(BaseModel):
@@ -70,22 +71,23 @@ class InvalidateResponseCacheRequest(BaseModel):
     response_model=LLMInvokeResponse,
     summary="Invoca um LLM com base no papel e prioridade",
 )
-async def invoke_llm(request: LLMInvokeRequest, service: LLMService = Depends(get_llm_service)):
+async def invoke_llm(
+    request: LLMInvokeRequest,
+    http_request: Request,
+):
     """Delega a invocação de um LLM para o LLMService."""
-    # ValueError, LLMTimeoutError, e LLMInvocationError são tratados pelo exception handler central.
-    role = ModelRole(request.role)
-    priority = ModelPriority(request.priority)
-
-    result = await service.invoke_llm(
+    inference = http_request.app.state.inference_facade
+    result = await inference.invoke(
         prompt=request.prompt,
-        role=role,
-        priority=priority,
+        role=request.role,
+        priority=request.priority,
         timeout_seconds=request.timeout_seconds,
         task_type=request.task_type,
         complexity=request.complexity,
         policy_overrides=request.policy_overrides,
         user_id=request.user_id,
         project_id=request.project_id,
+        objective_id=request.objective_id,
     )
     return LLMInvokeResponse(**result)
 
@@ -202,24 +204,25 @@ async def set_ab_experiment(req: ABExperimentSetRequest):
 async def get_budget_summary():
     """
     Retorna resumo de budget e gastos por provedor.
-    
+
     Utilizado pelo Budget Panel do frontend para mostrar consumo em tempo real.
     """
-    from app.core.llm import pricing
     from datetime import datetime
-    
+
+    from app.core.llm import pricing
+
     providers = ["openai", "google_gemini", "deepseek", "ollama"]
-    
+
     provider_data = []
     total_spent = 0.0
     total_budget = 0.0
-    
+
     for provider in providers:
         spent = pricing._provider_spend_usd.get(provider, 0.0)
         budget = pricing._provider_budgets_usd.get(provider, 0.0)
         remaining = max(0.0, budget - spent)
         percentage = (spent / budget * 100) if budget > 0 else 0.0
-        
+
         provider_data.append({
             "provider": provider,
             "spent": spent,
@@ -227,12 +230,12 @@ async def get_budget_summary():
             "remaining": remaining,
             "percentage": percentage
         })
-        
+
         total_spent += spent
         total_budget += budget
-    
+
     guardrail_active = total_spent >= (total_budget * 0.9)
-    
+
     return {
         "providers": provider_data,
         "total_spent": total_spent,
@@ -246,7 +249,7 @@ async def get_budget_summary():
 async def get_provider_pricing():
     """Retorna tabela de preços por provedor (USD por 1K tokens)."""
     from app.core.llm import pricing
-    
+
     return {
         provider: {
             "input_per_1k_usd": p.input_per_1k_usd,

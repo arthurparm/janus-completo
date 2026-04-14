@@ -1,3 +1,4 @@
+import builtins
 import time
 from typing import Any
 
@@ -6,7 +7,6 @@ from pydantic import BaseModel
 
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.routing import RouteIntent, RouteTarget, get_knowledge_routing_policy
-from app.core.security.request_guard import resolve_user_scope_id
 from app.services.code_hybrid_search_service import get_code_hybrid_search_service
 from app.services.memory_service import MemoryService, get_memory_service
 
@@ -37,14 +37,6 @@ except Exception:
     _RAG_LAT = _Noop()  # type: ignore
     _RAG_RESULTS_TOTAL = _Noop()  # type: ignore
     _RAG_SCORES = _Noop()  # type: ignore
-from qdrant_client import models
-
-from app.core.embeddings.embedding_manager import aembed_text
-from app.db.vector_store import (
-    aget_or_create_collection,
-    build_user_chat_collection_name,
-    build_user_memory_collection_name,
-    get_async_qdrant_client)
 
 try:
     from opentelemetry import trace  # type: ignore
@@ -58,6 +50,10 @@ except Exception:
     _tracer = None
 
 router = APIRouter(tags=["RAG"])
+
+
+def get_knowledge_facade(request: Request):
+    return request.app.state.knowledge_facade
 
 
 def _emit_rag_step(
@@ -138,7 +134,7 @@ async def rag_search(
     except Exception as e:
         _RAG_REQ.labels("search", "error").inc()
         _RAG_LAT.labels("search", "error").observe(max(0.0, _t.perf_counter() - _start))
-        error_code = type(e).__name__
+        error_code = builtins.type(e).__name__
         results = []
     try:
         _RAG_RESULTS_TOTAL.labels("search").inc(len(results))
@@ -202,14 +198,14 @@ async def rag_user_chat_search(
     session_id: str | None = Query(None, description="ID da conversa para filtrar"),
     role: str | None = Query(None, description="Filtrar por role (user|assistant)"),
     limit: int | None = Query(5, ge=1, le=10),
-    min_score: float | None = Query(None, ge=0.0, le=1.0)
+    min_score: float | None = Query(None, ge=0.0, le=1.0),
+    knowledge = Depends(get_knowledge_facade),
 ):
-    from qdrant_client import models
-
     started_at = time.perf_counter()
+    user_id = "default"
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_USER_CHAT_SEARCH,
-        user_id="default",
+        user_id=user_id,
         include_graph=False,
         query=query)
     route_meta = {
@@ -217,14 +213,16 @@ async def rag_user_chat_search(
         "route.primary": route_decision.primary.value,
         "route.fallback": route_decision.fallback,
     }
-    # Async
     try:
-        collection_name = await aget_or_create_collection(
-            build_user_chat_collection_name(user_id)
+        hits = await knowledge.search_user_chat(
+            query=query,
+            user_id=user_id,
+            session_id=session_id,
+            role=role,
+            limit=limit or 5,
+            min_score=min_score,
         )
-        vec = await aembed_text(query)
     except Exception as e:
-        # Fallback se falhar
         _emit_rag_step(
             endpoint="/rag/user-chat",
             step="retrieval",
@@ -232,42 +230,20 @@ async def rag_user_chat_search(
             db="qdrant",
             started_at=started_at,
             confidence=0.0,
-            error_code=type(e).__name__,
+            error_code=builtins.type(e).__name__,
             extra=route_meta)
         return RAGUserChatResponse(answer="Erro na busca.", citations=[])
-
-    must: list[models.FieldCondition] = []
-    if session_id:
-        must.append(
-            models.FieldCondition(
-                key="metadata.session_id", match=models.MatchValue(value=session_id)
-            )
-        )
-    if role:
-        must.append(models.FieldCondition(key="metadata.role", match=models.MatchValue(value=role)))
-    qfilter = models.Filter(must=must) if must else None
-
-    client = get_async_qdrant_client()
     import time as _t
 
     _start = _t.perf_counter()
     error_code: str | None = None
-    cm = _tracer.start_as_current_span("rag.user_chat") if _OTEL else nullcontext()
     try:
-        with cm:  # type: ignore
-            res = await client.query_points(
-                collection_name=collection_name,
-                query=vec,
-                limit=limit or 5,
-                with_payload=True,
-                query_filter=qfilter)
-        hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("user_chat", "success").inc()
         _RAG_LAT.labels("user_chat", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception as e:
         _RAG_REQ.labels("user_chat", "error").inc()
         _RAG_LAT.labels("user_chat", "error").observe(max(0.0, _t.perf_counter() - _start))
-        error_code = type(e).__name__
+        error_code = builtins.type(e).__name__
         hits = []
     try:
         _RAG_RESULTS_TOTAL.labels("user_chat").inc(len(hits or []))
@@ -342,14 +318,14 @@ async def rag_productivity_search(
     query: str = Query(..., description="Consulta"),
     type: str | None = Query(None, description="calendar_event|email_message|note_item"),
     limit: int | None = Query(5, ge=1, le=10),
-    min_score: float | None = Query(None, ge=0.0, le=1.0)
+    min_score: float | None = Query(None, ge=0.0, le=1.0),
+    knowledge = Depends(get_knowledge_facade),
 ):
-    from qdrant_client import models
-
     started_at = time.perf_counter()
+    user_id = "default"
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_PRODUCTIVITY_SEARCH,
-        user_id="default",
+        user_id=user_id,
         include_graph=False,
         query=query)
     route_meta = {
@@ -358,8 +334,14 @@ async def rag_productivity_search(
         "route.fallback": route_decision.fallback,
     }
     try:
-        coll = await aget_or_create_collection(build_user_memory_collection_name(user_id))
-        vec = await aembed_text(query)
+        hits = await knowledge.search_user_memory(
+            query=query,
+            user_id=user_id,
+            limit=limit or 5,
+            min_score=min_score,
+            memory_type=type,
+            exclude_duplicate=True,
+        )
     except Exception as e:
         _emit_rag_step(
             endpoint="/rag/productivity",
@@ -371,39 +353,17 @@ async def rag_productivity_search(
             error_code=e.__class__.__name__,
             extra=route_meta)
         return RAGProductivityResponse(answer="Erro em serviços.", citations=[])
-
-    must: list[models.FieldCondition] = [    ]
-    if type:
-        must.append(models.FieldCondition(key="metadata.type", match=models.MatchValue(value=type)))
-    # Evitar pontos marcados como duplicados
-    must_not: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.status", match=models.MatchValue(value="duplicate"))
-    ]
-    qfilter = (
-        models.Filter(must=must, must_not=must_not) if must else models.Filter(must_not=must_not)
-    )
-
-    client = get_async_qdrant_client()
     import time as _t
 
     _start = _t.perf_counter()
     error_code: str | None = None
-    cm = _tracer.start_as_current_span("rag.productivity") if _OTEL else nullcontext()
     try:
-        with cm:  # type: ignore
-            res = await client.query_points(
-                collection_name=coll,
-                query=vec,
-                limit=limit or 5,
-                with_payload=True,
-                query_filter=qfilter)
-        hits = getattr(res, "points", res) if "res" in locals() else []
         _RAG_REQ.labels("productivity", "success").inc()
         _RAG_LAT.labels("productivity", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception as e:
         _RAG_REQ.labels("productivity", "error").inc()
         _RAG_LAT.labels("productivity", "error").observe(max(0.0, _t.perf_counter() - _start))
-        error_code = type(e).__name__
+        error_code = builtins.type(e).__name__
         hits = []
     try:
         _RAG_RESULTS_TOTAL.labels("productivity").inc(len(hits or []))
@@ -481,7 +441,9 @@ async def rag_user_chat_search_v2(
     end_ts_ms: int | None = None,
     limit: int = 5,
     min_score: float | None = None,
-    http: Request = None):
+    http: Request = None,
+    knowledge = Depends(get_knowledge_facade),
+):
     started_at = time.perf_counter()
     user_id = "default"
     if not user_id:
@@ -496,10 +458,16 @@ async def rag_user_chat_search_v2(
         return RAGUserChatResponseV2(results=[])
 
     try:
-        vec = await aembed_text(query)
-        client = get_async_qdrant_client()
-        collection_name = await aget_or_create_collection(
-            build_user_chat_collection_name(user_id)
+        points = await knowledge.search_user_chat(
+            query=query,
+            user_id=user_id,
+            session_id=session_id,
+            role=None,
+            limit=limit,
+            min_score=min_score,
+            start_ts=start_ts_ms,
+            end_ts=end_ts_ms,
+            exclude_duplicate=True,
         )
     except Exception as e:
         _emit_rag_step(
@@ -511,59 +479,25 @@ async def rag_user_chat_search_v2(
             confidence=0.0,
             error_code=type(e).__name__)
         return RAGUserChatResponseV2(results=[])
-
-    # Filtro por payload
-    must: list[models.FieldCondition] = [    ]
-    if session_id:
-        must.append(
-            models.FieldCondition(
-                key="metadata.session_id", match=models.MatchValue(value=session_id)
-            )
-        )
-    # Apenas pontos de chat
-    must.append(
-        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="chat_msg"))
-    )
-    if isinstance(start_ts_ms, int) or isinstance(end_ts_ms, int):
-        rng = {}
-        if isinstance(start_ts_ms, int):
-            rng["gte"] = start_ts_ms
-        if isinstance(end_ts_ms, int):
-            rng["lte"] = end_ts_ms
-        must.append(models.FieldCondition(key="metadata.timestamp", range=models.Range(**rng)))
-    must_not_uc: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.status", match=models.MatchValue(value="duplicate"))
-    ]
-    sc_filter = models.Filter(must=must, must_not=must_not_uc)
     import time as _t
 
     _start = _t.perf_counter()
     error_code: str | None = None
-    cm = _tracer.start_as_current_span("rag.user_chat_v2") if _OTEL else nullcontext()
     try:
-        with cm:  # type: ignore
-            res = await client.query_points(
-                collection_name=collection_name,
-                query=vec,
-                limit=limit,
-                with_payload=True,
-                query_filter=sc_filter,
-                score_threshold=min_score if isinstance(min_score, float) else None)
         _RAG_REQ.labels("user_chat_v2", "success").inc()
         _RAG_LAT.labels("user_chat_v2", "success").observe(max(0.0, _t.perf_counter() - _start))
     except Exception as e:
         _RAG_REQ.labels("user_chat_v2", "error").inc()
         _RAG_LAT.labels("user_chat_v2", "error").observe(max(0.0, _t.perf_counter() - _start))
-        error_code = type(e).__name__
-        res = []
+        error_code = builtins.type(e).__name__
+        points = []
     try:
-        _RAG_RESULTS_TOTAL.labels("user_chat_v2").inc(len(res or []))
-        for r in (getattr(res, "points", res) or []):
+        _RAG_RESULTS_TOTAL.labels("user_chat_v2").inc(len(points or []))
+        for r in (points or []):
             s = float(getattr(r, "score", 0.0) or 0.0)
             _RAG_SCORES.labels("user_chat_v2").observe(max(0.0, min(1.0, s)))
     except Exception:
         pass
-    points = getattr(res, "points", res) or []
     results: list[dict[str, Any]] = []
     for r in points:
         payload = r.payload or {}

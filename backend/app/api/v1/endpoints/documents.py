@@ -11,18 +11,11 @@ from fastapi import (
     Query,
     Request,
     UploadFile,
-    status)
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from qdrant_client import models
 
-from app.core.embeddings.embedding_manager import aembed_text
-from app.core.security.request_guard import get_request_actor_id, resolve_user_scope_id
-from app.db.vector_store import (
-    aget_or_create_collection,
-    async_count_points,
-    build_user_docs_collection_name,
-    get_async_qdrant_client)
 from app.services.document_service import DocumentFileTooLargeError, DocumentIngestionService
 
 try:
@@ -72,6 +65,10 @@ def get_doc_service(request: Request) -> DocumentIngestionService:
     return request.app.state.document_service
 
 
+def get_knowledge_facade(request: Request):
+    return request.app.state.knowledge_facade
+
+
 def _resolve_upload_user_scope(
     request: Request | None,
 ) -> str | None:
@@ -107,7 +104,6 @@ async def upload_document(
     import time as _t
 
     _t0 = _t.perf_counter()
-    uid = "default"
     try:
         cm = _tracer.start_as_current_span("docs.upload") if _OTEL else nullcontext()
         with cm:  # type: ignore
@@ -166,7 +162,8 @@ async def search_documents(
     knowledge_space_id: str | None = None,
     limit: int = 5,
     min_score: float | None = None,
-    request: Request = None):
+    request: Request = None,
+    knowledge = Depends(get_knowledge_facade)):
     import time as _t
 
     _t0 = _t.perf_counter()
@@ -175,46 +172,15 @@ async def search_documents(
         _DOC_SEARCH_REQ.labels("error").inc()
         _DOC_SEARCH_LAT.observe(max(0.0, _t.perf_counter() - _t0))
         return DocSearchResponse(results=[])
-    vec = await aembed_text(query)
-    client = get_async_qdrant_client()
-    collection_name = await aget_or_create_collection(build_user_docs_collection_name(uid))
-    must: list[models.FieldCondition] = [        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk"))]
-    if doc_id:
-        must.append(
-            models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))
-        )
-    if knowledge_space_id:
-        must.append(
-            models.FieldCondition(
-                key="metadata.knowledge_space_id",
-                match=models.MatchValue(value=knowledge_space_id))
-        )
-    sc_filter = models.Filter(must=must)
     cm = _tracer.start_as_current_span("docs.search") if _OTEL else nullcontext()
     with cm:  # type: ignore
-        res = await client.query_points(
-            collection_name=collection_name,
-            query=vec,
+        results = await knowledge.search_documents(
+            query=query,
+            user_id=uid,
+            doc_id=doc_id,
+            knowledge_space_id=knowledge_space_id,
             limit=limit,
-            with_payload=True,
-            query_filter=sc_filter,
-            score_threshold=min_score if isinstance(min_score, float) else None)
-    points = getattr(res, "points", res) or []
-    results: list[dict[str, Any]] = []
-    for point in points:
-        payload = point.payload or {}
-        meta = payload.get("metadata", {})
-        results.append(
-            {
-                "id": point.id,
-                "score": point.score,
-                "doc_id": meta.get("doc_id"),
-                "file_name": meta.get("file_name"),
-                "index": meta.get("index"),
-                "timestamp": meta.get("timestamp"),
-                "knowledge_space_id": meta.get("knowledge_space_id"),
-                "section_title": meta.get("section_title"),
-            }
+            min_score=min_score,
         )
     _DOC_SEARCH_REQ.labels("success").inc()
     _DOC_SEARCH_LAT.observe(max(0.0, _t.perf_counter() - _t0))
@@ -249,34 +215,13 @@ class DocListResponse(BaseModel):
     items: list[DocListItem]
 
 
-def _build_legacy_doc_list_item(doc_id: str, payload: dict[str, Any]) -> DocListItem:
-    return DocListItem(
-        doc_id=doc_id,
-        knowledge_space_id=payload.get("knowledge_space_id"),
-        source_type=payload.get("source_type"),
-        source_id=payload.get("source_id"),
-        doc_role=payload.get("doc_role"),
-        edition_or_version=payload.get("edition_or_version"),
-        language=payload.get("language"),
-        parent_collection_id=payload.get("parent_collection_id"),
-        file_name=payload.get("file_name"),
-        chunks=int(payload.get("chunks", 0)),
-        chunks_total=int(payload.get("chunks", 0)),
-        chunks_indexed=int(payload.get("chunks", 0)),
-        status="indexed",
-        conversation_id=payload.get("conversation_id"),
-        last_index_ts=payload.get("last_index_ts"),
-        semantic_doc_type=payload.get("semantic_doc_type"),
-        semantic_confidence=payload.get("semantic_confidence"),
-        semantic_summary=payload.get("semantic_summary"))
-
-
 @router.get("/list", response_model=DocListResponse)
 async def list_documents(
     conversation_id: str | None = None,
     knowledge_space_id: str | None = None,
     request: Request = None,
-    limit: int = 100):
+    limit: int = 100,
+    knowledge = Depends(get_knowledge_facade)):
     uid = "default"
     if not uid:
         return DocListResponse(items=[])
@@ -288,10 +233,8 @@ async def list_documents(
         knowledge_space_id=knowledge_space_id,
         limit=limit)
     items: list[DocListItem] = []
-    seen_doc_ids: set[str] = set()
     for row in manifest_rows:
         doc_id = str(row.get("doc_id"))
-        seen_doc_ids.add(doc_id)
         chunks_total = int(row.get("chunks_total") or 0)
         chunks_indexed = int(row.get("chunks_indexed") or 0)
         items.append(
@@ -318,78 +261,14 @@ async def list_documents(
                 started_at=row.get("started_at"),
                 completed_at=row.get("completed_at"))
         )
-
-    client = get_async_qdrant_client()
-    coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
-    must: list[models.FieldCondition] = [
-        models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk"))]
-    if conversation_id:
-        must.append(
-            models.FieldCondition(
-                key="metadata.conversation_id", match=models.MatchValue(value=conversation_id)
-            )
-        )
-    if knowledge_space_id:
-        must.append(
-            models.FieldCondition(
-                key="metadata.knowledge_space_id",
-                match=models.MatchValue(value=knowledge_space_id))
-        )
-    qfilter = models.Filter(must=must)
-    scroll_res = await client.scroll(
-        collection_name=coll,
-        scroll_filter=qfilter,
-        limit=limit,
-        with_payload=True)
-    points = scroll_res[0] if isinstance(scroll_res, tuple) else (scroll_res or [])
-    agg: dict[str, dict[str, Any]] = {}
-    for hit in points:
-        payload = getattr(hit, "payload", {}) or {}
-        meta = payload.get("metadata") or {}
-        did = str(meta.get("doc_id") or "")
-        if not did or did in seen_doc_ids:
-            continue
-        current = agg.get(did) or {
-            "doc_id": did,
-            "file_name": meta.get("file_name"),
-            "chunks": 0,
-            "conversation_id": meta.get("conversation_id"),
-            "last_index_ts": 0,
-            "semantic_doc_type": meta.get("semantic_doc_type"),
-            "semantic_confidence": meta.get("semantic_confidence"),
-            "semantic_summary": meta.get("semantic_summary"),
-            "knowledge_space_id": meta.get("knowledge_space_id"),
-            "source_type": meta.get("source_type"),
-            "source_id": meta.get("source_id"),
-            "edition_or_version": meta.get("edition_or_version"),
-            "language": meta.get("language"),
-            "parent_collection_id": meta.get("parent_collection_id"),
-        }
-        current["chunks"] = int(current.get("chunks", 0)) + 1
-        ts = int(meta.get("timestamp") or 0)
-        if ts > int(current.get("last_index_ts") or 0):
-            current["last_index_ts"] = ts
-        agg[did] = current
-    for doc_id, payload in agg.items():
-        items.append(_build_legacy_doc_list_item(doc_id, payload))
     return DocListResponse(items=items)
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str, request: Request = None):
+async def delete_document(doc_id: str, request: Request = None, knowledge = Depends(get_knowledge_facade)):
     uid = "default"
-    client = get_async_qdrant_client()
-    coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
     try:
-        qfilter = models.Filter(
-            must=[                models.FieldCondition(
-                    key="metadata.type", match=models.MatchValue(value="doc_chunk")
-                ),
-                models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))]
-        )
-        await client.delete(
-            collection_name=coll,
-            points_selector=models.FilterSelector(filter=qfilter))
+        await knowledge.delete_document(doc_id=doc_id, user_id=uid)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -425,7 +304,6 @@ async def link_url(
     parent_collection_id: str | None = Form(None),
     request: Request = None,
     service: DocumentIngestionService = Depends(get_doc_service)):
-    uid = "default"
     import httpx
 
     try:
@@ -524,7 +402,7 @@ def _build_doc_samples(points: list[Any]) -> list[dict[str, Any]]:
 
 
 @router.get("/status/{doc_id}", response_model=DocStatusResponse)
-async def document_status(doc_id: str, request: Request = None):
+async def document_status(doc_id: str, request: Request = None, knowledge = Depends(get_knowledge_facade)):
     import time as _t
 
     _t0 = _t.perf_counter()
@@ -548,26 +426,15 @@ async def document_status(doc_id: str, request: Request = None):
 
         samples: list[dict[str, Any]] = []
         if manifest.get("status") == "indexed":
-            client = get_async_qdrant_client()
-            coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
-            qfilter = models.Filter(
-                must=[models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))]
-            )
             cm = _tracer.start_as_current_span("docs.status") if _OTEL else nullcontext()
             with cm:  # type: ignore
-                res = await client.query_points(
-                    collection_name=coll,
-                    query=[0.0] * 1536,
-                    limit=10,
-                    with_payload=True,
-                    query_filter=qfilter)
-            samples = _build_doc_samples(getattr(res, "points", res) or [])
+                points, _ = await knowledge.get_document_points(doc_id=doc_id, user_id=uid, limit=10)
+            samples = _build_doc_samples(points)
 
         _DOC_STATUS_REQ.labels("success").inc()
         _DOC_STATUS_LAT.observe(max(0.0, _t.perf_counter() - _t0))
         return DocStatusResponse(
             doc_id=doc_id,
-            user_id="default",
             knowledge_space_id=manifest.get("knowledge_space_id"),
             source_type=manifest.get("source_type"),
             source_id=manifest.get("source_id"),
@@ -585,35 +452,4 @@ async def document_status(doc_id: str, request: Request = None):
             samples=samples,
             semantic=semantic_payload)
 
-    client = get_async_qdrant_client()
-    coll = await aget_or_create_collection(build_user_docs_collection_name(uid))
-    qfilter = models.Filter(
-        must=[models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))]
-    )
-    cm = _tracer.start_as_current_span("docs.status") if _OTEL else nullcontext()
-    with cm:  # type: ignore
-        res = await client.query_points(
-            collection_name=coll,
-            query=[0.0] * 1536,
-            limit=10,
-            with_payload=True,
-            query_filter=qfilter)
-    points = getattr(res, "points", res) or []
-    samples = _build_doc_samples(points)
-    total = await async_count_points(client, coll, qfilter, exact=True)
-    _DOC_STATUS_REQ.labels("success").inc()
-    _DOC_STATUS_LAT.observe(max(0.0, _t.perf_counter() - _t0))
-    return DocStatusResponse(
-        doc_id=doc_id,
-        user_id="default",
-        knowledge_space_id=None,
-        source_type=None,
-        source_id=None,
-        edition_or_version=None,
-        language=None,
-        parent_collection_id=None,
-        status="indexed",
-        chunks_total=total,
-        chunks_indexed=total,
-        samples=samples,
-        semantic=None)
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document manifest not found")
