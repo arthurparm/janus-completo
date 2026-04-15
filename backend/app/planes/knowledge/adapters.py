@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 from qdrant_client import models
 
@@ -13,6 +14,7 @@ from app.db.vector_store import (
     build_user_memory_collection_name,
     get_async_qdrant_client,
 )
+from app.planes.knowledge.experimental_index import ExperimentalDomain, ExperimentalIndexManager
 
 
 class QdrantKnowledgeAdapter:
@@ -252,7 +254,182 @@ class QdrantKnowledgeAdapter:
 
 class GraphKnowledgeAdapter:
     async def health_snapshot(self, service: Any) -> dict[str, Any]:
-        return await service.get_health_status()
+        return cast(dict[str, Any], await service.get_health_status())
+
+
+class ExperimentalQuantizedRetrievalAdapter:
+    def __init__(self, *, index_manager: ExperimentalIndexManager | None = None):
+        self._index_manager = index_manager or ExperimentalIndexManager()
+
+    async def search_documents(
+        self,
+        *,
+        query: str,
+        user_id: str,
+        doc_id: str | None,
+        knowledge_space_id: str | None,
+        limit: int,
+        min_score: float | None,
+        collection_suffix: str | None = None,
+    ) -> list[dict[str, Any]]:
+        del user_id, collection_suffix
+        vec = await aembed_text(query)
+        points = self._index_manager.search(
+            domain="docs",
+            query_vector=vec,
+            limit=limit,
+            filters={
+                "doc_id": doc_id,
+                "knowledge_space_id": knowledge_space_id,
+            },
+        )
+        results: list[dict[str, Any]] = []
+        for point in points:
+            if min_score is not None and float(point.score) < float(min_score):
+                continue
+            payload = point.payload or {}
+            meta = payload.get("metadata", {})
+            results.append(
+                {
+                    "id": point.id,
+                    "score": point.score,
+                    "doc_id": meta.get("doc_id"),
+                    "file_name": meta.get("file_name"),
+                    "index": meta.get("index"),
+                    "timestamp": meta.get("timestamp"),
+                    "knowledge_space_id": meta.get("knowledge_space_id"),
+                    "section_title": meta.get("section_title"),
+                }
+            )
+        return results
+
+    async def search_user_chat(
+        self,
+        *,
+        query: str,
+        user_id: str,
+        session_id: str | None,
+        role: str | None,
+        limit: int,
+        min_score: float | None,
+        start_ts: int | None = None,
+        end_ts: int | None = None,
+        exclude_duplicate: bool = False,
+    ) -> list[Any]:
+        del user_id
+        vec = await aembed_text(query)
+        points = self._index_manager.search(
+            domain="chat",
+            query_vector=vec,
+            limit=limit,
+            filters={
+                "session_id": session_id,
+                "role": role,
+                "start_ts": start_ts,
+                "end_ts": end_ts,
+                "exclude_duplicate": exclude_duplicate,
+            },
+        )
+        return [
+            point for point in points if min_score is None or float(point.score) >= float(min_score)
+        ]
+
+    async def search_user_memory(
+        self,
+        *,
+        query: str,
+        user_id: str,
+        limit: int,
+        min_score: float | None,
+        memory_type: str | None = None,
+        origin: str | None = None,
+        exclude_duplicate: bool = False,
+    ) -> list[Any]:
+        del user_id
+        vec = await aembed_text(query)
+        points = self._index_manager.search(
+            domain="memory",
+            query_vector=vec,
+            limit=limit,
+            filters={
+                "memory_type": memory_type,
+                "origin": origin,
+                "exclude_duplicate": exclude_duplicate,
+            },
+        )
+        return [
+            point for point in points if min_score is None or float(point.score) >= float(min_score)
+        ]
+
+    async def index_memory_event(
+        self,
+        *,
+        user_id: str,
+        content: str,
+        point_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        del user_id
+        vec = await aembed_text(content)
+        domain: ExperimentalDomain = (
+            "chat"
+            if str((payload.get("metadata") or {}).get("type")) == "chat_msg"
+            else "memory"
+        )
+        await self._index_manager.append_point(
+            domain=domain,
+            point_id=point_id,
+            vector=vec,
+            payload=payload,
+        )
+
+    async def load_user_timeline_points(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str | None,
+        query: str | None,
+        start_ts: int | None,
+        end_ts: int | None,
+        limit: int,
+    ) -> list[Any]:
+        del user_id
+        if not query:
+            raise RuntimeError("Timeline experimental sem query ainda não é suportado.")
+        vec = await aembed_text(query)
+        points: list[Any] = []
+        for domain in ("memory", "chat", "docs"):
+            points.extend(
+                self._index_manager.search(
+                    domain=domain,
+                    query_vector=vec,
+                    limit=limit,
+                    filters={
+                        "session_id": conversation_id,
+                        "start_ts": start_ts,
+                        "end_ts": end_ts,
+                    },
+                )
+            )
+        points.sort(key=lambda item: float(getattr(item, "score", 0.0) or 0.0), reverse=True)
+        return points[:limit]
+
+    async def get_document_points(self, *, doc_id: str, user_id: str, limit: int = 10) -> tuple[list[Any], int]:
+        del user_id
+        artifact = self._index_manager.load_index(domain="docs")
+        points: list[Any] = []
+        for idx, payload in enumerate(artifact.payloads):
+            metadata = payload.get("metadata") or {}
+            if str(metadata.get("doc_id")) != str(doc_id):
+                continue
+            points.append(
+                SimpleNamespace(
+                    id=str(artifact.point_ids[idx]),
+                    score=1.0,
+                    payload=payload,
+                )
+            )
+        return points[:limit], len(points)
 
 
 def _matches_conversation_scope(point: Any, conversation_id: str) -> bool:

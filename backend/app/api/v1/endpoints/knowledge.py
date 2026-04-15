@@ -5,17 +5,21 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from app.core.security.request_guard import resolve_user_scope_id
+from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.models.knowledge import CodeEntity
+from app.planes.knowledge import KnowledgeFacade
+from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 from app.services.knowledge_space_service import (
     KnowledgeSpaceService,
     get_knowledge_space_service,
 )
-from app.services.knowledge_service import KnowledgeService, get_knowledge_service
-from app.core.workers.async_consolidation_worker import publish_consolidation_task
 
 router = APIRouter(tags=["Knowledge"])
 logger = structlog.get_logger(__name__)
+
+
+def get_knowledge_facade(request: Request) -> KnowledgeFacade:
+    return request.app.state.knowledge_facade
 
 
 class IndexResponse(BaseModel):
@@ -106,6 +110,50 @@ class KnowledgeHealthResponse(BaseModel):
     circuit_breaker_open: bool
     total_nodes: int
     total_relationships: int
+
+
+class ExperimentalKnowledgeHealthResponse(BaseModel):
+    active_backend: str
+    shadow_backend: str | None = None
+    experimental_collection_suffix: str | None = None
+    experimental_index_enabled: bool
+    experimental_index_version: str
+    experimental_write_dual: bool
+    compare_on_read: bool
+    promotion_allowed: bool
+    last_build: dict[str, Any] | None = None
+
+
+class ExperimentalIndexBuildRequest(BaseModel):
+    domain: str
+    user_id: str | None = None
+    knowledge_space_id: str | None = None
+    doc_id: str | None = None
+    rebuild_full: bool = False
+    since_ts: int | None = None
+    dry_run: bool = False
+
+
+class ExperimentalIndexBuildResponse(BaseModel):
+    dry_run: bool
+    output_dir: str
+    manifest: dict[str, Any]
+
+
+class ExperimentalCompareRequest(BaseModel):
+    operation: str
+    query: str
+    limit: int = 5
+    min_score: float | None = None
+    session_id: str | None = None
+    role: str | None = None
+    memory_type: str | None = None
+    origin: str | None = None
+    doc_id: str | None = None
+    knowledge_space_id: str | None = None
+    start_ts: int | None = None
+    end_ts: int | None = None
+    exclude_duplicate: bool = False
 
 
 class ConsolidationRequest(BaseModel):
@@ -401,6 +449,71 @@ async def detailed_health_check(service: KnowledgeService = Depends(get_knowledg
         raise HTTPException(status_code=500, detail=f"Erro ao obter status detalhado: {e!s}")
 
 
+@router.get(
+    "/experimental/health",
+    response_model=ExperimentalKnowledgeHealthResponse,
+    summary="Health snapshot do backend experimental de retrieval",
+)
+async def experimental_health_snapshot(knowledge: KnowledgeFacade = Depends(get_knowledge_facade)):
+    return ExperimentalKnowledgeHealthResponse(**knowledge.health_snapshot())
+
+
+@router.post(
+    "/experimental/index/build",
+    response_model=ExperimentalIndexBuildResponse,
+    summary="Build ou dry-run do índice experimental de retrieval",
+)
+async def build_experimental_index(
+    payload: ExperimentalIndexBuildRequest,
+    knowledge: KnowledgeFacade = Depends(get_knowledge_facade),
+):
+    result = await knowledge.build_experimental_index(
+        domain=payload.domain,
+        user_id=payload.user_id,
+        knowledge_space_id=payload.knowledge_space_id,
+        doc_id=payload.doc_id,
+        rebuild_full=payload.rebuild_full,
+        since_ts=payload.since_ts,
+        dry_run=payload.dry_run,
+    )
+    return ExperimentalIndexBuildResponse(
+        dry_run=result.dry_run,
+        output_dir=result.output_dir,
+        manifest=result.manifest.__dict__,
+    )
+
+
+@router.post(
+    "/experimental/compare",
+    summary="Compara baseline Qdrant com retrieval experimental",
+)
+async def compare_experimental_retrieval(
+    payload: ExperimentalCompareRequest,
+    knowledge: KnowledgeFacade = Depends(get_knowledge_facade),
+):
+    if payload.operation not in {
+        "search_documents",
+        "search_user_chat",
+        "search_user_memory",
+    }:
+        raise HTTPException(status_code=422, detail="operation inválida para compare endpoint")
+    return await knowledge.compare_retrieval(
+        operation=payload.operation,
+        query=payload.query,
+        limit=payload.limit,
+        min_score=payload.min_score,
+        session_id=payload.session_id,
+        role=payload.role,
+        memory_type=payload.memory_type,
+        origin=payload.origin,
+        doc_id=payload.doc_id,
+        knowledge_space_id=payload.knowledge_space_id,
+        start_ts=payload.start_ts,
+        end_ts=payload.end_ts,
+        exclude_duplicate=payload.exclude_duplicate,
+    )
+
+
 @router.post(
     "/consolidate",
     response_model=ConsolidationResponse,
@@ -680,7 +793,6 @@ async def query_knowledge_space(
     request: Request,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    user_id = "default"
     result = await service.query_space(
         knowledge_space_id=knowledge_space_id,
         question=payload.question,

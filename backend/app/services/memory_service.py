@@ -17,6 +17,7 @@ except Exception:
             pass
 
     Histogram = Counter = _Noop
+
 from typing import Any
 
 from fastapi import Request
@@ -31,7 +32,8 @@ from app.db.vector_store import (
     async_count_points,
     build_deterministic_point_id,
     build_user_chat_collection_name,
-    get_async_qdrant_client)
+    get_async_qdrant_client,
+)
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -297,6 +299,18 @@ class MemoryService:
             point = models.PointStruct(id=point_id, vector=vec, payload=payload)
 
             await client.upsert(collection_name=collection_name, points=[point])
+            if bool(getattr(settings, "KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL", False)):
+                try:
+                    from app.planes.knowledge import get_knowledge_facade
+
+                    await get_knowledge_facade().append_experimental_point(
+                        domain="chat",
+                        point_id=str(point_id),
+                        vector=vec,
+                        payload=payload,
+                    )
+                except Exception:
+                    logger.warning("Falha no dual-write experimental de chat", exc_info=True)
 
         except Exception:
             logger.warning("Falha ao indexar interaÃ§Ã£o", exc_info=True)

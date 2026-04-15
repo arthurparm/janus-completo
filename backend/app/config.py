@@ -266,6 +266,13 @@ class AppSettings(BaseSettings):
     KNOWLEDGE_RETRIEVAL_BACKEND: str = "baseline_qdrant"
     KNOWLEDGE_RETRIEVAL_SHADOW_MODE: bool = False
     KNOWLEDGE_EXPERIMENTAL_COLLECTION_SUFFIX: str | None = None
+    KNOWLEDGE_EXPERIMENTAL_INDEX_ENABLED: bool = False
+    KNOWLEDGE_EXPERIMENTAL_INDEX_VERSION: str = "v1"
+    KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL: bool = False
+    KNOWLEDGE_RETRIEVAL_COMPARE_ON_READ: bool = False
+    KNOWLEDGE_RETRIEVAL_PROMOTION_ALLOWED: bool = False
+    KNOWLEDGE_EXPERIMENTAL_QUANT_BITS: int = 8
+    KNOWLEDGE_EXPERIMENTAL_INDEX_ROOT: str = "workspace/knowledge_experimental"
 
     # Preço por 1k tokens (USD) por provedor
     # Valores padrão conservadores para evitar fallback indevido por teto de custo.

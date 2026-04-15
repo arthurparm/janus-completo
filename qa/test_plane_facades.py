@@ -61,6 +61,39 @@ class _DummyQdrantAdapter:
         return []
 
 
+class _DummyExperimentalAdapter(_DummyQdrantAdapter):
+    async def search_documents(self, **kwargs):
+        self.calls.append(("search_documents", kwargs))
+        return [{"id": "exp-1", "score": 0.73, "doc_id": "doc-exp"}]
+
+    async def search_user_chat(self, **kwargs):
+        self.calls.append(("search_user_chat", kwargs))
+        return [SimpleNamespace(id="chat-exp", score=0.7, payload={"metadata": {"session_id": "s1"}})]
+
+    async def search_user_memory(self, **kwargs):
+        self.calls.append(("search_user_memory", kwargs))
+        return [SimpleNamespace(id="mem-exp", score=0.68, payload={"metadata": {"type": "calendar_event"}})]
+
+
+class _DummyExperimentalIndexManager:
+    def __init__(self):
+        self.calls: list[tuple[str, dict]] = []
+
+    def last_build_summary(self):
+        return {"domain": "docs", "built_at": "2026-04-15T00:00:00+00:00"}
+
+    async def build_index(self, **kwargs):
+        self.calls.append(("build_index", kwargs))
+        return SimpleNamespace(
+            dry_run=bool(kwargs.get("dry_run", False)),
+            output_dir="/tmp/experimental",
+            manifest=SimpleNamespace(domain=kwargs.get("domain"), version="v1"),
+        )
+
+    async def append_point(self, **kwargs):
+        self.calls.append(("append_point", kwargs))
+
+
 class _DummyLLMService:
     def __init__(self):
         self.calls: list[tuple[str, dict]] = []
@@ -103,51 +136,137 @@ async def test_knowledge_facade_uses_baseline_backend_by_default(monkeypatch):
             KNOWLEDGE_RETRIEVAL_BACKEND="baseline_qdrant",
             KNOWLEDGE_RETRIEVAL_SHADOW_MODE=False,
             KNOWLEDGE_EXPERIMENTAL_COLLECTION_SUFFIX=None,
+            KNOWLEDGE_EXPERIMENTAL_INDEX_ENABLED=False,
+            KNOWLEDGE_EXPERIMENTAL_INDEX_VERSION="v1",
+            KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL=False,
+            KNOWLEDGE_RETRIEVAL_COMPARE_ON_READ=False,
+            KNOWLEDGE_RETRIEVAL_PROMOTION_ALLOWED=False,
         ),
     )
     adapter = _DummyQdrantAdapter()
+    experimental_manager = _DummyExperimentalIndexManager()
     facade = KnowledgeFacade(
         memory_service=_DummyMemoryService(),
         knowledge_service=_DummyKnowledgeService(),
         document_service=_DummyDocumentService(),
         rag_service=_DummyRagService(),
         qdrant_adapter=adapter,
+        experimental_index_manager=experimental_manager,
     )
 
     result = await facade.search_documents(query="janus", user_id="u1", limit=3)
 
     assert result == [{"id": "doc-1", "score": 0.91}]
     assert adapter.calls[0][0] == "search_documents"
-    assert "collection_suffix" not in adapter.calls[0][1]
     assert facade.health_snapshot()["active_backend"] == RetrievalBackendName.BASELINE_QDRANT.value
+    assert facade.health_snapshot()["last_build"]["domain"] == "docs"
 
 
 @pytest.mark.asyncio
-async def test_knowledge_facade_uses_experimental_suffix_when_backend_flag_enabled(monkeypatch):
+async def test_knowledge_facade_routes_to_experimental_backend_when_enabled(monkeypatch):
     monkeypatch.setattr(
         "app.planes.knowledge.facade.settings",
         SimpleNamespace(
             KNOWLEDGE_RETRIEVAL_BACKEND="experimental_quantized_retrieval",
             KNOWLEDGE_RETRIEVAL_SHADOW_MODE=False,
             KNOWLEDGE_EXPERIMENTAL_COLLECTION_SUFFIX="-turboquant",
+            KNOWLEDGE_EXPERIMENTAL_INDEX_ENABLED=True,
+            KNOWLEDGE_EXPERIMENTAL_INDEX_VERSION="v1",
+            KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL=False,
+            KNOWLEDGE_RETRIEVAL_COMPARE_ON_READ=False,
+            KNOWLEDGE_RETRIEVAL_PROMOTION_ALLOWED=False,
         ),
     )
     adapter = _DummyQdrantAdapter()
+    experimental_adapter = _DummyExperimentalAdapter()
     facade = KnowledgeFacade(
         memory_service=_DummyMemoryService(),
         knowledge_service=_DummyKnowledgeService(),
         document_service=_DummyDocumentService(),
         rag_service=_DummyRagService(),
         qdrant_adapter=adapter,
+        experimental_adapter=experimental_adapter,
+        experimental_index_manager=_DummyExperimentalIndexManager(),
     )
 
-    await facade.search_documents(query="janus", user_id="u1", limit=3)
+    result = await facade.search_documents(query="janus", user_id="u1", limit=3)
 
-    assert adapter.calls[0][1]["collection_suffix"] == "-turboquant"
+    assert result[0]["id"] == "exp-1"
+    assert experimental_adapter.calls[0][0] == "search_documents"
     assert (
         facade.retrieval_backend_decision().active_backend
         == RetrievalBackendName.EXPERIMENTAL_QUANTIZED_RETRIEVAL
     )
+
+
+@pytest.mark.asyncio
+async def test_knowledge_facade_runs_shadow_compare_without_breaking_active_response(monkeypatch):
+    monkeypatch.setattr(
+        "app.planes.knowledge.facade.settings",
+        SimpleNamespace(
+            KNOWLEDGE_RETRIEVAL_BACKEND="baseline_qdrant",
+            KNOWLEDGE_RETRIEVAL_SHADOW_MODE=True,
+            KNOWLEDGE_EXPERIMENTAL_COLLECTION_SUFFIX="-turboquant",
+            KNOWLEDGE_EXPERIMENTAL_INDEX_ENABLED=True,
+            KNOWLEDGE_EXPERIMENTAL_INDEX_VERSION="v1",
+            KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL=False,
+            KNOWLEDGE_RETRIEVAL_COMPARE_ON_READ=True,
+            KNOWLEDGE_RETRIEVAL_PROMOTION_ALLOWED=False,
+        ),
+    )
+    baseline = _DummyQdrantAdapter()
+    experimental = _DummyExperimentalAdapter()
+    facade = KnowledgeFacade(
+        memory_service=_DummyMemoryService(),
+        knowledge_service=_DummyKnowledgeService(),
+        document_service=_DummyDocumentService(),
+        rag_service=_DummyRagService(),
+        qdrant_adapter=baseline,
+        experimental_adapter=experimental,
+        experimental_index_manager=_DummyExperimentalIndexManager(),
+    )
+
+    result = await facade.search_documents(query="janus", user_id="u1", limit=3)
+
+    assert result == [{"id": "doc-1", "score": 0.91}]
+    assert baseline.calls[0][0] == "search_documents"
+    assert experimental.calls[0][0] == "search_documents"
+
+
+@pytest.mark.asyncio
+async def test_knowledge_facade_dual_write_uses_experimental_index_manager(monkeypatch):
+    monkeypatch.setattr(
+        "app.planes.knowledge.facade.settings",
+        SimpleNamespace(
+            KNOWLEDGE_RETRIEVAL_BACKEND="baseline_qdrant",
+            KNOWLEDGE_RETRIEVAL_SHADOW_MODE=False,
+            KNOWLEDGE_EXPERIMENTAL_COLLECTION_SUFFIX="-turboquant",
+            KNOWLEDGE_EXPERIMENTAL_INDEX_ENABLED=True,
+            KNOWLEDGE_EXPERIMENTAL_INDEX_VERSION="v1",
+            KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL=True,
+            KNOWLEDGE_RETRIEVAL_COMPARE_ON_READ=False,
+            KNOWLEDGE_RETRIEVAL_PROMOTION_ALLOWED=False,
+        ),
+    )
+    manager = _DummyExperimentalIndexManager()
+    facade = KnowledgeFacade(
+        memory_service=_DummyMemoryService(),
+        knowledge_service=_DummyKnowledgeService(),
+        document_service=_DummyDocumentService(),
+        rag_service=_DummyRagService(),
+        qdrant_adapter=_DummyQdrantAdapter(),
+        experimental_adapter=_DummyExperimentalAdapter(),
+        experimental_index_manager=manager,
+    )
+
+    await facade.append_experimental_point(
+        domain="chat",
+        point_id="p1",
+        vector=[0.1, 0.2],
+        payload={"metadata": {"type": "chat_msg"}},
+    )
+
+    assert manager.calls[0][0] == "append_point"
 
 
 @pytest.mark.asyncio

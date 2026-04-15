@@ -25,9 +25,11 @@ except Exception:
 
     msgpack = _MsgPackCompat()  # type: ignore[assignment]
 
+from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage
+from app.planes.knowledge.runtime import get_knowledge_facade
 
 logger = structlog.get_logger(__name__)
 
@@ -55,6 +57,15 @@ async def process_document_ingestion_task(task: TaskMessage) -> None:
         raise RuntimeError("Document service indisponível no kernel")
 
     result = await service.process_staged_document(doc_id=doc_id)
+    if bool(getattr(settings, "KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL", False)) and result.get("status") == "indexed":
+        try:
+            await get_knowledge_facade().build_experimental_index(
+                domain="docs",
+                rebuild_full=True,
+                dry_run=False,
+            )
+        except Exception as exc:
+            logger.warning("document_experimental_dual_write_failed", doc_id=doc_id, error=str(exc))
 
     if bool(payload.get("auto_consolidate")) and result.get("status") == "indexed":
         knowledge_service = getattr(kernel, "knowledge_service", None)

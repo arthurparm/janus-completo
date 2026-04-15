@@ -1,0 +1,26 @@
+{
+  "cases": [
+    {
+      "name": "documents-janus-overview",
+      "operation": "search_documents",
+      "query": "janus arquitetura overview",
+      "limit": 5,
+      "expected_ids": []
+    },
+    {
+      "name": "chat-episodic-recall",
+      "operation": "search_user_chat",
+      "query": "última conversa sobre rag e qdrant",
+      "limit": 5,
+      "expected_ids": []
+    },
+    {
+      "name": "memory-productivity-recall",
+      "operation": "search_user_memory",
+      "query": "eventos do google produtividade",
+      "limit": 5,
+      "memory_type": "calendar_event",
+      "expected_ids": []
+    }
+  ]
+}
