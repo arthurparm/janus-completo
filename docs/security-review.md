@@ -254,3 +254,24 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-15)
+
+### Checklist executado
+- [x] npm audit (frontend) - **28 vulnerabilidades encontradas (20 Altas, 8 Moderadas)**
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram vulnerabilidades (28 issues no total, sendo 20 altas e 8 moderadas). Incluindo:
+  - `express-rate-limit` (Alta) - Rate-limiting bypass via spoofed IP addresses.
+  - `hono` (Moderada) - Missing validation of cookie name on write path, Non-breaking space prefix bypass in cookie name handling, Incorrect IP matching in ipRestriction(), Path traversal in toSSG(), Middleware bypass via repeated slashes in serveStatic.
+  - `immutable` (Alta) - Prototype Pollution.
+  - `lodash-es` (Alta / Moderada) - Code Injection via `_.template`, Prototype Pollution via array path bypass em `_.unset` e `_.omit`.
+  - `path-to-regexp` (Alta / Moderada) - Denial of Service via sequential optional groups, Regular Expression Denial of Service via multiple wildcards.
+  - `picomatch` (Alta / Moderada) - ReDoS vulnerability via extglob quantifiers, Method Injection in POSIX Character Classes.
+  - `tar` (Alta) - Hardlink Path Traversal via Drive-Relative Linkpath, Symlink Path Traversal.
+  - `vite` (Alta / Moderada) - Arbitrary File Read via Vite Dev Server WebSocket, `server.fs.deny` bypassed with queries, Path Traversal in Optimized Deps `.map` Handling.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente no `package.json`.

@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Atualização crítica de dependências frontend (vite, lodash-es, hono)
+- Problema atual: Múltiplas vulnerabilidades novas de alta e moderada severidade foram identificadas via `npm audit` em dependências como `vite` (Arbitrary File Read, Path Traversal), `lodash-es` (Code Injection, Prototype Pollution) e `hono` (Middleware bypass, Cookie injection). Essas falhas representam riscos de execução de código, bypass de restrições de sistema de arquivos e evasão de controles de rate limit (ex: `express-rate-limit`).
+- Solucao proposta: Executar atualização ativa via npm/package.json para as versões corrigidas ou aplicar `npm audit fix --force` com validações rigorosas na pipeline.
+- Impacto esperado: Prevenção contra injeção de código, DoS e evasão de autenticação.
+- Riscos: Quebra de builds de frontend caso as atualizações tragam breaking changes.
+- Dependencias: Pipeline de CI/CD do frontend e bateria de testes `npm run test`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
