@@ -865,3 +865,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-050] Script Shadow IT com Log de Clear Text PII
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` gera logs locais (`tailscale-security-monitor.log`) expondo hostnames e peer data em clear text.
+- Solucao proposta: Implementar redator de PII universal antes de gravar em logs.
+- Impacto esperado: Conformidade LGPD em monitoria secundária.
+- Riscos: Redação acidental em metadados de rede cruciais.
+- Dependencias: Módulo de PII.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-019] Scripts de Teste Isolados da Pipeline CI
+- Problema atual: Scripts de teste em `tooling/` (e.g., `test_debate_system.py`, `seed-repro-scenarios.ps1`) rodam isoladamente e contornam validação de CI via Pytest.
+- Solucao proposta: Migrar lógicas para suíte Pytest dentro de `qa/` e adicionar na automação principal.
+- Impacto esperado: Previne regressão silenciosa nas ferramentas secundárias.
+- Riscos: Overhead temporário na CI.
+- Dependencias: N/A.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: ideia
+
+### [SG-051] Code Injection Subprocessos no Windows Launcher
+- Problema atual: `backend/app/core/tools/launcher_tools.py` injeta argumentos em processo de sistema com `shell=True`, permitindo execução de código arbitrário.
+- Solucao proposta: Mudar uso do subprocess para lista segura (`shell=False`).
+- Impacto esperado: Anula vetor de ataque do Windows.
+- Riscos: Compatibilidade com binários locais específicos.
+- Dependencias: N/A.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: ideia
+
+### [OQ-020] Observabilidade Quebrada por Silent Exceptions
+- Problema atual: Presença ubíqua de `try: except: pass` ou `continue` falha em registrar erros (Bandit B110/B112), tornando debug cego.
+- Solucao proposta: Acoplar as exceções pegas ao request_id e core logger.
+- Impacto esperado: Auditoria completa e correlação de eventos.
+- Riscos: Volume indesejado de logs.
+- Dependencias: OQ-001 (tracing).
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: ideia

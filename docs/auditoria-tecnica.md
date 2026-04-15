@@ -123,3 +123,37 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-15)
+
+### 12. Scripts de Monitoria Shadow IT com Vazamento de PII (LGPD/Segurança)
+**Descrição:** O script recém-adicionado `tooling/secure-tailscale-setup.ps1` possui rotinas de monitoria (`Test-TailscaleHealth`) que salvam logs locais (e.g. `tailscale-security-monitor.log`) registrando hostnames e metadados de conexão abertamente em clear text, ignorando a infraestrutura de sanitização de PII do Janus.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: A função `Write-SecurityLog` escreve dados diretamente no disco sem mascaramento universal.
+**Próximos passos:**
+- Anonimizar as saídas ou delegar os logs de segurança para a API Core que possui o `PII_PATTERNS`.
+- Risco registrado como SG-050.
+
+### 13. Vulnerabilidade de Code Injection em Ferramentas de Launcher (Segurança)
+**Descrição:** A ferramenta de launcher do Windows utiliza injeção de comandos diretamente via interface shell desprotegida, abrindo uma grave brecha (Code Injection) para manipulação de argumentos pelo Agente ou usuário malicioso.
+**Evidências:**
+- `backend/app/core/tools/launcher_tools.py`: Uso de `subprocess.Popen(f'start "" "{app_name}"', shell=True)`.
+**Próximos passos:**
+- Mudar para `shell=False` e vetorizar os argumentos da chamada do `subprocess`.
+- Risco registrado como SG-051 no `melhorias-possiveis.md`.
+
+### 14. Silenciamento Inseguro de Exceções e Perda de Tracing (Observabilidade/Segurança)
+**Descrição:** Identificou-se que um número substancial de serviços da aplicação possui blocos `try-except` genéricos que invocam `pass` ou `continue`. Essa prática de "engolir" exceções encobre falhas subjacentes que poderiam vazar contexto sensível de dados sob o escopo LGPD, além de inviabilizar relatórios de SLIs consistentes.
+**Evidências:**
+- Análise estática revela blocos do tipo `try: ... except Exception: pass/continue` (Bandit B110, B112).
+**Próximos passos:**
+- Injetar o core logger em todos os catches genéricos, atrelando as exceções ao `request_id` do escopo atual.
+- Tarefa adicionada como OQ-020.
+
+### 15. Derivação de Pipeline de Testes e Scripts Periféricos (Qualidade de Código)
+**Descrição:** Novos scripts adicionados (como `test_debate_system.py` e `seed-repro-scenarios.ps1`) residem na pasta `tooling/` como ferramentas isoladas, sem vínculo com as matrizes automatizadas de cobertura (`qa/` e pytest). Isso aumenta o escopo de lógica desprotegida.
+**Evidências:**
+- `tooling/test_debate_system.py` executa o LangGraph com lógicas extensas assíncronas isoladas por `if __name__ == "__main__":` sem relatórios de asserção do CI.
+**Próximos passos:**
+- Mover esses scripts para a suite de testes em `qa/` e refatorar em classes pytest compatíveis, garantindo acionamento contínuo nas builds.
+- Risco OQ-019 documentado.
