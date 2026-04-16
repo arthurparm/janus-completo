@@ -254,3 +254,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-16)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** nas dependências Python.
+- [x] Revisão manual de código via `bandit`.
+
+### 32. Múltiplos Riscos de SSRF (Bandit B310)
+- **Caminhos:** `backend/app/core/infrastructure/message_broker.py` e `backend/app/core/tools/agent_tools.py`
+- **Gravidade:** Média
+- **Descrição:** O uso de `urllib.request.urlopen` sem validação de esquema adequada permite vulnerabilidades de SSRF e abertura de URIs não esperadas.
+- **Ação Recomendada:** Restringir explicitamente os protocolos permitidos a HTTPS e implementar validação do host na camada de requisições.
+
+### 33. Risco de XML Bomb / XXE em parser de documentos (Bandit B314)
+- **Caminho:** `backend/app/services/document_parser_service.py`
+- **Gravidade:** Média
+- **Descrição:** Utilização do `xml.etree.ElementTree.fromstring` que é suscetível a ataques de injeção de entidades XML (XXE).
+- **Ação Recomendada:** Substituir o parser por alternativas seguras, por exemplo o equivalente seguro através do pacote `defusedxml`.
+
+### 34. Vulnerabilidades de Dependências Secundárias no Frontend
+- **Caminho:** `frontend/package.json`
+- **Gravidade:** Alta/Média
+- **Descrição:** Varredura `npm audit` evidenciou que os módulos `lodash-es` e `immutable`, além das previamente reportadas, contêm vulnerabilidades ativas.
+- **Ação Recomendada:** Executar atualizações via npm para as versões corrigidas e avaliar dependências de build secundárias.

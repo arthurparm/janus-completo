@@ -865,3 +865,14 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Atualização de dependências secundárias do frontend (lodash-es, immutable)
+- Problema atual: A varredura de `npm audit` evidenciou vulnerabilidades associadas a módulos secundários (`lodash-es`, `immutable`) que ainda não foram atualizados ou mitigados na codebase.
+- Solucao proposta: Atualizar as dependências no `package.json` e aplicar os patches através do comando `npm audit fix` para sanar as vulnerabilidades relatadas.
+- Impacto esperado: Remoção das vulnerabilidades reportadas na cadeia de ferramentas e bibliotecas frontend.
+- Riscos: Redução de compatibilidade das bibliotecas no build e e2e tests da plataforma em caso de atualizações de versão maior.
+- Dependencias: Pipeline CI de Frontend.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
