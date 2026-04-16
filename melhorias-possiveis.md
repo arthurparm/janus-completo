@@ -168,6 +168,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | PL-009 | Pipeline de ingestao em lote com dedupe e retry robusto | P1 | M | ideia |
 | PL-010 | Data catalog interno para fontes de conhecimento | P2 | M | ideia |
 | PL-011 | Fixar dependências do Backend (lockfile) e versionamento de pacotes críticos (asyncpg) | P1 | M | ideia |
+| OQ-019 | Testes (ex: tooling/test_debate_system.py) isolados da suite Pytest e sem timeout | P1 | S | aberto |
+| OQ-020 | Lógicas frágeis com dezenas de blocos try-except silenciados ocultando falhas sistêmicas | P1 | M | aberto |
+| SG-040 | Vulnerabilidades severas nas dependências frontend apontadas via npm audit (hono, dompurify, etc) | P0 | M | aberto |
 
 ---
 
@@ -865,3 +868,12 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-019] Testes sem integração e sem Timeout
+A scripts the testes avulsos como `tooling/test_debate_system.py` que estão isolados da suíte CI padrão de pytest e não estabelecem timeouts explícitos para chamadas async (risco de hang no CI).
+
+### [OQ-020] Lógicas Frágeis com Tratamento de Erro Silenciado (Try-Except-Pass)
+Detectado o uso abundante de blocos `try: except Exception: pass` no backend (21 vezes no `rag.py`, além de vários no `auth.py`, `planner.py`, etc.). Esse padrão falha silenciosamente, dificultando debugging, mascarando possíveis anomalias no sistema, e representando riscos de falha na retenção de eventos/auditoria.
+
+### [SG-040] Atualização Crítica de Dependências (hono e ecossistema front)
+O `npm audit` acusa falhas Severas e Altas em diversos pacotes utilizados no frontend, como problemas de acesso local/SSRF no `@hono/node-server`, falhas de prototype pollution, e outros CVEs recentes relacionados ao `hono` e `immutable`. É necessário aplicar uma revisão de dependências no `frontend/package.json`.

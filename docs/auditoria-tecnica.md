@@ -123,3 +123,30 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-16)
+
+### 12. Tratamento de Exceções Silenciado (Try-Except-Pass)
+**Descrição:** Foi identificado o uso excessivo e frágil de blocos `try: except Exception:` sem o devido tratamento ou log do erro, resultando em mascaramento silencioso de falhas no sistema.
+**Evidências:**
+- Encontradas 21 ocorrências de `except Exception` no arquivo `backend/app/api/v1/endpoints/rag.py`.
+- Ocorrências semelhantes em `auth.py`, `planner.py`, e middlewares de rate limiting.
+**Próximos passos:**
+- Remover padrões `pass` genéricos ou convertê-los para logging adequado. Se o fluxo permitir fail-safe, a exceção não deve ser genérica (`Exception`), mas sim a específica esperada.
+- Adicionar issue OQ-020 no backlog.
+
+### 13. Vulnerabilidades Graves em Dependências do Frontend
+**Descrição:** A varredura de `npm audit` reportou vulnerabilidades de severidade Alta e Moderada relacionadas a frameworks subjacentes.
+**Evidências:**
+- `npm audit` aponta múltiplas falhas no `hono` (ex: SSRF/Arbitrary File Access e Prototype Pollution) e `@hono/node-server`.
+**Próximos passos:**
+- Atualizar a árvore de pacotes (`npm update` ou alteração no `package.json`) mitigando as falhas conhecidas dos pacotes alertados.
+- Adicionar issue SG-040 no backlog de melhorias de segurança.
+
+### 14. Testes Isolados e Sem Timeout
+**Descrição:** Testes como o `test_debate_system.py` que se comunicam e executam fluxos críticos do sistema estão fora da CI (pytest pipeline) e carecem de controles de timeout para rotinas assíncronas, resultando em potenciais engasgos em integrações contínuas.
+**Evidências:**
+- O arquivo `tooling/test_debate_system.py` invoca diretamente loops complexos (ex: `debate_graph.astream`) mas não configura timeout async explícito e está em diretório solto (`tooling/`).
+**Próximos passos:**
+- Adotar timeouts via `asyncio.wait_for` em rotinas avulsas ou integrar o fluxo ao diretório `qa/` para uso via `pytest --timeout`.
+- Criar a issue OQ-019 no backlog.
