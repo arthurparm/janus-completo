@@ -123,3 +123,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-16)
+
+### 12. PII Exposure and Missing Timeouts in Tooling Scripts
+**Descrição:** Scripts in the `tooling/` directory, such as `test_debate_system.py`, lack explicit async timeouts risking CI hangs, and use raw `print()` statements that could leak PII or secrets into standard output. These bypass standard CI pipeline checks. Also `tooling/secure-tailscale-setup.ps1` exposes hostnames and peer data in clear text, avoiding standard PII redaction.
+**Evidências:**
+- `tooling/test_debate_system.py`: Uses `print()` directly and `asyncio.run(main())` without explicit timeouts on graph operations.
+- `tooling/secure-tailscale-setup.ps1`: Acts as a shadow IT monitor logging hostnames without scrubbing.
+
+**Próximos passos:**
+- Document and track OQ-019 (CI isolation limits automated regression validation) and SG-050 (PII leakage in `test_debate_system.py` and `secure-tailscale-setup.ps1`).

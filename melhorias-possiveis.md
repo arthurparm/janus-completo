@@ -865,3 +865,25 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-019] Integração de Testes de Ferramentas ao Pytest CI
+- Problema atual: Test scripts in `tooling/` (e.g., `test_debate_system.py`, `seed-repro-scenarios.ps1`) bypass standard Pytest CI pipelines by utilizing isolated execution rather than integrating with the `qa/` suite, limiting automated regression validation.
+- Solucao proposta: Migrate these test scripts to the standard Pytest suite under the `qa/` directory and implement appropriate async timeouts to prevent CI hangs.
+- Impacto esperado: Melhoria na cobertura de regressão automatizada e estabilidade de CI.
+- Riscos: Overhead temporário na refatoração e possíveis falsos positivos.
+- Dependencias: Pytest.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Vazamento de PII em Scripts de Ferramentas (Shadow IT)
+- Problema atual: The `tooling/secure-tailscale-setup.ps1` script acts as a 'Shadow IT' monitoring component that generates local logs (`tailscale-security-monitor.log`) exposing hostnames and peer data in clear text, circumventing standard core PII redaction. Similarly, `tooling/test_debate_system.py` uses raw `print()` statements risking PII leakage.
+- Solucao proposta: Apply standard PII redaction rules to these scripts or integrate them into the core logging framework. Replace raw prints with secure loggers.
+- Impacto esperado: Conformidade LGPD e segurança de logs locais e no CI.
+- Riscos: Redução de visibilidade em debuggers locais caso a ofuscação seja muito agressiva.
+- Dependencias: Core PII Redaction framework.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
