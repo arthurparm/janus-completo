@@ -607,18 +607,19 @@ class RateLimiter:
 
 #### Comprehensive Validation
 ```python
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional, List
 import re
 
 class ChatMessageRequest(BaseModel):
-    conversation_id: str = Field(..., regex=r'^conv-[a-zA-Z0-9]{6,}$')
+    conversation_id: str = Field(..., pattern=r'^conv-[a-zA-Z0-9]{6,}$')
     message: str = Field(..., min_length=1, max_length=10000)
-    role: Optional[str] = Field("auto", regex=r'^(auto|assistant|user|system)$')
-    priority: Optional[str] = Field("balanced", regex=r'^(fast_and_cheap|balanced|high_quality|reasoning)$')
+    role: Optional[str] = Field("auto", pattern=r'^(auto|assistant|user|system)$')
+    priority: Optional[str] = Field("balanced", pattern=r'^(fast_and_cheap|balanced|high_quality|reasoning)$')
     timeout_seconds: Optional[int] = Field(30, ge=5, le=300)
     
-    @validator('message')
+    @field_validator('message')
+    @classmethod
     def validate_message(cls, v):
         # Remove control characters
         v = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', v)
@@ -634,7 +635,8 @@ class ChatMessageRequest(BaseModel):
             
         return v.strip()
         
-    @validator('conversation_id')
+    @field_validator('conversation_id')
+    @classmethod
     def validate_conversation_id(cls, v):
         # Check if conversation exists and user has access
         if not ConversationService.user_has_access(v, user_id):

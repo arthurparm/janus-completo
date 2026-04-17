@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "generated_at": "2026-02-23T21:08:03.188218+00:00",
-    "source": "api_inventory_fallback",
+    "generated_at": "2026-04-14T19:18:26.958627+00:00",
+    "source": "openapi_live",
     "openapi_url": "http://localhost:8000/openapi.json",
     "inputs": {
       "inventory_fallback": "outputs/qa/api_inventory.json",
@@ -9,12 +9,12 @@
     }
   },
   "statistics": {
-    "total_endpoints": 226,
+    "total_endpoints": 247,
     "by_method": {
       "DELETE": 6,
-      "GET": 123,
+      "GET": 135,
       "PATCH": 2,
-      "POST": 92,
+      "POST": 101,
       "PUT": 3
     },
     "by_module": {
@@ -28,19 +28,19 @@
         "total": 1,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
       "Assistant": {
         "total": 1,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
       "Auth": {
         "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 8
       },
       "Auto Analysis": {
         "total": 1,
@@ -52,43 +52,43 @@
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 11
       },
-      "AutonomyHistory": {
-        "total": 3,
+      "AutonomyAdmin": {
+        "total": 9,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 1
       },
-      "Chat": {
-        "total": 11,
+      "AutonomyHistory": {
+        "total": 4,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 4
+      },
+      "Chat": {
+        "total": 12,
+        "smoke_pass": 0,
+        "smoke_fail": 0,
+        "in_tests": 11
       },
       "Collaboration": {
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 11
       },
       "Collaboration - Workspace": {
         "total": 5,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
-      },
-      "Consents": {
-        "total": 3,
-        "smoke_pass": 0,
-        "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 3
       },
       "Context": {
         "total": 6,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 6
       },
       "Deployment": {
         "total": 4,
@@ -100,7 +100,7 @@
         "total": 6,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 6
       },
       "Evaluation": {
         "total": 5,
@@ -112,19 +112,19 @@
         "total": 7,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 7
       },
       "Knowledge": {
-        "total": 21,
+        "total": 27,
         "smoke_pass": 2,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 20
       },
       "Learning": {
         "total": 12,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 12
       },
       "LLM": {
         "total": 12,
@@ -136,13 +136,13 @@
         "total": 6,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 6
       },
       "Observability": {
-        "total": 22,
+        "total": 24,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 24
       },
       "Optimization": {
         "total": 6,
@@ -154,67 +154,67 @@
         "total": 5,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 5
       },
       "Productivity": {
         "total": 11,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 3
+        "in_tests": 11
       },
       "Profiles": {
         "total": 2,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 2
       },
       "RAG": {
         "total": 5,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 5
       },
       "Reflexion": {
         "total": 5,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 5
       },
       "Sandbox": {
         "total": 3,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 3
       },
       "System": {
         "total": 5,
         "smoke_pass": 3,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 5
       },
       "Tasks": {
-        "total": 6,
+        "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 8
       },
       "Tools": {
         "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 3
+        "in_tests": 8
       },
       "unknown": {
-        "total": 4,
+        "total": 7,
         "smoke_pass": 1,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 4
       },
       "Users": {
         "total": 6,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 2
+        "in_tests": 6
       },
       "Workers": {
         "total": 3,
@@ -224,7 +224,7 @@
       }
     },
     "smoke_results_loaded": 6,
-    "test_path_refs": 54
+    "test_path_refs": 249
   },
   "endpoints": [
     {
@@ -247,7 +247,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -258,7 +258,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -269,7 +269,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -280,7 +280,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -291,7 +291,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -302,7 +302,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -313,7 +313,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -324,7 +324,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -335,7 +335,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -346,7 +346,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -368,7 +368,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -379,7 +379,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "DELETE",
@@ -390,7 +390,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -401,7 +401,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "PATCH",
@@ -412,7 +412,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -423,7 +423,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "PUT",
@@ -434,7 +434,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "PUT",
@@ -445,7 +445,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -456,7 +456,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -467,7 +467,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -475,6 +475,105 @@
       "module": "Autonomy",
       "summary": "Para o AutonomyLoop",
       "operation_id": "stop_autonomy_api_v1_autonomy_stop_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/autonomy/admin/backlog/sync",
+      "module": "AutonomyAdmin",
+      "summary": "Sync Backlog",
+      "operation_id": "sync_backlog_api_v1_autonomy_admin_backlog_sync_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/admin/board",
+      "module": "AutonomyAdmin",
+      "summary": "Get Board",
+      "operation_id": "get_board_api_v1_autonomy_admin_board_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/autonomy/admin/code-qa",
+      "module": "AutonomyAdmin",
+      "summary": "Code Qa",
+      "operation_id": "code_qa_api_v1_autonomy_admin_code_qa_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/admin/self-study/neo4j-audit",
+      "module": "AutonomyAdmin",
+      "summary": "Self Study Neo4J Audit",
+      "operation_id": "self_study_neo4j_audit_api_v1_autonomy_admin_self_study_neo4j_audit_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/autonomy/admin/self-study/neo4j-repair",
+      "module": "AutonomyAdmin",
+      "summary": "Self Study Neo4J Repair",
+      "operation_id": "self_study_neo4j_repair_api_v1_autonomy_admin_self_study_neo4j_repair_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/autonomy/admin/self-study/run",
+      "module": "AutonomyAdmin",
+      "summary": "Run Self Study",
+      "operation_id": "run_self_study_api_v1_autonomy_admin_self_study_run_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/admin/self-study/runs",
+      "module": "AutonomyAdmin",
+      "summary": "Self Study Runs",
+      "operation_id": "self_study_runs_api_v1_autonomy_admin_self_study_runs_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/admin/self-study/status",
+      "module": "AutonomyAdmin",
+      "summary": "Self Study Status",
+      "operation_id": "self_study_status_api_v1_autonomy_admin_self_study_status_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/autonomy/admin/self-study/trigger-on-goal-complete",
+      "module": "AutonomyAdmin",
+      "summary": "Admin Manual Goal Completion Trigger",
+      "operation_id": "admin_manual_goal_completion_trigger_api_v1_autonomy_admin_self_study_trigger_on_goal_complete_post",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -489,7 +588,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -500,7 +599,18 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/history/runs/{run_id}/enqueues",
+      "module": "AutonomyHistory",
+      "summary": "Lista enqueues de uma execução de autonomia",
+      "operation_id": "list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -511,7 +621,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -522,7 +632,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -566,6 +676,17 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/chat/study-jobs/{job_id}",
+      "module": "Chat",
+      "summary": "Consulta o status de um job de estudo assíncrono do chat",
+      "operation_id": "get_study_job_api_v1_chat_study_jobs__job_id__get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
       "referenced_in_tests": false
     },
     {
@@ -588,7 +709,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -599,7 +720,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -610,7 +731,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "PUT",
@@ -621,7 +742,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -632,7 +753,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -643,7 +764,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -654,7 +775,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -665,7 +786,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -676,7 +797,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -687,7 +808,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -698,7 +819,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -709,7 +830,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -720,7 +841,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -731,7 +852,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -742,7 +863,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -753,7 +874,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -764,7 +885,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -775,7 +896,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -786,7 +907,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -812,39 +933,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/v1/consents/",
-      "module": "Consents",
-      "summary": "List Consents",
-      "operation_id": "list_consents_api_v1_consents__get",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/consents/",
-      "module": "Consents",
-      "summary": "Grant Consent",
-      "operation_id": "grant_consent_api_v1_consents__post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/consents/{consent_id}/revoke",
-      "module": "Consents",
-      "summary": "Revoke Consent",
-      "operation_id": "revoke_consent_api_v1_consents__consent_id__revoke_post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": false
-    },
-    {
-      "method": "GET",
       "path": "/api/v1/context/current",
       "module": "Context",
       "summary": "Obtém contexto ambiental atual",
@@ -852,7 +940,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -863,7 +951,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -874,7 +962,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -885,7 +973,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -896,7 +984,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -907,7 +995,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -962,7 +1050,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -973,7 +1061,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -984,7 +1072,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -995,7 +1083,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1006,7 +1094,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "DELETE",
@@ -1017,7 +1105,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1083,7 +1171,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1094,7 +1182,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1105,7 +1193,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1116,7 +1204,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1127,7 +1215,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1138,7 +1226,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1149,7 +1237,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1171,7 +1259,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1182,7 +1270,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1193,7 +1281,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1204,7 +1292,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1226,7 +1314,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1237,7 +1325,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1270,7 +1358,7 @@
       "smoke_success": true,
       "smoke_status_code": 200,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1281,7 +1369,7 @@
       "smoke_success": true,
       "smoke_status_code": 200,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1292,7 +1380,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1303,7 +1391,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1314,7 +1402,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1347,7 +1435,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1373,6 +1461,72 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/knowledge/spaces",
+      "module": "Knowledge",
+      "summary": "Lista knowledge spaces do usuário",
+      "operation_id": "list_knowledge_spaces_api_v1_knowledge_spaces_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/spaces",
+      "module": "Knowledge",
+      "summary": "Cria um knowledge space isolado por obra/coleção",
+      "operation_id": "create_knowledge_space_api_v1_knowledge_spaces_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/knowledge/spaces/{knowledge_space_id}",
+      "module": "Knowledge",
+      "summary": "Retorna status e progresso de um knowledge space",
+      "operation_id": "get_knowledge_space_status_api_v1_knowledge_spaces__knowledge_space_id__get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/spaces/{knowledge_space_id}/consolidate",
+      "module": "Knowledge",
+      "summary": "Consolida estruturalmente um knowledge space",
+      "operation_id": "consolidate_knowledge_space_api_v1_knowledge_spaces__knowledge_space_id__consolidate_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/spaces/{knowledge_space_id}/documents/{doc_id}/attach",
+      "module": "Knowledge",
+      "summary": "Associa um documento existente a um knowledge space",
+      "operation_id": "attach_document_to_space_api_v1_knowledge_spaces__knowledge_space_id__documents__doc_id__attach_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/knowledge/spaces/{knowledge_space_id}/query",
+      "module": "Knowledge",
+      "summary": "Consulta knowledge space com fallback canônico para chunk_only",
+      "operation_id": "query_knowledge_space_api_v1_knowledge_spaces__knowledge_space_id__query_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/knowledge/stats",
       "module": "Knowledge",
       "summary": "Estatísticas do grafo",
@@ -1380,7 +1534,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1523,7 +1677,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1534,7 +1688,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1545,7 +1699,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1556,7 +1710,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1567,7 +1721,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1578,7 +1732,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1589,7 +1743,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1600,7 +1754,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1611,7 +1765,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1622,7 +1776,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1633,7 +1787,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1644,7 +1798,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1655,7 +1809,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1666,7 +1820,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1677,7 +1831,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1699,7 +1853,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1710,7 +1864,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1721,7 +1875,18 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/anomalies/predictive",
+      "module": "Observability",
+      "summary": "Deteccao preditiva de anomalias (latencia, erro e filas)",
+      "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1743,7 +1908,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1754,7 +1919,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1765,7 +1930,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1776,7 +1941,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1787,7 +1952,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1798,7 +1963,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1809,7 +1974,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1820,7 +1985,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1831,7 +1996,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1842,7 +2007,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1853,7 +2018,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1864,7 +2029,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1875,7 +2040,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1886,7 +2051,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1897,7 +2062,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1908,7 +2073,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -1919,7 +2084,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1930,7 +2095,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1941,7 +2106,18 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/slo/domains",
+      "module": "Observability",
+      "summary": "SLOs por domÃ­nio (chat/rag/tools/workers) com alertas ativos",
+      "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1952,7 +2128,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2029,7 +2205,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2040,7 +2216,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2051,7 +2227,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2062,7 +2238,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2073,7 +2249,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2084,7 +2260,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2106,7 +2282,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2117,7 +2293,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2128,7 +2304,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2139,7 +2315,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2150,7 +2326,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2183,7 +2359,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2194,7 +2370,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2205,7 +2381,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2216,18 +2392,18 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
       "path": "/api/v1/rag/hybrid_search",
       "module": "RAG",
-      "summary": "Busca híbrida (vetor + grafo) em conhecimento pessoal",
+      "summary": "Busca híbrida de código (lexical + vetor + grafo)",
       "operation_id": "rag_hybrid_search_api_v1_rag_hybrid_search_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2238,7 +2414,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2260,7 +2436,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2271,7 +2447,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2282,7 +2458,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2293,7 +2469,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2304,7 +2480,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2315,7 +2491,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2337,7 +2513,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2348,7 +2524,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2359,7 +2535,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2370,7 +2546,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2381,7 +2557,7 @@
       "smoke_success": true,
       "smoke_status_code": 200,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2392,7 +2568,7 @@
       "smoke_success": true,
       "smoke_status_code": 200,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2403,7 +2579,7 @@
       "smoke_success": true,
       "smoke_status_code": 200,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2414,7 +2590,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2425,7 +2601,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2436,7 +2612,29 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/outbox/reconcile",
+      "module": "Tasks",
+      "summary": "Reencaminha eventos do outbox para reconciliação",
+      "operation_id": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/outbox/stats",
+      "module": "Tasks",
+      "summary": "Retorna estatísticas do outbox transacional",
+      "operation_id": "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2447,7 +2645,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2458,7 +2656,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2469,7 +2667,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2480,7 +2678,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2513,7 +2711,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2524,7 +2722,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2535,7 +2733,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2557,7 +2755,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2568,7 +2766,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2579,7 +2777,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2590,7 +2788,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2623,7 +2821,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2634,7 +2832,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2693,6 +2891,39 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/memory/preferences",
+      "module": "unknown",
+      "summary": "Get User Preferences",
+      "operation_id": "get_user_preferences_api_v1_memory_preferences_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/secrets",
+      "module": "unknown",
+      "summary": "Get User Secrets",
+      "operation_id": "get_user_secrets_api_v1_memory_secrets_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/memory/secrets",
+      "module": "unknown",
+      "summary": "Add User Secret",
+      "operation_id": "add_user_secret_api_v1_memory_secrets_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/memory/timeline",
       "module": "unknown",
       "summary": "Get Memories Timeline",
@@ -2700,7 +2931,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
