@@ -123,3 +123,29 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-17)
+
+### 12. Fragilidade em Tratamento de Exceções Silenciadas
+**Descrição:** Identificado padrão de anti-pattern `try-except-pass` (B110) em componentes centrais do backend, o que compromete a observabilidade e introduz falhas silenciosas na aplicação.
+**Evidências:**
+- `backend/app/services/chat/streaming_service.py` possui dezenas de blocos `try-except-pass` silenciando erros de telemetria.
+- `backend/app/services/db_migration_service.py` e `backend/app/services/knowledge_graph_service.py` também mascaram erros com blocos silenciosos.
+**Próximos passos:**
+- Substituir `pass` por logs explícitos de warning ou error. Revisar a necessidade de engolir exceções. Registrar OQ-020 no backlog.
+
+### 13. Vulnerabilidades Críticas no Ecosistema Frontend
+**Descrição:** O relatório de auditoria do frontend apontou novas vulnerabilidades de segurança de alto impacto na árvore de dependências, englobando path traversals, XSS, code injection e DOS.
+**Evidências:**
+- Vite vulnerável a Path Traversal em `.map` deps (GHSA-4w7w-66w2-5vf9).
+- Angular vulnerable a XSS (GHSA-g93w-mfhg-p222).
+- Outros pacotes críticos como dompurify, hono e express-rate-limit.
+**Próximos passos:**
+- Atualizar o `package-lock.json` do frontend através do `npm audit fix` ou bump manual de versão. Mapeado como SG-040.
+
+### 14. Vulnerabilidade Crítica no Backend (Transformers)
+**Descrição:** A biblioteca `transformers` utilizada no backend possui versão afetada por Desserialização Insegura (Insecure Deserialization).
+**Evidências:**
+- `safety check` detectou CVE ID 85102 no `transformers` versão 4.57.5 (< 5.0.0).
+**Próximos passos:**
+- Fazer o bump para `transformers>=5.0.0` no `requirements.txt`. Mapeado como SG-041.

@@ -865,3 +865,15 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-020] Eliminar Padrões Try-Except Silenciosos no Backend
+- **Prioridade/Esforço:** P1 / S
+- **Descrição:** Substituir ocorrências de `try-except-pass` (B110) reportadas no SAST em módulos críticos (como streaming_service, db_migration_service) por tratamentos e logs apropriados para recuperar observabilidade.
+
+### [SG-040] Corrigir Vulnerabilidades Críticas de Dependências no Frontend
+- **Prioridade/Esforço:** P1 / M
+- **Descrição:** Atualizar pacotes vulneráveis apontados pelo `npm audit`, focando em sanar riscos de Path Traversal no `vite`, XSS no `@angular/compiler`, falhas de rate limit no `express-rate-limit` e injections no `hono` e `dompurify`.
+
+### [SG-041] Corrigir Vulnerabilidade de Desserialização no Transformers (CVE-85102)
+- **Prioridade/Esforço:** P1 / S
+- **Descrição:** Realizar upgrade no pacote `transformers` do backend para a versão `5.0.0` ou superior, mitigando risco de Insecure Deserialization atestado pelo safety.
