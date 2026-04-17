@@ -90,3 +90,19 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-17)
+- **LGPD/Observabilidade - Falha de Rastreabilidade e Silenciamento de Exceções (Bandit B110/B112)**: Foram identificadas múltiplas ocorrências de blocos `try-except-pass` ou `continue` (B110/B112). Isso mascara falhas potenciais e impede a rastreabilidade adequada de erros que podem envolver dados pessoais ou processamentos sensíveis, violando o princípio de responsabilização da LGPD.
+  - Evidências:
+    - Ocorrências generalizadas pelo sistema (240 incidentes de B110 e 11 de B112).
+    - Exemplos críticos: `app/api/v1/endpoints/auth.py` (linha 250), `app/api/v1/endpoints/chat/deps.py` (linha 252), `app/api/v1/endpoints/deployment.py` (linhas 54, 66, 83), entre outros (`rag.py`, `planner.py`, `documents.py`).
+  - Próximos passos: Remover silenciamento de exceções e introduzir logs adequados (utilizando `redact_pii_text_only` se necessário). Inserido item OQ-020 em `melhorias-possiveis.md`.
+
+- **LGPD - Lembrete de Riscos Contínuos e Falta de Minimização**: Permanece o risco atrelado à captura de telas via fallback para tela cheia no `windows_agent.py` e à gravação não anonimizada de transcrições de áudio no `janus.log` pelo `daemon.py`.
+  - Evidências: Mapeado nas vulnerabilidades em andamento, mas que persistem no estado atual da base de código.
+  - Próximos passos: Implementar controles de consentimento, minimização de imagem e PII scrubbing nas transcrições de voz (itens SG-022 e SG-023 já abertos no backlog).
+
+### Checklist LGPD
+- [x] Verificação de silenciamento de erros sem auditoria de vazamento de PII.
+- [x] Validação de captura indevida sem consentimento no agente.
+- [x] Validação de log de comando de voz vazado.

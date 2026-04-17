@@ -130,6 +130,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| SG-040 | Atualizar dependencias vulneraveis do frontend (npm audit) | P1 | M | aberto |
+| SG-041 | Remover credenciais e segredos hardcoded detectados pelo Bandit (B105) | P1 | M | aberto |
+| OQ-020 | Corrigir tratamento silencioso de excecoes em massa (Bandit B110/B112) | P1 | L | aberto |
 
 ---
 
@@ -865,3 +868,19 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Dependências vulneráveis no frontend (npm audit)
+- Arquivos afetados: Dependências do frontend (`package.json`, `package-lock.json`)
+- Risco: Presença de bibliotecas com CVEs de alta e moderada severidade, incluindo `hono`, `vite`, `path-to-regexp`, `picomatch`, `tar`, `immutable`, `lodash-es` e `protobufjs` (crítico: execução arbitrária de código).
+- Próximos Passos: Realizar atualizações de pacotes (`npm update`, overrides ou deduplicação) para mitigar os vetores.
+
+### [SG-041] Credenciais e Segredos Hardcoded (Bandit B105)
+- Arquivos afetados: `app/core/infrastructure/rate_limit_middleware.py`, `app/core/llm/sanitizer.py`, `tests/verify_secret_management.py`, `scripts/seed_repro_scenarios.py` e testes diversos.
+- Risco: Vazamento potencial de segredos ou credenciais hardcoded.
+- Próximos Passos: Substituir as chaves fixas no código por variáveis de ambiente gerenciadas via Vault, AWS Secrets Manager ou outro provedor configurado.
+
+
+### [OQ-020] Exceções Silenciadas Massivamente (Bandit B110/B112)
+- Arquivos afetados: Código backend de forma massiva (e.g. `app/api/v1/endpoints/auth.py`, `rag.py`, `chat/deps.py`, `deployment.py`).
+- Risco: O uso de blocos `try: ... except: pass/continue` encobre falhas de lógica, gerando bugs silenciosos e violando princípios de observabilidade da LGPD (B110, B112).
+- Próximos Passos: Revisar blocos e incluir tratamento adequado de erros, logando com nível `Warning` ou `Error` (e sanitizando via `redact_pii_text_only` se aplicável).

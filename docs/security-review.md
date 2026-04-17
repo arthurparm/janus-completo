@@ -254,3 +254,27 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-17)
+- **AppSec - Segredos Hardcoded (Bandit B105)**: Possíveis senhas/segredos fixos detectados no código-fonte, violando boas práticas de gerenciamento de segredos.
+  - Evidências:
+    - `app/core/infrastructure/rate_limit_middleware.py`: linha 18.
+    - `app/core/llm/sanitizer.py`: linha 41.
+    - `tests/verify_secret_management.py`: linhas 50 e 78.
+    - `scripts/seed_repro_scenarios.py`: linha 49.
+    - Diversos arquivos de teste (`chaos_harness.py`, `test_auth_local_login_password_policy.py`, `test_message_broker_di.py`).
+  - Próximos passos: Remover credenciais hardcoded, substituir por variáveis de ambiente ou secrets manager. Inserido item SG-041 em `melhorias-possiveis.md`.
+
+- **AppSec - Dependências Vulneráveis Frontend (npm audit)**: Identificadas dependências no frontend com vulnerabilidades conhecidas.
+  - Evidências:
+    - `hono`: vulnerabilidades de path traversal e bypass de middleware.
+    - `vite`: vulnerabilidades de path traversal e file read arbitrário.
+    - `path-to-regexp` e `picomatch`: vulnerabilidades de ReDoS e DoS.
+    - `tar`, `immutable`, `lodash-es`: múltiplas vulnerabilidades de injeção de código, poluição de protótipo e path traversal.
+    - `protobufjs`: execução arbitrária de código (severidade crítica).
+  - Próximos passos: Realizar atualização das dependências (ex: `npm update` ou force via package.json overrides). Inserido item SG-040 em `melhorias-possiveis.md`.
+
+### Checklist de Revisão
+- [x] Verificação de credenciais e segredos vazados no código (Bandit B105).
+- [x] Auditoria de dependências vulneráveis no frontend (npm audit).
+- [x] Verificação de exceções não tratadas / encobrimento de falhas.
