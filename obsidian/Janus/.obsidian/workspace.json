@@ -20,8 +20,19 @@
               "icon": "lucide-file",
               "title": "Home"
             }
+          },
+          {
+            "id": "f1cb26d8e40561f1",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "Nova aba"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -156,13 +167,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "00 - Índice/Home.md",
                 "followCursor": true,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Sumário de Home"
+              "title": "Sumário"
             }
           },
           {
@@ -198,8 +208,10 @@
       "random-note:Abrir nota aleatória": false
     }
   },
-  "active": "8b3e1bbf3d1eced8",
+  "active": "f1cb26d8e40561f1",
   "lastOpenFiles": [
+    "00 - Índice/Home.md",
+    "Sem título.md",
     "04 - Fluxos End-to-End/Documentos Conhecimento e Memória.md",
     "04 - Fluxos End-to-End/Ferramentas e Sandbox.md",
     "04 - Fluxos End-to-End/Conversa e Chat.md",
@@ -224,8 +236,6 @@
     "00 - Índice/Prompts de Refinamento.md",
     "00 - Índice/Mapa por Domínio.md",
     "00 - Índice/Mapa por Fluxos Críticos.md",
-    "00 - Índice/Mapa Mestre do Sistema.md",
-    "00 - Índice/Home.md",
     "07 - Glossário e Inventários",
     "06 - Qualidade e Testes",
     "05 - Infra e Operação",
