@@ -1,3 +1,5 @@
+version: '3.9'
+
 services:
   janus-api:
     build:
@@ -5,8 +7,12 @@ services:
       dockerfile: docker/Dockerfile
       args:
         JANUS_BUILD_REF: ${JANUS_BUILD_REF:-local-dev}
-    image: janus-completo-janus-api:latest
-    container_name: janus_api
+        JANUS_BUILD_DATE: ${JANUS_BUILD_DATE:-}
+        JANUS_VERSION: ${JANUS_VERSION:-0.5.44}
+      target: final
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:-arthurparaiso}/janus-api:${VERSION:-0.5.44}
+    container_name: janus_api_pc1
+    platform: linux/amd64
     init: true
     ports:
       - "8000:8000"
@@ -16,30 +22,24 @@ services:
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env.pc1}
       - AUTH_ADMIN_CPF_ALLOWLIST=${AUTH_ADMIN_CPF_ALLOWLIST:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-["http://localhost:4300"]}
-
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_USER=${POSTGRES_USER:-janus}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.pc1}
       - POSTGRES_DB=${POSTGRES_DB:-janus_db}
-
       - REDIS_ENABLED=${REDIS_ENABLED:-true}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
-
       - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
       - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
       - RABBITMQ_MANAGEMENT_PORT=${RABBITMQ_MANAGEMENT_PORT:-15672}
       - RABBITMQ_USER=${RABBITMQ_USER:-janus}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env.pc1}
-
       - NEO4J_URI=${NEO4J_URI:?Set NEO4J_URI in .env.pc1 (bolt://<PC2_TAILSCALE_IP>:7687)}
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env.pc1}
-
       - QDRANT_HOST=${QDRANT_HOST:?Set QDRANT_HOST in .env.pc1 (<PC2_TAILSCALE_IP>)}
       - QDRANT_PORT=${QDRANT_PORT:-6333}
       - QDRANT_API_KEY=${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env.pc1}
-
       - OLLAMA_HOST=${OLLAMA_HOST:?Set OLLAMA_HOST in .env.pc1 (http://<PC2_TAILSCALE_IP>:11434)}
       - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
       - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-deepseek-coder:6.7b}
@@ -47,14 +47,12 @@ services:
       - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-120m}
       - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-4096}
       - CHAT_UNLIMITED_USERS=${CHAT_UNLIMITED_USERS:-}
-
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - XAI_API_KEY=${XAI_API_KEY:-}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-5-mini}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4-mini}
       - DEEPSEEK_MODEL_NAME=${DEEPSEEK_MODEL_NAME:-deepseek-chat}
       - XAI_MODEL_NAME=${XAI_MODEL_NAME:-grok-4-1-fast-reasoning}
-
       - START_ORCHESTRATOR_WORKERS_ON_STARTUP=${START_ORCHESTRATOR_WORKERS_ON_STARTUP:-true}
       - AUTO_INDEX_ON_STARTUP=${AUTO_INDEX_ON_STARTUP:-true}
       - INIT_MAS_AGENTS_ON_STARTUP=${INIT_MAS_AGENTS_ON_STARTUP:-false}
@@ -96,8 +94,13 @@ services:
     build:
       context: ./frontend
       dockerfile: docker/Dockerfile
-    image: janus-completo-janus-frontend:latest
-    container_name: janus_frontend
+      args:
+        JANUS_BUILD_REF: ${JANUS_BUILD_REF:-local-dev}
+        JANUS_BUILD_DATE: ${JANUS_BUILD_DATE:-}
+        JANUS_VERSION: ${JANUS_VERSION:-0.5.44}
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:-arthurparaiso}/janus-frontend:${VERSION:-0.5.44}
+    container_name: janus_frontend_pc1
+    platform: linux/amd64
     ports:
       - "${FRONTEND_PORT:-4300}:4300"
     depends_on:
@@ -122,13 +125,15 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: janus_postgres
+    container_name: janus_postgres_pc1
+    platform: linux/amd64
     ports:
       - "127.0.0.1:5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-janus}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.pc1}
       - POSTGRES_DB=${POSTGRES_DB:-janus_db}
+      - POSTGRES_INITDB_ARGS=${POSTGRES_INITDB_ARGS:--c shared_buffers=256MB -c effective_cache_size=1GB}
     volumes:
       - janus_postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -150,7 +155,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: janus_redis
+    container_name: janus_redis_pc1
+    platform: linux/amd64
     ports:
       - "127.0.0.1:6379:6379"
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
@@ -175,13 +181,14 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    container_name: janus_rabbitmq
+    container_name: janus_rabbitmq_pc1
+    platform: linux/amd64
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-janus}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env.pc1}
       - RABBITMQ_DEFAULT_VHOST=/
     volumes:
       - janus_rabbitmq_data:/var/lib/rabbitmq
@@ -205,6 +212,9 @@ services:
 networks:
   janus-pc1-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   janus_postgres_data:

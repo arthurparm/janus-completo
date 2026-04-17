@@ -1,105 +1,221 @@
+# PC2 Hardware Configuration
+# i9-13900F (24 cores: 8P + 16E), 64GB DDR5-5600, RTX 4060 Ti 16GB
+
+version: '3.9'
+
 services:
   neo4j:
     image: neo4j:5.19-community
-    container_name: janus_neo4j
+    container_name: janus_neo4j_pc2
+    platform: linux/amd64
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
+      # Auth
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env.pc2}
       - NEO4J_PLUGINS=["apoc"]
-      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-2G}
-      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX:-8G}
-      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE:-12G}
+      
+      # Memory Configuration (optimize for 64GB system with i9-13900F)
+      # Allocate 20GB to Neo4j (conservative to leave room for Qdrant + Ollama)
+      - NEO4J_server_memory_heap_initial__size=10G
+      - NEO4J_server_memory_heap_max__size=20G
+      - NEO4J_server_memory_pagecache_size=12G
+      
+      # Performance Tuning
+      - NEO4J_dbms_memory_transaction_max__size=1G
+      - NEO4J_dbms_transaction_timeout=30s
+      - NEO4J_dbms_default__database=neo4j
+      
+      # Query Performance
+      - NEO4J_dbms_query_statistics_enabled=true
+      - NEO4J_dbms_query_statistics_record__allocation__enabled=true
+      
+      # Connection Pool
+      - NEO4J_server_bolt_connection__keep__alive=DISABLED
+      - NEO4J_server_bolt_thread__pool__min__size=20
+      - NEO4J_server_bolt_thread__pool__max__size=200
+      
+      # Cache Configuration (L3 Cache friendly)
+      - NEO4J_dbms_memory_off_heap_max__size=4G
+      - NEO4J_dbms_memory_transaction__state__off__heap__max__size=100M
+      
+      # Network
+      - NEO4J_server_bolt_advertised__address=0.0.0.0:7687
+      - NEO4J_server_http_advertised__address=0.0.0.0:7474
+      
     volumes:
       - janus_neo4j_data:/data
+      - janus_neo4j_logs:/logs
     restart: unless-stopped
-    mem_limit: ${NEO4J_MEM_LIMIT:-24g}
-    cpus: "${NEO4J_CPUS:-10.0}"
+    
+    # CPU & Memory: 10 cores (P-cores for consistency) + 20GB RAM
+    # i9-13900F has 8 P-cores (3.0-5.6GHz) + 16 E-cores (2.5-4.3GHz)
+    mem_limit: 22g
+    memswap_limit: 24g
+    cpus: "10.0"
+    cpuset: "0-9"
+    
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD} 'RETURN 1'"]
+      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 8
       start_period: 30s
+    
     logging:
       driver: "json-file"
       options:
-        max-size: "20m"
+        max-size: "50m"
         max-file: "5"
+    
     networks:
       - janus-pc2-net
 
   qdrant:
     image: qdrant/qdrant:v1.16.2
-    container_name: janus_qdrant
+    container_name: janus_qdrant_pc2
+    platform: linux/amd64
     ports:
       - "6333:6333"
+      - "6334:6334"
     environment:
+      # Security
       - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env.pc2}
+      
+      # Storage Configuration (SSD-optimized)
+      - QDRANT__STORAGE__SNAPSHOTS_PATH=/qdrant/snapshots
+      - QDRANT__STORAGE__SNAPSHOTS_TEMP_PATH=/qdrant/temp
+      - QDRANT__STORAGE__TEMP_PATH=/qdrant/temp
+      
+      # Performance Tuning
+      - QDRANT__STORAGE__PREFER_MMAP=false
+      - QDRANT__STORAGE__HNSW_USE_MEMMAP=false
+      
+      # Vector Search Parameters (GPU-friendly)
+      - QDRANT__STORAGE__SNAPSHOTS_SNAPSHOT_TEMP_DIR=/tmp
+      
+      # Service Configuration
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      
+      # Concurrency
+      - QDRANT__SERVICE__READ_ONLY_MODE=false
+    
     volumes:
       - janus_qdrant_data:/qdrant/storage
+      - janus_qdrant_snapshots:/qdrant/snapshots
+      - janus_qdrant_temp:/qdrant/temp
+    
     restart: unless-stopped
-    mem_limit: ${QDRANT_MEM_LIMIT:-12g}
-    cpus: "${QDRANT_CPUS:-6.0}"
+    
+    # CPU & Memory: 6 cores (E-cores) + 12GB RAM
+    # Qdrant is CPU-bound for HNSW (approximate nearest neighbor)
+    mem_limit: 12g
+    memswap_limit: 14g
+    cpus: "6.0"
+    cpuset: "10-15"
+    
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 8
       start_period: 15s
+    
     logging:
       driver: "json-file"
       options:
-        max-size: "20m"
+        max-size: "50m"
         max-file: "5"
+    
     networks:
       - janus-pc2-net
 
   ollama:
     image: ollama/ollama:latest
-    container_name: janus_ollama
+    container_name: janus_ollama_pc2
+    platform: linux/amd64
     ports:
       - "11434:11434"
-    gpus: all
+    
+    # GPU Support: RTX 4060 Ti 16GB
+    gpus:
+      - device: ${GPU_DEVICE:-0}
+        capabilities: [compute, utility]
+    
     environment:
+      # GPU Configuration
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-120m}
-      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-2}
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+      
+      # Model Management (4060 Ti = 16GB VRAM)
+      # Load 2 models simultaneously (~10-12GB combined)
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-30m}
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
       - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-2}
-      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-256}
+      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-512}
+      - OLLAMA_NUM_GPU=${OLLAMA_NUM_GPU:-1}
+      
+      # Thread Pool (24 cores available)
+      - OLLAMA_NUM_THREAD=${OLLAMA_NUM_THREAD:-16}
+      
+      # Context Window (optimize for token throughput)
+      - OLLAMA_DEFAULT_CTX=${OLLAMA_DEFAULT_CTX:-8192}
+      
+      # Performance
+      - OLLAMA_LLM_LIBRARY=cuda_v12
+      - OLLAMA_DEBUG=false
+    
     volumes:
       - janus_ollama_data:/root/.ollama
+      - /tmp/ollama_cache:/tmp/ollama
+    
     restart: unless-stopped
-    mem_limit: ${OLLAMA_MEM_LIMIT:-24g}
-    cpus: "${OLLAMA_CPUS:-12.0}"
+    
+    # CPU & Memory: 8 cores (P+E mix) + 20GB RAM + 16GB VRAM
+    # i9-13900F P-cores for inference, E-cores for tokenization
+    mem_limit: 20g
+    memswap_limit: 22g
+    cpus: "8.0"
+    cpuset: "16-23"
+    
+    # GPU is separate allocation (16GB VRAM)
+    
     healthcheck:
-      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 20
       start_period: 60s
+    
     logging:
       driver: "json-file"
       options:
-        max-size: "20m"
+        max-size: "100m"
         max-file: "5"
+    
     networks:
       - janus-pc2-net
 
   ollama-model-init:
     image: ollama/ollama:latest
-    container_name: janus_ollama_model_init
+    container_name: janus_ollama_model_init_pc2
+    platform: linux/amd64
+    
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
       - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-deepseek-coder:6.7b}
       - OLLAMA_CURATOR_MODEL=${OLLAMA_CURATOR_MODEL:-ministral-3:14b}
       - OLLAMA_AUTO_PULL_MODELS=${OLLAMA_AUTO_PULL_MODELS:-true}
+    
     depends_on:
       ollama:
         condition: service_healthy
+    
     entrypoint:
       - /bin/sh
       - -lc
@@ -108,7 +224,7 @@ services:
         sanitize() {
           printf "%s" "$$1" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
         }
-        echo "Waiting Ollama..."
+        echo "Waiting for Ollama to be ready..."
         for i in $$(seq 1 60); do
           if ollama list >/dev/null 2>&1; then
             break
@@ -123,25 +239,41 @@ services:
         ORCH_MODEL="$$(sanitize "$$OLLAMA_ORCHESTRATOR_MODEL")"
         CODER_MODEL="$$(sanitize "$$OLLAMA_CODER_MODEL")"
         CURATOR_MODEL="$$(sanitize "$$OLLAMA_CURATOR_MODEL")"
+        echo "Pulling models for 4060 Ti (16GB VRAM)..."
         for model in "$$ORCH_MODEL" "$$CODER_MODEL" "$$CURATOR_MODEL"; do
           if [ -z "$$model" ]; then
             continue
           fi
-          echo "Pulling model: $$model"
+          echo "📥 Pulling: $$model"
           if ! ollama pull "$$model"; then
-            echo "Warning: failed to pull $$model"
+            echo "⚠️  Failed to pull $$model (may require manual intervention)"
           fi
         done
+        echo "✅ Model initialization complete"
         ollama list
+    
     restart: "no"
+    
     networks:
       - janus-pc2-net
 
 networks:
   janus-pc2-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
 
 volumes:
   janus_neo4j_data:
+    driver: local
+  janus_neo4j_logs:
+    driver: local
   janus_qdrant_data:
+    driver: local
+  janus_qdrant_snapshots:
+    driver: local
+  janus_qdrant_temp:
+    driver: local
   janus_ollama_data:
+    driver: local

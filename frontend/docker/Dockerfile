@@ -1,25 +1,57 @@
-# Development Dockerfile for Janus Frontend
-# Optimized for caching node_modules and fast startup
+# syntax=docker/dockerfile:1.7
+# Multi-stage build: separates build-time deps from runtime
 
+# --- Stage 1: Dependencies ---
+FROM node:20-alpine AS dependencies
+
+WORKDIR /app
+
+COPY package*.json ./
+
+# Use npm install with --legacy-peer-deps (more forgiving than npm ci)
+RUN npm install --legacy-peer-deps --no-audit --no-fund
+
+
+# --- Stage 2: Build ---
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY package*.json ./
+COPY . .
+
+# Pre-build Angular app for production
+RUN npm run build --prod 2>/dev/null || npm run build
+
+
+# --- Stage 3: Runtime (production) ---
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies in a separate layer for caching
-# We use package*.json to match both package.json and package-lock.json (if it exists)
-COPY package*.json ./
+ARG JANUS_BUILD_REF=local-dev
+ARG JANUS_BUILD_DATE
+ARG JANUS_VERSION=0.5.44
 
-# Clean install of dependencies
-# We use --legacy-peer-deps as it was used in the original command
-RUN npm install --legacy-peer-deps
+# Install lightweight HTTP server
+RUN npm install -g serve --no-audit --no-fund
 
-# Copy the rest of the application source
-# (Note: In dev, this is often shadowed by a bind mount, but good for completeness)
-COPY . .
+# Copy only built artifacts from builder
+COPY --from=builder /app/dist ./dist
 
-# Expose the Angular default port
+ENV JANUS_BUILD_REF=${JANUS_BUILD_REF}
+ENV JANUS_BUILD_DATE=${JANUS_BUILD_DATE}
+ENV JANUS_VERSION=${JANUS_VERSION}
+
+LABEL org.opencontainers.image.revision=${JANUS_BUILD_REF} \
+      org.opencontainers.image.created=${JANUS_BUILD_DATE} \
+      org.opencontainers.image.version=${JANUS_VERSION}
+
 EXPOSE 4300
 
-# Default command matches the one used in docker-compose originally
-# We added --poll 2000 to help with file watching on Windows/WSL
-CMD ["npx", "ng", "serve", "--host", "0.0.0.0", "--port", "4300", "--poll", "2000", "--proxy-config", "proxy.docker.conf.json"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:4300/ || exit 1
+
+# Serve the built Angular app from the dist directory
+CMD ["serve", "-s", "dist", "-l", "4300", "--single"]
