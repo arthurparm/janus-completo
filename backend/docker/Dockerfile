@@ -41,8 +41,7 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
         poetry lock --no-interaction --no-ansi && \
         poetry export -f requirements.txt --output requirements.txt --without-hashes --no-interaction --no-ansi; \
     fi && \
-    uv pip install -r requirements.txt && \
-    rm -rf /root/.cache
+    uv pip install -r requirements.txt
 
 # --- Stage 2: Runtime Base ---
 FROM python:3.11-alpine as runtime-base
