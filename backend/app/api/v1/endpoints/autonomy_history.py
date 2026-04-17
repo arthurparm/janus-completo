@@ -53,11 +53,10 @@ async def list_runs(
     limit: int = 50,
     repo: AutonomyRepository = Depends(get_autonomy_repo),
 ):
-    runs = repo.list_runs(user_id=user_id, project_id=project_id, limit=limit)
+    runs = repo.list_runs(project_id=project_id, limit=limit)
     return [
         RunSummary(
             id=r.id,
-            user_id=r.user_id,
             project_id=r.project_id,
             status=r.status,
             cycles=int(r.cycles or 0),
@@ -75,7 +74,6 @@ async def get_run(run_id: int, repo: AutonomyRepository = Depends(get_autonomy_r
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run não encontrada")
     return RunSummary(
         id=r.id,
-        user_id=r.user_id,
         project_id=r.project_id,
         status=r.status,
         cycles=int(r.cycles or 0),

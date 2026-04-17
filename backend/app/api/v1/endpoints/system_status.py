@@ -157,6 +157,7 @@ async def get_services_health(
 )
 async def get_user_status(
     request: Request,
+    user_id: int | None = None,
     observability: ObservabilityService = Depends(get_observability_service),
 ):
     actor = getattr(request.state, "actor_user_id", None)

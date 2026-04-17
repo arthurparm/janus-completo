@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # --- Stage 1: Builder (with uv) ---
-FROM python:3.11-slim-bookworm as builder
+FROM python:3.11-alpine as builder
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
@@ -11,16 +11,19 @@ ENV PYTHONUNBUFFERED=1 \
 # Copy uv binary from official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Install build dependencies (consolidated, layer optimization)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+# Install build dependencies for Alpine (apk instead of apt)
+# Alpine requires gcc, musl-dev for building native extensions (numpy, etc)
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache \
+    gcc \
+    musl-dev \
+    linux-headers \
+    g++ \
+    make \
     git \
-    libstdc++6 \
-    libgomp1 \
-    portaudio19-dev && \
-    rm -rf /var/lib/apt/lists/*
+    libstdc++ \
+    libgomp \
+    portaudio-dev
 
 # Create virtual environment
 RUN uv venv --seed /opt/venv
@@ -42,30 +45,27 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     rm -rf /root/.cache
 
 # --- Stage 2: Runtime Base ---
-FROM python:3.11-slim-bookworm as runtime-base
+FROM python:3.11-alpine as runtime-base
 
 WORKDIR /app
 
 # Create non-root user (UID 1000 for bind-mount compatibility)
-RUN groupadd -g 1000 janus && \
-    useradd -u 1000 -g janus -m -d /home/janus -s /bin/bash janus && \
+RUN addgroup -g 1000 janus && \
+    adduser -u 1000 -G janus -m -h /home/janus -s /bin/sh janus && \
     mkdir -p /app/data /app/workspace /app/logs && \
     chown -R janus:janus /app
 
 ENV HOME=/home/janus
 
-# Install runtime dependencies (minimal set, cache mounted)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 \
-    libgomp1 \
-    libasound2 \
-    libportaudio2 \
+# Install runtime dependencies (Alpine apk, minimal set)
+RUN apk add --no-cache \
+    libstdc++ \
+    libgomp \
+    libasound \
+    portaudio \
     git \
     curl \
-    ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
 # Copy virtual environment from builder
 COPY --from=builder --chown=janus:janus /opt/venv /opt/venv
@@ -80,7 +80,8 @@ USER janus
 FROM runtime-base as test
 
 USER root
-RUN --mount=type=cache,target=/var/cache/pip,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache gcc musl-dev && \
     /opt/venv/bin/python -m pip install --no-cache-dir pytest pytest-asyncio
 USER janus
 
@@ -88,25 +89,21 @@ USER janus
 FROM runtime-base as final
 
 ARG JANUS_BUILD_REF=local-dev
+ARG JANUS_BUILD_DATE
+ARG JANUS_VERSION=0.5.44
 
-# Install docker-ce-cli (SysAdmin capability)
+# Install docker-ce-cli (SysAdmin capability) via apk edge repo
 USER root
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    gnupg \
-    lsb-release && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | \
-    gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | \
-    tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends docker-ce-cli && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache docker-cli --repository https://dl-cdn.alpinelinux.org/alpine/edge/community && \
+    apk add --no-cache tzdata
 
 ENV JANUS_BUILD_REF=${JANUS_BUILD_REF}
-LABEL org.opencontainers.image.revision=${JANUS_BUILD_REF}
+ENV JANUS_BUILD_DATE=${JANUS_BUILD_DATE}
+ENV JANUS_VERSION=${JANUS_VERSION}
+
+LABEL org.opencontainers.image.revision=${JANUS_BUILD_REF} \
+      org.opencontainers.image.created=${JANUS_BUILD_DATE} \
+      org.opencontainers.image.version=${JANUS_VERSION}
 
 USER janus
 

@@ -122,6 +122,8 @@ async def chat_history(
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except HTTPException:
+        raise
     except ChatServiceError as e:
         if "Access denied" in str(e):
             raise HTTPException(
@@ -202,6 +204,8 @@ async def chat_history_paginated(
         )
     except ConversationNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    except HTTPException:
+        raise
     except ChatServiceError as e:
         if "Access denied" in str(e):
             raise HTTPException(
@@ -230,7 +234,7 @@ async def list_conversations(
 ):
     identity_ctx = resolve_authenticated_user_context(
         http,
-        user_id,
+        None,
         allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat/conversations",
     )

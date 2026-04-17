@@ -26,6 +26,7 @@ class HarvestRequest(BaseModel):
     min_score: float | None = Field(
         None, ge=0.0, le=1.0, description="Pontuação mínima opcional para filtrar"
     )
+    user_id: str | None = None
 
 
 class TrainingConfig(BaseModel):
@@ -44,6 +45,7 @@ class TrainRequest(BaseModel):
     model_type: str = Field("CLASSIFIER")
     model_name: str | None = Field(None, description="Nome do modelo a ser treinado")
     data_source: str | None = Field(None, description="Fonte opcional de dados para treino")
+    user_id: str | None = None
     training_config: TrainingConfig = Field(default_factory=TrainingConfig)
 
 

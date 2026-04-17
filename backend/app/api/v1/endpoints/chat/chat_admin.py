@@ -30,7 +30,7 @@ async def rename_conversation(
     try:
         identity_ctx = resolve_authenticated_user_context(
             http,
-            payload.user_id,
+            None,
             allow_anonymous_fallback=False,
             endpoint_label="/api/v1/chat/rename",
         )
@@ -85,7 +85,7 @@ async def delete_conversation(
     try:
         identity_ctx = resolve_authenticated_user_context(
             http,
-            user_id,
+            None,
             allow_anonymous_fallback=False,
             endpoint_label="/api/v1/chat/delete",
         )

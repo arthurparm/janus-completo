@@ -4,8 +4,10 @@ from app.api.v1.endpoints.workspace import router as workspace_router
 from app.config import settings  # Added settings for feature flag
 
 from .endpoints import (
+    admin_config,
     agent,
     assistant,
+    auth,
     auto_analysis,
     autonomy,
     autonomy_admin,
@@ -26,6 +28,7 @@ from .endpoints import (
     optimization,
     pending_actions,
     productivity,
+    profiles,
     rag,
     reflexion,
     admin_config,
@@ -34,6 +37,7 @@ from .endpoints import (
     system_status,
     tasks,
     tools,
+    users,
     workers,
 )
 
@@ -50,10 +54,14 @@ if getattr(settings, "PUBLIC_API_MINIMAL", False):
     api_router.include_router(evaluation.router)
     api_router.include_router(deployment.router)
     api_router.include_router(auto_analysis.router, prefix="/auto-analysis")  # Auto-análise simples
+    api_router.include_router(users.router)
+    api_router.include_router(profiles.router)
     api_router.include_router(feedback.router)  # Quick Win: Feedback loop
+    api_router.include_router(auth.router)
 else:
     # Full API: expose all internal and public endpoints
     api_router.include_router(workspace_router)
+    api_router.include_router(auth.router)
 
     api_router.include_router(system_status.router, prefix="/system")
     api_router.include_router(system_overview.router, prefix="/system")
@@ -96,3 +104,5 @@ else:
         auto_analysis.router, prefix="/auto-analysis"
     )  # Auto-análise do sistema
     api_router.include_router(feedback.router)  # Quick Win: Feedback loop
+    api_router.include_router(users.router)
+    api_router.include_router(profiles.router)
