@@ -60,7 +60,7 @@ def _client(monkeypatch) -> TestClient:
     return TestClient(app)
 
 
-def test_hybrid_search_returns_code_results_without_user_id(monkeypatch):
+def test_hybrid_search_returns_code_results(monkeypatch):
     client = _client(monkeypatch)
 
     response = client.get("/api/v1/rag/hybrid_search?query=engine.run&limit=2")

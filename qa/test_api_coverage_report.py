@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 MODULE_PATH = (
-    Path(__file__).resolve().parents[1] / "scripts" / "generate_api_coverage_report.py"
+    Path(__file__).resolve().parents[1] / "tooling" / "generate_api_coverage_report.py"
 )
 MODULE_SPEC = importlib.util.spec_from_file_location("generate_api_coverage_report", MODULE_PATH)
 assert MODULE_SPEC and MODULE_SPEC.loader

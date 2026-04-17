@@ -38,6 +38,6 @@ def test_export_sanitize_redacts_sensitive_fields(monkeypatch):
     assert "events" in data
     ev = data["events"][0]
     dj = json.loads(ev["details_json"]) if ev.get("details_json") else {}
-    assert dj.get("email") == "[REDACTED]"
-    assert dj.get("token") == "[REDACTED]"
+    assert dj.get("email") == "[REDACTED_EMAIL]"
+    assert dj.get("token") == "[REDACTED_SECRET]"
     assert dj.get("note") == "ok"

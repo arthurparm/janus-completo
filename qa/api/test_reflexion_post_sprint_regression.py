@@ -6,8 +6,32 @@ Fix: Adicionado default value (3600s) e null-safety no core layer
 """
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
+@pytest.fixture
+def async_client():
+    from app.main import app
+    from app.api.v1.endpoints.reflexion import get_reflexion_service
+    from app.services.memory_service import get_memory_service
+    
+    class DummyReflexionService:
+        async def post_sprint_summary(self, **kwargs):
+            return {
+                "lessons": [{"score": 0.8, "content": "mocked"}],
+                "meta_report": "mocked"
+            }
+            
+    class DummyMemoryService:
+        async def recall_recent_lessons(self, **kwargs):
+            return [{"score": 0.8, "content": "mocked lesson"}]
+            
+    app.dependency_overrides[get_reflexion_service] = lambda: DummyReflexionService()
+    app.dependency_overrides[get_memory_service] = lambda: DummyMemoryService()
+    
+    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    yield client
+    
+    app.dependency_overrides.clear()
 
 class TestPostSprintEndpointRegressions:
     """Testes para prevenir regressão do bug de timeframe_seconds=None"""

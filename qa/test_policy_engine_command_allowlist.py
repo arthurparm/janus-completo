@@ -11,9 +11,9 @@ from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMeta
 
 def _patch_registry(monkeypatch, metadata: ToolMetadata):
     registry = SimpleNamespace(
-        get_tool=lambda name: object() if name == metadata.name else None,
-        get_metadata=lambda name: metadata if name == metadata.name else None,
-        check_rate_limit=lambda _name, user_id=None: True,
+        get_tool=lambda name, **kwargs: object() if name == metadata.name else None,
+        get_metadata=lambda name, **kwargs: metadata if name == metadata.name else None,
+        check_rate_limit=lambda _name, **kwargs: True,
     )
     monkeypatch.setattr(policy_module, "action_registry", registry)
 

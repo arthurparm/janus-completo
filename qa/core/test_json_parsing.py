@@ -6,7 +6,7 @@ import pytest
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
-from app.core.agents.utils import parse_json_strict
+from app.core.agents.utils import parse_json_strict, parse_json_lenient
 
 class TestJsonParsing:
     def test_strict_json(self):
@@ -36,7 +36,7 @@ class TestJsonParsing:
     def test_dirty_json(self):
         """Test parsing JSON with some surrounding whitespace/text handled by regex."""
         content = 'Sure, here is the JSON:\n```json\n{"key": "value"}\n```'
-        result = parse_json_strict(content)
+        result = parse_json_lenient(content)
         assert result == {"key": "value"}
 
     def test_invalid_json_raises_error(self):

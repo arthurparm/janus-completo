@@ -41,6 +41,9 @@ class _DummyChatService:
         self.last_start_user_id = user_id
         return "conv-1"
 
+    def resolve_active_knowledge_space_id(self, conversation_id, user_id, requested_knowledge_space_id=None):
+        return requested_knowledge_space_id
+
     async def send_message(self, **kwargs):
         self.last_message_user_id = kwargs.get("user_id")
         return {

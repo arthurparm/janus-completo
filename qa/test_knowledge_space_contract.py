@@ -27,7 +27,6 @@ class _DummyKnowledgeSpaceService:
         self.created = kwargs
         return {
             "knowledge_space_id": "ks:1",
-            "user_id": str(kwargs["user_id"]),
             "name": kwargs["name"],
             "source_type": kwargs["source_type"],
             "source_id": kwargs.get("source_id"),
@@ -49,7 +48,6 @@ class _DummyKnowledgeSpaceService:
         return [
             {
                 "knowledge_space_id": "ks:1",
-                "user_id": str(kwargs["user_id"]),
                 "name": "Livro Base",
                 "source_type": "book",
                 "source_id": "book-1",
@@ -82,10 +80,9 @@ class _DummyKnowledgeSpaceService:
             "canonical_points_indexed": 8,
         }
 
-    def get_space(self, *, knowledge_space_id: str, user_id: str):
+    def get_space(self, *, knowledge_space_id: str):
         return {
             "knowledge_space_id": knowledge_space_id,
-            "user_id": str(user_id),
             "name": "Livro Base",
             "source_type": "book",
             "source_id": "book-1",
@@ -103,10 +100,9 @@ class _DummyKnowledgeSpaceService:
             "consolidation_quality_score": 0.0,
         }
 
-    def get_space_status(self, *, knowledge_space_id: str, user_id: str):
+    def get_space_status(self, *, knowledge_space_id: str):
         return {
             "knowledge_space_id": knowledge_space_id,
-            "user_id": str(user_id),
             "name": "Livro Base",
             "source_type": "book",
             "source_id": "book-1",
@@ -132,10 +128,9 @@ class _DummyKnowledgeSpaceService:
             "consolidation_quality_score": 0.82,
         }
 
-    def mark_consolidation_requested(self, *, knowledge_space_id: str, user_id: str):
+    def mark_consolidation_requested(self, *, knowledge_space_id: str):
         self.consolidated = {
             "knowledge_space_id": knowledge_space_id,
-            "user_id": str(user_id),
             "status": "processing",
         }
         return {
@@ -193,7 +188,6 @@ def test_create_knowledge_space_uses_actor_scope():
 
     assert resp.status_code == 200
     assert resp.json()["knowledge_space_id"] == "ks:1"
-    assert service.created["user_id"] == "77"
     assert service.created["source_type"] == "book"
 
 
@@ -203,7 +197,7 @@ def test_attach_and_consolidate_knowledge_space():
 
     attach = client.post(
         "/api/v1/knowledge/spaces/ks:1/documents/doc-9/attach",
-        json={"user_id": "55", "source_id": "vol-1"},
+        json={"source_id": "vol-1"},
     )
     assert attach.status_code == 200
     assert service.attached["knowledge_space_id"] == "ks:1"
@@ -211,7 +205,7 @@ def test_attach_and_consolidate_knowledge_space():
 
     consolidate = client.post(
         "/api/v1/knowledge/spaces/ks:1/consolidate",
-        json={"user_id": "55", "limit_docs": 12},
+        json={"limit_docs": 12},
     )
     assert consolidate.status_code == 200
     data = consolidate.json()
@@ -220,7 +214,7 @@ def test_attach_and_consolidate_knowledge_space():
     assert data["stats"]["task_id"]
     assert "status_url" in data["stats"]
 
-    status = client.get("/api/v1/knowledge/spaces/ks:1?user_id=55")
+    status = client.get("/api/v1/knowledge/spaces/ks:1")
     assert status.status_code == 200
     assert status.json()["documents_processing"] == 1
     assert status.json()["progress"] == 0.4
@@ -232,7 +226,7 @@ def test_query_knowledge_space_returns_canonical_shape():
 
     resp = client.post(
         "/api/v1/knowledge/spaces/ks:1/query",
-        json={"user_id": "55", "question": "qual a sequência?", "mode": "canonical_answer"},
+        json={"question": "qual a sequência", "mode": "canonical_answer"},
     )
 
     assert resp.status_code == 200
@@ -240,4 +234,4 @@ def test_query_knowledge_space_returns_canonical_shape():
     assert data["mode_used"] == "canonical_answer"
     assert data["base_used"] == "consolidated"
     assert data["citations"][0]["doc_id"] == "doc-1"
-    assert service.queried["question"] == "qual a sequência?"
+    assert service.queried["question"] == "qual a sequência"

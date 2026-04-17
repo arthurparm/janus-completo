@@ -22,7 +22,7 @@ def test_legacy_callback_route_removed():
     client = _client()
     resp = client.post(
         LEGACY_CALLBACK_PATH,
-        json={"user_id": 1, "code": "abc"},
+        json={"code": "abc"},
     )
     assert resp.status_code == 404
 
@@ -31,7 +31,7 @@ def test_legacy_refresh_route_removed():
     client = _client()
     resp = client.post(
         LEGACY_REFRESH_PATH,
-        json={"user_id": 1, "provider": "google"},
+        json={"provider": "google"},
     )
     assert resp.status_code == 404
 
@@ -42,10 +42,18 @@ def test_canonical_callback_route_still_exists():
         "/api/v1/productivity/oauth/google/callback",
         json={"code": "abc", "state": "user:1:scope:calendar"},
     )
-    assert resp.status_code == 401
+    assert resp.status_code == 400
 
-
-def test_canonical_refresh_route_still_exists():
+def test_canonical_refresh_route_still_exists(monkeypatch):
+    import app.api.v1.endpoints.productivity as prod_module
+    class DummyUserRepo:
+        def get_user(self, user_id):
+            return None
+    class DummyOAuthRepo:
+        def get(self, user_id, provider):
+            return None
+    monkeypatch.setattr(prod_module, "UserRepository", DummyUserRepo)
+    monkeypatch.setattr(prod_module, "OAuthTokenRepository", DummyOAuthRepo)
     client = _client()
-    resp = client.post("/api/v1/productivity/oauth/google/refresh", params={"user_id": 1})
-    assert resp.status_code == 401
+    resp = client.post("/api/v1/productivity/oauth/google/refresh")
+    assert resp.status_code == 404

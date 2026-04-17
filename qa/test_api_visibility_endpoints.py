@@ -71,7 +71,6 @@ class DummyObservabilityService:
         return [
             {
                 "id": 1,
-                "user_id": 1,
                 "endpoint": "tool:codex_exec",
                 "action": "tool_call",
                 "tool": "codex_exec",
@@ -303,7 +302,6 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
 
     class DummyPendingRow:
         id = 101
-        user_id = "u-1"
         tool_name = "codex_exec"
         args_json = '{"prompt":"hello"}'
         simulation_summary_json = '{"summary":"dry-run ok","final_risk_level":"medium"}'
@@ -313,8 +311,7 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
         created_at = datetime(2026, 2, 12, 10, 30, 0)
 
     class DummyPendingRepo:
-        def list(self, user_id=None, status="pending", limit=50):
-            assert user_id is None
+        def list(self, status="pending", limit=50):
             assert status == "pending"
             assert limit == 50
             return [DummyPendingRow()]
@@ -340,14 +337,13 @@ def test_pending_actions_list_sql_redacts_sensitive_args(client, monkeypatch):
 
     class DummyPendingRow:
         id = 111
-        user_id = "u-redact"
         tool_name = "execute_shell"
         args_json = '{"password":"super-secret-password","email":"person@example.com","command":"echo ok"}'
         status = "pending"
         created_at = datetime(2026, 2, 12, 10, 45, 0)
 
     class DummyPendingRepo:
-        def list(self, user_id=None, status="pending", limit=50):
+        def list(self, status="pending", limit=50):
             return [DummyPendingRow()]
 
     monkeypatch.setattr(
@@ -371,7 +367,6 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
     class DummyPendingRow:
         def __init__(self):
             self.id = 202
-            self.user_id = "u-2"
             self.tool_name = "codex_review"
             self.args_json = '{"conversation_id":"77","commit":"abc123"}'
             self.status = "pending"
@@ -429,13 +424,12 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
                 }
             ]
 
-        def update_message_payload(self, conversation_id, message_id, patch, user_id=None):
+        def update_message_payload(self, conversation_id, message_id, patch):
             updated_payloads.append(
                 {
                     "conversation_id": conversation_id,
                     "message_id": message_id,
                     "patch": patch,
-                    "user_id": user_id,
                 }
             )
             return {}
@@ -471,7 +465,6 @@ def test_pending_actions_reject_sql_action(client, monkeypatch):
     class DummyPendingRow:
         def __init__(self):
             self.id = 303
-            self.user_id = "u-3"
             self.tool_name = "codex_exec"
             self.args_json = '{"conversation_id":"88","prompt":"bye"}'
             self.status = "pending"
@@ -529,13 +522,12 @@ def test_pending_actions_reject_sql_action(client, monkeypatch):
                 }
             ]
 
-        def update_message_payload(self, conversation_id, message_id, patch, user_id=None):
+        def update_message_payload(self, conversation_id, message_id, patch):
             updated_payloads.append(
                 {
                     "conversation_id": conversation_id,
                     "message_id": message_id,
                     "patch": patch,
-                    "user_id": user_id,
                 }
             )
             return {}
