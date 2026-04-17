@@ -47,6 +47,7 @@ def normalize_path(path: str) -> str:
     if not path:
         return path
     p = path.strip()
+    p = p.split("?", 1)[0].split("#", 1)[0]
     if p.startswith("/api/v1/"):
         return p
     if p.startswith("/"):
@@ -56,10 +57,11 @@ def normalize_path(path: str) -> str:
 
 def fetch_openapi() -> dict[str, Any] | None:
     try:
-        response = requests.get(OPENAPI_URL, timeout=8)
-        response.raise_for_status()
-        return response.json()
-    except Exception:
+        from app.main import app
+        return app.openapi()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -144,10 +146,18 @@ def discover_test_endpoint_refs() -> set[str]:
     return refs
 
 
+def template_path_to_regex(path: str) -> re.Pattern[str]:
+    escaped = re.escape(path)
+    escaped = re.sub(r"\\\{[^\\}]+\\\}", r"[^/]+", escaped)
+    return re.compile(rf"^{escaped}$")
+
+
 def build_matrix() -> dict[str, Any]:
     endpoints, source = load_endpoints()
     smoke = load_smoke_results()
     test_refs = discover_test_endpoint_refs()
+    test_refs_list = sorted(test_refs)
+    template_cache: dict[str, re.Pattern[str]] = {}
 
     rows: list[dict[str, Any]] = []
     module_stats: dict[str, dict[str, int]] = defaultdict(
@@ -169,6 +179,12 @@ def build_matrix() -> dict[str, Any]:
             smoke_error = smoke_data.get("error")
 
         in_tests = path in test_refs
+        if not in_tests and "{" in path and "}" in path:
+            pattern = template_cache.get(path)
+            if pattern is None:
+                pattern = template_path_to_regex(path)
+                template_cache[path] = pattern
+            in_tests = any(bool(pattern.match(ref)) for ref in test_refs_list)
 
         row = {
             "method": method,
