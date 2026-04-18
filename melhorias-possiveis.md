@@ -865,3 +865,16 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-040] Vulnerabilidades Altas em Dependências do Frontend
+- Prioridade: P1
+- Esforço: M
+- Problema atual: Múltiplas vulnerabilidades severas detectadas via `npm audit` em pacotes como `@hono/node-server`, `express-rate-limit`, `hono`, `immutable` e `tar` (Alta severidade), além de `dompurify` (Moderada severidade).
+- Solução proposta: Atualizar as dependências e resolver via `npm audit fix` ou atualização manual.
+- Impacto esperado: Prevenção de vulnerabilidades de segurança (ex: XSS, DoS) em bibliotecas base do frontend.
+
+### [SG-041] Fuga de Autenticação nos Endpoints de Workspace
+- Prioridade: P0
+- Esforço: M
+- Problema atual: Endpoints críticos em `backend/app/api/v1/endpoints/workspace.py` (como `/workspace/artifacts/add`, `/system/shutdown`) usam a dependência `get_collaboration_service` mas carecem de uma validação explícita de AuthZ (e.g. `Depends(get_current_user)`). Isso permite a atuação anônima dentro do workspace.
+- Solução proposta: Implementar uma camada de autorização/autenticação em todas as rotas de Workspace que interagem diretamente com artefatos, mensagens e estados do sistema.
+- Impacto esperado: Garantir que operações administrativas e interações sensíveis de colaboração sejam realizadas exclusivamente por usuários autenticados e autorizados.

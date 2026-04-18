@@ -254,3 +254,23 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-18)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas). Sem novos achados críticos em relação à varredura anterior, mantêm-se os alertas de SSRF, XML e injeção já conhecidos.
+- [x] Revisão de autenticação/autorização e dependências.
+
+### 32. Vulnerabilidades Altas e Moderadas no Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** O `npm audit` reportou vulnerabilidades em pacotes como `@hono/node-server`, `express-rate-limit`, `hono`, `immutable`, e `tar` de severidade Alta. Além de `dompurify` de severidade moderada.
+- **Ação Recomendada:** Atualizar dependências com `npm audit fix` ou overrides.
+
+### 33. Ausência de Autenticação nos Endpoints de Workspace
+- **Caminho:** `backend/app/api/v1/endpoints/workspace.py`
+- **Gravidade:** Alta
+- **Descrição:** Endpoints de workspace (`/workspace/artifacts/add`, `/system/shutdown`, etc.) usam `Depends(get_collaboration_service)` sem aplicar verificação de AuthN/AuthZ explícita (falta de `Depends(get_current_user)` ou similar).
+- **Ação Recomendada:** Proteger endpoints implementando controles de autorização apropriados.
