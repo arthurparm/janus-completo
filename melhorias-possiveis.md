@@ -109,6 +109,11 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-040 | Frontend dependencies (@angular/cli, hono, etc.) flag vulnerabilities during npm audit | P1 | M | aberto |
+| SG-041 | Insecure deserialization in transformers dependency discovered via safety | P0 | S | aberto |
+| SG-050 | tooling/secure-tailscale-setup.ps1 script acts as Shadow IT generating local logs exposing hostnames and peer data in clear text (LGPD risk) | P1 | S | aberto |
+| SG-051 | Code injection vulnerabilities (shell=True, B602) persist in launcher_tools.py for Windows subprocesses | P0 | S | aberto |
+| SG-053 | Bandit SAST identified hardcoded passwords (B105) in tests/verify_secret_management.py, app/core/infrastructure/rate_limit_middleware.py, and app/core/llm/sanitizer.py | P0 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -130,6 +135,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| OQ-017 | Fragile in-memory configuration updates in admin_config.py | P1 | M | aberto |
+| OQ-019 | Test scripts in tooling/ bypassing standard Pytest CI pipelines and lacking explicit async timeouts | P1 | S | aberto |
+| OQ-020 | Bandit B110/B112 (Try, Except, Pass/Continue) widespread silent blocks masking errors and creating observability risks in multiple backend files | P0 | M | aberto |
 
 ---
 

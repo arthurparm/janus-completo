@@ -3,6 +3,60 @@
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
 
+## Achados do dia (2026-04-18)
+
+### 12. Try-Except Silenciosos e Observabilidade Comprometida
+**Descrição:** Múltiplos blocos de `try-except` estão definidos com `pass` ou `continue` (Bandit B110, B112), mascarando erros silenciosamente. Isso cria um grave risco à observabilidade e mascara potenciais vazamentos de dados ou falhas operacionais.
+**Evidências:**
+- Diversos arquivos no backend apresentam esse padrão, incluindo `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py`.
+**Próximos passos:**
+- Remover tratamentos genéricos de exceção ou adicionar logging adequado aos erros capturados.
+- Item OQ-020 adicionado ao backlog.
+
+### 13. Testes Fora do CI Standard e Faltando Timeouts Assíncronos
+**Descrição:** Scripts de teste dentro de `tooling/` estão bypassando os pipelines padrão de Pytest no CI, limitando a validação automatizada de regressão. Eles também não possuem timeouts explícitos para operações assíncronas e usam prints brutos que podem expor segredos.
+**Evidências:**
+- Scripts em `tooling/`, como `test_debate_system.py` e `seed-repro-scenarios.ps1`, operam em isolamento e contêm prints sem redação.
+**Próximos passos:**
+- Integrar scripts relevantes ao Pytest ou garantir que sejam executados com verificação de CI e incluir timeout (ex: `asyncio.wait_for()`).
+- Item OQ-019 adicionado ao backlog.
+
+### 14. Riscos em Atualização em Memória
+**Descrição:** Configurações atualizadas via admin não persistem corretamente de forma centralizada ou resiliente. Atualizações em memória da configuração podem se perder após reinicialização e inconsistências entre instâncias.
+**Evidências:**
+- `admin_config.py` realiza manipulações de estado de configurações fracamente gerenciadas e restritas ao processo local.
+**Próximos passos:**
+- Armazenar as modificações dinâmicas de configuração em banco ou base transacional segura.
+- Item OQ-017 adicionado ao backlog.
+
+### 15. Vulnerabilidades de Dependências no Frontend
+**Descrição:** A varredura de segurança do NPM revelou vulnerabilidades críticas no frontend, particularmente relacionadas a injeção de atributos (Cookie Attribute, SSE Control Field).
+**Evidências:**
+- `npm_audit.json` inclui alertas sobre bibliotecas essenciais como `@angular/cli`, `hono`, e outras como `lodash-es` e `vite`.
+**Próximos passos:**
+- Realizar atualização e travamento das versões comprometidas nas dependências do frontend (ex: migrar para versões corrigidas do `hono`).
+- Item SG-040 adicionado ao backlog.
+
+### 16. Insecure Deserialization e Senhas Hardcoded
+**Descrição:** Dependências Python no backend apresentam desserialização insegura. Adicionalmente, credenciais hardcoded foram introduzidas em algumas camadas.
+**Evidências:**
+- Verificações de `safety` flagam o `transformers`.
+- Verificações do `Bandit` (B105) mostram hardcoded passwords em `tests/verify_secret_management.py`, `backend/app/core/infrastructure/rate_limit_middleware.py`, e `backend/app/core/llm/sanitizer.py`.
+**Próximos passos:**
+- Atualizar a versão do `transformers` no requirements.
+- Usar Secrets/Environment para os testes/middleware invés de senhas no código fonte.
+- Itens SG-041 e SG-053 registrados no backlog.
+
+### 17. Shadow IT e Code Injection Persistentes
+**Descrição:** Um script de setup está agindo de maneira obscura expondo dados críticos localmente. Simultaneamente, injeções de comandos com bash/powershell seguem um risco alto.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1` gera e mantêm logs de hostnames (`tailscale-security-monitor.log`) sem PII redaction.
+- `backend/app/core/tools/launcher_tools.py` continua chamando subprocessos no Windows com `shell=True` sem sanitização rigorosa (Bandit B602).
+**Próximos passos:**
+- Reescrever/substituir o script do tailscale para se adequar às regras globais de Logger/PII redaction.
+- Evitar `shell=True` e usar arrays de comando para mitigar o Code Injection.
+- Itens SG-050 e SG-051 registrados no backlog.
+
 ## Achados do dia
 
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)
