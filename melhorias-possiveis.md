@@ -84,6 +84,16 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| OQ-019 | Testes isolados contornam a pipeline CI principal (qa/) | P1 | M | aberto |
+| OQ-020 | Mascaramento silencioso de erros via try-except pass/continue (Bandit B110/B112) | P1 | M | aberto |
+| SG-040 | Vulnerabilidades recorrentes nas dependências Frontend (npm audit) | P0 | M | aberto |
+| SG-041 | Insecure Deserialization via safety audit (transformers) | P1 | S | aberto |
+| SG-050 | Exposição local de logs não ofuscados (Shadow IT) pelo script Tailscale | P1 | S | aberto |
+| SG-051 | Injeção de Comando em Processos Windows | P0 | M | aberto |
+| SG-052 | Vulnerabilidades de SSRF em requisições de rede HTTP (Bandit B310) | P1 | M | aberto |
+| SG-053 | Senhas/Segredos Hardcoded no Código Backend (Bandit B105) | P0 | S | aberto |
+| OQ-017 | Atualização Frágil de Configurações In-Memory | P1 | M | aberto |
+| LGPD-001 | Duplicação de PII em logs e relatórios da IA (SafeEvolutionManager) | P0 | M | aberto |
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
 | SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |
@@ -865,3 +875,76 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+
+## Detalhamento Adicional (2026-04-19)
+
+### [OQ-019] Testes isolados (tooling/) contornam a pipeline CI principal (qa/)
+- Problema atual: Scripts de teste na pasta `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) executam de forma isolada, não integrando com a suite `qa/`, o que limita a validação automática contra regressões.
+- Solucao proposta: Mover ou integrar os testes do diretório `tooling/` para dentro do ecossistema de `qa/` com execuções na pipeline CI contínua.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [OQ-020] Mascaramento silencioso de erros via try-except pass/continue (Bandit B110/B112)
+- Problema atual: O Bandit identificou padrões de `except: pass` e `except: continue` (B110 e B112) em vários arquivos do backend (ex: `llm_repository.py`, `auth.py`, `rag.py`, `planner.py`), o que cria falhas silenciosas e risco de perda de observabilidade (especialmente com PII/LGPD mascarados em logs).
+- Solucao proposta: Substituir blocos try-except opacos por loggings estruturados ou relançamento consciente da exception.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [SG-040] Vulnerabilidades recorrentes nas dependências Frontend (npm audit)
+- Problema atual: Auditoria recente npm detectou vulnerabilidades em pacotes essenciais como `@angular/cli`, `@angular-devkit`, `lodash-es`, `brace-expansion`, `express-rate-limit`, `hono` (Cookie/SSE Injection), `tar`, `vite`, `dompurify` e `immutable`.
+- Solucao proposta: Executar `npm audit fix` onde possível ou aplicar overrides para versões mitigadas.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [SG-041] Insecure Deserialization via safety audit (transformers)
+- Problema atual: Auditoria com `safety` indicou uma vulnerabilidade de Insecure Deserialization na dependência `transformers` no backend.
+- Solucao proposta: Atualizar a versão do `transformers` para a versão segura recomendada.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [SG-050] Exposição local de logs não ofuscados (Shadow IT) pelo script Tailscale
+- Problema atual: O script `tooling/secure-tailscale-setup.ps1` salva logs locais (`tailscale-security-monitor.log`) com nomes de host e dados de peers de forma legível em plain text, contornando a política core de redação de PII e configurando risco LGPD.
+- Solucao proposta: Adicionar ofuscação/redação (PII redaction) no registro dos dados ou remover o log sensível.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [SG-051] Injeção de Comando em Processos Windows
+- Problema atual: Permanece um risco explícito de injeção de comando/código devido ao uso de `shell=True` (Bandit B602) em `backend/app/core/tools/launcher_tools.py`.
+- Solucao proposta: Substituir chamadas por listas seguras de argumentos em `subprocess.run` e `shell=False`.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [SG-052] Vulnerabilidades de SSRF em requisições de rede HTTP (Bandit B310)
+- Problema atual: Detectado risco de Server-Side Request Forgery (SSRF) nas classes `message_broker.py` e `agent_tools.py` por validação de requisições de rede sem scheme seguro.
+- Solucao proposta: Adicionar validação de URL explícita via `urllib.parse` validando scheme (apenas HTTP/HTTPS) e host.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [SG-053] Senhas/Segredos Hardcoded no Código Backend (Bandit B105)
+- Problema atual: O Bandit acusou a presença de senhas hardcoded em arquivos de infraestrutura, middleware e sanitização.
+- Solucao proposta: Externalizar para variáveis de ambiente carregadas via `pydantic-settings`.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [OQ-017] Atualização Frágil de Configurações In-Memory
+- Problema atual: Existem atualizações frágeis das configurações in-memory no arquivo `admin_config.py` e lógica destrutiva/insegura de exclusão de dados em `admin_graph.py` com missing dependências de auth.
+- Solucao proposta: Refatorar para persistência correta via BD ou Redis, e garantir controle de AuthZ/AuthN nos admins.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.
+
+### [LGPD-001] Duplicação de PII em logs e relatórios da IA (SafeEvolutionManager)
+- Problema atual: O módulo `backend/app/core/memory/log_aware_reflector.py` lê logs do sistema inteiro (ex: `janus.log`) para extrair falhas. Isso duplica dados PII em clear text dentro de relatórios do `SafeEvolutionSession` por falta de sanitização universal.
+- Solucao proposta: Implementar chamada mandatória de `redact_pii_text_only` em todas as leituras do log para memória e IA.
+- Impacto esperado: Mitigação dos riscos operacionais/segurança.
+- Riscos: Mínimos, apenas ajustes de CI ou refatoração pontual.
+- Dependencias: Revisão da codebase atual.

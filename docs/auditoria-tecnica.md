@@ -123,3 +123,95 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-19)
+
+### 12. Testes isolados (tooling/) contornam a pipeline CI principal (qa/)
+**Descrição:** Scripts de teste na pasta `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) executam de forma isolada, não integrando com a suite `qa/`, o que limita a validação automática contra regressões.
+**Evidências:**
+- `tooling/test_debate_system.py` e `tooling/seed-repro-scenarios.ps1` bypassam o pytest pipeline padrão.
+
+**Próximos passos:**
+- Mover ou integrar os testes do diretório `tooling/` para dentro do ecossistema de `qa/` com execuções na pipeline CI contínua.
+- Registrar item OQ-019 no backlog de melhorias.
+
+### 13. Mascaramento silencioso de erros via try-except pass/continue (Bandit B110/B112)
+**Descrição:** O Bandit identificou padrões de `except: pass` e `except: continue` (B110 e B112) em vários arquivos do backend (ex: `llm_repository.py`, `auth.py`, `rag.py`, `planner.py`), o que cria falhas silenciosas e risco de perda de observabilidade (especialmente com PII/LGPD mascarados em logs).
+**Evidências:**
+- `backend/app/core/llm/llm_repository.py`, `backend/app/api/v1/endpoints/auth.py`, `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py` contêm esses blocos try-except opacos.
+
+**Próximos passos:**
+- Substituir blocos try-except opacos por loggings estruturados ou relançamento consciente da exception.
+- Registrar item OQ-020 no backlog de melhorias.
+
+### 14. Vulnerabilidades recorrentes nas dependências Frontend (npm audit)
+**Descrição:** Auditoria recente npm detectou vulnerabilidades em pacotes essenciais como `@angular/cli`, `@angular-devkit`, `lodash-es`, `brace-expansion`, `express-rate-limit`, `hono` (Cookie/SSE Injection), `tar`, `vite`, `dompurify` e `immutable`.
+**Evidências:**
+- Relatório npm audit no repositório `frontend/` acusando as dependências supracitadas.
+
+**Próximos passos:**
+- Executar `npm audit fix` onde possível ou aplicar overrides para versões mitigadas.
+- Registrar item SG-040 no backlog de melhorias.
+
+### 15. Insecure Deserialization via safety audit (transformers)
+**Descrição:** Auditoria com `safety` indicou uma vulnerabilidade de Insecure Deserialization na dependência `transformers` no backend.
+**Evidências:**
+- Report do safety sobre a biblioteca `transformers`.
+
+**Próximos passos:**
+- Atualizar a versão do `transformers` para a versão segura recomendada.
+- Registrar item SG-041 no backlog de melhorias.
+
+### 16. Exposição local de logs não ofuscados (Shadow IT) pelo script Tailscale
+**Descrição:** O script `tooling/secure-tailscale-setup.ps1` salva logs locais (`tailscale-security-monitor.log`) com nomes de host e dados de peers de forma legível em plain text, contornando a política core de redação de PII e configurando risco LGPD.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1` criando `tailscale-security-monitor.log`.
+
+**Próximos passos:**
+- Adicionar ofuscação/redação (PII redaction) no registro dos dados ou remover o log sensível.
+- Registrar item SG-050 no backlog de melhorias.
+
+### 17. Injeção de Comando em Processos Windows
+**Descrição:** Permanece um risco explícito de injeção de comando/código devido ao uso de `shell=True` (Bandit B602) em `backend/app/core/tools/launcher_tools.py`.
+**Evidências:**
+- Chamadas a subprocessos em `backend/app/core/tools/launcher_tools.py` usando flag shell=True.
+
+**Próximos passos:**
+- Substituir chamadas por listas seguras de argumentos em `subprocess.run` e `shell=False`.
+- Registrar item SG-051 no backlog de melhorias.
+
+### 18. Vulnerabilidades de SSRF em requisições de rede HTTP (Bandit B310)
+**Descrição:** Detectado risco de Server-Side Request Forgery (SSRF) nas classes `message_broker.py` e `agent_tools.py` por validação de requisições de rede sem scheme seguro.
+**Evidências:**
+- Relatório Bandit de SSRF (B310) nas referidas ferramentas/arquivos de serviço.
+
+**Próximos passos:**
+- Adicionar validação de URL explícita via `urllib.parse` validando scheme (apenas HTTP/HTTPS) e host.
+- Registrar item SG-052 no backlog de melhorias.
+
+### 19. Senhas/Segredos Hardcoded no Código Backend (Bandit B105)
+**Descrição:** O Bandit acusou a presença de senhas hardcoded em arquivos de infraestrutura, middleware e sanitização.
+**Evidências:**
+- Arquivos `tests/verify_secret_management.py`, `app/core/infrastructure/rate_limit_middleware.py`, e `app/core/llm/sanitizer.py` possuem secrets literais (B105).
+
+**Próximos passos:**
+- Externalizar para variáveis de ambiente carregadas via `pydantic-settings`.
+- Registrar item SG-053 no backlog de melhorias.
+
+### 20. Atualização Frágil de Configurações In-Memory
+**Descrição:** Existem atualizações frágeis das configurações in-memory no arquivo `admin_config.py` e lógica destrutiva/insegura de exclusão de dados em `admin_graph.py` com missing dependências de auth.
+**Evidências:**
+- `admin_config.py` modificando estado em tempo de execução, e endpoints em `admin_graph.py` ausentes de `Depends(get_current_user)`.
+
+**Próximos passos:**
+- Refatorar para persistência correta via BD ou Redis, e garantir controle de AuthZ/AuthN nos admins.
+- Registrar item OQ-017 no backlog de melhorias.
+
+### 21. Duplicação de PII em logs e relatórios da IA (SafeEvolutionManager)
+**Descrição:** O módulo `backend/app/core/memory/log_aware_reflector.py` lê logs do sistema inteiro (ex: `janus.log`) para extrair falhas. Isso duplica dados PII em clear text dentro de relatórios do `SafeEvolutionSession` por falta de sanitização universal.
+**Evidências:**
+- `backend/app/core/memory/log_aware_reflector.py` não chama `redact_pii_text_only` antes de usar o conteúdo de logs.
+
+**Próximos passos:**
+- Implementar chamada mandatória de `redact_pii_text_only` em todas as leituras do log para memória e IA.
+- Registrar item LGPD-001 no backlog de melhorias.
