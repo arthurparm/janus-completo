@@ -123,3 +123,28 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-19)
+
+### 12. Vulnerabilidades de Código Fonte (Bandit)
+**Descrição:** Identificação de riscos de segurança relacionados ao uso de funções perigosas e manipulação de diretórios temporários na base de código.
+**Evidências:**
+- `backend/app/core/infrastructure/python_sandbox.py`: Uso perigoso da função `exec()` identificada pelo analisador estático (Bandit B102).
+- `backend/app/core/memory/log_aware_reflector.py`: Criação e manipulação de diretórios temporários hardcoded (`/tmp`), representando risco (Bandit B108).
+**Próximos passos:**
+- Avaliar a substituição de `exec()` por alternativas seguras ou reforçar o isolamento do sandbox (já rastreado como SG-035).
+- Atualizar a manipulação de arquivos temporários usando as bibliotecas recomendadas (`tempfile`).
+
+### 13. Risco de LGPD e Observabilidade em Try/Except Silenciosos
+**Descrição:** Identificação de blocos try/except que silenciam erros, ocultando potenciais falhas no processamento de dados e possíveis vazamentos de PII.
+**Evidências:**
+- Blocos Try, Except, Pass/Continue em arquivos como `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py` (Bandit B110/B112).
+**Próximos passos:**
+- Remover o bypass silencioso, garantindo que exceções sejam tratadas, higienizadas de PII (com `redact_pii_text_only`) e devidamente logadas. Registrar o risco formalmente.
+
+### 14. Riscos de Autenticação em Endpoints Expostos
+**Descrição:** Interações não autenticadas em rotas de agentes e assistentes apresentam riscos de falsificação de identidade e retenção não intencional de PII.
+**Evidências:**
+- Fuga de autenticação e ausência de restrições de identidade em endpoints de execução de agentes como `/execute` em `agent.py` e `/assistant/execute` em `assistant.py`.
+**Próximos passos:**
+- Aplicar `Depends(get_current_user)` nas rotas de agentes. Registrar tracking de segurança no roadmap.

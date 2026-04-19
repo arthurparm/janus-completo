@@ -101,6 +101,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-019 | Corrigir vazamento de estado global e risco de PII no productivity_tools.py | P1 | M | ideia |
 | SG-020 | Corrigir vulnerabilidade de SQL Injection no dedupe_service.py (f-strings) | P0 | M | aberto |
 | SG-021 | Implementar autenticacao nos endpoints FastAPI expostos em windows_agent.py | P0 | S | aberto |
+| SG-042 | Exigir autenticação nos endpoints de agentes (/execute, /assistant/execute) para prevenir spoofing e vazamento LGPD | P0 | S | aberto |
 | SG-022 | LGPD: Adicionar minimizacao e auditoria nas capturas de tela do windows_agent.py | P1 | M | aberto |
 | SG-023 | LGPD: Ofuscar comandos de voz capturados e logados em daemon.py | P1 | S | aberto |
 | SG-024 | Atualizar @hono/node-server no frontend para mitigar vulnerabilidade de alta severidade | P1 | S | aberto |
@@ -130,6 +131,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| OQ-020 | Remover blocos try/except silenciosos (Bandit B110/B112) com riscos de observabilidade e LGPD | P1 | M | aberto |
 
 ---
 
@@ -440,7 +442,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 |---|---|---|---|---|---|
 | FE3-001 | Chat melhorado com stream de eventos de agente (thought stream) | `/chat/*`, SSE events | P0 | M | parcial |
 | FE3-002 | Painel de autonomia com gestão de strategic goals e tools | `/autonomy/*`, `/tools/*` | P0 | M | parcial |
-| FE3-003 | Centro de aprovações pendentes com diff visual | `/pending-actions/*` | P0 | S | feito |
+| FE3-003 | Centro de aprovações pendentes com diff visual | `/pending-actions/*` | P0 | S | não comprovada |
 | FE3-004 | Gerenciamento de tasks e subtasks com Kanban/Timeline | `/tasks/*` | P1 | M | ideia |
 | FE3-005 | Productivity dashboard (summary, metrics, templates) | `/productivity/*` | P1 | M | ideia |
 | FE3-006 | Learning center com insights e flashcards | `/learning/*` | P1 | M | ideia |
