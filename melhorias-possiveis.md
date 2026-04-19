@@ -109,6 +109,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-054 | Mitigar vulnerabilidades criticas no frontend (protobufjs) | P0 | S | aberto |
+| SG-055 | Mitigar OS Command Injection, Exec e Binding sem proteção (B602, B102) | P1 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -865,3 +867,19 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-054] Vulnerabilidades Críticas de Dependências no Frontend (`protobufjs`, etc)
+- **Status:** aberto
+- **Prioridade:** P0
+- **Esforço:** S
+- **Descrição:** O npm audit apontou 1 vulnerabilidade crítica (`protobufjs`) e outras de severidade alta (como `lodash-es` e `vite`). Isso expande os vetores de ataque documentados e requer atualização emergencial ou mitigação via overrides, especialmente pelo alto impacto de uma falha crítica.
+- **Evidências:** Frontend `npm audit`.
+- **Mitigação:** Rodar `npm audit fix`, ou forçar atualização manual com overrides no package.json.
+
+### [SG-055] Vazamento de OS Command Injection, Exec e Binding sem Proteção (Bandit)
+- **Status:** aberto
+- **Prioridade:** P1
+- **Esforço:** M
+- **Descrição:** O Bandit revelou vulnerabilidades críticas e médias novas: Command Injection via `subprocess.call` com `shell=True` no `launcher_tools.py` (B602), uso de `exec()` no `python_sandbox.py` (B102), chamadas sem timeout no `test_tool_evolution_chat.py` (B113), entre outras. O Agente do Windows continua sem validações, permitindo acesso aberto.
+- **Evidências:** `backend/app/core/tools/launcher_tools.py`, `python_sandbox.py`, `windows_agent.py`.
+- **Mitigação:** Substituir implementações inseguras por sanitização, arrays em subprocessos, remoção de `exec`/`eval`, restringir ligações a localhost.

@@ -254,3 +254,39 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-19)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidade Crítica e Altas em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Crítica / Alta
+- **Descrição:** Múltiplas dependências do frontend apresentaram vulnerabilidades, destacando-se:
+  - `protobufjs` (Crítica)
+  - `lodash-es`, `vite` (Alta)
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente, priorizando `protobufjs`.
+
+### 33. Code Injection e OS Command Injection (B602, B102, B307)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`, `backend/app/core/infrastructure/python_sandbox.py`, `backend/app/core/tools/faulty_tools.py`
+- **Gravidade:** Alta / Média
+- **Descrição:**
+  - `launcher_tools.py` (linha 33): `subprocess.call` com `shell=True` identificado, possibilitando command injection.
+  - `python_sandbox.py` (linha 449): Uso de `exec` detectado.
+  - `faulty_tools.py` (linhas 41, 67): Uso de `eval()`, considerável inseguro.
+- **Ação Recomendada:** Remover `shell=True` substituindo por array de comandos. Substituir `eval` e `exec` por alternativas seguras ou sandboxing rigoroso.
+
+### 34. Requisições HTTP sem Timeout (B113)
+- **Caminho:** `backend/scripts/test_tool_evolution_chat.py`, `backend/scripts/verify_arch_knowledge.py`, `backend/tests/e2e/conftest.py`, etc.
+- **Gravidade:** Média
+- **Descrição:** Múltiplas chamadas à biblioteca `requests` (get, post) sem o parâmetro `timeout`, possibilitando falhas por esgotamento de recursos caso a conexão trave.
+- **Ação Recomendada:** Adicionar `timeout=10` (ou valor adequado) em todas as requisições.
+
+### 35. Binding Inseguro a Todas as Interfaces (B104)
+- **Caminho:** `backend/windows_agent.py`
+- **Gravidade:** Média
+- **Descrição:** O `windows_agent.py` continua vinculando-se a `0.0.0.0` (linha 329), expondo os endpoints para toda a rede sem restrições.
+- **Ação Recomendada:** Restringir o host de inicialização para `127.0.0.1`.

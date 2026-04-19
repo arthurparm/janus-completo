@@ -90,3 +90,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-19)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização (Logs do Daemon):** O `daemon.py` continua registrando e persistindo transcrições (`logger.info("log_info", message=f"Command received: {command}")`), violando regras de minimização, e não utiliza redação de PII.
+- **Metadados de Email Sensíveis não Ofuscados:** Em `productivity_tools.py`, dados críticos (`user_id`, `to` e `subject`) continuam vazando pelos logs em texto limpo (`logger.info("[EMAIL]", extra=...)`), expondo PII sem redação.
+- **Rate Limiting em Endpoints Críticos (Fail-Closed e Auth Exposto):** O endpoint de autenticação (`/auth`) em `auth.py` não conta com a anotação `@limiter.limit`. Associado ao comportamento de fail-closed ou ausência de limitador (`rate_limit_middleware.py`), facilita ataques de força-bruta diretamente sobre identidades, aumentando riscos para as contas.
+- **Exposição Global sem Autenticação (Windows Agent):** O binding em `0.0.0.0:5001` expõe as APIs do `windows_agent.py` para a rede local sem validações. Combinado com a captura de tela indiscriminada que registra senhas e outras PIIs (sem minimização/redação), há altíssimo risco LGPD em vazamento não auditado.
+
+### Próximos Passos
+1. **Implementar Mascaramento de Áudio:** Configurar `redact_pii_text_only` no ciclo do comando de áudio do daemon.
+2. **Mascaramento de Logs no Tooling:** Aplicar redação para logs nas ferramentas de produtividade.
+3. **Limitação de Tráfego Auth:** Adicionar rate limit apropriado (`@limiter.limit`) para o endpoint de tokens, controlando as chamadas.
+4. **Fechamento do Binding no Agente:** Atualizar porta para `127.0.0.1` e impor validações rígidas.
