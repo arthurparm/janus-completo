@@ -130,6 +130,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| SG-040 | Atualizar vulnerabilidades severas do Frontend (Vite, Hono, Angular, etc) via `npm audit` | P1 | M | aberto |
+| OQ-020 | Remover bloqueios try-except silenciosos (Bandit B110/B112) que ofuscam erros e falhas em tratativas LGPD | P1 | M | aberto |
 
 ---
 
@@ -865,3 +867,12 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-040] Atualizar dependências vulneráveis do Frontend (npm audit)
+- Contexto: A auditoria de dependências no frontend identificou 29 vulnerabilidades, englobando componentes centrais como `@angular/core`, `@hono/node-server`, `vite`, `dompurify` e `tar`.
+- Impacto esperado: Remoção de vulnerabilidades de severidade crítica e alta (ex: protobufjs).
+- Riscos: Atualizações de versões majoritárias podem requerer refatoração e quebrar funcionalidades do frontend se não devidamente testadas.
+
+### [OQ-020] Remoção de blocos "Try, Except, Pass" silenciosos
+- Contexto: O Bandit identificou dezenas de ocorrências (B110, B112) de tratamento de erro silencioso em arquivos de back-end.
+- Impacto esperado: Aumento significativo da observabilidade. Falhas de rotina, especialmente ligadas ao tratamento de dados, não passarão mais despercebidas, gerando alertas no Grafana/Sentry.
+- Riscos: Pode inundar os logs caso exceções antes ignoradas sejam triviais. Deve-se avaliar o `pass` ou adicionar logs no nível de warning com redução de ruído apropriada.

@@ -90,3 +90,12 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+## Achados do dia (2026-04-20)
+
+### Lacunas e Impacto
+1. **Mascaramento de Exceções Silencioso (B110/B112):** A presença de centenas de blocos `try-except-pass` e `try-except-continue` em componentes do backend (ex: agentes, memória, chat) pode engolir falhas de anonimização ou expurgo, resultando em dados pessoais não sendo devidamente tratados ou expurgados e dificultando a auditoria.
+2. **Execução de Comandos em Sandbox Insegura:** O uso persistente de `exec()` e chamadas a `subprocess` sem higienização rigorosa abre portas para que ferramentas processem e retenham dados inadvertidamente.
+
+### Próximos Passos
+- **Tratamento de Exceções Sensíveis (OQ-020):** Implementar logging proativo nos blocos de `except` e garantir que qualquer erro na cadeia de processamento que lide com dados do usuário dispare alertas de monitoramento ao invés de prosseguir silenciosamente.
+- **Isolamento e Sanitização de Subprocessos:** Acelerar a mitigação das tasks SG-026 e SG-035 para assegurar que ferramentas baseadas em shell não processem comandos injetados com PII de forma opaca aos controles de LGPD.

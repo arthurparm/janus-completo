@@ -254,3 +254,38 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+## Achados do dia (2026-04-20)
+
+### Checklist executado
+- [x] Vazamento de segredos/tokens nos logs
+- [x] Falta de autenticação/autorização
+- [x] Permissões frouxas
+- [x] Validação de inputs
+- [x] Segredos hardcoded
+- [x] Ausência de rate limiting
+- [x] Dependências vulneráveis
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Severidade:** Crítica / Alta / Moderada
+- **Descrição:** O `npm audit` revelou 29 vulnerabilidades, sendo 1 crítica (protobufjs), 20 altas e 8 moderadas. Dependências afetadas incluem: `@angular/core`, `@hono/node-server`, `dompurify`, `tar`, `vite`, `lodash-es`, `express-rate-limit`, `brace-expansion`, `immutable`.
+- **Ação Recomendada:** Criar task SG-040 para atualizar as dependências via `npm audit fix` ou overrides manuais.
+
+### 33. Ocultação Silenciosa de Exceções (Bandit B110 / B112)
+- **Severidade:** Alta (Risco de Observabilidade)
+- **Descrição:** O Bandit reportou mais de 250 instâncias de blocos "Try, Except, Pass" e "Try, Except, Continue", afetando arquivos do backend. Isso mascara falhas em fluxos de dados, podendo levar a instabilidades não rastreáveis ou processamento silencioso de erros.
+- **Ação Recomendada:** Criar task OQ-020 para revisar esses blocos, logando os erros ou tratando-os adequadamente.
+
+### 34. Execução de subprocessos com shell=True (Bandit B602)
+- **Severidade:** Alta
+- **Descrição:** O Bandit detectou uso de `shell=True` no `launcher_tools.py` e chamadas a `exec()` no `python_sandbox.py`. Isso abre brechas para OS Command Injection.
+- **Ação Recomendada:** Tratar o input, usar `shlex.quote` ou migrar para chamadas diretas com listas de argumentos (já rastreado via SG-026/SG-035).
+
+### 35. Uso de funções inseguras para avaliação de strings (Bandit B307)
+- **Severidade:** Média
+- **Descrição:** Uso de `eval()` (em vez de `ast.literal_eval`) e funções afins no `faulty_tools.py`.
+- **Ação Recomendada:** Trocar por `ast.literal_eval` para previnir injeção de código (rastreado em SG-039).
+
+### 36. XML Parsing Vulnerável (Bandit B314)
+- **Severidade:** Média
+- **Descrição:** Uso do ElementTree inseguro no `document_parser_service.py` suscetível a ataques XXE.
+- **Ação Recomendada:** Migrar para `defusedxml` (rastreado em SG-031).
