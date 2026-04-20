@@ -865,3 +865,47 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-021] Configurações in-memory frágeis em admin_config.py
+- Problema atual: O endpoint `/admin/config` (Hot-Reload) realiza alterações de configuração in-memory, o que resulta em perda de estado global em caso de restart dos serviços, gerando inconsistências.
+- Solucao proposta: Refatorar a classe `ConfigService` e `admin_config.py` para persistir dados modificados (via Redis persistente ou base de dados como Postgres).
+- Impacto esperado: Configuração tolerante a falhas que sobrevive a reboots das instâncias.
+- Riscos: Adição de complexidade à inicialização (precisa de fetch da base central na subida da config).
+- Dependencias: Banco de dados ou cache distribuído.
+- Prioridade: P2
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-022] Lógica de purge perigosa e sem validação
+- Problema atual: A rota `/admin/graph/purge_incompatible` permite exclusão massiva do banco e não implementa checagens de validação granulares da thread atual vs versão, sendo um risco técnico e operacional.
+- Solucao proposta: Substituir purge destrutivo incondicional por arquivamento e implementar check-point schemas versionados rigorosamente.
+- Impacto esperado: Proteção dos dados dos usuários em produção e prevenção contra acidentes críticos na infraestrutura do LangGraph.
+- Riscos: Redução de agilidade em dev, mas aumento massivo na segurança em prod.
+- Dependencias: Mapeamento de tabelas do LangGraph.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-054] Auth bypass nas rotas de execute do agente e assistant
+- Problema atual: Endpoints críticos para orquestração (como `/execute` em `agent.py` e `/assistant/execute` em `assistant.py`) foram mapeados sem a anotação obrigatória de RBAC/AuthZ `Depends(get_current_user)`.
+- Solucao proposta: Inserir e testar o dependency injector de `get_current_user` em todas as rotas que manipulam estado conversacional dos agentes.
+- Impacto esperado: Fechar falhas críticas de A1 (Broken Access Control).
+- Riscos: N/A.
+- Dependencias: Atualização do contrato e testes.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-055] Injeção de shell via Popen no agente Windows
+- Problema atual: Em `backend/app/core/tools/launcher_tools.py`, o sub-processo que inicia as aplicações usa `subprocess.Popen(..., shell=True)`, habilitando um ataque clássico de Injeção de Comando de SO (Bandit B602).
+- Solucao proposta: Remover o uso de `shell=True` construindo explicitamente o array do command line para inicialização no OS, mitigando injeção via parâmetros polimórficos.
+- Impacto esperado: Sandbox de execução mais rigoroso e aprovação nos checkgates do Bandit SAST.
+- Riscos: Testar incompatibilidades de abertura de executáveis nativos no Windows sem shell env vars.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

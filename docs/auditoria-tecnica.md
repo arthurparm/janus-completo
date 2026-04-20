@@ -123,3 +123,28 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-20)
+
+### 12. Vulnerabilidades de Shell e Exec (Segurança)
+**Descrição:** Observou-se a persistência de uso de funções vulneráveis a injeção de shell no agente Windows, permitindo execução de código arbitrário.
+**Evidências:**
+- `backend/app/core/tools/launcher_tools.py`: Utiliza `subprocess.Popen(..., shell=True)` de forma insegura.
+- (Anterior) `python_sandbox.py` usa `exec()` dinâmico, já mapeado no Bandit B102.
+
+**Próximos passos:**
+- Remover as flags `shell=True` substituindo a passagem de parâmetros para formato de lista (Array of strings).
+- Cadastrado SG-055 no backlog de melhorias.
+
+### 13. Endpoints Expostos Sem Autenticação e Lógicas Frágeis e Destrutivas (Segurança/Codificação)
+**Descrição:** Falta de proteção de endpoints críticos por autenticação e validação, somada a componentes com falhas de persistência ou lógicas de manipulação de DB destrutivas.
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py` e `backend/app/api/v1/endpoints/assistant.py`: Endpoints como `/execute` não possuem o decorator ou dependência `Depends(get_current_user)`.
+- `backend/app/api/v1/endpoints/admin_config.py`: Endpoint `/admin/config` realiza alterações de configuração do sistema `in-memory`, com risco de perda global de estado em restarts.
+- `backend/app/api/v1/endpoints/admin_graph.py`: O endpoint `/admin/graph/purge_incompatible` contém uma lógica pesada e potencialmente destrutiva sem proteções granulares adequadas.
+
+**Próximos passos:**
+- Injetar validação `Depends(get_current_user)` nos endpoints desprotegidos.
+- Estudar mecanismo de persistência robusto (DB ou volume) para configurações a quente.
+- Revisar permissões de expurgo do LangGraph e exigir roles rígidas e backup preventivo nas rotas de admin.
+- Registrados OQ-021, OQ-022 e SG-054 no roadmap (`melhorias-possiveis.md`).
