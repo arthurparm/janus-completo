@@ -1,10 +1,11 @@
 from typing import Any
 
 import structlog
-from app.db import db
-from app.models.user_models import Consent
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
+
+from app.db import db
+from app.models.user_models import Consent
 
 logger = structlog.get_logger(__name__)
 

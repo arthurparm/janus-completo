@@ -123,3 +123,12 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-21)
+
+### 12. Melhoria em db_migration_service.py (Simplificação)
+**Descrição:** Ocorreu uma reorganização das importações no arquivo `backend/app/services/db_migration_service.py` realizada pelo ruff (lint gate), o que é um indicador de manutenção de padronização, simplificando o arquivo e garantindo alinhamento de code style.
+**Evidências:**
+- Commit recente modificando `backend/app/services/db_migration_service.py` corrigindo ordem de importações.
+**Próximos passos:**
+- N/A. Alteração feita via gate de CI com ruff.
