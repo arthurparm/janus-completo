@@ -1,7 +1,5 @@
-import os
-import sys
 
-sys.path.append(os.path.join(os.getcwd(), "backend"))
+
 
 from app.services.observability_service import ObservabilityService
 

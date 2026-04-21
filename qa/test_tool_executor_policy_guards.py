@@ -1,11 +1,7 @@
-import os
-import sys
 from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 import app.services.tool_executor_service as tool_module
 from app.core.autonomy.policy_engine import PolicyDecision, SimulationResult

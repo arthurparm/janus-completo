@@ -1,4 +1,3 @@
-import os
 import sys
 import types
 from contextlib import asynccontextmanager
@@ -9,8 +8,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Ensure "app" package is discoverable when running from repo root
-sys.path.append(os.path.join(os.getcwd(), "backend"))
-
 from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata
 from app.services.knowledge_service import get_knowledge_service
 from app.services.llm_service import get_llm_service
