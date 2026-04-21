@@ -865,3 +865,36 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-040] Novas atualizações críticas de dependências frontend (Vite, Flatted, @hono/node-server)
+- Problema atual: A varredura de `npm audit` evidenciou novas vulnerabilidades em bibliotecas base do frontend (Vite com Arbitrary File Read, Flatted com Prototype Pollution, e @hono/node-server com Auth bypass).
+- Solucao proposta: Executar atualização das bibliotecas indicadas (`npm audit fix`) ou forçar mitigação manual no `package.json`.
+- Impacto esperado: Prevenção de acessos indevidos e negação de serviço.
+- Riscos: Quebra de compatibilidade durante update.
+- Dependencias: Frontend pipelines.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-053] Exposição de senhas hardcoded (Bandit B105) em rate_limit_middleware e sanitizer
+- Problema atual: Strings hardcoded foram encontradas em `backend/app/core/infrastructure/rate_limit_middleware.py`, `backend/app/core/llm/sanitizer.py`, e múltiplos scripts de testes (ex. `verify_secret_management.py`).
+- Solucao proposta: Substituir por injeções corretas via `.env` ou utilizar estruturas dinâmicas que não gravem senhas no código-fonte.
+- Impacto esperado: Prevenção do vazamento de credenciais.
+- Riscos: Nenhum.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-020] Mascaramento silencioso de erros (Bandit B110/B112) criando riscos de observabilidade e LGPD
+- Problema atual: Em todo o backend (ex. `rag.py`, `planner.py`, `auth.py`), blocos `try-except` estão omitindo exceções ativamente (`pass` ou `continue`), o que pode esconder falhas críticas no processamento de dados e na sanitização PII.
+- Solucao proposta: Inserir `logger.error` e `logger.warning` detalhados em todos os blocos `except` silenciosos, reportando falhas aos serviços de telemetria da aplicação sem derrubar o request.
+- Impacto esperado: Maior rastreabilidade e controle operacional.
+- Riscos: Aumento drástico de log-spam caso a exceção seja intencional ou esperada no loop de eventos.
+- Dependencias: Logging framework `structlog`.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto

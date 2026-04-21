@@ -90,3 +90,14 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-21)
+
+### Lacunas e Impacto
+- Nenhuma nova funcionalidade ou fluxo de arquitetura alterou diretamente a coleta de dados, mas os escaneamentos detalhados recentes (Bandit) identificaram riscos atrelados à observabilidade de PII:
+- **Mascaramento Silencioso de Processamento de PII (Silent Exceptions):** A presença sistêmica de falhas silenciosas (`try-except` com `pass` ou `continue`, vulnerabilidades B110 e B112) em subsistemas que lidam indiretamente com informações dos usuários (ex: `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py`) pode engolir exceções cruciais sobre vazamento ou falha de manipulação de PII. Se uma lógica de expurgo ou criptografia falhar e for capturada por esse `except` mudo, o dado ficará comprometido em texto plano sem alerta ao controle de monitoramento (SOC).
+- As falhas críticas de mitigação LGPD mapeadas em datas anteriores (logs do daemon, retenção de ProductivityTools) continuam exigindo fechamento.
+
+### Próximos Passos
+1. **Refatorar Try-Excepts em Módulos Críticos:** Mapear e remover as estruturas `B112` nos arquivos `rag.py` e `planner.py`, garantindo que falhas emitam log formatado com aviso ao sistema de segurança, assegurando o rastreamento em caso de incidentes envolvendo dados pessoais.
+2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção imediata das vulnerabilidades listadas nos dias anteriores.

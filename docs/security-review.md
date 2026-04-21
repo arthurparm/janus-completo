@@ -254,3 +254,31 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-21)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado com sucesso no virtualenv do poetry).
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta
+- **Descrição:** O `npm audit` reportou novas vulnerabilidades em dependências do frontend que não haviam sido mapeadas na última auditoria:
+  - `vite` (Path Traversal in Optimized Deps, Arbitrary File Read).
+  - `flatted` (Unbounded recursion DoS, Prototype Pollution).
+  - `@hono/node-server` (Authorization bypass for protected static paths).
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente no projeto frontend e recompilar.
+
+### 33. Exposição de Senhas Hardcoded em Configurações e Testes
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`, `backend/app/core/llm/sanitizer.py`, e múltiplos scripts em `backend/tests/` (como `verify_secret_management.py`).
+- **Gravidade:** Alta (Bandit B105)
+- **Descrição:** Identificadas strings fixas sendo atribuídas a variáveis sensíveis relacionadas a senhas ou hashes sem os devidos tratamentos. Isso introduz riscos de exposição de credenciais em commits, dumps e processos da aplicação.
+- **Ação Recomendada:** Remover hardcodes e injetar dependências usando variáveis de ambiente (`os.getenv`, `.env`) gerenciadas pela camada `app.config`.
+
+### 34. Mascaramento Silencioso de Exceções Críticas
+- **Caminho:** Numerosos arquivos sob `backend/app/`, incluindo endpoints críticos (`auth.py`, `auto_analysis.py`) e infraestrutura (`python_sandbox.py`, `rag.py`, `planner.py`).
+- **Gravidade:** Moderada (Bandit B110, B112)
+- **Descrição:** Identificado o uso excessivo e arriscado de blocos `try-except` silenciados que chamam `pass` ou `continue`. O mascaramento cego de exceções obscurece a detecção de potenciais falhas sistêmicas e compromete gravemente a observabilidade e auditoria (logs nulos para problemas no RAG ou em tarefas baseadas no DB).
+- **Ação Recomendada:** Refatorar os blocos para relatar `logger.error(...)` e usar exceções devidamente tipadas e gerenciadas no fluxo da API FastAPI ou workers.
