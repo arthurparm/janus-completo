@@ -865,3 +865,16 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-040] Vulnerabilidades no Frontend via npm audit
+- **Problema:** O relatório `npm audit` revelou vulnerabilidades Críticas, Altas e Moderadas em múltiplas dependências do ecossistema `@angular` (core, compiler, router, etc.), em componentes do Vite, servidor Hono, flatted, e notavelmente `protobufjs`. A falta de mitigação ou atualização dessas libs expõe o frontend a explorações de injeção (XSS), DoS e Prototype Pollution.
+- **Risco:** Alto a Crítico.
+- **Prioridade:** P0
+- **Esforço:** M
+- **Ação:** Proceder com atualizações ou deduplicações (`npm audit fix`), override manual ou refatorações pontuais no caso de breaking changes das bibliotecas afetadas.
+
+### [SG-054] Falta de Autenticação em `/execute` e `/assistant/execute`
+- **Problema:** Observado que as rotas em `backend/app/api/v1/endpoints/agent.py` e `backend/app/api/v1/endpoints/assistant.py` (métodos de execução) recebem Requests, porém não exigem a dependência de `get_current_user` explícitamente nas rotas do FastAPI, configurando um risco de bypass de acesso aos serviços core por agentes não autenticados que consigam acessar a infraestrutura da API.
+- **Risco:** Alto.
+- **Prioridade:** P0
+- **Esforço:** S
+- **Ação:** Introduzir `Depends(get_current_user)` nas declarações dessas rotas ou na montagem do Router.

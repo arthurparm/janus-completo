@@ -254,3 +254,34 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-22)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Nenhuma vulnerabilidade encontrada** (executado no virtualenv do poetry via PIPAPI_PYTHON_LOCATION).
+- [x] Revisão manual de código via `bandit` (backend).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Crítica / Alta / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram vulnerabilidades:
+  - `protobufjs` (Crítica)
+  - Dependências do ecosistema `@angular` (core, animations, common, compiler, etc), `vite`, `hono`, `flatted`, `express-rate-limit`, `tar`, `immutable`, `lodash-es`, `picomatch`, `path-to-regexp` (Alta).
+  - `brace-expansion`, `dompurify` e ferramentas do Angular CLI (Moderada).
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+### 33. Bypass de Autenticação nos endpoints de Agent e Assistant
+- **Caminho:** `backend/app/api/v1/endpoints/agent.py` e `backend/app/api/v1/endpoints/assistant.py`
+- **Gravidade:** Alta
+- **Descrição:** Os endpoints de execução de agentes (`/execute` e `/assistant/execute`) não possuem dependência explícita de autenticação (como `Depends(get_current_user)`). Isso pode permitir acessos indevidos se os serviços adjacentes não fizerem a validação de forma unificada.
+- **Ação Recomendada:** Adicionar a proteção de rota adequada ou unificar a validação nas dependências de autorização de forma clara.
+
+### 34. Vulnerabilidades Recorrentes Identificadas via Bandit
+- **Caminho:** Vários arquivos (backend)
+- **Gravidade:** Alta / Média
+- **Descrição:** A ferramenta Bandit apontou vulnerabilidades antigas ainda não resolvidas, incluindo:
+  - B310: Uso de esquemas de URL não validados (SSRF) em `message_broker.py` e `agent_tools.py`.
+  - B608: Potencial Injeção SQL via f-strings em `dedupe_service.py`.
+  - B602: Injeção de Comando usando subprocess com shell=True em `launcher_tools.py`.
+- **Ação Recomendada:** Aplicar tratativas de segurança nas queries SQL, validação de URL explícita e desativação do parâmetro `shell=True` no subprocess.

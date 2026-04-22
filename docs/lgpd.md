@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-22)
+
+### Lacunas e Impacto
+- **Captura de Tela Indiscriminada e sem Autorização (Windows Agent):** Os endpoints expostos sem autenticação pelo `backend/windows_agent.py` continuam operando captura de tela sem restrições ou tratamento prévio de PII (redação de dados na imagem antes do envio).
+- **Dados Transacionais Gravados sem Máscara:** Módulos como `daemon.py` e ferramentas de produtividade continuam emitindo informações sensíveis de usuários em formato raw nos logs da aplicação (`structlog` em nível INFO), podendo comprometer os canais de observabilidade e backups.
+
+### Próximos Passos
+1. **Implementar Mascaramento Restante:** Utilizar as utilidades de minimização/redação (ex: `redact_pii_text_only`) antes de gravar informações confidenciais de forma estática.
+2. **Priorizar Fechamento de Achados Abertos:** Adicionar as tratativas no Windows Agent para anonimizar visualmente partes sensíveis e/ou introduzir controle estrito e aprovação de usuário (Opt-In).
