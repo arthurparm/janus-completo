@@ -123,3 +123,71 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-22)
+
+### 12. Falta de Observabilidade e Erros Silenciosos (Confiabilidade)
+**Descrição:** Foi identificada a presença de dezenas de blocos `try-except` que utilizam `pass` ou `continue` sem emitir nenhum log (Bandit B110, B112). Isso mascara exceções de forma silenciosa, dificultando debugging de falhas e análise de incidentes no core da aplicação.
+**Evidências:**
+- Padrões encontrados em dezenas de arquivos, incluindo `backend/app/main.py`, serviços (`tool_executor_service.py`), repositórios e endoints principais (como `rag.py`).
+**Próximos passos:**
+- Adicionar logs estruturados em blocos try-except críticos e rever a validade de supressões silenciosas.
+- Registrar e tratar no backlog como OQ-020.
+
+### 13. State Drift em Configurações em Memória (Confiabilidade)
+**Descrição:** O endpoint de atualização de configurações de admin manipula o estado em memória, o qual não é persistido de forma durável (em banco ou arquivo lock). Um restart do serviço resultará na reversão das configurações, causando drift de estado em produção.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py` e classe `ConfigService` injetada, que propaga em memória local/Redis pub-sub mas não persiste.
+**Próximos passos:**
+- Implementar persistência dos updates (ex: armazenar JSON patch de configurações ativas no Redis ou no Postgres).
+- Tratar via OQ-021.
+
+### 14. Purge Destrutivo Não Transacional (Segurança e Operação)
+**Descrição:** As rotas preparadas para limpeza de threads "incompatíveis" no LangGraph realizam deleção destrutiva no banco sem confirmação (Dry-run funcional completo) nem salvaguardas claras. Ações admin podem resultar em perda de dados valiosos do grafo de conversa.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py` (método `_purge_incompatible_threads_task`).
+**Próximos passos:**
+- Impor backup em tempo real ou lógicas de soft-delete antes do purge de checkpoint, além de logs de auditoria explícitos no admin action.
+- Tratar via OQ-022.
+
+### 15. Vulnerabilidades de Dependências no Frontend (Segurança)
+**Descrição:** Execução atualizada de `npm audit` revelou pacotes críticos afetados no ecossistema de infraestrutura frontend e sanitização, apresentando riscos XSS e negação de serviço.
+**Evidências:**
+- Relatório de `npm_audit.json` inclui alertas High/Moderate para pacotes como `@hono/node-server`, `dompurify` e `express-rate-limit`.
+**Próximos passos:**
+- Atualizar versões em `package.json` ou sobrescrevê-las no lockfile.
+- Tratar como SG-040.
+
+### 16. Monitoramento de Rede Vazando PII (LGPD e Segurança)
+**Descrição:** Um script utilitário interno focado em monitorar e assegurar a configuração do Tailscale está gerando logs estruturados (`tailscale-security-monitor.log`) que retêm informações de telemetria e PII em texto claro, ignorando as políticas de redação do Core.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1` possui loop de monitoramento persistindo alertas localmente na máquina.
+**Próximos passos:**
+- Omitir PII nesses logs de infra ou roteá-los pelo mecanismo de logger central com redator.
+- Tratar via SG-050.
+
+### 17. Credenciais Hardcoded e Exposição de Testes (Segurança)
+**Descrição:** Testes e classes de integração de limite de taxa contém senhas e tokens mockados (ou literais reais deixados de teste) em formato explícito, sendo flagrados por scan estático SAST.
+**Evidências:**
+- Alertas do Bandit (B105) evidenciam strings de password (`rate_limit_middleware.py`, e arquivos como `tests/verify_secret_management.py`).
+**Próximos passos:**
+- Transacionar secrets por variáveis mockadas na inicialização ou cofres/config env em ambiente de Dev.
+- Tratar via SG-053.
+
+### 18. Fuga de Autenticação em Endpoints Transacionais e Logs (Segurança)
+**Descrição:** Rotas responsáveis pela execução direta de instruções do Assistant e Agent ignoram validações estritas de autenticação, o que agrava a retenção e processamento de informações que caem no transacional do log (`janus.log`).
+**Evidências:**
+- Rotas de execução localizadas em `backend/app/api/v1/endpoints/execute` (Agent) e `/assistant/execute`.
+**Próximos passos:**
+- Requerer JWT/Auth em rotas transacionais essenciais que geram footprints persistidos.
+- Tratar via SG-054.
+
+### 19. Risco Contínuo de RCE por Code Injection (Segurança Crítica)
+**Descrição:** Scans ativos reportam vetores de OS Command Injection (B602) por uso de `shell=True` não isolado e execuções inseguras contínuas (via `eval()` e `exec()`) que expõem permissões locais e que podem contornar a segurança do Sandbox caso as abstrações falhem.
+**Evidências:**
+- `launcher_tools.py` usa `subprocess.Popen(..., shell=True)`.
+- `python_sandbox.py` usa diretamente `exec()`.
+- `faulty_tools.py` processa fluxos usando `eval()`.
+**Próximos passos:**
+- Limitar o uso de `shell=True`, passar a usar `ast.literal_eval` em tools numéricas e isolar containers.
+- Tratar via SG-055.

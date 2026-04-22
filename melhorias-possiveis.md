@@ -109,6 +109,11 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-040 | Vulnerabilidades de dependências frontend reportadas via npm audit | P1 | S | aberto |
+| SG-050 | Monitoramento Shadow IT do Tailscale salva logs PII em clear text | P1 | M | aberto |
+| SG-053 | Senhas Hardcoded expostas em código fonte ou arquivos de testes | P0 | S | aberto |
+| SG-054 | Autenticação Bypass e Risco de Retenção PII não validada via rotas /execute | P0 | M | aberto |
+| SG-055 | Injeção de Comando Crítica e Vulnerabilidades Code Injection ativas | P0 | S | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -130,6 +135,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| OQ-020 | Falta de observabilidade devido a try-except silenciosos em dezenas de arquivos | P1 | M | aberto |
+| OQ-021 | Atualizações de Configuração em memória perdem estado no restart do serviço | P1 | M | aberto |
+| OQ-022 | Purge de DB destrutivo sem logs ou dry-run adequados na admin API | P0 | M | aberto |
 
 ---
 
@@ -865,3 +873,28 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+
+### [OQ-020] Falta de observabilidade devido a try-except silenciosos em dezenas de arquivos
+- **Problema:** Blocos try-except seguidos por `pass` ou `continue` sem emitir logs (Bandit B110, B112) mascaram exceções em endpoints e core.
+
+### [OQ-021] Atualizações de Configuração em memória perdem estado no restart do serviço
+- **Problema:** A rota de atualização de configurações `admin_config.py` é baseada apenas em memória. Um restart reinicia tudo, causando state drift e fragilidade.
+
+### [OQ-022] Purge de DB destrutivo sem logs ou dry-run adequados na admin API
+- **Problema:** `admin_graph.py` tem rotas preparadas para invocar limpeza da base que podem resultar em deleções acidentais e perda de dados valiosos.
+
+### [SG-040] Vulnerabilidades de dependências frontend reportadas via npm audit
+- **Problema:** `npm audit` aponta falhas graves como `@hono/node-server`, `dompurify` e `express-rate-limit`.
+
+### [SG-050] Monitoramento Shadow IT do Tailscale salva logs PII em clear text
+- **Problema:** O script de monitoramento no tooling vaza dados de uso no `tailscale-security-monitor.log` contrariando a LGPD.
+
+### [SG-053] Senhas Hardcoded expostas em código fonte ou arquivos de testes
+- **Problema:** Bandit flag B105 foi acionado por declarações de hardcoded passwords sem cofre ou env vars em middlewares e testes.
+
+### [SG-054] Autenticação Bypass e Risco de Retenção PII não validada via rotas /execute
+- **Problema:** As rotas `/execute` nos endpoints Agent e Assistant processam chamadas transacionais que vão gerar logs de sessão de usuários que não passaram por validação de Autenticação.
+
+### [SG-055] Injeção de Comando Crítica e Vulnerabilidades Code Injection ativas
+- **Problema:** Presença alarmante de subprocessos rodando como `shell=True` (B602) no launcher_tools, ou blocos contendo `eval` ou `exec` no ambiente backend, tornando possível injeção RCE.
