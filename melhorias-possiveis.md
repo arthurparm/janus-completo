@@ -130,6 +130,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| SG-042 | Vulnerabilidade critica no protobufjs e alta no vite (npm audit) | P0 | S | aberto |
 
 ---
 
@@ -865,3 +866,9 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-042] Vulnerabilidade crítica no protobufjs e alta no vite (npm audit)
+- **Caminho:** `frontend/package.json`
+- **Gravidade:** Crítica
+- **Descrição:** A ferramenta `npm audit` relatou vulnerabilidade de severidade crítica na biblioteca `protobufjs` e alta no `vite`, além das anteriores não mitigadas no ecossistema angular.
+- **Ação Recomendada:** Realizar atualização manual (ou override) destas bibliotecas visando mitigar a falha o mais breve possível para não expor a build e o ecossistema frontend.
