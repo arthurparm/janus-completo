@@ -123,3 +123,18 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+
+## Achados do dia (2026-04-22)
+
+### 12. Falta de integração CI para scripts da pasta tooling
+**Descrição:** Scripts de teste em `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) rodam isolados do pipeline principal do Pytest (`qa/`), gerando falhas de regressão não detectadas automaticamente. Evidência: Commit fec8e75.
+
+**Próximos passos:**
+- Integrar os testes de `tooling/` no pipeline `qa/` ou criar um stage separado no CI.
+
+### 13. Exposição de PII e Shadow IT
+**Descrição:** O script `tooling/secure-tailscale-setup.ps1` atua como componente Shadow IT, gerando logs (`tailscale-security-monitor.log`) que expõem hostnames e dados de peers em texto plano, evadindo a redação padrão de PII do core. Evidência: Commit fec8e75.
+
+**Próximos passos:**
+- Aplicar redação de PII nos scripts PowerShell ou movê-los para o gerenciamento de secrets central do backend.

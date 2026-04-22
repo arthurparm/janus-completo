@@ -865,3 +865,19 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [OQ-019] Scripts de teste em tooling/ rodam isolados e fora do pipeline de CI
+**Objetivo:** Integrar os testes de `tooling/` no pipeline `qa/` ou criar um stage separado no CI.
+**Problema atual:** Scripts de teste em `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) rodam isolados do pipeline principal do Pytest (`qa/`), gerando falhas de regressão não detectadas automaticamente.
+**Esforço:** M
+**Prioridade:** P1
+**Status:** Não comprovada
+**Data:** 2026-04-22
+
+### [SG-050] Risco de LGPD em tooling/secure-tailscale-setup.ps1 que expõe hostnames em texto puro
+**Objetivo:** Aplicar redação de PII nos scripts PowerShell ou movê-los para o gerenciamento de secrets central do backend.
+**Problema atual:** O script `tooling/secure-tailscale-setup.ps1` atua como componente Shadow IT, gerando logs (`tailscale-security-monitor.log`) que expõem hostnames e dados de peers em texto plano, evadindo a redação padrão de PII do core.
+**Esforço:** M
+**Prioridade:** P1
+**Status:** Não comprovada
+**Data:** 2026-04-22
