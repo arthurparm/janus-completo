@@ -90,3 +90,8 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-23)
+- **Ocultação de Exceções com PII**: Blocos `try-except-pass` e `try-except-continue` amplamente encontrados pelo Bandit (B110/B112), mascarando falhas e correndo risco de não observar vazamentos de PII.
+- **Shadow IT Logging**: O script `tooling/secure-tailscale-setup.ps1` gera um log local não criptografado exibindo dados de peers/hostnames, contornando a redação principal.
+- **In-Memory PII**: O processo `log_aware_reflector.py` expõe logs inteiros e exceções do `janus.log` diretamente na memória da sessão sem um `redact_pii_text_only`, facilitando duplicação indevida.

@@ -254,3 +254,9 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-23)
+- **Vulnerabilidades de Dependências no Frontend**: `npm audit` reportou múltiplas falhas críticas e altas (ex: `protobufjs`, `lodash-es`, `vite`, `hono`), necessitando de atualizações de versão.
+- **Segredos Hardcoded**: Identificadas instâncias de `B105` apontando para hardcoded passwords em `tests/verify_secret_management.py` e `app/core/llm/sanitizer.py`.
+- **Injeção de Comando (B602)**: Uso contínuo de `shell=True` no `launcher_tools.py` no Windows subprocess, representando um risco sério.
+- **Bypass de Autenticação**: Endpoints `/execute` e `/assistant/execute` continuam permitindo interações não autenticadas, com riscos de acesso indevido.

@@ -111,6 +111,15 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
 ---
 
+| SG-040 | Atualizar dependências críticas do frontend (protobufjs, lodash-es, vite, etc) | P0 | S | aberto |
+| SG-041 | Corrigir vulnerabilidade de desserialização insegura em dependências do backend | P0 | M | aberto |
+| SG-042 | Atualizar outras vulnerabilidades do frontend identificadas pelo npm audit | P1 | M | aberto |
+| SG-050 | LGPD: Remover log em texto claro no script secure-tailscale-setup.ps1 | P1 | S | aberto |
+| SG-052 | Mitigar risco de SSRF via esquemas não validados nas requests | P1 | S | aberto |
+| SG-053 | Remover senhas/segredos hardcoded reportados pelo Bandit (B105) | P0 | M | aberto |
+| SG-054 | Implementar autenticação em endpoints de agent.py e assistant.py | P0 | S | aberto |
+| SG-055 | Corrigir Command Injection via subprocess shell=True em launcher_tools.py | P0 | S | aberto |
+
 ## 5) Observabilidade, Qualidade e Confiabilidade
 
 | ID | Melhoria | Prioridade | Esforco | Status |
@@ -132,6 +141,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
 
 ---
+
+| OQ-020 | Corrigir blocos try-except silenciosos detectados pelo Bandit (B110/B112) | P1 | M | aberto |
+| OQ-021 | Refatorar atualização frágil in-memory do admin_config.py | P2 | M | aberto |
+| OQ-022 | Refatorar lógica perigosa de purga de BD no admin_graph.py | P1 | S | aberto |
 
 ## 6) Produto e Experiencia (Front + API)
 
