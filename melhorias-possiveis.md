@@ -865,3 +865,32 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-050] Logging inseguro de PII em monitoramento Tailscale
+- **Descrição:** `secure-tailscale-setup.ps1` escreve hostnames de peers em plain-text localmente, evadindo `redact_pii_text_only` do core.
+- **Prioridade:** P1
+- **Esforço:** S
+
+### [OQ-019] Drift de Configuração de Testes em tooling/
+- **Descrição:** `test_debate_system.py` roda isolado e não passa no pipeline Pytest/CI, dificultando detecção de regressão.
+- **Prioridade:** P2
+- **Esforço:** S
+
+### [SG-054] Ausência de Autenticação em /execute e /assistant/execute
+- **Descrição:** Endpoints core (`agent.py`, `assistant.py`) operam sem validação de identidade e controle de sessão adequado.
+- **Prioridade:** P0
+- **Esforço:** M
+
+### [SG-055] Risco de Injeção em launcher_tools.py (B602)
+- **Descrição:** `subprocess.Popen` usando `shell=True` para o modo Windows, permitindo injeção de comandos arbitrários no host.
+- **Prioridade:** P1
+- **Esforço:** S
+
+### [OQ-021] Configurações Administrativas Transientes em admin_config.py
+- **Descrição:** O endpoint `/admin/config` salva estado local/em memória (Hot-Reload) que se perde e causa inconsistência entre instâncias do backend.
+- **Prioridade:** P2
+- **Esforço:** M
+
+### [OQ-022] Risco de Destruição de Dados em admin_graph.py
+- **Descrição:** Rota `/purge_incompatible` contém rotinas de purga agressivas e diretas de dados LangGraph sem snapshotting ou migração segura.
+- **Prioridade:** P1
+- **Esforço:** M

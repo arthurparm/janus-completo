@@ -123,3 +123,55 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-23)
+
+### 12. LGPD e Monitoramento Obscuro (Shadow IT)
+**Descrição:** O script `secure-tailscale-setup.ps1` cria um arquivo de log local (`tailscale-security-monitor.log`) que expõe hostnames e dados de pares em texto claro, ignorando as políticas de redação de PII do core. Isso representa um risco direto à LGPD por criar bases não catalogadas.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: A função `Test-TailscaleHealth` registra hostnames sem ofuscação (ex: `Write-SecurityLog "High latency detected: $($Peer.HostName) ..."`).
+
+**Próximos passos:**
+- Remover o logging de texto claro ou integrar com a ofuscação central de PII.
+- Documentar SG-050 no backlog.
+
+### 13. Testes Fora do CI (Drift de Configuração)
+**Descrição:** Scripts de teste em `tooling/` executam de maneira isolada do pipeline principal do Pytest (`qa/`), criando uma falsa sensação de segurança e impedindo validação de regressão automatizada.
+**Evidências:**
+- `tooling/test_debate_system.py` e `tooling/seed-repro-scenarios.ps1` não estão integrados aos workflows de CI.
+
+**Próximos passos:**
+- Mover `test_debate_system.py` para a pasta `qa/` e refatorar para padrão Pytest.
+- Documentar OQ-019 no backlog.
+
+### 14. Bypass de Autenticação em Endpoints Principais
+**Descrição:** Observou-se a ausência de camadas adequadas de autenticação nos endpoints centrais de execução de agentes e assistentes.
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py` (`/execute`) e `backend/app/api/v1/endpoints/assistant.py` (`/assistant/execute`) processam requisições sem validar token ou sessão.
+
+**Próximos passos:**
+- Adicionar dependência `Depends(get_current_user)` ou equivalente nestes endpoints.
+- Documentar SG-054 no backlog.
+
+### 15. Injeção de Código em Ferramentas (Bandit)
+**Descrição:** Vulnerabilidades persistentes de execução de comandos não tratados apontadas pelo analisador estático, permitindo injeção de código através da parametrização de processos.
+**Evidências:**
+- `backend/app/core/tools/launcher_tools.py`: Uso de `shell=True` para inicialização de subprocessos Windows (Bandit B602).
+- `backend/app/core/infrastructure/python_sandbox.py`: Uso direto de `exec()` (Bandit B102) que, embora mitigado via namespace, não dispensa revisão estrutural de segurança.
+- `backend/app/core/tools/faulty_tools.py`: Uso inseguro de `eval()` em simulação de falhas (Bandit B307).
+
+**Próximos passos:**
+- Substituir `shell=True` por listas de comandos seguras ou APIs nativas sem invólucro do shell.
+- Usar `ast.literal_eval` no lugar de `eval()` em `faulty_tools.py`.
+- Documentar SG-055 e revisar as exceções de sandbox (SG-035).
+
+### 16. Fragilidades de Estado e Destruição (Admin)
+**Descrição:** Endpoints administrativos apresentam comportamentos perigosos que dependem do estado transiente (em memória) e que podem levar à purga indevida de dados na base.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: Atualizações em memória (Hot-Reload) se perdem no restart do serviço caso não sejam persistidas e distribuídas.
+- `backend/app/api/v1/endpoints/admin_graph.py`: A lógica de purga em `/purge_incompatible` manipula diretamente registros do banco sem mecanismos robustos de reversão ou versionamento seguro.
+
+**Próximos passos:**
+- Adicionar armazenamento persistente ou distribuído via Redis nas configurações de admin.
+- Restringir a deleção física de blobs e focar em migrações reversíveis.
+- Documentar OQ-021 e OQ-022 no backlog.
