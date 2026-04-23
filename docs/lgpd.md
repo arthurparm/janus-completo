@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-23)
+
+### Lacunas e Impacto
+- **Ofuscação de Incidentes e Falhas em Fluxos Críticos (B110/B112):** O backend tem supressões em bloco de exceções (`try/except: pass`) ocorrendo amplamente (ex: em `productivity.py` com 24 ocorrências e endpoints de RAG e Chat). No contexto da LGPD, o silencionamento de erros em rotas que transitam dados como emails e eventos de calendário impede:
+  1. A auditoria de violações ou vazamentos ocorridos durante exceções, pois não são logados.
+  2. O mapeamento do destino e da completude do tratamento das Informações Pessoais.
+
+### Próximos Passos
+1. **Ativar Logging Redigido:** Remover pass/continue de try/excepts endêmicos e implementar logs apropriados de `error` ou `warning`. Assegurar que estes logs sejam processados através da função central `redact_pii_text_only` antes de tocar os volumes (`janus.log`).

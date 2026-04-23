@@ -254,3 +254,18 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-23)
+
+### 1. Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `frontend/package-lock.json`
+- **Gravidade:** Crítica / Alta
+- **Descrição:** A auditoria diária detectou 29 vulnerabilidades (`npm audit`). As mais graves incluem falhas de Execução Arbitrária de Código em `protobufjs` (Crítica), bypasses de autorização e injeções no SSR via `@hono/node-server`/`hono`, Path Traversal e negação de serviço em `vite`, `path-to-regexp` e `picomatch`.
+- **Ação Recomendada:** Realizar o update destas bibliotecas via overrides ou correções majoritárias (registrado como SG-040).
+- *Nota: Auditoria de dependências do backend (`pip-audit`, `safety`) não detectou vulnerabilidades abertas.*
+
+### 2. Máscara de Exceções e Perda de Observabilidade (Bandit B110/B112)
+- **Caminho:** Múltiplos (ex: `backend/app/db/graph.py`, `backend/app/api/v1/endpoints/productivity.py`, `backend/app/core/embeddings/embedding_manager.py`)
+- **Gravidade:** Média
+- **Descrição:** O `Bandit` detectou uso endêmico de `try/except: pass` (B110) e `try/except: continue` (B112) em mais de 60 arquivos do backend. Falhas são suprimidas sem logging, prejudicando a telemetria, detecção de ataques ou incidentes e encobrindo exceções silenciosas críticas (registrado como OQ-020).
+- **Ação Recomendada:** Adicionar chamadas explícitas de logging usando a infraestrutura do `structlog` (preferencialmente integradas ao mascarador de PII) para rastrear todas as falhas interceptadas por esses blocos `except`.

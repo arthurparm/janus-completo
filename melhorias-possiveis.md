@@ -109,6 +109,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-040 | Atualizar pacotes vulneraveis do frontend (ex: protobufjs, vite, @hono) reportados no npm audit | P0 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -130,6 +131,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| OQ-020 | Remover bloqueios de try/except silenciosos generalizados (Bandit B110/B112) no backend para evitar perda de observabilidade | P1 | M | aberto |
 
 ---
 
@@ -863,5 +865,27 @@ Copiar e preencher:
 - Dependencias: Nenhuma.
 - Prioridade: P2
 - Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-040] Atualização Crítica de Dependências Frontend (npm audit)
+- Problema atual: A auditoria do frontend identificou 29 novas vulnerabilidades abertas, com riscos mapeados como RCE (protobufjs - Crítica) e injeções no Hono Server/Vite (Altas).
+- Solucao proposta: Aplicar `npm audit fix`, atualizações manuais de versões em `frontend/package.json` ou `overrides` temporários para estabilizar pacotes comprometidos.
+- Impacto esperado: Redução da superfície de ataque do frontend SSR e cliente, previnindo RCEs no pipeline de build/Node e XSS.
+- Riscos: Quebra de compatibilidade em SSR e bundles por atualizações maiores em `hono` e `vite`.
+- Dependencias: Frontend QA para regressão visual/funcional.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-020] Falta de observabilidade (B110/B112 generalizados)
+- Problema atual: A varredura de segurança do Bandit detectou mais de 60 casos de exceções silenciosas (`try: ... except: pass` ou `except: continue`), especialmente em `app/db/graph.py` e `productivity.py`. Isso destrói a telemetria, mascarando falhas críticas de infraestrutura e impedindo a auditoria adequada exigida pela LGPD em processamento de dados confidenciais.
+- Solucao proposta: Remover ou refatorar blocos except: pass/continue adicionando envios de métricas de log via `structlog.get_logger().warning/error`. Integrar essa telemetria ao sistema de redação PII (`redact_pii_text_only`).
+- Impacto esperado: Confiabilidade de métricas e redução do risco de falhas latentes.
+- Riscos: Sobrecarga nos canais de log no curto prazo caso a taxa de falha desses blocos já seja altíssima, o que demandará ajuste.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
 - Dono: a definir
 - Status: aberto
