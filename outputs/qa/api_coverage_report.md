@@ -1,15 +1,15 @@
 # API Coverage Report (OQ-011)
 
-- Generated at: `2026-03-31T21:14:27.719641+00:00`
-- Source matrix mode: `openapi_live`
-- Source matrix generated at: `2026-03-31T21:14:15.291829+00:00`
+- Generated at: `2026-04-23T21:32:01.930821+00:00`
+- Source matrix mode: `api_inventory_fallback`
+- Source matrix generated at: `2026-04-23T21:31:58.623837+00:00`
 
 ## Summary
 
-- Total endpoints: `232`
+- Total endpoints: `235`
 - Covered endpoints: `27`
-- Uncovered endpoints: `205`
-- Coverage percent: `11.64%`
+- Uncovered endpoints: `208`
+- Coverage percent: `11.49%`
 - Runtime validated endpoints: `6`
 - Runtime failed endpoints: `0`
 - Test referenced endpoints (no runtime smoke): `21`
@@ -17,7 +17,7 @@
 ## Target Tracking
 
 - Expected endpoints (target): `229`
-- Observed endpoints: `232`
+- Observed endpoints: `235`
 - Target met: `True`
 - Endpoint gap: `0`
 
@@ -53,10 +53,10 @@
 | RAG | 5 | 1 | 4 | 0 | 0 | 1 | 20.0% |
 | Reflexion | 5 | 1 | 4 | 0 | 0 | 1 | 20.0% |
 | Sandbox | 3 | 0 | 3 | 0 | 0 | 0 | 0.0% |
-| System | 5 | 3 | 2 | 3 | 0 | 0 | 60.0% |
+| System | 7 | 3 | 4 | 3 | 0 | 0 | 42.86% |
 | Tasks | 8 | 0 | 8 | 0 | 0 | 0 | 0.0% |
 | Tools | 8 | 3 | 5 | 0 | 0 | 3 | 37.5% |
-| unknown | 5 | 1 | 4 | 1 | 0 | 0 | 20.0% |
+| unknown | 6 | 1 | 5 | 1 | 0 | 0 | 16.67% |
 | Users | 6 | 2 | 4 | 0 | 0 | 2 | 33.33% |
 | Workers | 3 | 1 | 2 | 0 | 0 | 1 | 33.33% |
 
@@ -219,4 +219,4 @@
 | POST | `/api/v1/optimization/analyze` | Optimization | analyze_system_api_v1_optimization_analyze_post |
 | GET | `/api/v1/optimization/health` | Optimization | get_system_health_api_v1_optimization_health_get |
 
-_Truncated: 55 additional uncovered endpoints not shown._
+_Truncated: 58 additional uncovered endpoints not shown._

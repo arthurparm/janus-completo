@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "generated_at": "2026-03-31T21:14:15.291829+00:00",
-    "source": "openapi_live",
+    "generated_at": "2026-04-23T21:31:58.623837+00:00",
+    "source": "api_inventory_fallback",
     "openapi_url": "http://localhost:8000/openapi.json",
     "inputs": {
       "inventory_fallback": "outputs/qa/api_inventory.json",
@@ -9,10 +9,10 @@
     }
   },
   "statistics": {
-    "total_endpoints": 232,
+    "total_endpoints": 235,
     "by_method": {
       "DELETE": 6,
-      "GET": 128,
+      "GET": 131,
       "PATCH": 2,
       "POST": 93,
       "PUT": 3
@@ -187,7 +187,7 @@
         "in_tests": 0
       },
       "System": {
-        "total": 5,
+        "total": 7,
         "smoke_pass": 3,
         "smoke_fail": 0,
         "in_tests": 0
@@ -205,7 +205,7 @@
         "in_tests": 3
       },
       "unknown": {
-        "total": 5,
+        "total": 6,
         "smoke_pass": 1,
         "smoke_fail": 0,
         "in_tests": 1
@@ -2395,6 +2395,28 @@
       "referenced_in_tests": false
     },
     {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "module": "System",
+      "summary": "Health (detailed)",
+      "operation_id": "health_health_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/healthz",
+      "module": "System",
+      "summary": "Health (basic)",
+      "operation_id": "healthz_healthz_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
       "method": "POST",
       "path": "/api/v1/system/db/migrate",
       "module": "System",
@@ -2763,6 +2785,17 @@
       "module": "unknown",
       "summary": "Get Memories Timeline",
       "operation_id": "get_memories_timeline_api_v1_memory_timeline_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "module": "unknown",
+      "summary": "Metrics",
+      "operation_id": "metrics_metrics_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,

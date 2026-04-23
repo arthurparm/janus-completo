@@ -865,3 +865,5 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+| OQ-023 | Mapear e testar novos endpoints do sistema (`/api/v1/health`, `/api/v1/healthz`, `/api/v1/metrics`) descobertos na API drift | P2 | S | pendente |

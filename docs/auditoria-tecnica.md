@@ -123,3 +123,20 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-23)
+
+### Simplificação de código
+- **Nenhum problema grave de duplicação ou complexidade excessiva foi introduzido nas últimas 24h.** (Evidência: `git log --since="24 hours ago"` retornou vazio)
+
+### Lógica frágil
+- **Nenhuma regressão ou mudança frágil nas últimas 24h.**
+
+### Segurança e LGPD
+- **Nenhuma violação ou risco novo adicionado nas últimas 24h.**
+
+### Drift de API
+- A API agora contabiliza **235 endpoints**, com coverage de **11.49%**. Três novos endpoints apareceram nas rotas offline, que não estavam mapeados (ex: `/api/v1/health`, `/api/v1/healthz`, `/api/v1/metrics`). Nenhuma alteração significativa de contrato foi observada além da atualização dos relatórios estáticos.
+
+### Próximos Passos
+- Cobrir os novos endpoints nos testes (health, healthz, metrics).

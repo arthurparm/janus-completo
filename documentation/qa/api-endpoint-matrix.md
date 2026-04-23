@@ -1,12 +1,12 @@
 # API Endpoint Matrix (Live)
 
-- Generated at: `2026-03-31T21:14:15.291829+00:00`
-- Source: `openapi_live`
+- Generated at: `2026-04-23T21:31:58.623837+00:00`
+- Source: `api_inventory_fallback`
 - Regenerate command: `python tooling/generate_api_matrix.py`
 
 ## Summary
 
-- Total endpoints: `232`
+- Total endpoints: `235`
 - Smoke results loaded: `6`
 - Test path references: `59`
 
@@ -15,7 +15,7 @@
 | Method | Count |
 |---|---:|
 | DELETE | 6 |
-| GET | 128 |
+| GET | 131 |
 | PATCH | 2 |
 | POST | 93 |
 | PUT | 3 |
@@ -52,10 +52,10 @@
 | RAG | 5 | 0 | 0 | 1 |
 | Reflexion | 5 | 0 | 0 | 1 |
 | Sandbox | 3 | 0 | 0 | 0 |
-| System | 5 | 3 | 0 | 0 |
+| System | 7 | 3 | 0 | 0 |
 | Tasks | 8 | 0 | 0 | 0 |
 | Tools | 8 | 0 | 0 | 3 |
-| unknown | 5 | 1 | 0 | 1 |
+| unknown | 6 | 1 | 0 | 1 |
 | Users | 6 | 0 | 0 | 2 |
 | Workers | 3 | 0 | 0 | 1 |
 
@@ -260,6 +260,8 @@
 | GET | `/api/v1/sandbox/capabilities` | Sandbox | N/A | no |
 | POST | `/api/v1/sandbox/evaluate` | Sandbox | N/A | no |
 | POST | `/api/v1/sandbox/execute` | Sandbox | N/A | no |
+| GET | `/api/v1/health` | System | N/A | no |
+| GET | `/api/v1/healthz` | System | N/A | no |
 | POST | `/api/v1/system/db/migrate` | System | N/A | no |
 | GET | `/api/v1/system/db/validate` | System | PASS (200) | no |
 | GET | `/api/v1/system/health/services` | System | PASS (200) | no |
@@ -294,4 +296,5 @@
 | POST | `/api/v1/memory/generative` | unknown | N/A | no |
 | GET | `/api/v1/memory/preferences` | unknown | N/A | no |
 | GET | `/api/v1/memory/timeline` | unknown | N/A | no |
+| GET | `/api/v1/metrics` | unknown | N/A | no |
 | GET | `/api/v1/system/overview` | unknown | PASS (200) | yes |

@@ -1,21 +1,21 @@
 {
   "metadata": {
-    "generated_at": "2026-03-31T21:14:27.719641+00:00",
-    "source_matrix_generated_at": "2026-03-31T21:14:15.291829+00:00",
-    "source_matrix_mode": "openapi_live",
+    "generated_at": "2026-04-23T21:32:01.930821+00:00",
+    "source_matrix_generated_at": "2026-04-23T21:31:58.623837+00:00",
+    "source_matrix_mode": "api_inventory_fallback",
     "issue_id": "OQ-011"
   },
   "target": {
     "expected_endpoints": 229,
-    "observed_endpoints": 232,
+    "observed_endpoints": 235,
     "target_met": true,
     "endpoint_gap": 0
   },
   "summary": {
-    "total_endpoints": 232,
+    "total_endpoints": 235,
     "covered_endpoints": 27,
-    "uncovered_endpoints": 205,
-    "coverage_percent": 11.64,
+    "uncovered_endpoints": 208,
+    "coverage_percent": 11.49,
     "runtime_validated_endpoints": 6,
     "runtime_failed_endpoints": 0,
     "test_referenced_endpoints": 21
@@ -303,13 +303,13 @@
     },
     {
       "module": "System",
-      "total": 5,
+      "total": 7,
       "covered": 3,
-      "not_covered": 2,
+      "not_covered": 4,
       "runtime_validated": 3,
       "runtime_failed": 0,
       "test_referenced": 0,
-      "coverage_percent": 60.0
+      "coverage_percent": 42.86
     },
     {
       "module": "Tasks",
@@ -333,13 +333,13 @@
     },
     {
       "module": "unknown",
-      "total": 5,
+      "total": 6,
       "covered": 1,
-      "not_covered": 4,
+      "not_covered": 5,
       "runtime_validated": 1,
       "runtime_failed": 0,
       "test_referenced": 0,
-      "coverage_percent": 20.0
+      "coverage_percent": 16.67
     },
     {
       "module": "Users",
@@ -2704,6 +2704,32 @@
       "smoke_error": null
     },
     {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "module": "System",
+      "operation_id": "health_health_get",
+      "summary": "Health (detailed)",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/healthz",
+      "module": "System",
+      "operation_id": "healthz_healthz_get",
+      "summary": "Health (basic)",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
       "method": "POST",
       "path": "/api/v1/system/db/migrate",
       "module": "System",
@@ -2943,6 +2969,19 @@
       "module": "unknown",
       "operation_id": "get_memories_timeline_api_v1_memory_timeline_get",
       "summary": "Get Memories Timeline",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "module": "unknown",
+      "operation_id": "metrics_metrics_get",
+      "summary": "Metrics",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
@@ -5593,6 +5632,32 @@
       "smoke_error": null
     },
     {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "module": "System",
+      "operation_id": "health_health_get",
+      "summary": "Health (detailed)",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/healthz",
+      "module": "System",
+      "operation_id": "healthz_healthz_get",
+      "summary": "Health (basic)",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
       "method": "POST",
       "path": "/api/v1/system/db/migrate",
       "module": "System",
@@ -5910,6 +5975,19 @@
       "module": "unknown",
       "operation_id": "get_memories_timeline_api_v1_memory_timeline_get",
       "summary": "Get Memories Timeline",
+      "coverage_status": "not_covered",
+      "covered": false,
+      "referenced_in_tests": false,
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "module": "unknown",
+      "operation_id": "metrics_metrics_get",
+      "summary": "Metrics",
       "coverage_status": "not_covered",
       "covered": false,
       "referenced_in_tests": false,
