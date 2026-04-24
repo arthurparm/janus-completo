@@ -22,6 +22,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| PX-014 | Refatorar componentes com Alta Complexidade Cognitiva (ex: router, worker) | P2 | M | aberto |
 | CI-001 | Corrigir modelagem de entidades de codigo no grafo (File/Function/Class com chaves consistentes) | P0 | M | feito (2026-02-12) |
 | CI-002 | Corrigir resolucao de `CALLS` para usar nome qualificado e evitar links quebrados | P0 | M | feito (2026-02-12) |
 | CI-003 | Indexacao incremental por `git diff` (alem de reindex full) | P1 | M | ideia |
@@ -83,6 +84,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 ## 4) Ferramentas, SeguranÃ§a e Governanca
 
 | ID | Melhoria | Prioridade | Esforco | Status |
+| SG-055 | Mitigar riscos de segurança em subprocessos (shell=True, inputs não checados) | P0 | M | aberto |
 |---|---|---|---|---|
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
@@ -116,6 +118,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
+| OQ-020 | Corrigir blocos Try-Except-Pass silenciando exceções e impactando observabilidade | P1 | M | aberto |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |
 | OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
@@ -137,6 +140,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| SG-040 | Resolver vulnerabilidades críticas/altas em dependências do frontend (npm audit) | P0 | S | aberto |
 | PX-001 | Tela de explicacao de resposta (fontes, confianca, latencia) | P1 | M | ideia |
 | PX-002 | UI de citacao clicavel para codigo e documentos | P0 | M | feito (2026-02-13) |
 | PX-003 | Timeline de memoria por conversa e por usuario | P1 | M | parcial |

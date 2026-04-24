@@ -123,3 +123,39 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-24)
+
+### 12. Complexidade Cognitiva Extrema em Componentes Core
+**Descrição:** A análise estática (Flake8) revelou módulos e funções com complexidade cognitiva muito acima do limite (15), dificultando a manutenção e testes.
+**Evidências:**
+- `backend/app/core/agents/meta_agent_cycle.py`: Complexidade 23.
+- `backend/app/api/v1/endpoints/system_overview.py`: Complexidade 24.
+**Próximos passos:**
+- Refatorar as funções complexas dividindo as responsabilidades.
+- Documentar PX-014 no backlog.
+
+### 13. Mascaramento de Erros por Try-Except Silencioso
+**Descrição:** Múltiplas rotas backend contêm blocos `try-except pass` ou `continue` (Bandit B110/B112), criando riscos de observabilidade e escondendo falhas críticas.
+**Evidências:**
+- Múltiplas ocorrências em `backend/app/api/v1/endpoints/auth.py` e `backend/app/api/v1/endpoints/documents.py`.
+**Próximos passos:**
+- Substituir `pass` por log de erro estruturado ou relançamento da exceção apropriada.
+- Criar item OQ-020 no backlog.
+
+### 14. Vulnerabilidades de Injeção em Subprocessos
+**Descrição:** Uso do módulo `subprocess` com `shell=True` (Bandit B602) ou entradas não validadas (Bandit B603), permitindo Command Injection.
+**Evidências:**
+- `backend/app/core/tools/launcher_tools.py`: `shell=True` detectado.
+- `backend/app/services/semantic_commit_service.py`: chamadas sem checagem de entrada segura.
+**Próximos passos:**
+- Remover `shell=True` e usar arrays para argumentos do subprocesso.
+- Registrar SG-055 no backlog.
+
+### 15. Vulnerabilidades Críticas de Dependências no Frontend
+**Descrição:** O pacote `protobufjs` e outras dependências essenciais do Angular estão sinalizados com vulnerabilidades altas ou críticas pelo `npm audit`.
+**Evidências:**
+- Relatório `npm audit` em `frontend/` (Critical em `protobufjs`, High em `vite`, `tar`, `express-rate-limit`).
+**Próximos passos:**
+- Realizar a atualização forçada e testar a integridade da aplicação frontend.
+- Criar item SG-040 no backlog.
