@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-24)
+
+### Lacunas e Impacto
+- **Persistência de Lacunas Anteriores:** As falhas críticas de mitigação LGPD mapeadas anteriormente (logs de áudio do daemon, retenção de sessões na ProductivityTools, metadados não ofuscados em envio de e-mails, e capturas de tela sem consentimento/redação via `windows_agent.py`) permanecem não resolvidas e em aberto.
+- **Risco de Acesso a Dados Pessoais via Endpoints Expostos:** A ausência de AuthZ nos endpoints `/execute` (agente e assistente) possibilita que agentes gerem histórico ou acessem informações sem identificação clara, ferindo princípios de controle de acesso a PII.
+
+### Próximos Passos
+1. **Corrigir Autenticação em Endpoints:** Aplicar bloqueio imediato e identificação de usuário em `agent.py` e `assistant.py`.
+2. **Retomar Remediação de Vazamentos Estáticos:** Exigir tratativa ativa das vulnerabilidades de logs de voz, captura de tela e `_notes` expostos globalmente.

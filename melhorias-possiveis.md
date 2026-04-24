@@ -84,6 +84,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| SG-056 | Fuga de Autenticação em endpoints /execute (agent.py e assistant.py) | P0 | S | ideia |
+| SG-057 | Senhas hardcoded identificadas (Bandit B105) em rate_limit_middleware e sanitizer | P1 | S | ideia |
+| SG-058 | Atualizar vulnerabilidade no Backend via pip-audit (pip CVE-2026-3219) | P1 | S | ideia |
+| SG-059 | Vulnerabilidades de Frontend (npm audit - protobufjs critico) | P0 | S | ideia |
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
 | SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |
@@ -115,6 +119,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| OQ-023 | Refatorar ausência de Rate Limit seguro / Fail-Closed em rate_limit_middleware | P1 | M | ideia |
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |

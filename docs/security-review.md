@@ -254,3 +254,22 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-24)
+
+### Checklist executado
+- [x] npm audit (frontend) - **Crítico**: protobufjs.
+- [x] pip-audit (backend) - **Vulnerabilidade**: pip CVE-2026-3219.
+- [x] Revisão manual de código via `bandit`.
+
+### 32. Fuga de Autenticação em Endpoints de Execução
+- **Caminho:** `backend/app/api/v1/endpoints/agent.py` e `backend/app/api/v1/endpoints/assistant.py`
+- **Gravidade:** Alta
+- **Descrição:** Os endpoints de execução de agente e assistente não possuem dependência de autorização (`Depends(get_current_user)`).
+- **Ação Recomendada:** Adicionar a proteção aos endpoints correspondentes.
+
+### 33. Senhas Hardcoded e Uso de Shell Inseguro
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`, `backend/app/core/llm/sanitizer.py`, e `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Identificadas strings tratadas como senhas/tokens (B105) e `subprocess.Popen` com `shell=True` (B602).
+- **Ação Recomendada:** Refatorar hardcoded tokens e substituir `shell=True` por chamadas diretas mais seguras.
