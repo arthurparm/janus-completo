@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "generated_at": "2026-03-31T21:14:15.291829+00:00",
-    "source": "openapi_live",
+    "generated_at": "2026-04-24T21:19:10.504754+00:00",
+    "source": "api_inventory_fallback",
     "openapi_url": "http://localhost:8000/openapi.json",
     "inputs": {
       "inventory_fallback": "outputs/qa/api_inventory.json",

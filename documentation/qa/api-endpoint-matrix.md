@@ -1,7 +1,7 @@
 # API Endpoint Matrix (Live)
 
-- Generated at: `2026-03-31T21:14:15.291829+00:00`
-- Source: `openapi_live`
+- Generated at: `2026-04-24T21:19:10.504754+00:00`
+- Source: `api_inventory_fallback`
 - Regenerate command: `python tooling/generate_api_matrix.py`
 
 ## Summary

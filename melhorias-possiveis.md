@@ -120,6 +120,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |
 | OQ-004 | Error taxonomy padronizada para suporte e produto | P1 | S | feito (2026-02-13) |
 | OQ-005 | Chaos tests para Redis, Neo4j, vetor e broker | P2 | M | ideia |
+| OQ-023 | Atualizar testes para cobrir os 205 endpoints não cobertos (cobertura atual 11.64%) | P1 | L | Aberto |
 | OQ-006 | Contract tests para endpoints criticos e SSE | P0 | M | feito (2026-02-13) |
 | OQ-007 | Scorecards automaticos de qualidade de resposta | P1 | M | ideia |
 | OQ-008 | Canary release para mudancas de prompt/roteador | P2 | M | ideia |

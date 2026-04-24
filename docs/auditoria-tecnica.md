@@ -123,3 +123,20 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-24)
+
+### 12. API Drift Detectado
+**Descrição:** A extração do inventário da API identificou a cobertura atual. O coverage report (outputs/qa/api_coverage_report.md) relata coverage de 11.64%, com 205 endpoints não cobertos e 232 no total.
+**Evidências:**
+- `outputs/qa/api_coverage_report.json` e `outputs/qa/api_inventory.json` refletem os endpoints (cobertura=11.64%).
+**Próximos passos:**
+- Documentar a nova cobertura e agendar criação de testes para os endpoints.
+
+
+### 13. Auditoria Técnica - Revisão de Commits/PRs Recentes
+**Descrição:** A análise do commit recente (`fec8e75`) de "docs: daily technical control tower" focado em atualizações massivas de relatórios de cobertura QA e métricas, não identificou novas mudanças substanciais no código fonte backend/frontend. Não foram encontradas lógicas frágeis adicionais (edge cases, tz, retries), complexidade ou duplicação, tampouco foram introduzidas novas violações de segurança ou LGPD no código.
+**Evidências:**
+- `git show fec8e75` demonstrou apenas atualizações de relatórios JSON/MD, testes (QA) e componentes UI padronizados sem alterações de core business logic.
+**Próximos passos:**
+- Continuar o monitoramento no próximo ciclo.
