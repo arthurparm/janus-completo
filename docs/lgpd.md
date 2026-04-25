@@ -90,3 +90,13 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-25)
+
+**Lacunas e Impacto:**
+- `tooling/secure-tailscale-setup.ps1` atua como 'Shadow IT', gerando logs locais em texto claro que contornam a redação PII padrão do core, criando risco de exposição de dados de hostnames e peers (SG-050).
+- O script de telemetria falha em redigir logs através do `log_aware_reflector.py`, o que não foi completamente resolvido pelas tarefas anteriores, sendo um risco LGPD passivo.
+
+**Próximos Passos:**
+- Revisar e aplicar PII redaction ao arquivo de configuração de rede gerado pelo tooling.
+- Mitigar logs no `log_aware_reflector.py` com PII scrubber.

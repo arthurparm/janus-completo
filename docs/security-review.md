@@ -254,3 +254,21 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-25)
+
+**Checklist Executado:**
+- [x] SAST Backend (Bandit, Safety, pip-audit)
+- [x] Auditoria de dependências Frontend (npm audit)
+- [x] Revisão manual de commits recientes (foco em auth, tokens, segredos, endpoints sensíveis)
+
+**Gaps + Severidade Sugerida:**
+- Frontend: `protobufjs` reportado com vulnerabilidade Crítica (SG-040).
+- Frontend: Várias dependências (ex: `@angular/*`, `express-rate-limit`, `vite`) reportadas com vulnerabilidade Alta (SG-042).
+- Backend: Vulnerabilidade no pacote `pip` (CVE-2026-3219, SG-043).
+- Backend: Blocos Try/Except silenciosos em vários arquivos mascaram falhas e criam riscos de observabilidade (OQ-020).
+
+**Ações Recomendadas:**
+- Atualizar `protobufjs` e demais dependências vulneráveis no frontend.
+- Atualizar versão do pacote `pip` no backend.
+- Corrigir tratamento de exceções nos arquivos backend.

@@ -84,6 +84,10 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| SG-040 | Atualizar pacote protobufjs com vulnerabilidade Crítica (npm audit) | P0 | S | aberto |
+| SG-042 | Atualizar pacotes do frontend com vulnerabilidade Alta (ex: angular, vite, express-rate-limit) | P1 | M | aberto |
+| SG-043 | Atualizar pacote pip com vulnerabilidade CVE-2026-3219 no backend | P1 | S | aberto |
+| SG-050 | Corrigir script secure-tailscale-setup.ps1 para redigir PII e evitar vazamento em logs locais | P0 | M | aberto |
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
 | SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |
@@ -115,6 +119,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| OQ-020 | Corrigir Try/Except silenciosos em endpoints backend (B110/B112) que mascaram falhas ou vazamentos | P1 | M | aberto |
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |
