@@ -84,6 +84,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| SG-055 | Mitigar command injection (B602) removendo shell=True no launcher_tools.py | P0 | M | aberto |
+| SG-053 | Remover secrets hardcoded (B105) no Rate Limiter e arquivos de infra | P0 | S | aberto |
+| SG-050 | Remover leak de PII (hostnames) e adequar log do tailscale-security-monitor.log | P1 | M | aberto |
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
 | SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |
@@ -115,6 +118,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| OQ-020 | Remover blocos try-except silenciosos em endpoints (B110/B112) | P1 | M | aberto |
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |

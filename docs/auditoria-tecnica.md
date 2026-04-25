@@ -123,3 +123,33 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-25)
+
+### 12. Fragilidade em Tratamento de Exceções e Ocultação de Erros (OQ-020)
+**Descrição:** Foram identificados múltiplos blocos try-except silenciosos em endpoints de back-end que ocultam falhas na execução, gerando falhas mascaradas que dificultam a observabilidade e a resolução de problemas de lógica, o que também introduz potenciais falhas de processamento de dados confidenciais sob a perspectiva da LGPD.
+**Evidências:**
+- Bandit SAST reporta B110 (Try, Except, Pass) e B112 (Try, Except, Continue) de forma disseminada, incluindo em `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py`.
+**Próximos passos:**
+- Remover os tratamentos de erros silenciosos e documentar a issue OQ-020 no backlog para reestruturar as respostas das APIs a fim de evitar masking de erros.
+
+### 13. Vulnerabilidade de Injeção de Comando em Ferramentas de Launcher (SG-055)
+**Descrição:** A utilização do parâmetro `shell=True` para inicialização de processos em ambientes Windows constitui um risco grave de execução arbitrária de comandos não sanitizados.
+**Evidências:**
+- Bandit B602 apontado em `backend/app/core/tools/launcher_tools.py`.
+**Próximos passos:**
+- Remover a flag `shell=True` de todas as chamadas de subprocessos e registrar a issue SG-055 no documento de melhorias.
+
+### 14. Senhas e Segredos Explícitos no Código Fonte (SG-053)
+**Descrição:** Diversos arquivos contêm credenciais hardcoded, representando um risco sério de vazamento através do versionamento do código.
+**Evidências:**
+- Bandit identificou o risco B105 em `tests/verify_secret_management.py`, `app/core/infrastructure/rate_limit_middleware.py`, e `app/core/llm/sanitizer.py`.
+**Próximos passos:**
+- Remover dados estáticos confidenciais e passar a utilizar gerenciamento de configuração adequado. Documentar como SG-053.
+
+### 15. Risco de LGPD por Ferramenta de Shadow IT (SG-050)
+**Descrição:** O componente `tooling/secure-tailscale-setup.ps1` armazena dados de hostnames e rede em claro (`tailscale-security-monitor.log`), fugindo da infraestrutura centralizada de redação do log do PII.
+**Evidências:**
+- Gravação explícita e em texto simples identificada na saída do log.
+**Próximos passos:**
+- Adequar a coleta de dados de rede aos mecanismos de consentimento e ofuscação do projeto. Registrar issue SG-050.
