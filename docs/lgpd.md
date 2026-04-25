@@ -90,3 +90,15 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-25)
+
+### Lacunas e Impacto
+- **Máscara e Risco de Observabilidade (Bandit B110 e B112):** Um alto volume de padrões `Try, Except, Pass` (240 ocorrências, B110) e `Try, Except, Continue` (11 ocorrências, B112) foram detectados, inclusive no `backend/app/api/v1/endpoints/rag.py` e `backend/app/core/autonomy/planner.py`. Este silenciamento cria um risco direto à LGPD/Privacidade por mascarar falhas no processamento de dados e potencialmente não registrar comportamentos anômalos onde informações confidenciais possam ser lidas indevidamente ou vazadas silenciosamente.
+- **Registro não ofuscado pelo Shadow IT:** O script `tooling/secure-tailscale-setup.ps1` deposita logs de monitoramento local no `tailscale-security-monitor.log` com dados de peers e hostnames totalmente abertos, sem aderência aos filtros nativos do Janus de redação.
+- **Risco in-memory persistente:** `backend/app/core/memory/log_aware_reflector.py` carrega logs transacionais para a memória a fim de realizar "reflexões" sem submeter os dados coletados à camada de `redact_pii_text_only`, replicando informações já salvas e potencialmente não mascaradas em runtime.
+
+### Próximos Passos
+1. **Mitigação do Try/Except-Pass:** Transformar esses blocos cegos em registros explícitos do evento e seu contexto restrito, porém ofuscado.
+2. **Integração de Mascaramento em ferramentas "Shadow IT":** Impor regras no `tooling/secure-tailscale-setup.ps1` para que os dados extraídos passem por ofuscação mínima.
+3. **Refatoração no Refletor:** Adicionar `redact_pii_text_only` nativo nas leituras de logs feitas em `log_aware_reflector.py` antes que a LLM o utilize nas melhorias do agente.

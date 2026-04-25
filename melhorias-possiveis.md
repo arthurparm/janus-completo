@@ -84,6 +84,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| SG-056 | Atualizar pip no backend para mitigar CVE-2026-3219 | P1 | S | aberto |
+| SG-057 | Atualizar pacotes @angular no frontend para mitigar vulnerabilidades criticas/altas | P1 | S | aberto |
+| SG-058 | Substituir credenciais/senhas hardcoded em rate_limit_middleware.py e testes (Bandit B105) | P1 | S | aberto |
+| SG-059 | Integrar ofuscacao de PII no tooling/secure-tailscale-setup.ps1 | P1 | S | aberto |
+| SG-060 | Aplicar redact_pii_text_only no log_aware_reflector.py (in-memory risk) | P1 | S | aberto |
+| OQ-023 | Tratar padroes try-except-pass/continue silenciosos para evitar risco de observabilidade LGPD | P1 | M | aberto |
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
 | SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |

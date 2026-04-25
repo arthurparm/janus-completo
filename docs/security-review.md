@@ -254,3 +254,28 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-25)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Vulnerabilidade no pip (Backend)
+- **Caminho:** `backend/pyproject.toml` / `pip-audit`
+- **Gravidade:** Alta (CVE-2026-3219)
+- **Descrição:** A ferramenta pip-audit reportou uma vulnerabilidade no tratamento de arquivos tar/ZIP concatenados (CVE-2026-3219).
+- **Ação Recomendada:** Atualizar a versão do `pip` no ambiente backend para mitigar a vulnerabilidade.
+
+### 33. Novas Vulnerabilidades no Ecossistema Angular (Frontend)
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Moderada
+- **Descrição:** Inúmeros pacotes baseados em `@angular` (`@angular/animations`, `@angular/compiler`, etc.) apontaram vulnerabilidades.
+- **Ação Recomendada:** Executar `npm audit fix` ou avaliar atualização controlada das dependências.
+
+### 34. Credenciais Hardcoded e Possíveis Senhas (Bandit B105)
+- **Caminho:** `backend/app/core/infrastructure/rate_limit_middleware.py`, `backend/tests/verify_secret_management.py`
+- **Gravidade:** Baixa (mas exige correção sistêmica)
+- **Descrição:** O Bandit reportou strings que podem corresponder a senhas vazadas em códigos-fonte, ferindo o princípio de segurança e permitindo escalada de privilégios se exploradas em ambiente rodando código similar (B105).
+- **Ação Recomendada:** Substituir quaisquer chaves literais por extrações dinâmicas a partir do ambiente usando `.env` e Pydantic Settings.
