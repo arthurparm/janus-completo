@@ -865,3 +865,59 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-054] Bypass de Autenticação em Workspaces API / Agentes / Assistants
+- **Prioridade:** P0
+- **Esforço:** S
+- **Status:** Pendente
+- **Descrição:** Endpoints como `/execute` em `agent.py` e `/assistant/execute` em `assistant.py` não exigem autenticação ou validação de escopo/RBAC para a execução de pedidos com ferramentas e guardrails, permitindo acessos diretos arbitrários.
+- **Próximos Passos:** Implementar Depends(get_current_user) ou validação explícita de AuthZ para esses endpoints.
+
+### [OQ-021] Configurações em Memória Frágeis (Admin Config)
+- **Prioridade:** P2
+- **Esforço:** M
+- **Status:** Pendente
+- **Descrição:** O endpoint de atualização de configuração (admin_config.py) manipula atualizações via Redis e salva localmente em memória. Essas atualizações são perdidas no restart do servidor, criando comportamentos voláteis sem persistência em DB ou secrets vault.
+- **Próximos Passos:** Desenvolver camada de persistência para atualizações do sistema de configuração em tempo real, ou forçar sincronização persistente com banco de dados/Vault.
+
+### [OQ-022] Lógica Frágil de Purge no Admin Graph
+- **Prioridade:** P1
+- **Esforço:** M
+- **Status:** Pendente
+- **Descrição:** O endpoint de `/purge_incompatible` em `admin_graph.py` tem lógica nuclear comentada ou insegura (`# Warning: This is dangerous. pass`) e pode ser suscetível a erros de versão de schema do LangGraph ou até destruição acidental de threads vitais (independente de flag `force`).
+- **Próximos Passos:** Refatorar para usar APIs do LangGraph ao invés de acesso SQL direto perigoso, implementando migração de estado ou validação granular (soft delete).
+
+### [SG-050] Vazamento de PII e Dados de Rede em Logs do Tailscale Monitor
+- **Prioridade:** P1
+- **Esforço:** S
+- **Status:** Pendente
+- **Descrição:** O script de monitoramento `secure-tailscale-setup.ps1` atua como "Shadow IT", gerando logs (`tailscale-security-monitor.log`) que expõem explicitamente hostnames e detalhes de peers em claro (sem restrição ou ofuscação).
+- **Próximos Passos:** Aplicar máscara em hostnames nos logs ou centralizar essas coletas no serviço do Backend sob as regras de redação do Core.
+
+### [SG-053] Hardcoded Passwords em Scripts (Bandit B105)
+- **Prioridade:** P0
+- **Esforço:** S
+- **Status:** Pendente
+- **Descrição:** Bandit identificou hardcoded passwords (B105) em diversos scripts e middlewares, criando vulnerabilidade de credential leakage.
+- **Próximos Passos:** Remover strings hardcoded e usar variáveis de ambiente ou secrets management.
+
+### [OQ-023] Padrão Frágil de Exceções Silenciadas (Try/Except/Pass)
+- **Prioridade:** P2
+- **Esforço:** M
+- **Status:** Pendente
+- **Descrição:** Exceções vitais são suprimidas sem log adequado, camuflando falhas e impactando a observabilidade e LGPD (risco OQ-020 e OQ-023 via Bandit B110, B112).
+- **Próximos Passos:** Remover o supressamento silencioso e registrar os erros em log centralizado.
+
+### [SG-057] Vazamento de PII na Extração de Logs
+- **Prioridade:** P1
+- **Esforço:** M
+- **Status:** Pendente
+- **Descrição:** A classe `log_aware_reflector.py` lê logs do sistema (`janus.log`) para extrair erros para o `SafeEvolutionManager` e não aplica `redact_pii_text_only`, expondo dados sensíveis à manager evolution logic.
+- **Próximos Passos:** Aplicar máscara/redact de PII antes do processamento dos logs via `redact_pii_text_only`.
+
+### [SG-056] Vulnerabilidade CVE-2026-3219 no PIP (Tratamento Tar/Zip)
+- **Prioridade:** P1
+- **Esforço:** S
+- **Status:** Pendente
+- **Descrição:** Vulnerabilidade em `pip` reportada sobre o tratamento inseguro de arquivos concatenados em empacotamentos Tar/Zip.
+- **Próximos Passos:** Atualizar pip ou mitigar riscos na criação e deploy de pacotes.

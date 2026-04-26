@@ -123,3 +123,81 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-26)
+
+### 12. Bypass de Autenticação em Workspaces API / Agentes / Assistants (Segurança)
+**Descrição:** Endpoints como `/execute` em `agent.py` e `/assistant/execute` em `assistant.py` não exigem autenticação ou validação de escopo/RBAC para a execução de pedidos com ferramentas e guardrails, permitindo acessos diretos arbitrários.
+**Evidências:**
+- backend/app/api/v1/endpoints/agent.py (falta de validação em /execute)
+- backend/app/api/v1/endpoints/assistant.py (falta de validação em /assistant/execute)
+
+**Próximos passos:**
+- Implementar Depends(get_current_user) ou validação explícita de AuthZ para esses endpoints.
+- Registrar/acompanhar SG-054 no backlog.
+
+### 13. Configurações em Memória Frágeis (Admin Config) (Qualidade/Operação)
+**Descrição:** O endpoint de atualização de configuração (admin_config.py) manipula atualizações via Redis e salva localmente em memória. Essas atualizações são perdidas no restart do servidor, criando comportamentos voláteis sem persistência em DB ou secrets vault.
+**Evidências:**
+- backend/app/api/v1/endpoints/admin_config.py
+
+**Próximos passos:**
+- Desenvolver camada de persistência para atualizações do sistema de configuração em tempo real, ou forçar sincronização persistente com banco de dados/Vault.
+- Registrar/acompanhar OQ-021 no backlog.
+
+### 14. Lógica Frágil de Purge no Admin Graph (Qualidade/Operação)
+**Descrição:** O endpoint de `/purge_incompatible` em `admin_graph.py` tem lógica nuclear comentada ou insegura (`# Warning: This is dangerous. pass`) e pode ser suscetível a erros de versão de schema do LangGraph ou até destruição acidental de threads vitais (independente de flag `force`).
+**Evidências:**
+- backend/app/api/v1/endpoints/admin_graph.py (lógica insegura de _purge_incompatible_threads_task)
+
+**Próximos passos:**
+- Refatorar para usar APIs do LangGraph ao invés de acesso SQL direto perigoso, implementando migração de estado ou validação granular (soft delete).
+- Registrar/acompanhar OQ-022 no backlog.
+
+### 15. Vazamento de PII e Dados de Rede em Logs do Tailscale Monitor (Segurança)
+**Descrição:** O script de monitoramento `secure-tailscale-setup.ps1` atua como "Shadow IT", gerando logs (`tailscale-security-monitor.log`) que expõem explicitamente hostnames e detalhes de peers em claro (sem restrição ou ofuscação).
+**Evidências:**
+- tooling/secure-tailscale-setup.ps1 (função Write-SecurityLog logga `$Peer.HostName` em texto claro).
+
+**Próximos passos:**
+- Aplicar máscara em hostnames nos logs ou centralizar essas coletas no serviço do Backend sob as regras de redação do Core.
+- Registrar/acompanhar SG-050 no backlog.
+
+### 16. Hardcoded Passwords em Scripts (Bandit B105) (Segurança)
+**Descrição:** Bandit identificou hardcoded passwords (B105) em diversos scripts e middlewares, criando vulnerabilidade de credential leakage.
+**Evidências:**
+- tests/verify_secret_management.py
+- app/core/infrastructure/rate_limit_middleware.py
+- app/core/llm/sanitizer.py
+
+**Próximos passos:**
+- Remover strings hardcoded e usar variáveis de ambiente ou secrets management.
+- Registrar/acompanhar SG-053 no backlog.
+
+### 17. Padrão Frágil de Exceções Silenciadas (Try/Except/Pass) (Qualidade/Operação)
+**Descrição:** Exceções vitais são suprimidas sem log adequado, camuflando falhas e impactando a observabilidade e LGPD (risco OQ-020 e OQ-023 via Bandit B110, B112).
+**Evidências:**
+- backend/app/api/v1/endpoints/rag.py
+- backend/app/core/autonomy/planner.py
+
+**Próximos passos:**
+- Remover o supressamento silencioso e registrar os erros em log centralizado.
+- Registrar/acompanhar OQ-023 no backlog.
+
+### 18. Vazamento de PII na Extração de Logs (Segurança)
+**Descrição:** A classe `log_aware_reflector.py` lê logs do sistema (`janus.log`) para extrair erros para o `SafeEvolutionManager` e não aplica `redact_pii_text_only`, expondo dados sensíveis à manager evolution logic.
+**Evidências:**
+- backend/app/core/memory/log_aware_reflector.py
+
+**Próximos passos:**
+- Aplicar máscara/redact de PII antes do processamento dos logs via `redact_pii_text_only`.
+- Registrar/acompanhar SG-057 no backlog.
+
+### 19. Vulnerabilidade CVE-2026-3219 no PIP (Tratamento Tar/Zip) (Segurança)
+**Descrição:** Vulnerabilidade em `pip` reportada sobre o tratamento inseguro de arquivos concatenados em empacotamentos Tar/Zip.
+**Evidências:**
+- backend/requirements.txt (e lockfiles dependentes de pip ou safety checks)
+
+**Próximos passos:**
+- Atualizar pip ou mitigar riscos na criação e deploy de pacotes.
+- Registrar/acompanhar SG-056 no backlog.
