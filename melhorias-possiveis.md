@@ -130,6 +130,8 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| SG-057 | Adicionar sanitização universal de PII no Log Reflector ao consumir janus.log | P1 | S | aberto |
+| OQ-023 | Remover try/except genéricos (Bandit B110/B112) que ocultam erros de orquestração | P1 | M | aberto |
 
 ---
 
@@ -862,6 +864,28 @@ Copiar e preencher:
 - Riscos: Redução de flexibilidade no caso de ferramentas propositalmente "faulty" (com falha), requerendo documentação da escolha.
 - Dependencias: Nenhuma.
 - Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-023] Blocos Try/Except Genéricos (Bandit B110/B112)
+- Problema atual: A análise sintática estática revela exceções silenciadas via `pass` ou `continue` (como B112 no RAG). Isso mascara erros, introduz falhas opacas de lógica de negócio e agrava vazamento silencioso em falha de sanitização.
+- Solucao proposta: Remover try/except vazios substituindo por logging estruturado ou tratativas resilientes (como relatórios de error bubble-up ou re-lançar a Exception tipada).
+- Impacto esperado: Menor dificuldade em root-cause-analysis e proteção contra silent fails.
+- Riscos: Exposição de erros inesperados que antes eram "ignorados" ao usuário.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-057] Vazamento de dados em Memória via Log Reflector e Falta de PII Scrubbing Universal
+- Problema atual: Em `backend/app/core/memory/log_aware_reflector.py`, o componente incorpora linhas do log legadas e expõe possivelmente dados pessoais na camada de reflexão autônoma, visto que não há chamada para o `redact_pii_text_only` global no momento de consumo de arquivos físicos.
+- Solucao proposta: Interceptar qualquer leitura de string dos arquivos de log via método sanitizador universal antes de adicionar à memória vetorial ou buffer do agente.
+- Impacto esperado: Garantia de LGPD/compliance contínuo e resguardo em auto-evolução.
+- Riscos: Redução de especificidade semântica em logs de erro para diagnóstico das máquinas autônomas se erradamente ofuscados demais.
+- Dependencias: Refatoração com as funções de redação locais.
+- Prioridade: P1
 - Esforco: S
 - Dono: a definir
 - Status: aberto

@@ -123,3 +123,21 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-26)
+
+### 12. API Coverage e Matrix Drift Detectado
+**Descrição:** A geração da matriz de cobertura reporta um desvio. O backend agora possui 232 endpoints (aumento de 226 para 232) e a cobertura continua baixa em 11.64%, deixando 205 não cobertos.
+**Evidências:**
+- \`outputs/qa/api_coverage_report.json\` reflete 232 endpoints sendo 205 descobertos.
+**Próximos passos:**
+- Documentar no roadmap a necessidade de incrementar testes para atingir melhor estabilidade técnica (OQ-018)
+
+### 13. Omissão de Padrão PII em Memória Compartilhada e Logs
+**Descrição:** Processos vitais (como \`log_aware_reflector.py\`) acessam e consolidam logs não ofuscados sem aplicar uma sanitização universal antes do uso em memória (\`redact_pii_text_only\`). Da mesma forma, relatórios Bandit identificam blocos Try/Except Pass/Continue abrangentes mascarando a falta de resposta segura e falhas ocultas na orquestração LLM.
+**Evidências:**
+- \`backend/app/core/memory/log_aware_reflector.py\`: Leitura do arquivo físico \`janus.log\` e agregação direta à estrutura interna.
+- B112 Tracked across multiple endpoints masking failures (\`auth.py\`, \`rag.py\`).
+**Próximos passos:**
+- Adicionar o ticket SG-057 para unificar a ofuscação \`redact_pii\` nos componentes RAG/LogReflector.
+- Adicionar o ticket OQ-023 sobre os try-except opacos espalhados no sistema.
