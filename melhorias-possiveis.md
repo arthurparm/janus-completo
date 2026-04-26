@@ -111,6 +111,18 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
 ---
 
+### [SG-056] Tratamento inseguro de arquivos tar/ZIP concatenados no pip (CVE-2026-3219)
+- **Status:** planejado
+- **Impacto / Relevância:** (P1) Permite comportamentos confusos e explorações através de instalação dissimulada de artefatos que forjam assinaturas em ZIP/tar mistos.
+- **Esforço Estimado:** (S) Atualização da versão do pip na imagem Docker / pyproject.
+- **Evidência:** `pip-audit` apontou CVE-2026-3219 para o `pip` na stack do backend.
+
+### [SG-040] Vulnerabilidades críticas não resolvidas no Frontend (Angular, protobufjs, vite)
+- **Status:** planejado
+- **Impacto / Relevância:** (P0) Manutenção de dezenas de pendências de segurança apontadas pelo `npm audit`, introduzindo vetores de Prototype Pollution e ReDoS.
+- **Esforço Estimado:** (M) Rodar `npm audit fix --force` e validar build final.
+- **Evidência:** `npm audit` acusa 30 problemas, com severidades Altas e Críticas recorrentes no ecossistema atual.
+
 ## 5) Observabilidade, Qualidade e Confiabilidade
 
 | ID | Melhoria | Prioridade | Esforco | Status |

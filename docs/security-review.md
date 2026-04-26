@@ -254,3 +254,23 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-26)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend) - **Vulnerabilidade encontrada**.
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+- [x] Verificação de segurança safety - **Falha de parse**.
+
+### 32. Tratamento inseguro de arquivos concatenados no pip
+- **Caminho:** `backend/pyproject.toml` (dependência do ambiente global pip)
+- **Gravidade:** Alta (CVE-2026-3219)
+- **Descrição:** O `pip` trata arquivos tar e ZIP concatenados como arquivos ZIP independentemente do nome do arquivo ou se um arquivo é simultaneamente tar e ZIP. Esse comportamento pode resultar em comportamentos confusos de instalação de pacotes maliciosos.
+- **Ação Recomendada:** Atualizar a versão do `pip` (`pip install --upgrade pip`) para a versão corrigida (26.1+).
+
+### 33. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Crítica
+- **Descrição:** Múltiplas dependências do frontend seguem apresentando vulnerabilidades críticas/altas, englobando ecossistema `@angular/*`, `vite`, `protobufjs` e `express-rate-limit`.
+- **Ação Recomendada:** Executar `npm audit fix` rigorosamente.
