@@ -254,3 +254,23 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+
+## Achados do dia (2026-04-27)
+
+### Checklist executado
+- [x] npm audit (frontend)
+- [x] pip-audit (backend)
+- [x] Revisão manual de código via `bandit` (arquivos alterados / evidências levantadas).
+
+### 32. Novas Vulnerabilidades em Dependências do Frontend
+- **Caminho:** `frontend/package.json` / `npm audit`
+- **Gravidade:** Alta / Crítica / Moderada
+- **Descrição:** Múltiplas dependências do frontend apresentaram vulnerabilidades, totalizando 30 issues (20 altas, 9 moderadas, 1 crítica). Adição de novas bibliotecas como `@angular-devkit/architect`, `@angular-devkit/core`, entre outras listadas no ecosistema Angular e dependências transitivas.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente.
+
+### 33. Vulnerabilidade em Dependência Backend (CVE-2026-3219)
+- **Caminho:** Dependência `pip` via `pip-audit`
+- **Gravidade:** Média
+- **Descrição:** O `pip` manipula arquivos tar e ZIP concatenados como arquivos ZIP, independentemente do nome do arquivo, podendo levar a instalação de arquivos incorretos segundo as CVEs reportadas.
+- **Ação Recomendada:** Atualizar a versão do `pip` para mitigar o CVE.

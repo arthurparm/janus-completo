@@ -619,6 +619,18 @@ Copiar e preencher:
 - Dono: a definir
 - Status: ideia
 
+### [SG-040] Vulnerabilidades em dependências do frontend (npm audit 2026-04-27)
+- **Status:** planejado
+- **Prioridade:** P1
+- **Esforço:** M
+- **Descrição:** 30 vulnerabilidades identificadas (20 altas, 9 moderadas, 1 crítica) afetando `@angular-devkit/architect` e ecosistema Angular. Atualização crítica necessária.
+
+### [SG-041] CVE-2026-3219 no PIP concatenando archives
+- **Status:** planejado
+- **Prioridade:** P2
+- **Esforço:** P
+- **Descrição:** A vulnerabilidade CVE-2026-3219 reportada pelo pip-audit indica que arquivos ZIP/tar com malformação de concatecnação poderiam gerar ataques de bypass. Necessário atualizar o pip no ambiente backend.
+
 ### [OQ-013] Rate Limiting Fail-Closed
 - Problema atual: O middleware `rate_limit_middleware.py` bloqueia requisições (503) se o Redis estiver indisponível em produção (fail-closed) invés de fail-open.
 - Solucao proposta: Configurar a política do Rate Limit para modo `fail-open`, permitindo a requisição prosseguir com degradação graciosa caso o Redis caia.
