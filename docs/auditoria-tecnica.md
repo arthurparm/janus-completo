@@ -123,3 +123,14 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-27)
+
+### 12. Execução Diária sem Novos Desvios (CI/API/Auditoria)
+**Descrição:** A execução rotineira de verificação de paridade de CI, validação de drift de contratos da API e a auditoria técnica de 24h não identificaram novas falhas ou vulnerabilidades a serem reportadas em relação ao último baseline validado (PR #177).
+**Evidências:**
+- `ruff check`, `mypy` no backend e verificações completas no frontend (npm run lint/test/build) passaram sem erros críticos impeditivos.
+- Extração do inventário da API (openapi_spec) com o `tooling/extract_api_inventory_offline.py` resultou em um diff vazio nos arquivos de métricas (api-endpoint-matrix e api_coverage_report).
+- Log de commits recentes confirma a estabilidade desde a submissão do 'docs: daily technical control tower (#177)'.
+**Próximos passos:**
+- Nenhuma ação imediata necessária nas próximas 24h a não ser manter o acompanhamento normal de PRs e monitoramento.
