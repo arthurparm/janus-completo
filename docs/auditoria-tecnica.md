@@ -123,3 +123,32 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-28)
+
+### 12. Melhorias e testes de segurança ignorados na branch
+
+**Descrição:** Modificações contendo scripts inseguros foram incluídas em PRs recentes expondo dados PII via logs transparentes da tailscale, gerando um risco adicional em ambientes gerenciados.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1` expõe detalhes em cleartext no filesystem local sem usar redact e logs seguros.
+- API drift continua inalterado demonstrando que os 205 endpoints em aberto da última execução (`2026-03-31`) persistem.
+
+**Próximos passos:**
+- Remover dependências ou log calls locais não mascarados nos utilitários tooling.
+- Continuar o track na OQ-018 no `melhorias-possiveis.md` atualizando a data.
+
+### 13. Scripts de utilidade isolados sem cobertura CI
+**Descrição:** Scripts de testes dentro de `tooling/` (e.g. `test_debate_system.py`, `seed-repro-scenarios.ps1`) não estão integrados nos pipelines primários de Pytest (`qa/`), o que limita a validação contínua contra regressões.
+**Evidências:**
+- `tooling/test_debate_system.py` roda isolado.
+- `tooling/seed-repro-scenarios.ps1` não é executado em CI automaticamente.
+**Próximos passos:**
+- Documentar OQ-019 no backlog técnico.
+
+### 14. Logs e Observabilidade sem Redaction Unificado (Bandit B112 e PII)
+**Descrição:** Verificado blocos de código com Try-Except que apenas passam (B110) ou continuam silenciando erros (B112) de RAG e planners sem logging adequado. Além disso, a aplicação tem um risco geral contínuo de vazamento de logs PII.
+**Evidências:**
+- `app/api/v1/endpoints/rag.py`
+- `app/core/autonomy/planner.py`
+**Próximos passos:**
+- Documentar no roadmap a resolução das tags OQ-020 (Silenciamento PII/B112).

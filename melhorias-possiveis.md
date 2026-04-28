@@ -22,6 +22,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| OQ-020 | Corrigir tratamento silencioso de erros e riscos LGPD/Bandit B112 (RAG/Planner) | P1 | M | aberto |
+| OQ-019 | Integrar scripts de utilidade (tooling/test_*) nas pipelines primárias de CI (qa/) | P2 | M | aberto |
+| SG-050 | Ocultar dados PII logs locais em scripts PowerShell de infra (Tailscale) | P1 | M | aberto |
 | CI-001 | Corrigir modelagem de entidades de codigo no grafo (File/Function/Class com chaves consistentes) | P0 | M | feito (2026-02-12) |
 | CI-002 | Corrigir resolucao de `CALLS` para usar nome qualificado e evitar links quebrados | P0 | M | feito (2026-02-12) |
 | CI-003 | Indexacao incremental por `git diff` (alem de reindex full) | P1 | M | ideia |
