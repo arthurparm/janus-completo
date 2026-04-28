@@ -109,6 +109,12 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-040 | Vulnerabilidades no Frontend Update (protobufjs e dependencias angular) | P1 | M | aberto |
+| SG-041 | Vulnerabilidade em Dependência Backend (pip - CVE-2026-3219) | P1 | S | aberto |
+| LGPD-001 | Minimização Textual para Áudio em daemon.py | P1 | S | aberto |
+| LGPD-002 | Isolamento de Estado Global In-Memory em productivity_tools.py | P1 | M | aberto |
+| LGPD-003 | Mascaramento de Metadados de Comunicação (productivity_tools.py) | P1 | S | aberto |
+| LGPD-004 | Autorização e Redação Visual em Capturas de Tela do Windows Agent | P1 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -865,3 +871,15 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-040] Vulnerabilidades no Frontend Update (protobufjs e dependencias angular)
+- Solucao proposta: Executar auditoria para tratar as vulnerabilidades atualizadas recentemente no ecosystem Frontend, com atencao especial ao risco critico em protobufjs.
+### [SG-041] Vulnerabilidade em Dependência Backend (pip - CVE-2026-3219)
+- Solucao proposta: Atualizar o pip para prevenir possiveis exploracoes via arquivos tar/ZIP concatenados (CVE-2026-3219).
+### [LGPD-001] Minimização Textual para Áudio em daemon.py
+- Solucao proposta: Aplicar redação de PII nos comandos de voz antes do salvamento em disco no log do sistema.
+### [LGPD-002] Isolamento de Estado Global In-Memory em productivity_tools.py
+- Solucao proposta: Mover estado temporário de _notes e _calendar_events para cache autenticado isolado por usuário.
+### [LGPD-003] Mascaramento de Metadados de Comunicação (productivity_tools.py)
+- Solucao proposta: Omitir e-mails de remetente, destinatário e assunto nos logs de envio de e-mails.
+### [LGPD-004] Autorização e Redação Visual em Capturas de Tela do Windows Agent
+- Solucao proposta: Exigir flag de opt-in local e mascarar informações sensíveis da tela do usuário ao fazer o dump do display host.

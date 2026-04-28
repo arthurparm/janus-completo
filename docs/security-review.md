@@ -254,3 +254,19 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-28)
+
+### Lacunas e Impacto
+- **Command Injection:** O `backend/app/core/tools/launcher_tools.py` continua chamando `subprocess` com `shell=True` expondo vetores de injeção direta de comandos se os inputs não forem devidamente validados. (Bandit B602)
+- **SSRF (Server-Side Request Forgery) / File Read:** A abertura de URLs no `message_broker.py` e `agent_tools.py` sem validação forte de schema (`file://` ou schemas customizados arbitrários) abre margem para exfiltração de dados locais ou requisições forjadas. (Bandit B310)
+- **Uso Inseguro de Avaliação de Código:** A utilização do `eval()` no `faulty_tools.py` e uso do `exec()` no `python_sandbox.py` persiste. Pode permitir execução arbitrária se o input derivar do LLM manipulado. (Bandit B307, B102)
+- **Insecure XML Parsing:** O `document_parser_service.py` utiliza `xml.etree.ElementTree` que é suscetível a ataques como XXE (XML External Entity). Deve-se usar o pacote `defusedxml`. (Bandit B314)
+- **Dependência Backend Vulnerável:** A dependência `pip` apresenta a vulnerabilidade CVE-2026-3219 relacionada ao tratamento confuso de arquivos concatenados tar/ZIP.
+- **Dependências Frontend Vulneráveis:** O relatório de segurança via `npm audit` indica que vários pacotes estão vulneráveis (alta/crítica severidade), incluindo `protobufjs` (crítico), bem como as dependências atreladas ao angular e roteadores/express (como `@angular/cli`, `lodash-es`, `tar`, `vite`).
+
+### Próximos Passos
+1. **Mitigar Injeções:** Revisar e remover `shell=True` no `launcher_tools.py`. Refatorar `eval` em `faulty_tools.py` para `ast.literal_eval`. Limitar as capabilities do `exec()` no `python_sandbox.py`.
+2. **Validar Schemas:** Adicionar checagem restritiva (allowlist apenas HTTP/HTTPS) no `message_broker.py` e `agent_tools.py` antes de processar URLs.
+3. **Refatorar Parser XML:** Substituir os parsers XML inseguros em `document_parser_service.py` pelo `defusedxml.defuse_stdlib()`.
+4. **Atualização de Dependências:** Efetuar a atualização prioritária do `pip` para evitar as falhas de handling de ZIP. Executar a resolução manual (via `npm audit fix --force` ou upgrades específicos) para eliminar as vulnerabilidades do frontend, sobretudo `protobufjs`.

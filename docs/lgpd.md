@@ -90,3 +90,17 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-28)
+
+### Lacunas e Impacto
+- **Captura de Áudio Sensível sem Minimização:** O `backend/app/interfaces/daemon/daemon.py` continua arquivando comandos de voz nos logs do sistema em claro. A falta de minimização (PII scrubbing) prévia resulta na potencial gravação indevida de dados biométricos/comportamentais.
+- **Estado Global Inseguro (Vazamento In-Memory):** As ferramentas em `backend/app/core/tools/productivity_tools.py` mantêm variáveis globais ativas para persistir dados de anotações e calendários. Como se trata de estado in-memory, acessos de diferentes usuários entre sessões ativas podem conflitar e vazar dados para threads adjacentes.
+- **Registro Indevido de Metadados Pessoais de Comunicação:** A ferramenta de envio de email em `productivity_tools.py` registra abertamente todos os metadados de correspondência (remetente, destinatário, assunto) via logger informacional. Esses dados desprotegidos expõem hábitos e PII nos logs.
+- **Captura de Tela Indiscriminada e sem Autorização:** Os endpoints expostos pelo Windows Agent (`backend/windows_agent.py`) retiram prints completos da tela do sistema host de forma livre e não autenticada, não executando qualquer data minimization visual (obfuscating de janelas críticas).
+
+### Próximos Passos
+1. **Minimização Textual para Áudio:** Aplicar o helper `redact_pii_text_only` nativamente nos comandos vocais processados pelo daemon antes de enviá-los ao logger de aplicação.
+2. **Refatoração do Estado Transitório (Tools):** Extrair o contexto e os objetos de anotação de `productivity_tools.py` em uma cache persistente via Redis/DB baseada no ID do usuário da sessão, isolando radicalmente os processos entre chamadas.
+3. **Máscara de Comunicações:** Utilizar interceptadores de log ou filtros no structlog para que destinatários e assuntos de email passem por redatores antes do salvamento em arquivo de log.
+4. **Proteção Endpoint de Desktop:** Integrar validação por Auth e obrigar o acionamento de um flag de `OPT_IN` na aplicação servidora do Windows antes de permitir as execuções de captura, integrando também borramento visual preventivo em bordas críticas da tela.
