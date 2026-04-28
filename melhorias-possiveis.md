@@ -130,6 +130,9 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| SG-054 | Fuga de Autenticação nos endpoints de Agentes e Assistentes (Auth Bypass) | P0 | S | aberto |
+| OQ-021 | Atualizações de Configuração em Memória voláteis no Admin | P1 | M | aberto |
+| OQ-022 | Purgação de banco perigosa via raw SQL em admin_graph.py | P0 | M | aberto |
 
 ---
 
@@ -863,5 +866,38 @@ Copiar e preencher:
 - Dependencias: Nenhuma.
 - Prioridade: P2
 - Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-054] Fuga de Autenticação (Auth Bypass) em endpoints Core
+- Problema atual: Os endpoints `backend/app/api/v1/endpoints/agent.py` e `backend/app/api/v1/endpoints/assistant.py` carecem de `@Depends(get_current_user)`, expondo endpoints sensíveis publicamente e permitindo execução não-autorizada.
+- Solucao proposta: Aplicar as restrições de AuthN/AuthZ baseadas nos escopos adequados.
+- Impacto esperado: Prevenir escalonamento de privilégio e execução indevida.
+- Riscos: Quebra de integrações internas que não estiverem enviando o token.
+- Dependencias: Módulo de `auth_service`.
+- Prioridade: P0
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-021] Atualizações de Configuração em Memória voláteis
+- Problema atual: A rota em `backend/app/api/v1/endpoints/admin_config.py` faz alterações quentes de configuração que se perdem no restart do sistema devido à ausência de persistência durável.
+- Solucao proposta: Intermediar as atualizações via banco de dados ou `.env` persistente antes de publicar no Redis Pub/Sub.
+- Impacto esperado: Melhor robustez de configuração e prevenção contra drift entre nodes.
+- Riscos: Latência inicial na sincronização de configurações de arquivo/banco no startup.
+- Dependencias: Camada de armazenamento durável.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [OQ-022] Purgação de banco perigosa via raw SQL (Data Integrity Risk)
+- Problema atual: A task em `backend/app/api/v1/endpoints/admin_graph.py` executa expurgos puramente com base em premissas não verificadas (sem schema_version na memória) acessando msgpack blob sem bloqueio seguro.
+- Solucao proposta: Restringir essa purgação a um sistema de versionamento ou exigir snapshots obrigatórios. Migrar queries cruas SQL para abstrações seguras e documentar.
+- Impacto esperado: Menor risco de perda acidental de dados sensíveis de agentes (conversões antigas).
+- Riscos: Maior sobrecarga operacional para limpar bancos grandes.
+- Dependencias: Conhecimento avançado de SQLAlchemy e lock de SGDB.
+- Prioridade: P0
+- Esforco: M
 - Dono: a definir
 - Status: aberto

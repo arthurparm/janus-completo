@@ -123,3 +123,30 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-28)
+
+### 12. Fuga de Autenticação em Endpoints Core (Segurança)
+**Descrição:** Os endpoints de execução de agentes e assistentes virtuais carecem de proteção. Eles recebem requisições diretamente sem verificar a identidade, configurando falha grave em autenticação/autorização (AuthN/AuthZ).
+**Evidências:**
+- `backend/app/api/v1/endpoints/agent.py`: Rota `/execute` exposta publicamente sem `Depends(get_current_user)`.
+- `backend/app/api/v1/endpoints/assistant.py`: Rota `/assistant/execute` exposta da mesma forma sem verificação de token ou privilégios.
+**Próximos passos:**
+- Incluir a camada de autenticação nestes endpoints garantindo rastreabilidade e segurança (RBAC/JWT).
+- Adicionado SG-054 ao backlog de melhorias.
+
+### 13. Lógica Frágil de Atualização de Configuração em Memória
+**Descrição:** Atualizações críticas via painel de administração não possuem persistência e são vulneráveis a resets durante ciclos de reinicialização dos containers/pods, caracterizando injeção volátil.
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_config.py`: A rota `/admin/config` injeta parâmetros e faz "hot-reload" do estado de runtime, propagando via Redis Pub/Sub, mas carece de sincronização com o banco ou `.env`, o que anula os efeitos pós-restart.
+**Próximos passos:**
+- Ajustar `admin_config.py` para escrever as alterações em um repositório central durável (DB ou Vault) antes do cache.
+- Adicionado OQ-021 ao backlog.
+
+### 14. Purgação Perigosa e Incompleta de Banco de Dados
+**Descrição:** Lógica administrativa de limpeza de banco expõe riscos significativos à integridade dos dados (possível deleção acidental não validada ou expurgo destrutivo sem restrições fortes).
+**Evidências:**
+- `backend/app/api/v1/endpoints/admin_graph.py`: O endpoint `/purge_incompatible` planeja deletar threads baseadas em "schema_version" utilizando raw SQL queries pesadas. A função `_purge_incompatible_threads_task` interage de forma agressiva diretamente com os snapshots msgpack sem uma camada robusta de lock/migração.
+**Próximos passos:**
+- Refatorar `/purge_incompatible` para um soft delete ou snapshotting seguro pré-remoção, exigindo duplo lock ou validação avançada (two-factor/role específica de DBA).
+- Adicionado OQ-022 ao backlog.
