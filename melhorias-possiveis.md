@@ -865,3 +865,17 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+
+### [SG-041] Vulnerabilidade em pip para manipulação de pacotes ZIP/tar (CVE-2026-3219)
+- **Descrição**: O `pip` trata arquivos que são tanto zip quanto tar apenas como zip (ou vice versa dependendo do payload), o que pode resultar em confusão durante a instalação e instalação de arquivos arbitrários. Identificado via `pip-audit`.
+- **Impacto**: Instalações forjadas que comprometam pacotes base do sistema via cache local ou server poisoning (Supply chain attack).
+- **Esforço**: S
+- **Prioridade**: P1
+- **Status**: a fazer
+
+### [SG-042] Vulnerabilidade em protobufjs com Arbitrary Code Execution
+- **Descrição**: Vulnerabilidade na biblioteca protobufjs do frontend possibilita a execução de código arbitrário. Encontrada via npm audit. (GHSA-xq3m-2v4x-88gg)
+- **Impacto**: Crítico. Pode permitir comprometimento da aplicação pelo cliente.
+- **Esforço**: M
+- **Prioridade**: P0
+- **Status**: a fazer

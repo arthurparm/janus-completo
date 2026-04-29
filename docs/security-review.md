@@ -47,6 +47,32 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Descrição:** A biblioteca padrão `random` é usada com `random.choice`, o que não é adequado para usos onde imprevisibilidade criptográfica seja necessária, embora neste contexto específico pareça gerar fatos aleatórios.
 - **Ação Recomendada:** Substituir pela biblioteca `secrets` se houver possibilidade de uso em cenários seguros, ou adicionar uma exceção documentada/inline para o linter.
 
+## Achados do dia (2026-04-02)
+
+
+### Checklist executado
+- [x] Extração e avaliação de metadados PII em logs;
+- [x] Execução de varreduras via npm audit, poetry run pip-audit e safety check;
+- [x] Inspeção das diffs mais recentes em PRs abertos.
+
+### Janela de Análise
+- Desde a última execução (2026-04-01).
+
+### Dependências
+- **Backend:** Nova vulnerabilidade detectada no `pip` via auditoria `pip-audit`.
+  - `pip` vulnerável a ZIP/tar concatenado (CVE-2026-3219).
+- **Frontend:** Auditoria (`npm audit`) aponta persistência em `protobufjs` (Crítico) e vulnerabilidades em `lodash-es` e `vite`.
+
+### Riscos Inerentes aos Arquivos Alterados
+- Foi verificado grande volume de arquivos modificados nas últimas 24h na pasta `frontend/src/` relativos a novos componentes e widgets e também a relatórios de testes na pasta `outputs/qa`.
+- Não foram encontrados novos segredos hardcoded nestes arquivos via análise direta.
+
+### Gaps + Severidade
+- **Alta:** Risco na manipulação de arquivos (`pip` CVE-2026-3219).
+
+### Ações Recomendadas
+- Atualizar a dependência `pip` no ambiente backend (Poetry).
+
 ## Achados do dia (2026-03-08)
 
 ### Checklist executado

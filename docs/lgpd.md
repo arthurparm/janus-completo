@@ -27,6 +27,21 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 1. Introduzir uma política estrita de "Scrubbing/Masking" para metadados de email (Destinatários e Assuntos) passando por uma heurística segura antes de ser jogado nos arquivos `janus.log` ou ser interceptado pelo structlog.
 2. Refatorar as listas globais (`_notes` e `_calendar_events`) e mover esse estado transitório para repositórios transacionais atrelados a banco (Postgres/Redis) onde AuthZ e encriptação de disco possam intervir, prevenindo compartilhamentos temporais entre requests.
 
+## Achados do dia (2026-04-02)
+
+### Janela de Análise
+- Desde a última execução (2026-04-01).
+
+### Arquivos tocados e Dados Pessoais
+- Houve muitas atualizações na interface de frontend e relatórios QA de integração.
+- Nenhuma modificação direta em processos que tocam PII, no entanto a observabilidade em novos widgets deve ser monitorada.
+
+### Lacunas e Impacto
+- Sem lacunas adicionais relacionadas a LGPD introduzidas na janela analisada.
+
+### Próximos Passos
+- Continuar monitoramento nos relatórios de QA para evitar vazamentos em logs de sistema e testes de carga.
+
 ## Achados do dia (2026-03-08)
 
 ### Lacunas e Impacto
