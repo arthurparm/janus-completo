@@ -254,3 +254,30 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-29)
+
+**Checklist:**
+- [x] Logs com PII/tokens
+- [x] Falta de validação
+- [x] Permissões frouxas
+- [x] Endpoints sem authZ
+- [x] Segredos hardcoded
+- [x] Ausência de rate limit
+- [x] Dependências vulneráveis
+
+**Gaps e Recomendações:**
+*   **Dependências Vulneráveis (Frontend):** Vulnerabilidades críticas e altas em `protobufjs` (Arbitrary code execution), `vite` (Path Traversal), `tar` (Hardlink Path Traversal), `lodash-es` (Prototype Pollution), `path-to-regexp` (DoS/ReDoS) e `postcss` (XSS) identificadas via `npm audit`.
+    *   *Recomendação:* Atualizar pacotes no frontend via `npm update` ou `npm audit fix` ou sobrescrever versões no `package.json`.
+*   **Segredos Hardcoded:** Senhas hardcoded identificadas em `tests/verify_secret_management.py`, `app/core/infrastructure/rate_limit_middleware.py`, e `app/core/llm/sanitizer.py`.
+    *   *Recomendação:* Remover senhas hardcoded e migrar para gestão de segredos via variáveis de ambiente ou secrets manager.
+*   **Ausência de Rate Limit / Falha Segura:** Falha de middleware de rate limit (Fail-closed) se o Redis cair em `rate_limit_middleware.py` e endpoint de auth (`auth.py`) sem anotação `@limiter.limit`.
+    *   *Recomendação:* Implementar fail-open no circuit breaker do Redis e adicionar rate limit no login.
+*   **Injeção de Comandos (OS Command Injection):** Uso de `shell=True` para Windows no `launcher_tools.py` e `exec()` em `python_sandbox.py`.
+    *   *Recomendação:* Refatorar chamadas subprocess para usar array de argumentos, remover `shell=True` e `exec()`.
+*   **Injeção SSRF:** Uso de URLs não validadas em `agent_tools.py`.
+    *   *Recomendação:* Validar scheme da URL forçando `http://` ou `https://`.
+*   **Uso de eval() Inseguro:** `eval()` em `faulty_tools.py`.
+    *   *Recomendação:* Substituir por `ast.literal_eval`.
+*   **Auth bypass em agentes:** Auth bypass detectado em `/execute` (`agent.py`) e `/assistant/execute` (`assistant.py`).
+    *   *Recomendação:* Implementar validação de sessão e tokens de acesso aos endpoints de agentes.

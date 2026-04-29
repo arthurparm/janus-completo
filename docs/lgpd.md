@@ -90,3 +90,19 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-29)
+
+**Gaps e Recomendações:**
+*   **Captura de Tela não Consentida:** `backend/windows_agent.py` captura telas sem minimização ou consentimento.
+    *   *Recomendação:* Adicionar popup de consentimento ou desfoque de áreas sensíveis antes do envio.
+*   **Logs de Áudio com PII:** `daemon.py` arquiva comandos de voz em `janus.log` sem PII scrubbing.
+    *   *Recomendação:* Integrar o `redact_pii_text_only` no pipeline do daemon antes de salvar logs.
+*   **Vazamento de PII em E-mails:** `productivity_tools.py` vaza `user_id`, `to`, `subject` no stdout via `structlog`.
+    *   *Recomendação:* Aplicar máscara aos campos de destinatário e subject antes de usar `structlog.get_logger()`.
+*   **Logs de Configuração Tailscale:** `tooling/secure-tailscale-setup.ps1` expõe hostnames e peer data em logs locais em texto claro.
+    *   *Recomendação:* Omitir hostnames nos logs ou ofuscar dados do peer no Powershell.
+*   **Vazamento em Refletor de Logs:** `log_aware_reflector.py` lê `janus.log` diretamente para a memória do SafeEvolutionManager sem PII redaction.
+    *   *Recomendação:* Passar o conteúdo lido pelo sanitizer `redact_pii_text_only`.
+*   **Vazamento em Tratamento de Erros:** Exceções mascaradas com Try/Except/Pass (B110) e Continue (B112) em múltiplos arquivos causam risco de observabilidade e logs de stack traces em texto claro com PII não tratada.
+    *   *Recomendação:* Padronizar captura de erro centralizada aplicando redação universal de PII.

@@ -82,6 +82,28 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 ## 4) Ferramentas, SeguranÃ§a e Governanca
 
+### [SG-040] Vulnerabilidades Críticas de Frontend (protobufjs, vite, tar)
+- Problema atual: Múltiplas vulnerabilidades severas reportadas via npm audit, incluindo RCE em protobufjs, Path Traversal em vite e tar, e DoS em path-to-regexp.
+- Solucao proposta: Atualizar as dependências afetadas para versões seguras via `npm install` ou correções manuais no package.json.
+- Impacto esperado: Prevenção contra injeções de código, XSS e leitura indevida de arquivos no cliente.
+- Riscos: Atualizações majoritárias podem quebrar compatibilidade de build ou runtime do Angular.
+- Dependencias: Frontend pipelines e testes regressivos.
+- Prioridade: P0
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Vazamento de PII em ferramentas de produtividade
+- Problema atual: O script `productivity_tools.py` realiza logs de `user_id`, `to` e `subject` sem ofuscação durante envio de e-mails, violando diretrizes de LGPD.
+- Solucao proposta: Adicionar mascaramento para os campos de destinatário e aplicar PII scrubbing no assunto.
+- Impacto esperado: Conformidade com LGPD nos logs de aplicação.
+- Riscos: Redução de utilidade em debugging de envio de e-mails.
+- Dependencias: `redact_pii_text_only`.
+- Prioridade: P1
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
