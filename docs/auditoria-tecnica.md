@@ -123,3 +123,21 @@ Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débito
 **Próximos passos:**
 - Documentar a nova cobertura e agendar criação de testes para os endpoints expostos recentemente, garantindo que a cobertura da API atinja as métricas alvo.
 - Adicionar issue OQ-018 ao backlog.
+
+## Achados do dia (2026-04-29)
+
+### 12. Script de Setup Expondo Logs e PII em Texto Limpo
+**Descrição:** O script `tooling/secure-tailscale-setup.ps1` expõe hostnames e dados de pares em logs locais não criptografados e sem redação (PII), gerando risco de LGPD.
+**Evidências:**
+- `tooling/secure-tailscale-setup.ps1`: `Write-SecurityLog "High latency detected: \$Peer.HostName (\$Peer.LatencyMs ms)" "WARNING"`
+
+**Próximos passos:**
+- Ofuscar logs locais no powershell, e adicionar SG-050 no backlog.
+
+### 13. Testes Isolados Bypassando o Pytest CI
+**Descrição:** Scripts de teste localizados em `tooling/` (ex: `test_debate_system.py`, `seed-repro-scenarios.ps1`) executam de forma isolada, não integrando com as pipelines CI primárias do Pytest (`qa/`), o que reduz a validação de regressão automatizada.
+**Evidências:**
+- Diretório `tooling/` contém testes e seed scripts recentes (ex: commit fec8e75) desvinculados do pytest coverage.
+
+**Próximos passos:**
+- Migrar `test_debate_system.py` para a pasta `qa/` e registrá-lo na suíte automatizada. Adicionar OQ-019 no backlog.

@@ -84,6 +84,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| SG-050 | Ofuscar dados de PII (hostnames, IP, etc) gravados em logs no tooling/secure-tailscale-setup.ps1 | P1 | S | aberto |
 | SG-001 | Substituir parser fragil de tool call por envelope JSON estrito | P0 | M | feito (2026-02-13) |
 | SG-002 | Validacao de args por schema por ferramenta (pydantic) | P0 | M | feito (2026-02-13) |
 | SG-003 | Redaction de secrets/PII antes de persistir args e auditoria | P0 | S | feito (2026-02-13) |
@@ -115,6 +116,7 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 
 | ID | Melhoria | Prioridade | Esforco | Status |
 |---|---|---|---|---|
+| OQ-019 | Integrar scripts de teste isolados (tooling/) com as pipelines de Pytest CI | P2 | S | aberto |
 | OQ-001 | Dashboard unico por request_id (pipeline completo) | P0 | M | feito (2026-02-13) |
 | OQ-002 | SLOs por dominio (chat, rag, tools, workers) com alertas | P0 | M | feito (2026-02-21) |
 | OQ-003 | Tracing distribuido fim-a-fim com correlacao frontend/back/worker | P1 | M | concluido (2026-03-03) |
@@ -862,6 +864,28 @@ Copiar e preencher:
 - Riscos: Redução de flexibilidade no caso de ferramentas propositalmente "faulty" (com falha), requerendo documentação da escolha.
 - Dependencias: Nenhuma.
 - Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [OQ-019] Integrar scripts de teste isolados com Pytest CI
+- Problema atual: Scripts como `test_debate_system.py` em `tooling/` rodam isolados e ignoram testes de regressão automatizados do Pytest (`qa/`).
+- Solucao proposta: Migrar scripts testáveis para `qa/` e integrá-los na suíte automatizada.
+- Impacto esperado: Melhor cobertura e detecção de regressões automáticas.
+- Riscos: Quebra de pipelines se testes dependentes de ambiente não forem adequados via fixtures.
+- Dependencias: Pytest CI base.
+- Prioridade: P2
+- Esforco: S
+- Dono: a definir
+- Status: aberto
+
+### [SG-050] Ofuscar dados de PII em tooling/secure-tailscale-setup.ps1
+- Problema atual: `Write-SecurityLog` expõe `Peer.HostName` em claro nos logs locais.
+- Solucao proposta: Aplicar ofuscação (ex. hash ou máscara) ao hostname e a outras variáveis de sessão antes de gravar no arquivo.
+- Impacto esperado: Redução de riscos na conformidade LGPD / vazamento de topologia de VPN.
+- Riscos: Dificuldade temporária na leitura analítica de logs crus.
+- Dependencias: Atualização no script PS1.
+- Prioridade: P1
 - Esforco: S
 - Dono: a definir
 - Status: aberto
