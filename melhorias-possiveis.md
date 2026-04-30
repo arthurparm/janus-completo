@@ -109,6 +109,16 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | SG-027 | Corrigir criacao insegura de arquivos temporarios em log_aware_reflector.py (/tmp hardcoded) | P1 | S | aberto |
 | SG-028 | Mitigar abertura insegura de URL com arbitrary schemes (file://) em message_broker.py e agent_tools.py | P1 | S | aberto |
 | SG-029 | Remover ou ofuscar credenciais e segredos hardcoded em scripts de tooling/testes e benchmarks | P1 | S | aberto |
+| SG-040 | Vulnerabilidades Críticas de NPM (protobufjs) | P0 | S | aberto |
+| SG-041 | Vulnerabilidade em pip (CVE-2026-3219) | P0 | S | aberto |
+| SG-042 | Vulnerabilidades Altas em NPM (Angular DevKit, Vite, etc) | P1 | M | aberto |
+| SG-050 | Exposição de Hostnames em Script Tailscale | P1 | S | aberto |
+| SG-052 | Risco de SSRF por Falta de Validação de Scheme | P1 | M | aberto |
+| SG-053 | Senhas Hardcoded no Código Backend | P0 | M | aberto |
+| SG-054 | Authentication Bypass nos Endpoints Principais | P0 | L | aberto |
+| SG-055 | Code Injection via Subprocessos Windows | P0 | M | aberto |
+| SG-056 | Insecure Deserialization em Transformers | P1 | M | aberto |
+| SG-057 | Vazamento PII via Leitura de Logs (Log-Aware Reflector) | P0 | M | aberto |
 ---
 
 ## 5) Observabilidade, Qualidade e Confiabilidade
@@ -130,6 +140,11 @@ Objetivo: centralizar ideias de evolucao do Janus em um unico backlog vivo, para
 | OQ-015 | Padronizar uso do Settings/Config no ChatAgentLoop (remover os.getenv) | P2 | S | ideia |
 | OQ-016 | Corrigir fragilidade e mocking HTTP no frontend auth.service.spec.ts | P1 | S | ideia |
 | OQ-018 | Melhorar cobertura de testes para os novos endpoints expostos na API (Total agora é 232, 205 não cobertos) | P1 | M | aberto |
+| OQ-019 | Testes de tooling bypassando CI do Pytest | P1 | M | aberto |
+| OQ-020 | Blocos Try-Except Silenciosos (Bandit B110) | P1 | L | aberto |
+| OQ-021 | Atualizações Frágeis em Memória | P1 | M | aberto |
+| OQ-022 | Purge Perigoso de Banco de Dados | P0 | M | aberto |
+| OQ-023 | Blocos Try-Except com Continue (Bandit B112) | P1 | L | aberto |
 
 ---
 

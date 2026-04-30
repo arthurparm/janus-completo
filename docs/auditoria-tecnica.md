@@ -3,6 +3,38 @@
 Data de criação: 2026-03-01
 Objetivo: Registrar as descobertas das auditorias contínuas, consolidar débitos técnicos e evidenciar pontos de risco no sistema.
 
+
+## Achados do dia (2026-04-30)
+
+### 1. Blocos de Try-Except Silenciosos (Observabilidade Frágil)
+**Descrição:** Múltiplos arquivos do backend utilizam blocos try-except com `pass` ou `continue` (B110, B112 detectados via Bandit), mascarando possíveis falhas ou vazamentos de PII.
+**Evidências:** `app/api/v1/endpoints/rag.py` e `app/core/autonomy/planner.py`.
+**Próximos passos:** Substituir por tratamento explícito ou re-raise de exceções. Cadastrar OQ-020 e OQ-023.
+
+### 2. Bypass de Autenticação e Lógica Frágil
+**Descrição:** Identificado bypass de autenticação e lógicas sensíveis inseguras.
+**Evidências:**
+- `agent.py` (/execute) e `assistant.py` (/assistant/execute) com auth bypass.
+- Atualizações frágeis em `admin_config.py`.
+- Purge de DB perigoso em `admin_graph.py`.
+**Próximos passos:** Reforçar autenticação. Cadastrar SG-054, OQ-021 e OQ-022.
+
+### 3. Vulnerabilidades de Code Injection e Dependências
+**Descrição:** Risco de Code Injection em subprocessos e dependências com falhas.
+**Evidências:**
+- `shell=True` no `launcher_tools.py` no Windows.
+- Dependências vulneráveis no frontend (protobufjs, @angular/cli, etc).
+- Senhas hardcoded em testes e middlewares.
+**Próximos passos:** Sanear inputs, atualizar dependências via npm audit, remover credenciais hardcoded. Cadastrar SG-055, SG-040, SG-042, SG-053.
+
+### 4. Riscos de LGPD e Observabilidade
+**Descrição:** Extração de logs na memória sem redação e scripts expondo hostnames locais. Testes críticos isolados.
+**Evidências:**
+- `log_aware_reflector.py` lê `janus.log` sem `redact_pii_text_only`.
+- `secure-tailscale-setup.ps1` expõe hostnames/peer data cleartext.
+- Scripts em `tooling/` bypassam CI Pytest.
+**Próximos passos:** Implementar redação e refatorar CI. Cadastrar SG-057, SG-050 e OQ-019.
+
 ## Achados do dia
 
 ### 1. Vazamento de PII em Logging (LGPD/Segurança)
