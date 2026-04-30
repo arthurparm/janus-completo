@@ -90,3 +90,14 @@ Atualmente o sistema processa e interage com as seguintes informações pessoais
 ### Próximos Passos
 1. **Implementar Mascaramento Restante:** Utilizar `redact_pii_text_only` nos sub-módulos críticos.
 2. **Priorizar Fechamento de Achados Abertos:** Requisitar atenção para a correção das vulnerabilidades de vazamento de informações sensíveis listadas nos dias anteriores.
+
+## Achados do dia (2026-04-30)
+- Confirmados 11 casos de Try-Except-Continue (Bandit B112) e 233 de Try-Except-Pass (B110) que, além da falha de segurança, representam um risco de observabilidade à privacidade pois exceções processando PII podem ser invisíveis e mascarar vazamentos.
+
+
+## Checklist LGPD e Privacidade
+- [x] Analisar PII retido em `janus.log` ou logs consolidados do RabbitMQ
+- [x] Varredura de falsos `pass` (Bandit B110, B112) ocultando possíveis leaks
+- [ ] Revisar implementação e consentimento explícito no `windows_agent.py` para captura de desktop/tela
+- [ ] Confirmar aplicação universal de `redact_pii_text_only` no correlacionamento de logs
+- [ ] Identificar e restringir a falsificação de `X-User-Id` (bypass Auth) para prevenir acesso de terceiros a sessões e histórico

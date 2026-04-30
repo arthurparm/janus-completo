@@ -865,3 +865,29 @@ Copiar e preencher:
 - Esforco: S
 - Dono: a definir
 - Status: aberto
+### [SG-040] Dependências críticas de frontend (npm audit)
+Corrigir 30 vulnerabilidades no package.json do frontend (dompurify, angular, etc) identificadas no npm audit
+- Riscos: Ataques via DoS, injeções ou XSS a depender das bibliotecas comprometidas (npm audit aponta High).
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: M
+- Dono: a definir
+- Status: aberto
+
+### [SG-041] Vulnerabilidade em biblioteca pip do backend (CVE-2026-3219)
+Atualizar versão da biblioteca pip para mitigar vulnerabilidade de ZIP/tar (CVE-2026-3219)
+- Riscos: Riscos de spoofing/instalação de arquivos incorretos durante bootstrapping ou manipulação de virtualenvs.
+- Dependencias: Nenhuma.
+- Prioridade: P1
+- Esforco: P
+- Dono: a definir
+- Status: aberto
+
+### [SG-042] Vulnerabilidade de Injeção de Comando no Launcher
+Remover shell=True em subprocess.Popen dentro do core/tools/launcher_tools.py (Bandit B602)
+- Riscos: Permite OS command injection através dos inputs do usuário que seriam passados ao subprocesso sem sanitização.
+- Dependencias: Nenhuma.
+- Prioridade: P0
+- Esforco: P
+- Dono: a definir
+- Status: aberto

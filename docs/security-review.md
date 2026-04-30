@@ -254,3 +254,38 @@ Objetivo: Auditar, documentar e expurgar as vulnerabilidades do sistema que pode
 - **Gravidade:** Média (Bandit B307)
 - **Descrição:** Uso da função embutida `eval()`, identificada como insegura para avaliação de entradas.
 - **Ação Recomendada:** Remover `eval()` e utilizar métodos mais seguros como `ast.literal_eval` para lidar com conversões dinâmicas caso necessário.
+
+## Achados do dia (2026-04-30)
+
+### 1. Silenciamento de Erros Críticos (Bandit B110)
+- **Caminho:** Diversos arquivos (233 ocorrências)
+- **Gravidade:** Média/Alta
+- **Descrição:** Blocos `Try-Except-Pass` configuram silenciamento de erros críticos, mascarando vazamentos e comportamentos anômalos.
+- **Ação Recomendada:** Remover `pass` e tratar/logar as exceções explicitamente, omitindo dados sensíveis (PII).
+
+### 2. Command Injection via shell=True (Bandit B602)
+- **Caminho:** `backend/app/core/tools/launcher_tools.py`
+- **Gravidade:** Crítica
+- **Descrição:** Subprocesso com `shell=True` permitindo injeção e execução de comandos arbitrários no sistema host.
+- **Ação Recomendada:** Remover `shell=True` de `subprocess.Popen()` e passar parâmetros usando o formato de lista de argumentos de forma segura.
+
+### 3. Vulnerabilidade em Biblioteca Pip (CVE-2026-3219)
+- **Caminho:** `backend` dependencies (`pip`)
+- **Gravidade:** Alta
+- **Descrição:** Vulnerabilidade de ZIP/tar não tratada na dependência `pip` reportada pelo `pip-audit`.
+- **Ação Recomendada:** Atualizar a versão do `pip` ou contornar/mitigar a validação do formato de archive no sistema de instalação do backend.
+
+### 4. Vulnerabilidades de Frontend (npm audit)
+- **Caminho:** `frontend/package.json`
+- **Gravidade:** Alta
+- **Descrição:** 30 vulnerabilidades identificadas via `npm audit` afetando pacotes de dependências do frontend como `dompurify`, `@angular/cli`, `brace-expansion`.
+- **Ação Recomendada:** Executar `npm audit fix` ou atualizar as dependências manualmente testando a estabilidade da aplicação em seguida.
+
+## Checklist de Segurança Atualizado
+- [x] Rodar análise estática de código (Bandit)
+- [x] Checar vulnerabilidades em dependências Python (pip-audit)
+- [x] Checar vulnerabilidades em dependências JS/Frontend (npm audit)
+- [ ] Checar PII em arquivos de log globais (`janus.log`) e RabbitMQ
+- [ ] Rever permissões frouxas e rate-limits em `/api/v1/auth` e `/api/v1/workspace`
+- [ ] Remediar todas as ocorrências de Try-Except-Pass silenciadas nas camadas de serviço/endpoints
+- [ ] Remover ou justificar segredos em plaintext no config.py
