@@ -396,6 +396,16 @@ def execute_request(
         return row, evidence_row
 
 
+def _redact_bootstrap_auth(boot: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(boot, dict):
+        return boot
+    redacted = dict(boot)
+    for key in ("password", "token", "access_token", "refresh_token"):
+        if key in redacted and redacted[key]:
+            redacted[key] = "***REDACTED***"
+    return redacted
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Execute active requests from backend/http/sprint/*.http with log correlation.")
     ap.add_argument("--sprint-dir", default=str(DEFAULT_SPRINT_DIR))
@@ -432,7 +442,7 @@ def main() -> int:
             token = str(boot.get("token") or "")
             user_id = str(boot.get("user_id") or "")
         else:
-            print(f"[warn] auth bootstrap failed: {boot}", flush=True)
+            print(f"[warn] auth bootstrap failed: {_redact_bootstrap_auth(boot)}", flush=True)
 
     correlator = None
     if args.with_log_correlation:
@@ -538,7 +548,7 @@ def main() -> int:
         "failures_reportable": failures_reportable,
         "log_evidence": log_rows,
         "sprints": per_sprint_reports,
-        "bootstrap_auth": boot,
+        "bootstrap_auth": _redact_bootstrap_auth(boot),
         "status": "blocked_bootstrap_auth" if (args.phase == "auth" and args.bootstrap_auth and (boot and not boot.get("ok"))) else "ok",
     }
     save_json(args.report_json, aggregate)
