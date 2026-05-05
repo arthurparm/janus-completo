@@ -97,8 +97,7 @@ def fetch_openapi(openapi_url: str, timeout: float) -> dict[str, Any]:
 
 
 def save_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    save_json_shared(path, payload)
 
 
 def load_fixtures(path: Path) -> dict[str, dict[str, Any]]:
