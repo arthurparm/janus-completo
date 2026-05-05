@@ -1,4 +1,7 @@
 from typing import Any
+import ipaddress
+import socket
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -366,6 +369,37 @@ class LinkUrlResponse(BaseModel):
     semantic: dict[str, Any] | None = None
 
 
+def _validate_outbound_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL inválida: esquema não permitido",
+        )
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL inválida: host ausente",
+        )
+    try:
+        addrinfo = socket.getaddrinfo(hostname, None)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL inválida: não foi possível resolver host",
+        )
+
+    for info in addrinfo:
+        ip_str = info[4][0]
+        ip_obj = ipaddress.ip_address(ip_str)
+        if not ip_obj.is_global:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="URL não permitida",
+            )
+
+
 @router.post("/link-url", response_model=LinkUrlResponse)
 async def link_url(
     url: str = Form(...),
@@ -384,6 +418,8 @@ async def link_url(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="user_id necessário"
         )
     import httpx
+
+    _validate_outbound_url(url)
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
