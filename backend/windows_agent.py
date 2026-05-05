@@ -290,7 +290,8 @@ async def get_active_window_title():
         title = win32gui.GetWindowText(hwnd)
         return {"success": True, "title": title, "hwnd": hwnd}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        print(f"Error in /window/title: {e}", file=sys.stderr)
+        return {"success": False, "error": "Failed to get active window title"}
 
 
 @app.get("/monitors")
