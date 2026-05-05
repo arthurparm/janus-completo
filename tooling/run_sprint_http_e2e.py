@@ -552,7 +552,7 @@ def main() -> int:
         "status": "blocked_bootstrap_auth" if (args.phase == "auth" and args.bootstrap_auth and (boot and not boot.get("ok"))) else "ok",
     }
     save_json(args.report_json, aggregate)
-    print(f"[summary:{args.phase}] requests={aggregate['summary']['total_requests']} failures_reportable={len(failures_reportable)}", flush=True)
+    print(f"[summary:{args.phase}] requests={len(all_rows)} failures_reportable={len(failures_reportable)}", flush=True)
     return 1 if failures_reportable else 0
 
 
