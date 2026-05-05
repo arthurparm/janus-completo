@@ -1039,6 +1039,13 @@ def main() -> int:
         merged_reportable.extend(phase_report.get("failures_reportable", []))
         merged_logs.extend(phase_report.get("log_evidence", []))
 
+    redacted_boot = boot
+    if isinstance(boot, dict):
+        redacted_boot = copy.deepcopy(boot)
+        for sensitive_key in ("password", "token", "access_token", "refresh_token"):
+            if sensitive_key in redacted_boot and redacted_boot[sensitive_key] is not None:
+                redacted_boot[sensitive_key] = "[REDACTED]"
+
     final_report = {
         "metadata": {
             "generated_at": isoformat_utc(utc_now()),
@@ -1054,7 +1061,7 @@ def main() -> int:
         "failures": merged_failures,
         "failures_reportable": merged_reportable,
         "log_evidence": merged_logs,
-        "bootstrap_auth": boot,
+        "bootstrap_auth": redacted_boot,
     }
 
     dual_dir = Path(args.dual_output_dir)
