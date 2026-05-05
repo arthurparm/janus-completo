@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -8,6 +9,8 @@ from app.config import settings
 from app.core.security.request_guard import require_admin_actor
 
 router = APIRouter(tags=["Deployment"], prefix="/deployment")
+
+MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def get_inference_facade(request: Request):
@@ -30,6 +33,11 @@ async def stage(
 @router.post("/publish")
 async def publish(model_id: str, request: Request, inference = Depends(get_inference_facade)):
     require_admin_actor(request)
+    if not MODEL_ID_PATTERN.fullmatch(model_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid model_id format",
+        )
     try:
         models_base_dir = os.path.realpath(os.path.join("/app", "workspace", "models"))
         meta_path = os.path.realpath(os.path.join(models_base_dir, model_id, "metadata.json"))
