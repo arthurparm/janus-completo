@@ -56,7 +56,7 @@ class KnowledgeService:
                 "total_relationships": 0,
                 "node_types": [],
                 "relationship_types": [],
-                "error": str(e),
+                "error": "Unable to retrieve knowledge stats at this time.",
             }
 
     async def get_code_entities(self, file_path: str | None = None) -> list[dict[str, Any]]:
