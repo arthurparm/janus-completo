@@ -285,6 +285,22 @@ async def delete_document(doc_id: str, request: Request = None, knowledge = Depe
     return {"status": "ok"}
 
 
+ALLOWED_LINK_URL_HOSTS = {
+    "example.com",
+    "www.example.com",
+}
+
+
+def _is_allowed_link_url(raw_url: str) -> bool:
+    try:
+        parsed = urlparse(raw_url)
+    except Exception:
+        return False
+
+    hostname = (parsed.hostname or "").lower().strip(".")
+    return hostname in ALLOWED_LINK_URL_HOSTS
+
+
 def _is_public_http_url(raw_url: str) -> bool:
     try:
         parsed = urlparse(raw_url)
@@ -351,7 +367,7 @@ async def link_url(
     service: DocumentIngestionService = Depends(get_doc_service)):
     import httpx
 
-    if not _is_public_http_url(url):
+    if not _is_allowed_link_url(url) or not _is_public_http_url(url):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="URL inválida ou não permitida",
