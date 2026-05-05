@@ -63,7 +63,7 @@ def verify_token(token: str) -> int | None:
         padded = body + "=" * (-len(body) % 4)
         payload_json = base64.urlsafe_b64decode(padded.encode("ascii"))
         payload = json.loads(payload_json.decode("utf-8"))
-        if _sign(payload) != sig:
+        if not hmac.compare_digest(_sign(payload), sig):
             return None
         if int(payload.get("exp", 0)) < int(time.time()):
             return None

@@ -16,6 +16,7 @@ Desktop.ini
 !.vscode/launch.json
 !.vscode/extensions.json
 .idea/
+.history/
 *.sublime-workspace
 *.swp
 *.swo
@@ -87,6 +88,16 @@ frontend/.sass-cache/
 frontend/tmp/
 frontend/out-tsc/
 frontend/bazel-out/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+playwright/.auth/
+__screenshots__/
+connect.lock
+libpeerconnection.log
+testem.log
+typings/
 *.tsbuildinfo
 
 # -----------------------------

@@ -52,6 +52,7 @@ def _run_command(args: list[str], cwd: Path | None = None) -> str:
         result = subprocess.run(
             args,
             cwd=str(cwd) if cwd else None,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -59,6 +60,8 @@ def _run_command(args: list[str], cwd: Path | None = None) -> str:
         output = result.stdout or ""
         if result.stderr:
             output += f"\n[STDERR]\n{result.stderr}"
+        if result.returncode != 0:
+            output += f"\n[EXIT CODE]\n{result.returncode}"
         if len(output) > max_chars:
             output = output[:max_chars] + "\n...[output truncated]"
         return output.strip()

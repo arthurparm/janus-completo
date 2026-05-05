@@ -4,6 +4,7 @@ import ipaddress
 import socket
 from typing import Any
 from urllib.parse import urlparse
+from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -107,6 +108,11 @@ async def upload_document(
     import time as _t
 
     _t0 = _t.perf_counter()
+    if not _is_supported_upload(file):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tipo de arquivo não suportado para upload",
+        )
     try:
         cm = _tracer.start_as_current_span("docs.upload") if _OTEL else nullcontext()
         with cm:  # type: ignore
@@ -285,20 +291,44 @@ async def delete_document(doc_id: str, request: Request = None, knowledge = Depe
     return {"status": "ok"}
 
 
-ALLOWED_LINK_URL_HOSTS = {
-    "example.com",
-    "www.example.com",
+_SUPPORTED_UPLOAD_EXTENSIONS = {
+    ".docx",
+    ".htm",
+    ".html",
+    ".json",
+    ".pdf",
+    ".txt",
+}
+
+_SUPPORTED_UPLOAD_CONTENT_TYPES = {
+    "application/json",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/xhtml+xml",
+    "text/html",
+    "text/plain",
 }
 
 
-def _is_allowed_link_url(raw_url: str) -> bool:
-    try:
-        parsed = urlparse(raw_url)
-    except Exception:
-        return False
+def _normalize_content_type(raw_content_type: str | None) -> str:
+    return (raw_content_type or "").split(";", 1)[0].strip().lower()
 
-    hostname = (parsed.hostname or "").lower().strip(".")
-    return hostname in ALLOWED_LINK_URL_HOSTS
+
+def _is_supported_upload(file: UploadFile) -> bool:
+    extension = Path(file.filename or "").suffix.lower()
+    content_type = _normalize_content_type(file.content_type)
+
+    if extension and extension not in _SUPPORTED_UPLOAD_EXTENSIONS:
+        return False
+    if content_type and content_type not in _SUPPORTED_UPLOAD_CONTENT_TYPES and content_type != "application/octet-stream":
+        return False
+    if extension in _SUPPORTED_UPLOAD_EXTENSIONS:
+        return True
+    return content_type in _SUPPORTED_UPLOAD_CONTENT_TYPES
+
+
+def _is_allowed_link_url(raw_url: str) -> bool:
+    return _is_public_http_url(raw_url)
 
 
 def _is_public_http_url(raw_url: str) -> bool:
@@ -367,7 +397,7 @@ async def link_url(
     service: DocumentIngestionService = Depends(get_doc_service)):
     import httpx
 
-    if not _is_allowed_link_url(url) or not _is_public_http_url(url):
+    if not _is_allowed_link_url(url):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="URL inválida ou não permitida",

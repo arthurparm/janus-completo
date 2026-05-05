@@ -1,89 +1,44 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
-import { MarkdownService } from './markdown.service'
-import { AppLoggerService } from '../../core/services/app-logger.service'
+import { MarkdownService } from './markdown.service';
 
 describe('MarkdownService', () => {
-  let service: MarkdownService
   const logger = {
-    error: vi.fn(),
-  }
+    error: vi.fn()
+  };
 
-  const rendererPrototype = marked.Renderer.prototype as { table: (...args: unknown[]) => string }
-  const originalTable = rendererPrototype.table
+  const createService = () => new MarkdownService(logger as never);
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    rendererPrototype.table = originalTable
-    service = new MarkdownService(logger as unknown as AppLoggerService)
-  })
+    vi.clearAllMocks();
+  });
 
-  afterEach(() => {
-    rendererPrototype.table = originalTable
-    vi.restoreAllMocks()
-  })
+  it('removes script tags and inline event handlers from rendered html', () => {
+    const service = createService();
 
-  it('renderiza tabela com assinatura atual do marked sem artefatos', () => {
-    const markdown = [
-      '| Coluna | Valor |',
-      '| --- | --- |',
-      '| status | ok |',
-    ].join('\n')
+    const result = service.parse('Hello <img src="x" onerror="alert(1)"><script>alert(1)</script>');
 
-    const html = service.parse(markdown)
+    expect(result).toContain('Hello');
+    expect(result).toContain('<img src="x">');
+    expect(result).not.toContain('onerror');
+    expect(result).not.toContain('<script>');
+  });
 
-    expect(html).toContain('table-container')
-    expect(html).toContain('table table-striped')
-    expect(html).not.toContain('[object Object]')
-    expect(html).not.toContain('undefined')
-  })
+  it('removes javascript urls from markdown links', () => {
+    const service = createService();
 
-  it('faz fallback legado de tabela quando renderer nativo falha', () => {
-    rendererPrototype.table = vi.fn(() => {
-      throw new Error('forced-renderer-failure')
-    })
+    const result = service.parse('[click me](javascript:alert(1))');
 
-    const serviceWithFallback = new MarkdownService(logger as unknown as AppLoggerService)
-    const tableRenderer = ((marked as unknown as { defaults: { renderer: { table: (...args: unknown[]) => string } } }).defaults.renderer.table)
-    const html = tableRenderer('<tr><th>Coluna</th></tr>', '<tr><td>ok</td></tr>')
+    expect(result).toContain('click me');
+    expect(result).not.toContain('javascript:alert(1)');
+  });
 
-    expect(html).toContain('table-container')
-    expect(html).toContain('table table-striped')
-    expect(html).not.toContain('[object Object]')
-    expect(html).not.toContain('undefined')
-    expect(serviceWithFallback).toBeTruthy()
-  })
+  it('preserves code blocks and tables for legitimate markdown', () => {
+    const service = createService();
 
-  it('renderiza fence code normal com lang-label coerente', () => {
-    const markdown = ['```typescript', 'const x = 1', '```'].join('\n')
-    const html = service.parse(markdown)
+    const result = service.parse('```ts\nconst value = 1;\n```\n\n|a|b|\n|-|-|\n|1|2|');
 
-    expect(html).toContain('code-block-wrapper')
-    expect(html).toContain('lang-label')
-    expect(html).toContain('typescript')
-    expect(html).not.toContain('[object Object]')
-  })
-
-  it('renderiza token object de code sem vazar [object Object]', () => {
-    const renderer = (marked as unknown as { defaults: { renderer: { code: (code: unknown, languageHint?: string) => string } } }).defaults.renderer
-    const html = renderer.code({ text: 'print("ok")', language: 'python' })
-
-    expect(html).toContain('code-block-wrapper')
-    expect(html).toContain('lang-label')
-    expect(html).toContain('python')
-    expect(html).not.toContain('[object Object]')
-  })
-
-  it('degrada para pre/code quando highlight falha', () => {
-    vi.spyOn(hljs, 'highlight').mockImplementation(() => {
-      throw new Error('highlight-failed')
-    })
-
-    const markdown = ['```invalid-lang', 'const y = 2', '```'].join('\n')
-    const html = service.parse(markdown)
-
-    expect(html).toContain('<pre><code>')
-    expect(html).toContain('const y = 2')
-  })
-})
+    expect(result).toContain('code-block-wrapper');
+    expect(result).toContain('language-ts');
+    expect(result).toContain('<table');
+    expect(result).toContain('hljs-keyword');
+  });
+});

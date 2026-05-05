@@ -101,10 +101,16 @@ export class MarkdownService {
 
         try {
             const html = marked.parse(rawMarkdown) as string;
-            // Sanitize specifically allowing standard formatting tags and our custom code classes
+            // Keep a narrow HTML allowlist because the output is rendered through [innerHTML].
             const cleanHtml = DOMPurify.sanitize(html, {
-                ADD_TAGS: ['img', 'pre', 'code', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'div', 'span'],
-                ADD_ATTR: ['class', 'src', 'alt', 'href', 'target']
+                ALLOWED_TAGS: [
+                    'a', 'blockquote', 'br', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                    'hr', 'img', 'li', 'ol', 'p', 'pre', 'span', 'strong', 'table', 'tbody', 'td',
+                    'th', 'thead', 'tr', 'ul'
+                ],
+                ALLOWED_ATTR: ['alt', 'class', 'href', 'src', 'target', 'rel'],
+                ALLOW_UNKNOWN_PROTOCOLS: false,
+                FORBID_TAGS: ['form', 'iframe', 'input', 'object', 'script', 'style', 'svg']
             });
 
             return cleanHtml;

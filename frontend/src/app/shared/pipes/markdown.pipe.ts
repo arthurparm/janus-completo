@@ -1,5 +1,4 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
 
 @Pipe({
@@ -8,12 +7,9 @@ import { MarkdownService } from '../services/markdown.service';
 })
 export class MarkdownPipe implements PipeTransform {
 
-    constructor(
-        private markdownService: MarkdownService,
-        private sanitizer: DomSanitizer
-    ) { }
+    constructor(private markdownService: MarkdownService) { }
 
-    transform(value: string | object | null | undefined): SafeHtml {
+    transform(value: string | object | null | undefined): string {
         if (value === null || value === undefined) return '';
 
         let content = '';
@@ -31,7 +27,6 @@ export class MarkdownPipe implements PipeTransform {
         }
 
         const parsedHtml = this.markdownService.parse(content);
-        // Trust the HTML because we already sanitized it with DOMPurify in the service
-        return this.sanitizer.bypassSecurityTrustHtml(parsedHtml);
+        return parsedHtml;
     }
 }
