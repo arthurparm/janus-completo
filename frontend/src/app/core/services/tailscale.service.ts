@@ -126,7 +126,15 @@ export class TailscaleService {
    * Check if we're currently using Tailscale URLs
    */
   isUsingTailscaleUrls(): boolean {
-    return this.isTailscaleEnabled() && 
-           this.apiUrl.includes('.ts.net');
+    if (!this.isTailscaleEnabled()) {
+      return false;
+    }
+
+    try {
+      const hostname = new URL(this.apiUrl).hostname.toLowerCase();
+      return hostname === 'ts.net' || hostname.endsWith('.ts.net');
+    } catch {
+      return false;
+    }
   }
 }
