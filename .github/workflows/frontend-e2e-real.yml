@@ -3,6 +3,9 @@ name: Frontend E2E Real
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   frontend-e2e-real:
     name: Frontend E2E Real Smoke
