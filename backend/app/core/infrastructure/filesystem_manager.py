@@ -151,8 +151,8 @@ def read_file(file_path: str) -> str:
         return f"Erro: O ficheiro '{file_path}' não foi encontrado."
     except Exception as e:
         _FS_OPS.labels("read", "error", Path(file_path).suffix.lower()).inc()
-        logger.error("log_error", message=f"Erro ao ler ficheiro após retries: {e}")
-        return f"Erro ao ler o ficheiro '{file_path}': {e}"
+        logger.error("log_error", message="Erro ao ler ficheiro após retries.", exc_info=e)
+        return f"Erro ao ler o ficheiro '{file_path}'."
 
 
 def write_file(file_path: str, content: str, overwrite: bool = False) -> str:
