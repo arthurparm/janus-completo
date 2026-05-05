@@ -445,10 +445,11 @@ async def check_llm_router_health() -> dict[str, Any]:
                 "message": "Todos os provedores operacionais",
                 "details": {"open_circuits": 0, "pool_instances": pool_instances},
             }
-    except Exception as e:
+    except Exception:
+        logger.exception("Erro interno ao verificar health do LLM Router")
         return {
             "status": "unhealthy",
-            "message": f"Erro ao verificar LLM Router: {e!s}",
+            "message": "Erro interno ao verificar LLM Router",
             "details": {},
         }
 
