@@ -588,7 +588,11 @@ class DBMigrationService:
             return {"status": "applied", "changes": applied}
         except Exception as e:
             logger.error("DB migration failed", exc_info=e)
-            return {"status": "error", "detail": str(e), "changes": applied}
+            return {
+                "status": "error",
+                "detail": "Internal error during migration",
+                "changes": applied,
+            }
         finally:
             s.close()
 
