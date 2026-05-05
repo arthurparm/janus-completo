@@ -306,7 +306,8 @@ async def get_monitors():
             }
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        print(f"Error in /monitors: {e}", file=sys.stderr)
+        return {"success": False, "error": "Failed to get monitor information"}
 
 
 # ============================================================================
