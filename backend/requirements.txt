@@ -1,4 +1,5 @@
 aio-pika==9.5.8 ; python_version >= "3.11" and python_version < "3.13"
+beautifulsoup4==4.14.3
 aiohappyeyeballs==2.6.1 ; python_version >= "3.11" and python_version < "3.13"
 aiohttp==3.13.3 ; python_version >= "3.11" and python_version < "3.13"
 aiormq==6.9.2 ; python_version >= "3.11" and python_version < "3.13"

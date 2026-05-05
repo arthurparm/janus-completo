@@ -120,14 +120,16 @@ class DocumentParserService:
         t0 = time.perf_counter()
 
         try:
+            from bs4 import BeautifulSoup
+
             html = data.decode("utf-8", errors="ignore")
+            soup = BeautifulSoup(html, "html.parser")
 
-            # Strip scripts and styles
-            html = re.sub(r"<script[\s\S]*?</script>", " ", html, flags=re.IGNORECASE)
-            html = re.sub(r"<style[\s\S]*?</style>", " ", html, flags=re.IGNORECASE)
+            # Remove non-visible/scripted content
+            for element in soup(["script", "style"]):
+                element.decompose()
 
-            # Remove HTML tags
-            text = re.sub(r"<[^>]+>", " ", html)
+            text = soup.get_text(separator=" ")
             text = re.sub(r"\s+", " ", text).strip()
 
             self._metrics.record_parse("html", "success", time.perf_counter() - t0)
