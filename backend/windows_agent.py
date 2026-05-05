@@ -275,7 +275,8 @@ async def speak_text(request: SpeakRequest):
     except asyncio.TimeoutError:
         return {"success": False, "error": "Speech timeout"}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        print(f"Error in /speak: {e}", file=sys.stderr)
+        return {"success": False, "error": "Failed to speak text"}
 
 
 @app.get("/window/title")
