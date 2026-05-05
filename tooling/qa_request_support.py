@@ -274,10 +274,36 @@ def _safe_json(resp: requests.Response) -> Any:
         return {"_raw_text": text}
 
 
+def _redact_sensitive(payload: Any) -> Any:
+    sensitive_keys = {
+        "password",
+        "token",
+        "access_token",
+        "refresh_token",
+        "authorization",
+        "secret",
+        "api_key",
+    }
+
+    if isinstance(payload, dict):
+        redacted: dict[Any, Any] = {}
+        for k, v in payload.items():
+            key_lower = str(k).lower()
+            if key_lower in sensitive_keys:
+                redacted[k] = "<redacted>"
+            else:
+                redacted[k] = _redact_sensitive(v)
+        return redacted
+    if isinstance(payload, list):
+        return [_redact_sensitive(v) for v in payload]
+    return payload
+
+
 def save_json(path: str | Any, payload: Any) -> None:
     from pathlib import Path
 
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    sanitized_payload = _redact_sensitive(payload)
+    p.write_text(json.dumps(sanitized_payload, indent=2, ensure_ascii=False))
 
