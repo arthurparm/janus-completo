@@ -1,6 +1,0 @@
-DEBUGGING PROTOCOL
-1. Understand: clarify the error and expected behavior.
-2. Investigate: read files, logs, and runtime state.
-3. Hypothesize: list likely causes with evidence.
-4. Test: validate hypotheses.
-5. Fix: apply a minimal, targeted change.

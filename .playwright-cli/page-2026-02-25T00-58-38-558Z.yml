@@ -1,9 +1,0 @@
-- generic [active] [ref=e1]:
-  - generic [ref=e2]:
-    - link "Skip to main content" [ref=e3] [cursor=pointer]:
-      - /url: "#main-content"
-    - main
-  - generic [ref=e6]:
-    - generic [ref=e7]: "TS4111: Property 'content' comes from an index signature, so it must be accessed with ['content']."
-    - generic [ref=e8]: src/app/features/conversations/conversations.html:603:42
-    - generic [ref=e9]: Click outside, press Esc key, or fix the code to dismiss.

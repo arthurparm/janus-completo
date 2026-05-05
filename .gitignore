@@ -112,10 +112,14 @@ pip-wheel-metadata/
 .project/complete_drafts.txt
 .project/localProjectSettings.json
 .project/attachments/files/**
+.codex/
+.playwright-cli/
+.vercel/
 backend/data/
 backend/workspace/
 .claude/worktrees/
 _bmad/
+_bmad-output/
 
 # -----------------------------
 # Temporary artifacts

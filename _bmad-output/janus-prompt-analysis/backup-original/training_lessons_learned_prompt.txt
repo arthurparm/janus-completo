@@ -1,2 +1,0 @@
-Analyze the situation and extract actionable lessons learned.
-Return concise, generalizable lessons.
