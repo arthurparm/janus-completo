@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
+import socket
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -282,6 +285,48 @@ async def delete_document(doc_id: str, request: Request = None, knowledge = Depe
     return {"status": "ok"}
 
 
+def _is_public_http_url(raw_url: str) -> bool:
+    try:
+        parsed = urlparse(raw_url)
+    except Exception:
+        return False
+
+    if parsed.scheme not in {"http", "https"}:
+        return False
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+
+    lowered = hostname.lower().strip(".")
+    if lowered in {"localhost"} or lowered.endswith(".localhost"):
+        return False
+
+    try:
+        addrinfo = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except Exception:
+        return False
+
+    for entry in addrinfo:
+        ip_text = entry[4][0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_text)
+        except ValueError:
+            return False
+
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return False
+
+    return True
+
+
 class LinkUrlResponse(BaseModel):
     doc_id: str
     status: str
@@ -306,9 +351,15 @@ async def link_url(
     service: DocumentIngestionService = Depends(get_doc_service)):
     import httpx
 
+    if not _is_public_http_url(url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL inválida ou não permitida",
+        )
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, follow_redirects=False)
             content_type = resp.headers.get("content-type", "text/html")
             data = resp.content
     except Exception as exc:
