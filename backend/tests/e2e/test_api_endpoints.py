@@ -47,7 +47,7 @@ def test_browse_url_tool_trigger(api_client, active_conversation):
     text = data["response"]
     lowered_text = lowered(text)
     # Check for success (content) or standard refusal (capability)
-    assert "Example Domain" in text or "example.com" in lowered_text or "capacidade" in lowered_text or "sorry" in lowered_text or "cannot" in lowered_text
+    assert "Example Domain" in text or has_allowed_example_host(text) or "capacidade" in lowered_text or "sorry" in lowered_text or "cannot" in lowered_text
 
 def test_anonymous_memory_support(api_client):
     """Verify that operations without user_id still function (using default_user)."""
@@ -71,6 +71,17 @@ def test_anonymous_memory_support(api_client):
     assert hist_resp.status_code == 200
     messages = hist_resp.json().get("messages", [])
     assert len(messages) >= 2  # User msg + Assistant response
+
+def has_allowed_example_host(text):
+    import re
+    from urllib.parse import urlparse
+
+    urls = re.findall(r"https?://[^\s)>\]\"']+", text or "")
+    for url in urls:
+        host = urlparse(url).hostname
+        if host and (host == "example.com" or host.endswith(".example.com")):
+            return True
+    return False
 
 def lowered(s):
     return s.lower() if s else ""
