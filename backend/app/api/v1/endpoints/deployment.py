@@ -13,6 +13,16 @@ router = APIRouter(tags=["Deployment"], prefix="/deployment")
 MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+def _safe_model_file_path(model_id: str, filename: str) -> str:
+    models_base_dir = os.path.realpath(os.path.join("/app", "workspace", "models"))
+    candidate_path = os.path.realpath(os.path.join(models_base_dir, model_id, filename))
+    if not (candidate_path == models_base_dir or candidate_path.startswith(models_base_dir + os.sep)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid model_id path"
+        )
+    return candidate_path
+
+
 def get_inference_facade(request: Request):
     return request.app.state.inference_facade
 
@@ -39,12 +49,7 @@ async def publish(model_id: str, request: Request, inference = Depends(get_infer
             detail="Invalid model_id format",
         )
     try:
-        models_base_dir = os.path.realpath(os.path.join("/app", "workspace", "models"))
-        meta_path = os.path.realpath(os.path.join(models_base_dir, model_id, "metadata.json"))
-        if os.path.commonpath([models_base_dir, meta_path]) != models_base_dir:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid model_id path"
-            )
+        meta_path = _safe_model_file_path(model_id, "metadata.json")
 
         if os.path.isfile(meta_path):
             with open(meta_path, encoding="utf-8") as f:
