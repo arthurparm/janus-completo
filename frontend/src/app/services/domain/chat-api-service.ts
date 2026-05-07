@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
-import { Observable, BehaviorSubject, Subject } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { ApiContextService } from '../api-context.service';
 import { AppLoggerService } from '../../core/services/app-logger.service';

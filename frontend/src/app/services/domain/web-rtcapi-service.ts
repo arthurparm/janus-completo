@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, Subject } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
 import { ApiContextService } from '../api-context.service';
 import { JanusStatic, JanusSession, JanusPluginHandle } from '../../core/types';
 declare const Janus: JanusStatic;

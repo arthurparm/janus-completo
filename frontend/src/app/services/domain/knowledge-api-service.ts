@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
-import { Observable, BehaviorSubject, Subject } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
 import { RagUserChatResponse, RagUserChatV2Response, KnowledgeHealthResponse, KnowledgeHealthDetailedResponse, KnowledgeSpace, KnowledgeSpaceStatus, KnowledgeSpaceCreateRequest, KnowledgeSpaceListResponse, KnowledgeSpaceAttachRequest, KnowledgeSpaceConsolidationResponse, KnowledgeSpaceQueryResponse, RagSearchResponse, RagHybridResponse, KnowledgeStats, EntityRelationshipsResponse } from '../../models';
 
