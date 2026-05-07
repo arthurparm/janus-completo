@@ -14,6 +14,7 @@ import requests
 
 from qa_request_support import (
     DockerLogCorrelator,
+    _redact_sensitive,
     bootstrap_local_auth,
     classify_gate,
     classify_http_status,
@@ -399,11 +400,8 @@ def execute_request(
 def _redact_bootstrap_auth(boot: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(boot, dict):
         return boot
-    redacted = dict(boot)
-    for key in ("password", "token", "access_token", "refresh_token"):
-        if key in redacted and redacted[key]:
-            redacted[key] = "***REDACTED***"
-    return redacted
+    redacted = _redact_sensitive(boot)
+    return redacted if isinstance(redacted, dict) else {"_redacted": True}
 
 
 def main() -> int:
