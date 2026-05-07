@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, ViewChild, computed, inject, signal } from '@angular/core'
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, ViewChild, inject } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormControl, ReactiveFormsModule } from '@angular/forms'
 import { ActivatedRoute, Router } from '@angular/router'
@@ -7,8 +7,7 @@ import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Observable } from 'rxjs'
 
-import { AuthService } from '../../core/auth/auth.service'
-import { AgentEvent, AgentEventsService } from '../../core/services/agent-events.service'
+import { AgentEventsService } from '../../core/services/agent-events.service'
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
 import {
   BackendApiService,
@@ -20,14 +19,12 @@ import {
   ChatUnderstanding,
   ConversationMeta,
   CitationStatus,
-  DocListItem,
   DocSearchResultItem,
   FeedbackQuickResponse,
   GenerativeMemoryItem,
   MemoryItem,
   PendingAction,
   Citation,
-  AutonomyStatusResponse,
   Goal,
   RagHybridResponse,
   RagSearchResponse,
@@ -42,6 +39,25 @@ import { JarvisAvatarComponent } from '../../shared/components/jarvis-avatar/jar
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 import { MarkdownPipe } from '../../shared/pipes/markdown.pipe'
 import { parseAdminCodeQaCommand } from './admin-code-qa.util'
+import { ConversationStateFacade } from './conversations-state.facade'
+import type {
+  AdvancedRailTab,
+  ChatMessageView,
+  ChatRole,
+  CustomerTab,
+  FeedbackUiState,
+  GoalStatus,
+  PendingActionResolution,
+  PriorityOption,
+  RagMode,
+  RagResultViewTab,
+  RailNoticeKind,
+  RailNoticeSection,
+  RoleOption,
+  TabGroup,
+  ThoughtKind,
+  ThoughtStreamItem
+} from './conversations.types'
 import {
   coerceDateInputToMs,
   cognitiveStatusText,
@@ -53,85 +69,6 @@ import {
   sanitizeDiagnosticText,
   sanitizeStreamingText
 } from './conversations.utils'
-
-type ChatRole = 'user' | 'assistant' | 'system' | 'event'
-
-interface ChatMessageView {
-  id: string
-  backendMessageId?: string
-  role: ChatRole
-  text: string
-  timestamp: number
-  estimated_wait_seconds?: number
-  estimated_wait_range_seconds?: number[]
-  processing_profile?: string
-  processing_notice?: string
-  citations?: Citation[]
-  understanding?: ChatUnderstanding
-  citation_status?: CitationStatus
-  confirmation?: ChatConfirmationState
-  agent_state?: ChatAgentState
-  latency_ms?: number
-  provider?: string
-  model?: string
-  delivery_status?: string
-  failure_classification?: string
-  streaming?: boolean
-  error?: boolean
-}
-
-type ThoughtKind = 'agent' | 'stream' | 'system'
-
-interface ThoughtStreamItem {
-  id: string
-  kind: ThoughtKind
-  title: string
-  text: string
-  timestamp: number
-}
-
-type RagMode = 'search' | 'user-chat' | 'user_chat' | 'hybrid_search' | 'productivity'
-type AdvancedRailTab = 'insights' | 'cliente' | 'autonomia'
-type CustomerTab = 'docs' | 'memoria' | 'rag'
-type TabGroup = 'advancedRail' | 'customer' | 'ragResult'
-type RailNoticeKind = 'success' | 'info' | 'warning' | 'error'
-type RailNoticeSection = 'docs' | 'memory' | 'rag' | 'autonomy'
-type RagResultViewTab = 'resposta' | 'fontes' | 'raw'
-
-interface FeedbackUiState {
-  rating?: 'positive' | 'negative'
-  commentOpen?: boolean
-  submitting?: boolean
-  submitted?: boolean
-  error?: string
-  serverMessage?: string
-}
-
-interface RagUiResult {
-  mode: RagMode
-  answer?: string
-  citations?: Citation[]
-  results?: Record<string, unknown>[]
-}
-
-interface RailNotice {
-  kind: RailNoticeKind
-  message: string
-  visible: boolean
-}
-
-interface RoleOption {
-  value: string
-  label: string
-}
-
-interface PriorityOption {
-  value: string
-  label: string
-}
-
-type GoalStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
-type PendingActionResolution = 'approved' | 'rejected'
 
 @Component({
   selector: 'app-conversations',
@@ -155,91 +92,94 @@ export class ConversationsComponent {
     /a[cç][aã]o pendente\s+#(\d+)\s+(aprovada|rejeitada)\b/i
 
   private api = inject(BackendApiService)
-  private auth = inject(AuthService)
   private route = inject(ActivatedRoute)
   private router = inject(Router)
   private destroyRef = inject(DestroyRef)
   private eventsService = inject(AgentEventsService)
   private stream = inject(ChatStreamService)
+  private state = inject(ConversationStateFacade)
 
   @ViewChild('messageList') messageList?: ElementRef<HTMLDivElement>
 
   readonly prompt = new FormControl('', { nonNullable: true })
-  readonly listLoading = signal(true)
-  readonly historyLoading = signal(false)
-  readonly contextLoading = signal(false)
-  readonly sending = signal(false)
-  readonly error = signal('')
-  readonly search = signal('')
+  readonly listLoading = this.state.listLoading
+  readonly historyLoading = this.state.historyLoading
+  readonly contextLoading = this.state.contextLoading
+  readonly sending = this.state.sending
+  readonly error = this.state.error
+  readonly search = this.state.search
 
-  readonly conversations = signal<ConversationMeta[]>([])
-  readonly messages = signal<ChatMessageView[]>([])
-  readonly events = signal<AgentEvent[]>([])
-  readonly docs = signal<DocListItem[]>([])
-  readonly memoryUser = signal<MemoryItem[]>([])
-  readonly docSearchResults = signal<DocSearchResultItem[]>([])
-  readonly generativeMemoryResults = signal<GenerativeMemoryItem[]>([])
-  readonly ragResult = signal<RagUiResult | null>(null)
-  readonly docsNotice = signal<RailNotice | null>(null)
-  readonly memoryNotice = signal<RailNotice | null>(null)
-  readonly ragNotice = signal<RailNotice | null>(null)
-  readonly autonomyNotice = signal<RailNotice | null>(null)
+  readonly conversations = this.state.conversations
+  readonly messages = this.state.messages
+  readonly events = this.state.events
+  readonly docs = this.state.docs
+  readonly memoryUser = this.state.memoryUser
+  readonly docSearchResults = this.state.docSearchResults
+  readonly generativeMemoryResults = this.state.generativeMemoryResults
+  readonly ragResult = this.state.ragResult
+  readonly docsNotice = this.state.docsNotice
+  readonly memoryNotice = this.state.memoryNotice
+  readonly ragNotice = this.state.ragNotice
+  readonly autonomyNotice = this.state.autonomyNotice
 
-  readonly selectedId = signal<string | null>(null)
-  readonly streamStatus = signal('idle')
-  readonly streamTyping = signal(false)
-  readonly selectedRole = signal('orchestrator')
-  readonly selectedPriority = signal('fast_and_cheap')
-  readonly streamingEnabled = signal(true)
-  readonly latestCognitiveState = signal<string>('')
-  readonly latestToolStatus = signal<string>('')
-  readonly pendingActionLoading = signal<Record<number, boolean>>({})
-  readonly showAdvanced = signal(false)
-  readonly advancedRailTab = signal<AdvancedRailTab>('cliente')
-  readonly customerTab = signal<CustomerTab>('docs')
-  readonly copiedCitation = signal('')
-  readonly autonomyLoading = signal(false)
-  readonly autonomySaving = signal(false)
-  readonly autonomyStatus = signal<AutonomyStatusResponse | null>(null)
-  readonly autonomyGoals = signal<Goal[]>([])
-  readonly autonomyTools = signal<Tool[]>([])
-  readonly autonomyError = signal('')
-  readonly goalCreateTitle = signal('')
-  readonly goalCreateDescription = signal('')
-  readonly goalCreateLoading = signal(false)
-  readonly goalCreateError = signal('')
+  readonly selectedId = this.state.selectedId
+  readonly streamStatus = this.state.streamStatus
+  readonly streamTyping = this.state.streamTyping
+  readonly selectedRole = this.state.selectedRole
+  readonly selectedPriority = this.state.selectedPriority
+  readonly streamingEnabled = this.state.streamingEnabled
+  readonly latestCognitiveState = this.state.latestCognitiveState
+  readonly latestToolStatus = this.state.latestToolStatus
+  readonly pendingActionLoading = this.state.pendingActionLoading
+  readonly showAdvanced = this.state.showAdvanced
+  readonly advancedRailTab = this.state.advancedRailTab
+  readonly customerTab = this.state.customerTab
+  readonly copiedCitation = this.state.copiedCitation
+  readonly autonomyLoading = this.state.autonomyLoading
+  readonly autonomySaving = this.state.autonomySaving
+  readonly autonomyStatus = this.state.autonomyStatus
+  readonly autonomyGoals = this.state.autonomyGoals
+  readonly autonomyTools = this.state.autonomyTools
+  readonly autonomyError = this.state.autonomyError
+  readonly goalCreateTitle = this.state.goalCreateTitle
+  readonly goalCreateDescription = this.state.goalCreateDescription
+  readonly goalCreateLoading = this.state.goalCreateLoading
+  readonly goalCreateError = this.state.goalCreateError
 
-  readonly docUploadInFlight = signal(false)
-  readonly docUploadProgress = signal<number | null>(null)
-  readonly docUploadError = signal('')
-  readonly docLinkUrl = signal('')
-  readonly docLinkLoading = signal(false)
-  readonly docLinkError = signal('')
-  readonly docSearchQuery = signal('')
-  readonly docSearchLoading = signal(false)
-  readonly docSearchError = signal('')
-  readonly deletingDocIds = signal<Record<string, boolean>>({})
+  readonly docUploadInFlight = this.state.docUploadInFlight
+  readonly docUploadProgress = this.state.docUploadProgress
+  readonly docUploadError = this.state.docUploadError
+  readonly docLinkUrl = this.state.docLinkUrl
+  readonly docLinkLoading = this.state.docLinkLoading
+  readonly docLinkError = this.state.docLinkError
+  readonly docSearchQuery = this.state.docSearchQuery
+  readonly docSearchLoading = this.state.docSearchLoading
+  readonly docSearchError = this.state.docSearchError
+  readonly deletingDocIds = this.state.deletingDocIds
 
-  readonly memoryDraft = signal('')
-  readonly memoryImportance = signal<number | null>(null)
-  readonly memoryType = signal('episodic')
-  readonly memoryAddLoading = signal(false)
-  readonly memoryAddError = signal('')
-  readonly memorySearchQuery = signal('')
-  readonly memorySearchLimit = signal(5)
-  readonly memorySearchLoading = signal(false)
-  readonly memorySearchError = signal('')
+  readonly memoryDraft = this.state.memoryDraft
+  readonly memoryImportance = this.state.memoryImportance
+  readonly memoryType = this.state.memoryType
+  readonly memoryAddLoading = this.state.memoryAddLoading
+  readonly memoryAddError = this.state.memoryAddError
+  readonly memorySearchQuery = this.state.memorySearchQuery
+  readonly memorySearchLimit = this.state.memorySearchLimit
+  readonly memorySearchLoading = this.state.memorySearchLoading
+  readonly memorySearchError = this.state.memorySearchError
 
-  readonly ragMode = signal<RagMode>('hybrid_search')
-  readonly ragQuery = signal('')
-  readonly ragLoading = signal(false)
-  readonly ragError = signal('')
-  readonly ragResultViewTab = signal<RagResultViewTab>('resposta')
+  readonly ragMode = this.state.ragMode
+  readonly ragQuery = this.state.ragQuery
+  readonly ragLoading = this.state.ragLoading
+  readonly ragError = this.state.ragError
+  readonly ragResultViewTab = this.state.ragResultViewTab
 
-  readonly feedbackStateByMessageId = signal<Record<string, FeedbackUiState>>({})
-  readonly feedbackCommentDraftByMessageId = signal<Record<string, string>>({})
+  readonly feedbackStateByMessageId = this.state.feedbackStateByMessageId
+  readonly feedbackCommentDraftByMessageId = this.state.feedbackCommentDraftByMessageId
 
-  readonly selectedUploadFile = signal<File | null>(null)
+  readonly selectedUploadFile = this.state.selectedUploadFile
+  readonly traceSteps = this.state.traceSteps
+  readonly showTrace = this.state.showTrace
+  readonly thoughtStream = this.state.thoughtStream
   private readonly advancedRailTabOrder: AdvancedRailTab[] = ['insights', 'cliente', 'autonomia']
   private readonly customerTabOrder: CustomerTab[] = ['docs', 'memoria', 'rag']
   private readonly ragResultTabOrder: RagResultViewTab[] = ['resposta', 'fontes', 'raw']
@@ -258,88 +198,21 @@ export class ConversationsComponent {
     { value: 'local_only', label: 'Local Only' }
   ]
 
-  readonly user = this.auth.user
-  readonly isAdmin = this.auth.isAdmin
-
-  readonly displayName = computed(() => {
-    const user = this.user()
-    return user?.display_name || user?.username || user?.email || 'Operador'
-  })
-
-  readonly filteredConversations = computed(() => {
-    const term = this.search().trim().toLowerCase()
-    const items = this.conversations()
-      .slice()
-      .sort((a, b) => conversationUpdatedAt(b) - conversationUpdatedAt(a))
-    if (!term) return items
-    return items.filter((conv) => {
-      const title = String(conv.title || '')
-      const id = String(conv.conversation_id || '')
-      return title.toLowerCase().includes(term) || id.toLowerCase().includes(term)
-    })
-  })
-
-  readonly selectedConversation = computed(() => {
-    const id = this.selectedId()
-    if (!id) return null
-    return this.conversations().find((conv) => conv.conversation_id === id) || null
-  })
-
-  readonly isSimpleMode = computed(() => !this.showAdvanced())
-  readonly latestAssistantMessage = computed(() => {
-    const items = this.messages()
-    for (let idx = items.length - 1; idx >= 0; idx -= 1) {
-      if (items[idx].role === 'assistant') return items[idx]
-    }
-    return null
-  })
-  readonly conversationMemory = computed(() => {
-    const conversationId = this.selectedId()
-    const items = this.memoryUser()
-    if (!conversationId) return []
-    return items
-      .filter((item) => isConversationMemory(item, conversationId))
-      .slice(0, 6)
-  })
-  readonly userMemory = computed(() => {
-    const conversationId = this.selectedId()
-    const items = this.memoryUser()
-    const filtered = conversationId
-      ? items.filter((item) => !isConversationMemory(item, conversationId))
-      : items
-    return filtered.slice(0, 6)
-  })
-  readonly autonomyActiveGoals = computed(() => this.autonomyGoals()
-    .filter((goal) => goal.status === 'pending' || goal.status === 'in_progress')
-    .slice(0, 6))
-  readonly autonomyEnabledTools = computed(() => this.autonomyTools()
-    .filter((tool) => tool.enabled !== false)
-    .slice(0, 8))
-  readonly hasConversationSelected = computed(() => Boolean(this.selectedId()))
-
-  readonly selectedTitle = computed(() => {
-    const selected = this.selectedConversation()
-    if (selected?.title) return selected.title
-    const id = this.selectedId()
-    if (!id) return 'Nova conversa'
-    return `Conversa ${id.slice(0, 8)}`
-  })
-
-  readonly avatarState = computed(() => {
-    if (this.streamTyping()) return 'speaking'
-    const status = this.streamStatus()
-    if (status === 'connecting' || status === 'retrying' || status === 'open') return 'thinking'
-    return 'idle'
-  })
-
-  readonly streamBadge = computed(() => {
-    const status = this.streamStatus()
-    if (status === 'streaming') return { label: 'Streaming', variant: 'success' as const }
-    if (status === 'connecting' || status === 'retrying') return { label: 'Conectando', variant: 'warning' as const }
-    if (status === 'error') return { label: 'Erro', variant: 'error' as const }
-    if (status === 'open') return { label: 'Pronto', variant: 'info' as const }
-    return { label: 'Aguardando', variant: 'neutral' as const }
-  })
+  readonly user = this.state.user
+  readonly isAdmin = this.state.isAdmin
+  readonly displayName = this.state.displayName
+  readonly filteredConversations = this.state.filteredConversations
+  readonly selectedConversation = this.state.selectedConversation
+  readonly isSimpleMode = this.state.isSimpleMode
+  readonly latestAssistantMessage = this.state.latestAssistantMessage
+  readonly conversationMemory = this.state.conversationMemory
+  readonly userMemory = this.state.userMemory
+  readonly autonomyActiveGoals = this.state.autonomyActiveGoals
+  readonly autonomyEnabledTools = this.state.autonomyEnabledTools
+  readonly hasConversationSelected = this.state.hasConversationSelected
+  readonly selectedTitle = this.state.selectedTitle
+  readonly avatarState = this.state.avatarState
+  readonly streamBadge = this.state.streamBadge
 
   private streamingBuffer = ''
   private streamingMessageId: string | null = null
@@ -1235,9 +1108,6 @@ export class ConversationsComponent {
     return 'Pendente'
   }
 
-  readonly traceSteps = signal<any[]>([])
-  readonly showTrace = signal(false)
-  readonly thoughtStream = signal<ThoughtStreamItem[]>([])
   private readonly advancedModeStorageKey = 'janus.conversations.show_advanced_mode'
   private readonly advancedRailTabStorageKey = 'janus.conversations.advanced_rail_tab'
   private readonly customerTabStorageKey = 'janus.conversations.customer_tab'
