@@ -42,6 +42,17 @@ import { JarvisAvatarComponent } from '../../shared/components/jarvis-avatar/jar
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 import { MarkdownPipe } from '../../shared/pipes/markdown.pipe'
 import { parseAdminCodeQaCommand } from './admin-code-qa.util'
+import {
+  coerceDateInputToMs,
+  cognitiveStatusText,
+  conversationUpdatedAt,
+  createConversationViewId,
+  extractErrorMessage,
+  isConversationMemory,
+  sanitizeChatText,
+  sanitizeDiagnosticText,
+  sanitizeStreamingText
+} from './conversations.utils'
 
 type ChatRole = 'user' | 'assistant' | 'system' | 'event'
 
@@ -259,7 +270,7 @@ export class ConversationsComponent {
     const term = this.search().trim().toLowerCase()
     const items = this.conversations()
       .slice()
-      .sort((a, b) => this.conversationUpdatedAt(b) - this.conversationUpdatedAt(a))
+      .sort((a, b) => conversationUpdatedAt(b) - conversationUpdatedAt(a))
     if (!term) return items
     return items.filter((conv) => {
       const title = String(conv.title || '')
@@ -287,14 +298,14 @@ export class ConversationsComponent {
     const items = this.memoryUser()
     if (!conversationId) return []
     return items
-      .filter((item) => this.isConversationMemory(item, conversationId))
+      .filter((item) => isConversationMemory(item, conversationId))
       .slice(0, 6)
   })
   readonly userMemory = computed(() => {
     const conversationId = this.selectedId()
     const items = this.memoryUser()
     const filtered = conversationId
-      ? items.filter((item) => !this.isConversationMemory(item, conversationId))
+      ? items.filter((item) => !isConversationMemory(item, conversationId))
       : items
     return filtered.slice(0, 6)
   })
@@ -382,7 +393,7 @@ export class ConversationsComponent {
         const state = String(evt?.state || '')
         this.latestCognitiveState.set(state)
         if (state) {
-          this.appendThought('agent', 'Estado cognitivo', this.cognitiveStatusText(state, evt.reason))
+          this.appendThought('agent', 'Estado cognitivo', cognitiveStatusText(state, evt.reason))
         }
       })
 
@@ -429,7 +440,7 @@ export class ConversationsComponent {
 
     const now = Date.now()
     this.appendMessage({
-      id: this.createId(),
+      id: createConversationViewId(),
       role: 'user',
       text: message,
       timestamp: now
@@ -445,7 +456,7 @@ export class ConversationsComponent {
         const nowHelp = Date.now()
         const helpText = 'Para consultar codigo no modo admin, use: /code sua pergunta.'
         this.appendMessage({
-          id: this.createId(),
+          id: createConversationViewId(),
           role: 'assistant',
           text: helpText,
           timestamp: nowHelp
@@ -527,13 +538,13 @@ export class ConversationsComponent {
   }
 
   conversationPreviewText(conv: ConversationMeta): string {
-    const text = this.sanitizeChatText(conv.last_message?.text || '')
+    const text = sanitizeChatText(conv.last_message?.text || '')
     if (!text) return 'Sem mensagens ainda'
     return text.length > 110 ? `${text.slice(0, 110)}...` : text
   }
 
   conversationLastActivity(conv: ConversationMeta): string {
-    const ts = this.conversationUpdatedAt(conv)
+    const ts = conversationUpdatedAt(conv)
     if (!ts) return '--'
     const now = Date.now()
     if (Math.abs(now - ts) < 24 * 60 * 60 * 1000) return this.formatTime(ts)
@@ -773,7 +784,7 @@ export class ConversationsComponent {
       parts.push(`Score ${score.toFixed(2)}`)
     }
 
-    const timestamp = this.coerceDateInputToMs(item.created_at ?? item.updated_at)
+    const timestamp = coerceDateInputToMs(item.created_at ?? item.updated_at)
     if (timestamp) {
       parts.push(new Date(timestamp).toLocaleString('pt-BR', {
         day: '2-digit',
@@ -790,8 +801,8 @@ export class ConversationsComponent {
     const compositeId = String(item.composite_id || '').trim()
     if (compositeId) return compositeId
     const ts = Number(item.ts_ms)
-    const normalizedTs = Number.isFinite(ts) ? ts : (this.coerceDateInputToMs(item.metadata?.timestamp) || 0)
-    const content = this.sanitizeDiagnosticText(item.content, 'memory').slice(0, 48)
+    const normalizedTs = Number.isFinite(ts) ? ts : (coerceDateInputToMs(item.metadata?.timestamp) || 0)
+    const content = sanitizeDiagnosticText(item.content, 'memory').slice(0, 48)
     return `${normalizedTs}:${content}:${index}`
   }
 
@@ -856,7 +867,7 @@ export class ConversationsComponent {
     this.docUploadProgress.set(0)
     this.api.uploadDocument(file, this.selectedId() || undefined, userId || undefined)
       .pipe(catchError((err) => {
-        this.docUploadError.set(this.extractErrorMessage(err, 'Falha no upload do documento.'))
+        this.docUploadError.set(extractErrorMessage(err, 'Falha no upload do documento.'))
         this.docUploadInFlight.set(false)
         this.docUploadProgress.set(null)
         return of(null)
@@ -900,7 +911,7 @@ export class ConversationsComponent {
     this.docLinkLoading.set(true)
     this.api.linkUrl(conversationId, url, this.userIdString() || undefined)
       .pipe(catchError((err) => {
-        this.docLinkError.set(this.extractErrorMessage(err, 'Falha ao vincular URL.'))
+        this.docLinkError.set(extractErrorMessage(err, 'Falha ao vincular URL.'))
         this.docLinkLoading.set(false)
         return of(null)
       }))
@@ -932,7 +943,7 @@ export class ConversationsComponent {
     this.docSearchLoading.set(true)
     this.api.searchDocuments(query, undefined, undefined, this.userIdString())
       .pipe(catchError((err) => {
-        this.docSearchError.set(this.extractErrorMessage(err, 'Falha ao buscar documentos.'))
+        this.docSearchError.set(extractErrorMessage(err, 'Falha ao buscar documentos.'))
         this.docSearchLoading.set(false)
         return of({ results: [] as DocSearchResultItem[] })
       }))
@@ -951,7 +962,7 @@ export class ConversationsComponent {
     this.deletingDocIds.update((curr) => ({ ...curr, [docId]: true }))
     this.api.deleteDocument(docId, this.userIdString())
       .pipe(catchError((err) => {
-        this.docSearchError.set(this.extractErrorMessage(err, 'Falha ao excluir documento.'))
+        this.docSearchError.set(extractErrorMessage(err, 'Falha ao excluir documento.'))
         this.deletingDocIds.update((curr) => {
           const next = { ...curr }
           delete next[docId]
@@ -992,7 +1003,7 @@ export class ConversationsComponent {
       sessionId: conversationId
     })
       .pipe(catchError((err) => {
-        this.memoryAddError.set(this.extractErrorMessage(err, 'Falha ao adicionar memória.'))
+        this.memoryAddError.set(extractErrorMessage(err, 'Falha ao adicionar memória.'))
         this.memoryAddLoading.set(false)
         return of(null)
       }))
@@ -1023,7 +1034,7 @@ export class ConversationsComponent {
       conversationId: this.selectedId() || undefined
     })
       .pipe(catchError((err) => {
-        this.memorySearchError.set(this.extractErrorMessage(err, 'Falha ao buscar memória generativa.'))
+        this.memorySearchError.set(extractErrorMessage(err, 'Falha ao buscar memória generativa.'))
         this.memorySearchLoading.set(false)
         return of([] as GenerativeMemoryItem[])
       }))
@@ -1078,7 +1089,7 @@ export class ConversationsComponent {
 
     request$
       .pipe(catchError((err) => {
-        this.ragError.set(this.extractErrorMessage(err, 'Falha ao executar consulta RAG.'))
+        this.ragError.set(extractErrorMessage(err, 'Falha ao executar consulta RAG.'))
         this.ragLoading.set(false)
         return of(null)
       }))
@@ -1155,7 +1166,7 @@ export class ConversationsComponent {
       priority: 2
     })
       .pipe(catchError((err) => {
-        this.goalCreateError.set(this.extractErrorMessage(err, 'Falha ao criar meta.'))
+        this.goalCreateError.set(extractErrorMessage(err, 'Falha ao criar meta.'))
         this.goalCreateLoading.set(false)
         return of(null)
       }))
@@ -1188,7 +1199,7 @@ export class ConversationsComponent {
       })
     request$
       .pipe(catchError((err) => {
-        this.autonomyError.set(this.extractErrorMessage(err, 'Falha ao atualizar autonomia.'))
+        this.autonomyError.set(extractErrorMessage(err, 'Falha ao atualizar autonomia.'))
         return of(null)
       }))
       .subscribe(() => {
@@ -1205,7 +1216,7 @@ export class ConversationsComponent {
     this.clearNotice('autonomy')
     this.api.updateGoalStatus(goal.id, status)
       .pipe(catchError((err) => {
-        this.autonomyError.set(this.extractErrorMessage(err, 'Falha ao atualizar meta.'))
+        this.autonomyError.set(extractErrorMessage(err, 'Falha ao atualizar meta.'))
         return of(null)
       }))
       .subscribe((updated) => {
@@ -1360,7 +1371,7 @@ export class ConversationsComponent {
         user_id: userId,
         conversation_id: conversationId
       }).pipe(
-        map((items) => items.filter((item) => this.isConversationMemory(item, conversationId))),
+        map((items) => items.filter((item) => isConversationMemory(item, conversationId))),
         catchError(() => of([] as MemoryItem[]))
       )
     }).subscribe((result) => {
@@ -1469,7 +1480,7 @@ export class ConversationsComponent {
 
     request$
       .pipe(catchError((err) => {
-        const errorMsg = this.extractErrorMessage(err, 'Falha ao enviar feedback.')
+        const errorMsg = extractErrorMessage(err, 'Falha ao enviar feedback.')
         this.feedbackStateByMessageId.update((curr) => ({
           ...curr,
           [msg.id]: { ...(curr[msg.id] || {}), rating, submitting: false, submitted: false, error: errorMsg }
@@ -1529,7 +1540,7 @@ export class ConversationsComponent {
 
   private startStreaming(conversationId: string, message: string): void {
     this.streamingBuffer = ''
-    this.streamingMessageId = this.createId()
+    this.streamingMessageId = createConversationViewId()
     this.streamingConversationId = conversationId
     this.appendMessage({
       id: this.streamingMessageId,
@@ -1555,7 +1566,7 @@ export class ConversationsComponent {
         const latencyMs = this.consumeResponseLatency()
         if (!resp) {
           this.appendMessage({
-            id: this.createId(),
+            id: createConversationViewId(),
             role: 'assistant',
             text: 'Falha ao enviar mensagem.',
             timestamp: Date.now(),
@@ -1563,12 +1574,12 @@ export class ConversationsComponent {
           })
         } else {
           const now = Date.now()
-          const cleanText = this.sanitizeChatText(resp.response)
+          const cleanText = sanitizeChatText(resp.response)
           const raw = resp as unknown as Record<string, unknown>
           const backendMessageId = typeof raw['message_id'] === 'string'
             ? String(raw['message_id'])
             : (typeof raw['id'] === 'string' ? String(raw['id']) : undefined)
-          const localMessageId = this.createId()
+          const localMessageId = createConversationViewId()
           this.appendMessage({
             id: localMessageId,
             backendMessageId,
@@ -1609,7 +1620,7 @@ export class ConversationsComponent {
         const latencyMs = this.consumeResponseLatency()
         if (!resp) {
           this.appendMessage({
-            id: this.createId(),
+            id: createConversationViewId(),
             role: 'assistant',
             text: 'Falha ao consultar codigo no modo admin.',
             timestamp: Date.now(),
@@ -1617,9 +1628,9 @@ export class ConversationsComponent {
           })
         } else {
           const now = Date.now()
-          const cleanText = this.sanitizeChatText(resp.answer)
+          const cleanText = sanitizeChatText(resp.answer)
           this.appendMessage({
-            id: this.createId(),
+            id: createConversationViewId(),
             role: 'assistant',
             text: cleanText,
             timestamp: now,
@@ -1641,7 +1652,7 @@ export class ConversationsComponent {
     if (!this.streamingBuffer) {
       this.appendThought('stream', 'Resposta', 'Janus iniciou a geracao da resposta.')
     }
-    this.streamingBuffer = this.sanitizeStreamingText(`${this.streamingBuffer}${chunk}`)
+    this.streamingBuffer = sanitizeStreamingText(`${this.streamingBuffer}${chunk}`)
     this.updateMessage(this.streamingMessageId, {
       text: this.streamingBuffer,
       streaming: true
@@ -1690,7 +1701,7 @@ export class ConversationsComponent {
 
   private handleStreamError(reason: string): void {
     this.consumeResponseLatency()
-    const id = this.streamingMessageId || this.createId()
+    const id = this.streamingMessageId || createConversationViewId()
     if (!this.streamingMessageId) {
       this.appendMessage({
         id,
@@ -1753,16 +1764,6 @@ export class ConversationsComponent {
     }))
   }
 
-  private conversationUpdatedAt(conv: ConversationMeta): number {
-    const updated = Number(conv.updated_at)
-    if (Number.isFinite(updated) && updated > 0) return updated
-    const lastTimestamp = Number(conv.last_message?.timestamp)
-    if (Number.isFinite(lastTimestamp) && lastTimestamp > 0) return lastTimestamp
-    const created = Number(conv.created_at)
-    if (Number.isFinite(created) && created > 0) return created
-    return 0
-  }
-
   private mapMessage(msg: ChatMessage): ChatMessageView {
     const raw = msg as unknown as Record<string, unknown>
     const latencyMsRaw = Number(raw['latency_ms'])
@@ -1770,10 +1771,10 @@ export class ConversationsComponent {
       ? String(raw['message_id'])
       : (typeof raw['id'] === 'string' ? String(raw['id']) : undefined)
     return {
-      id: this.createId(),
+      id: createConversationViewId(),
       backendMessageId,
       role: (msg.role as ChatRole) || 'assistant',
-      text: this.sanitizeChatText(msg.text),
+      text: sanitizeChatText(msg.text),
       timestamp: msg.timestamp,
       citations: msg.citations || [],
       citation_status: (raw['citation_status'] as CitationStatus | undefined),
@@ -1852,22 +1853,6 @@ export class ConversationsComponent {
     })
   }
 
-  private cognitiveStatusText(state: string, reason?: string): string {
-    if (state === 'knowledge_wait_estimate') {
-      return reason || 'Consulta grounded iniciada; isso pode demorar.'
-    }
-    if (state === 'studying_codebase') {
-      return reason || 'Estudando a base para responder com seguranca; isso pode demorar.'
-    }
-    if (state === 'study_progress') {
-      return reason || 'Estudo em andamento na base local.'
-    }
-    if (state === 'resuming_answer_generation') {
-      return reason || 'Gerando a resposta final a partir do estudo.'
-    }
-    return `Estado: ${state}${reason ? ` (${reason})` : ''}`
-  }
-
   private showStudyNotice(message: string): void {
     this.autonomyNotice.set({ kind: 'info', message, visible: true })
   }
@@ -1904,7 +1889,7 @@ export class ConversationsComponent {
     if (!jobId) return
     if (job.status === 'completed' && job.final_response) {
       const finalResponse = job.final_response
-      const finalText = this.sanitizeChatText(finalResponse.response)
+      const finalText = sanitizeChatText(finalResponse.response)
       this.updateMessage(localMessageId, {
         backendMessageId: finalResponse.message_id,
         text: finalText,
@@ -1936,19 +1921,12 @@ export class ConversationsComponent {
     }
     if (job.placeholder_message) {
       this.updateMessage(localMessageId, {
-        text: this.sanitizeChatText(job.placeholder_message),
+        text: sanitizeChatText(job.placeholder_message),
         delivery_status: 'pending_study',
         failure_classification: job.failure_classification
       })
     }
     this.scheduleStudyPoll(jobId, localMessageId, 2500)
-  }
-
-  private createId(): string {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return crypto.randomUUID()
-    }
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
   }
 
   private queueScroll(): void {
@@ -1983,15 +1961,15 @@ export class ConversationsComponent {
   }
 
   private appendThought(kind: ThoughtKind, title: string, text: string, timestamp?: number): void {
-    const safeTitleRaw = this.sanitizeDiagnosticText(title, 'Evento').slice(0, 120)
+    const safeTitleRaw = sanitizeDiagnosticText(title, 'Evento').slice(0, 120)
     const safeTitle = safeTitleRaw.toLowerCase() === 'unknown' ? 'Agente' : safeTitleRaw
-    const safeText = this.sanitizeDiagnosticText(text, 'Evento tecnico recebido')
+    const safeText = sanitizeDiagnosticText(text, 'Evento tecnico recebido')
     const item: ThoughtStreamItem = {
-      id: this.createId(),
+      id: createConversationViewId(),
       kind,
       title: safeTitle || 'Evento',
       text: safeText,
-      timestamp: this.coerceDateInputToMs(timestamp) || Date.now()
+      timestamp: coerceDateInputToMs(timestamp) || Date.now()
     }
     this.thoughtStream.update((items) => [item, ...items].slice(0, 40))
   }
@@ -2065,7 +2043,7 @@ export class ConversationsComponent {
           agent_state: { state: 'completed', reason: 'approved' }
         })
         this.appendMessage({
-          id: this.createId(),
+          id: createConversationViewId(),
           role: 'system',
           text: `Ação pendente #${actionId} aprovada. ${resp.message || ''}`.trim(),
           timestamp: Date.now()
@@ -2092,7 +2070,7 @@ export class ConversationsComponent {
           agent_state: { state: 'completed', reason: 'rejected' }
         })
         this.appendMessage({
-          id: this.createId(),
+          id: createConversationViewId(),
           role: 'system',
           text: `Ação pendente #${actionId} rejeitada. ${resp.message || ''}`.trim(),
           timestamp: Date.now()
@@ -2173,122 +2151,5 @@ export class ConversationsComponent {
       this.autonomyTools.set(result.tools)
       this.autonomyLoading.set(false)
     })
-  }
-
-  private isConversationMemory(item: MemoryItem, conversationId: string): boolean {
-    const metadata = item.metadata || {}
-    const target = String(conversationId || '').trim()
-    if (!target) return false
-    const sessionId = String(metadata.session_id || '').trim()
-    const threadId = String(metadata['thread_id'] || '').trim()
-    const convoId = String(metadata['conversation_id'] || '').trim()
-    const taskId = String(metadata['task_id'] || '').trim()
-    const compositeId = String(item.composite_id || '')
-    if ([sessionId, threadId, convoId, taskId].some((value) => value === target)) return true
-    if (!compositeId) return false
-    const compositeTokens = compositeId.split(/[:/|]/g).map((part) => part.trim()).filter(Boolean)
-    return compositeTokens.some((part) => part === target)
-  }
-
-  private coerceDateInputToMs(value: unknown): number | null {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value > 10_000_000_000 ? value : value * 1000
-    }
-    if (typeof value === 'string' && value.trim()) {
-      const numeric = Number(value)
-      if (Number.isFinite(numeric)) {
-        return numeric > 10_000_000_000 ? numeric : numeric * 1000
-      }
-      const parsed = Date.parse(value)
-      if (Number.isFinite(parsed)) return parsed
-    }
-    return null
-  }
-
-  private extractErrorMessage(error: unknown, fallback: string): string {
-    if (!error || typeof error !== 'object') return fallback
-    const maybe = error as { error?: { detail?: string } }
-    const detail = maybe.error?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
-    return fallback
-  }
-
-  private sanitizeChatText(value: unknown): string {
-    if (value === null || value === undefined) return ''
-    if (typeof value === 'string') {
-      const cleaned = value
-        .replace(/\[\s*object\s+object\s*\]/gi, '')
-        .split('')
-        .map((ch) => {
-          const code = ch.charCodeAt(0)
-          const isControl = (code >= 0x00 && code <= 0x08)
-            || code === 0x0b
-            || code === 0x0c
-            || (code >= 0x0e && code <= 0x1f)
-            || (code >= 0x7f && code <= 0x9f)
-            || code === 0xfffd
-          return isControl ? ' ' : ch
-        })
-        .join('')
-        .replace(/\n{3,}/g, '\n\n')
-      return cleaned.trim() ? cleaned : ''
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-    try {
-      return JSON.stringify(value, null, 2)
-    } catch {
-      return String(value)
-    }
-  }
-
-  private sanitizeStreamingText(value: string): string {
-    return String(value || '')
-      .replace(/\[\s*object\s+object\s*\]/gi, '')
-      .split('')
-      .map((ch) => {
-        const code = ch.charCodeAt(0)
-        const isControl = (code >= 0x00 && code <= 0x08)
-          || code === 0x0b
-          || code === 0x0c
-          || (code >= 0x0e && code <= 0x1f)
-          || (code >= 0x7f && code <= 0x9f)
-          || code === 0xfffd
-        return isControl ? ' ' : ch
-      })
-      .join('')
-      .replace(/\n{3,}/g, '\n\n')
-  }
-
-  private sanitizeDiagnosticText(value: unknown, fallback = ''): string {
-    const raw = this.sanitizeChatText(value)
-    if (!raw) return fallback
-    const compact = raw.replace(/\s{2,}/g, ' ').trim()
-    if (!compact) return fallback
-    if (this.looksLikeBinaryPayload(compact) || this.looksLikeStructuredTelemetryNoise(compact)) {
-      return fallback || 'Conteudo nao textual omitido'
-    }
-    return compact
-  }
-
-  private looksLikeBinaryPayload(value: string): boolean {
-    if (value.length < 20) return false
-    const alphaNumericCount = (value.match(/[A-Za-z0-9\u00C0-\u024F]/g) || []).length
-    const symbolRatio = 1 - (alphaNumericCount / value.length)
-    return symbolRatio > 0.55
-  }
-
-  private looksLikeStructuredTelemetryNoise(value: string): boolean {
-    const lowered = value.toLowerCase()
-    const markers = [
-      'event_type',
-      'agent_role',
-      'task_id',
-      'metadata',
-      'entities_count',
-      'relationships_count',
-      'memory_consolidated',
-    ]
-    const hitCount = markers.reduce((acc, marker) => (lowered.includes(marker) ? acc + 1 : acc), 0)
-    return hitCount >= 3
   }
 }
