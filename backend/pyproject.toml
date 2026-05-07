@@ -14,7 +14,7 @@ aiohttp = "3.13.4"
 orjson = "3.11.6"
 pyjwt = "2.12.0"
 python-dotenv = "1.2.2"
-python-multipart = "0.0.26"
+python-multipart = "0.0.27"
 requests = "2.33.0"
 
 # Databases / Storage
@@ -88,12 +88,12 @@ pydantic-ai-slim = {version = "1.56.0", extras = ["google", "groq", "openai", "r
 langgraph-checkpoint = "4.0.1"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
+pytest = "^9.0.3"
 pytest-asyncio = "^0.23.0"
 pytest-cov = "^7.1.0"
 mypy = "^1.8.0"
 ruff = "^0.1.0"
-black = "^24.0.0"
+black = "^26.3.1"
 
 [tool.mypy]
 python_version = "3.11"
