@@ -252,7 +252,6 @@ def bootstrap_local_auth(
     return {
         "ok": True,
         "email": email,
-        "password": password,
         "username": username,
         "token": token,
         "user_id": str(user_id) if user_id is not None else None,
@@ -275,7 +274,7 @@ def _safe_json(resp: requests.Response) -> Any:
 
 
 def _redact_sensitive(payload: Any) -> Any:
-    sensitive_keys = {
+    sensitive_key_fragments = (
         "password",
         "token",
         "access_token",
@@ -283,13 +282,15 @@ def _redact_sensitive(payload: Any) -> Any:
         "authorization",
         "secret",
         "api_key",
-    }
+        "apikey",
+        "auth",
+    )
 
     if isinstance(payload, dict):
         redacted: dict[Any, Any] = {}
         for k, v in payload.items():
             key_lower = str(k).lower()
-            if key_lower in sensitive_keys:
+            if any(fragment in key_lower for fragment in sensitive_key_fragments):
                 redacted[k] = "<redacted>"
             else:
                 redacted[k] = _redact_sensitive(v)
