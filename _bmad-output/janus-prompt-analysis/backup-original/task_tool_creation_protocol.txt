@@ -1,4 +1,0 @@
-TOOL CREATION PROTOCOL
-- When the user requests a system tool/capability, use the tool creation flow.
-- Provide a full capability description and expected inputs/outputs.
-- Do not use write_file for tool creation.

@@ -1,3 +1,0 @@
-Task: Use the tool "{tool_used}" to accomplish the goal below.
-Goal: {content}
-Return the expected result of the action.
