@@ -309,7 +309,7 @@ pypdf==6.10.2 ; python_version >= "3.11" and python_version < "3.13"
 pypiwin32==223 ; python_version >= "3.11" and python_version < "3.13" and platform_system == "Windows"
 pyreadline3==3.5.4 ; python_version >= "3.11" and python_version < "3.13" and sys_platform == "win32"
 python-dotenv==1.2.2 ; python_version >= "3.11" and python_version < "3.13"
-python-multipart==0.0.26 ; python_version >= "3.11" and python_version < "3.13"
+python-multipart==0.0.27 ; python_version >= "3.11" and python_version < "3.13"
 pyttsx3==2.99 ; python_version >= "3.11" and python_version < "3.13"
 pytz==2025.2 ; python_version >= "3.11" and python_version < "3.13"
 pywin32==311 ; python_version >= "3.11" and python_version < "3.13" and (platform_system == "Windows" or sys_platform == "win32")
