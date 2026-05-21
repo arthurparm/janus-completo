@@ -17,6 +17,7 @@ class DocumentManifestRepository:
         self,
         *,
         doc_id: str,
+        user_id: str,
         conversation_id: str | None,
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
@@ -35,6 +36,7 @@ class DocumentManifestRepository:
         try:
             row = DocumentManifest(
                 doc_id=doc_id,
+                user_id=str(user_id),
                 conversation_id=str(conversation_id) if conversation_id is not None else None,
                 knowledge_space_id=(
                     str(knowledge_space_id) if knowledge_space_id is not None else None
@@ -65,10 +67,12 @@ class DocumentManifestRepository:
         finally:
             session.close()
 
-    def get_manifest(self, doc_id: str) -> dict[str, Any] | None:
+    def get_manifest(self, doc_id: str, user_id: str | None = None) -> dict[str, Any] | None:
         session = db.get_session_direct()
         try:
             query = session.query(DocumentManifest).filter(DocumentManifest.doc_id == str(doc_id))
+            if user_id is not None:
+                query = query.filter(DocumentManifest.user_id == str(user_id))
             row = query.first()
             return self._serialize(row) if row is not None else None
         finally:
@@ -77,6 +81,7 @@ class DocumentManifestRepository:
     def list_manifests(
         self,
         *,
+        user_id: str | None = None,
         conversation_id: str | None = None,
         knowledge_space_id: str | None = None,
         limit: int = 100,
@@ -85,6 +90,8 @@ class DocumentManifestRepository:
         session = db.get_session_direct()
         try:
             query = session.query(DocumentManifest)
+            if user_id is not None:
+                query = query.filter(DocumentManifest.user_id == str(user_id))
             if conversation_id is not None:
                 query = query.filter(DocumentManifest.conversation_id == str(conversation_id))
             if knowledge_space_id is not None:
@@ -100,10 +107,13 @@ class DocumentManifestRepository:
         finally:
             session.close()
 
-    def update_manifest(self, doc_id: str, **fields: Any) -> dict[str, Any] | None:
+    def update_manifest(self, doc_id: str, *, user_id: str | None = None, **fields: Any) -> dict[str, Any] | None:
         session = db.get_session_direct()
         try:
-            row = session.query(DocumentManifest).filter(DocumentManifest.doc_id == str(doc_id)).first()
+            query = session.query(DocumentManifest).filter(DocumentManifest.doc_id == str(doc_id))
+            if user_id is not None:
+                query = query.filter(DocumentManifest.user_id == str(user_id))
+            row = query.first()
             if row is None:
                 return None
             for key, value in fields.items():
@@ -221,6 +231,7 @@ class DocumentManifestRepository:
         return {
             "id": int(row.id),
             "doc_id": str(row.doc_id),
+            "user_id": str(row.user_id),
             "conversation_id": str(row.conversation_id) if row.conversation_id is not None else None,
             "knowledge_space_id": (
                 str(row.knowledge_space_id) if row.knowledge_space_id is not None else None

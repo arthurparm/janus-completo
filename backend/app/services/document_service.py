@@ -75,7 +75,7 @@ class DocumentIngestionService:
         value = getattr(settings, "DOC_UPLOAD_STORAGE_DIR", "/app/data/document_uploads")
         return Path(str(value)).expanduser()
 
-    def resolve_storage_path(self, *, doc_id: str, filename: str) -> Path:
+    def resolve_storage_path(self, *, user_id: str, doc_id: str, filename: str) -> Path:
         safe_name = Path(filename or "document").name or "document"
         return self.storage_root() / str(user_id) / str(doc_id) / safe_name
 
@@ -97,6 +97,7 @@ class DocumentIngestionService:
         self,
         *,
         file: UploadFile,
+        user_id: str,
         conversation_id: str | None,
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
@@ -107,10 +108,10 @@ class DocumentIngestionService:
         parent_collection_id: str | None = None,
         auto_consolidate: bool = False,
     ) -> dict[str, Any]:
-        doc_id = self.build_doc_id("system")
+        doc_id = self.build_doc_id(str(user_id))
         filename = Path(file.filename or "document").name or "document"
         content_type = (file.content_type or "application/octet-stream").strip()
-        storage_path = self.resolve_storage_path(doc_id=doc_id, filename=filename)
+        storage_path = self.resolve_storage_path(user_id=str(user_id), doc_id=doc_id, filename=filename)
         storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         manifest = self._manifest_repo.create_manifest(

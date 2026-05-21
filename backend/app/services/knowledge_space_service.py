@@ -399,12 +399,13 @@ class KnowledgeSpaceService:
         self._space_repo = space_repo or KnowledgeSpaceRepository()
         self._llm = llm_service
 
-    def build_space_id(self) -> str:
+    def build_space_id(self, user_id: str) -> str:
         return f"ks:{user_id}:{uuid4().hex}"
 
     def create_space(
         self,
         *,
+        user_id: str,
         name: str,
         source_type: str = "documentation",
         source_id: str | None = None,
@@ -420,7 +421,8 @@ class KnowledgeSpaceService:
                 detail=f"source_type inválido: {normalized_source_type}",
             )
         return self._space_repo.create_space(
-            knowledge_space_id=self.build_space_id(user_id),
+            knowledge_space_id=self.build_space_id(str(user_id)),
+            user_id=str(user_id),
             name=str(name or "").strip() or "Knowledge Space",
             source_type=normalized_source_type,
             source_id=source_id,
@@ -430,18 +432,20 @@ class KnowledgeSpaceService:
             description=description,
         )
 
-    def list_spaces(self, *, limit: int = 100) -> list[dict[str, Any]]:
-        return self._space_repo.list_spaces(limit=limit)
+    def list_spaces(self, *, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        return self._space_repo.list_spaces(user_id=str(user_id), limit=limit)
 
-    def get_space(self, *, knowledge_space_id: str) -> dict[str, Any]:
-        row = self._space_repo.get_space(knowledge_space_id=str(knowledge_space_id))
+    def get_space(self, *, knowledge_space_id: str, user_id: str | None = None) -> dict[str, Any]:
+        row = self._space_repo.get_space(knowledge_space_id=str(knowledge_space_id), user_id=user_id)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="knowledge_space não encontrado")
         return row
 
-    def get_space_status(self, *, knowledge_space_id: str) -> dict[str, Any]:
-        space = self.get_space(knowledge_space_id=knowledge_space_id)
+    def get_space_status(self, *, knowledge_space_id: str, user_id: str | None = None) -> dict[str, Any]:
+        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        resolved_user_id = str(space.get("user_id")).strip() if space.get("user_id") else None
         manifests = self._manifest_repo.list_manifests(
+            user_id=resolved_user_id,
             knowledge_space_id=str(knowledge_space_id),
             limit=500,
         )
@@ -513,8 +517,10 @@ class KnowledgeSpaceService:
         )
         return reconciled or knowledge_space
 
-    def mark_consolidation_requested(self, *, knowledge_space_id: str) -> dict[str, Any]:
-        self.get_space(knowledge_space_id=knowledge_space_id)
+    def mark_consolidation_requested(
+        self, *, knowledge_space_id: str, user_id: str | None = None
+    ) -> dict[str, Any]:
+        self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
         return self._space_repo.mark_consolidation(
             knowledge_space_id,
             status="processing",
@@ -534,8 +540,8 @@ class KnowledgeSpaceService:
         language: str | None = None,
         parent_collection_id: str | None = None,
     ) -> dict[str, Any]:
-        space = self.get_space(knowledge_space_id=knowledge_space_id)
-        manifest = self._manifest_repo.get_manifest(doc_id, user_id)
+        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=str(user_id))
+        manifest = self._manifest_repo.get_manifest(doc_id, user_id=str(user_id))
         if manifest is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="documento não encontrado")
 
@@ -548,8 +554,8 @@ class KnowledgeSpaceService:
             language=language or space.get("language"),
             parent_collection_id=parent_collection_id or space.get("parent_collection_id"),
         )
-        updated = self._manifest_repo.update_manifest(doc_id, **scope_payload)
-        await self._sync_doc_scope_payload(doc_id=str(doc_id), scope_payload=scope_payload)
+        updated = self._manifest_repo.update_manifest(doc_id, user_id=str(user_id), **scope_payload)
+        await self._sync_doc_scope_payload(doc_id=str(doc_id), user_id=str(user_id), scope_payload=scope_payload)
         return updated or manifest
 
     async def consolidate_space(
@@ -565,6 +571,7 @@ class KnowledgeSpaceService:
             summary="Consolidação estrutural em andamento.",
         )
         manifests = self._manifest_repo.list_manifests(
+            user_id=str(space.get("user_id")).strip() if space.get("user_id") else None,
             knowledge_space_id=str(knowledge_space_id),
             limit=max(1, int(limit_docs)),
             statuses=["indexed"],
@@ -589,6 +596,7 @@ class KnowledgeSpaceService:
         for manifest in manifests:
             points = await self._load_document_points(
                 doc_id=str(manifest["doc_id"]),
+                user_id=str(space.get("user_id")).strip() if space.get("user_id") else "system",
                 knowledge_space_id=str(knowledge_space_id),
             )
             if not points:
@@ -679,6 +687,7 @@ class KnowledgeSpaceService:
         self,
         *,
         knowledge_space_id: str,
+        user_id: str | None = None,
         question: str,
         mode: str = "auto",
         limit: int = 5,
@@ -687,12 +696,15 @@ class KnowledgeSpaceService:
         if normalized_mode not in _QUERY_MODES:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="mode inválido")
 
-        space = self.get_space(knowledge_space_id=knowledge_space_id)
+        space = self.get_space(knowledge_space_id=knowledge_space_id, user_id=user_id)
+        resolved_user_id = str(space.get("user_id")).strip() if space.get("user_id") else None
         manifests = self._manifest_repo.list_manifests(
+            user_id=resolved_user_id,
             knowledge_space_id=str(knowledge_space_id),
             limit=200,
         )
         active_manifests = self._manifest_repo.list_manifests(
+            user_id=resolved_user_id,
             knowledge_space_id=str(knowledge_space_id),
             limit=200,
             statuses=["indexed"],
@@ -894,6 +906,7 @@ class KnowledgeSpaceService:
         self,
         *,
         doc_id: str,
+        user_id: str,
         scope_payload: dict[str, Any],
     ) -> None:
         client = get_async_qdrant_client()
@@ -924,6 +937,7 @@ class KnowledgeSpaceService:
         self,
         *,
         doc_id: str,
+        user_id: str,
         knowledge_space_id: str,
     ) -> list[dict[str, Any]]:
         client = get_async_qdrant_client()
@@ -2237,6 +2251,7 @@ class KnowledgeSpaceService:
     ) -> int:
         if not sections:
             return 0
+        user_id = str(knowledge_space.get("user_id") or "system").strip() or "system"
         client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         await client.delete(
@@ -2406,6 +2421,7 @@ class KnowledgeSpaceService:
         manifests: list[dict[str, Any]],
         sections: list[dict[str, Any]],
     ) -> None:
+        resolved_user_id = str(knowledge_space.get("user_id") or "system").strip() or "system"
         graph = await get_graph_db()
         await graph.execute(
             """
@@ -2421,7 +2437,7 @@ class KnowledgeSpaceService:
             """,
             {
                 "knowledge_space_id": str(knowledge_space["knowledge_space_id"]),
-                "user_id": str(user_id),
+                "user_id": resolved_user_id,
                 "name": knowledge_space.get("name"),
                 "source_type": knowledge_space.get("source_type"),
                 "source_id": knowledge_space.get("source_id"),
@@ -2435,7 +2451,7 @@ class KnowledgeSpaceService:
             {
                 "doc_id": str(manifest["doc_id"]),
                 "file_name": manifest.get("file_name"),
-                "user_id": str(user_id),
+                "user_id": resolved_user_id,
                 "source_type": manifest.get("source_type"),
                 "source_id": manifest.get("source_id"),
                 "doc_role": manifest.get("doc_role") or self._infer_doc_role(manifest, knowledge_space),

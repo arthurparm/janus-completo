@@ -151,3 +151,5 @@ neo4j-distinct.json
 neo4j-noise-audit*.json
 janus.log
 janus-errors.log
+.tmp.*
+.vscode/*

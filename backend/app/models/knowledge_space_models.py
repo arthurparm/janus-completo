@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Index, Integer, String, Text
+from sqlalchemy import Column, DateTime, Index, Integer, String, Text, text
 from sqlalchemy.sql import func
 
 from app.models.config_models import Base
@@ -9,6 +9,7 @@ class KnowledgeSpace(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     knowledge_space_id = Column(String(255), nullable=False, unique=True)
+    user_id = Column(String(128), nullable=False, server_default=text("'default'"))
     name = Column(String(255), nullable=False)
     source_type = Column(String(64), nullable=False, default="documentation")
     source_id = Column(String(255), nullable=True)
@@ -34,4 +35,6 @@ class KnowledgeSpace(Base):
 
     __table_args__ = (
         Index("idx_knowledge_spaces_status", "consolidation_status"),
+        Index("idx_knowledge_spaces_user", "user_id"),
+        Index("idx_knowledge_spaces_user_status", "user_id", "consolidation_status"),
     )
