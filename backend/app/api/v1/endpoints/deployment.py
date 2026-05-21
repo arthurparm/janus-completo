@@ -14,11 +14,22 @@ MODEL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def _safe_model_file_path(model_id: str, filename: str) -> str:
+    if not MODEL_ID_PATTERN.fullmatch(model_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid model_id format"
+        )
+
     models_base_dir = os.path.realpath(os.path.join("/app", "workspace", "models"))
-    candidate_path = os.path.realpath(os.path.join(models_base_dir, model_id, filename))
-    if not (candidate_path == models_base_dir or candidate_path.startswith(models_base_dir + os.sep)):
+    model_dir = os.path.realpath(os.path.join(models_base_dir, model_id))
+    if not (model_dir == models_base_dir or model_dir.startswith(models_base_dir + os.sep)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid model_id path"
+        )
+
+    candidate_path = os.path.realpath(os.path.join(model_dir, filename))
+    if not (candidate_path == model_dir or candidate_path.startswith(model_dir + os.sep)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file path"
         )
     return candidate_path
 
