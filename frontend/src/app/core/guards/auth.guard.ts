@@ -5,9 +5,11 @@
 
 import { Injectable, inject } from '@angular/core';
 import { CanActivate, CanActivateChild, CanLoad, Router, ActivatedRouteSnapshot, RouterStateSnapshot, Route, UrlSegment } from '@angular/router';
-import { Observable, combineLatest, filter, map, take } from 'rxjs';
+import { Observable, catchError, combineLatest, filter, map, of, take, timeout } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationService } from '../notifications/notification.service';
+
+const AUTH_READY_TIMEOUT_MS = 10000;
 
 @Injectable({
   providedIn: 'root'
@@ -41,6 +43,7 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   private checkAuth(route?: ActivatedRouteSnapshot, state?: RouterStateSnapshot): Observable<boolean> {
     return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
       filter(([ready]) => ready),
+      timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
       map(([, isAuthenticated]) => {
         if (isAuthenticated) {
@@ -56,6 +59,15 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
 
         this.notificationService.notifyWarning('Acesso negado', 'Por favor, faça login para acessar esta página');
         return false;
+      }),
+      catchError(() => {
+        const returnUrl = state?.url || route?.url?.join('/') || '/';
+        this.router.navigate(['/login'], {
+          queryParams: { returnUrl },
+          replaceUrl: true
+        });
+        this.notificationService.notifyWarning('Autenticação indisponível', 'Não foi possível inicializar a autenticação. Tente novamente.');
+        return of(false);
       })
     );
   }
@@ -63,12 +75,17 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   private checkAuthForLoad(): Observable<boolean> {
     return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
       filter(([ready]) => ready),
+      timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
       map(([, isAuthenticated]) => {
         if (!isAuthenticated) {
           this.notificationService.notifyWarning('Acesso negado', 'Por favor, faça login para acessar este módulo');
         }
         return isAuthenticated;
+      }),
+      catchError(() => {
+        this.notificationService.notifyWarning('Autenticação indisponível', 'Não foi possível inicializar a autenticação. Tente novamente.');
+        return of(false);
       })
     );
   }
@@ -91,6 +108,7 @@ export class RoleGuard implements CanActivate {
 
     return combineLatest([this.authService.authReady$, this.authService.user$]).pipe(
       filter(([ready]) => ready),
+      timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
       map(([, user]) => {
         if (!user) {
@@ -107,6 +125,11 @@ export class RoleGuard implements CanActivate {
         }
 
         return true;
+      }),
+      catchError(() => {
+        this.notificationService.notifyWarning('Autenticação indisponível', 'Não foi possível inicializar a autenticação. Tente novamente.');
+        this.router.navigate(['/login']);
+        return of(false);
       })
     );
   }
@@ -161,6 +184,7 @@ export class NoAuthGuard implements CanActivate {
   canActivate(): Observable<boolean> | Promise<boolean> | boolean {
     return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
       filter(([ready]) => ready),
+      timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
       map(([, isAuthenticated]) => {
         if (!isAuthenticated) {
@@ -170,7 +194,8 @@ export class NoAuthGuard implements CanActivate {
         // Se já está autenticado, redirecionar para dashboard
         this.router.navigate(['/']);
         return false;
-      })
+      }),
+      catchError(() => of(true))
     );
   }
 }
