@@ -5,13 +5,8 @@ import { forkJoin, of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
-import {
-  AuditEvent,
-  BackendApiService,
-  PendingAction,
-  Tool,
-  ToolStats
-} from '../../services/backend-api.service'
+import { BackendApiService } from '../../services/backend-api.service'
+import { AuditEvent, PendingAction, Tool, ToolStats } from '../../models'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiTableComponent } from '../../shared/components/ui/ui-table/ui-table.component'
@@ -149,19 +144,19 @@ export class ToolsComponent {
     this.loading.set(true)
     this.error.set('')
 
-    const tools$ = this.api.getTools()
+    const tools$ = this.api.tools.getTools()
       .pipe(
         map((resp) => resp.tools || []),
         catchError(() => of([]))
       )
-    const toolStats$ = this.api.getToolStats()
+    const toolStats$ = this.api.tools.getToolStats()
       .pipe(catchError(() => of(null)))
-    const auditEvents$ = this.api.listAuditEvents({ limit: 100 })
+    const auditEvents$ = this.api.observability.listAuditEvents({ limit: 100 })
       .pipe(
         map((resp) => resp.events || []),
         catchError(() => of([]))
       )
-    const pendingActions$ = this.api.listPendingActions({ include_sql: true, include_graph: false })
+    const pendingActions$ = this.api.observability.listPendingActions({ include_sql: true, include_graph: false })
       .pipe(catchError(() => of([])))
 
     forkJoin({
@@ -204,7 +199,7 @@ export class ToolsComponent {
   approve(action: PendingAction) {
     if (!action || this.actionLoading()) return
     this.actionLoading.set(true)
-    this.api.approvePendingAction(action)
+    this.api.observability.approvePendingAction(action)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError((err) => {
@@ -225,7 +220,7 @@ export class ToolsComponent {
   reject(action: PendingAction) {
     if (!action || this.actionLoading()) return
     this.actionLoading.set(true)
-    this.api.rejectPendingAction(action)
+    this.api.observability.rejectPendingAction(action)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError((err) => {

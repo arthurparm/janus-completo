@@ -4,7 +4,7 @@ import type {
   ChatUnderstanding,
   Citation,
   CitationStatus
-} from '../../services/backend-api.service'
+} from '../../models'
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'event'
 

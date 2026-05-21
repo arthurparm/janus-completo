@@ -11,7 +11,7 @@ import type {
   Goal,
   MemoryItem,
   Tool
-} from '../../services/backend-api.service'
+} from '../../models'
 import { conversationUpdatedAt, isConversationMemory } from './conversations.utils'
 import type {
   AdvancedRailTab,

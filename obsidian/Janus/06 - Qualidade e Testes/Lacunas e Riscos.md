@@ -72,7 +72,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 ### Visao consolidada
 | ID | Titulo | Categoria | Prob. | Impacto | Nivel | Status | Responsavel | Referencias |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| RISK-001 | BackendApiService concentra contratos demais | tecnica | 3 | 3 | 9 | identificado | a definir | `frontend/src/app/services/backend-api.service.ts` |
+| RISK-001 | BackendApiService concentra contratos demais | tecnica | 3 | 3 | 9 | mitigado | Frontend/QA | `frontend/src/app/services/backend-api.service.ts` |
 | RISK-002 | ConversationsComponent concentra subfluxos demais | tecnica | 3 | 3 | 9 | identificado | a definir | `frontend/src/app/features/conversations/conversations.ts` |
 | RISK-003 | Kernel compoe quase tudo manualmente | tecnica | 3 | 3 | 9 | identificado | a definir | `backend/app/core/kernel.py` |
 | RISK-004 | Deploy distribuido PC1/PC2 aumenta superficie de falha | processo | 3 | 3 | 9 | identificado | a definir | [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]] |
@@ -114,12 +114,23 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 > - **Probabilidade (1-5):** 3
 > - **Impacto (1-5):** 3
 > - **Nivel (PxI):** 9
-> - **Status:** identificado
-> - **Responsavel:** a definir
-> - **Plano de mitigacao:** mapear contratos expostos, separar por dominios e adicionar testes de contrato para chamadas criticas
-> - **Prazo limite:** a definir
-> - **Ultima atualizacao:** a definir
-> - **Referencias:** `frontend/src/app/services/backend-api.service.ts`
+> - **Status:** mitigado
+> - **Responsavel:** Frontend/QA
+> - **Plano de mitigacao:**
+>   - Refatorado `BackendApiService` para fachada minima por dominio (sem proxies e sem reexport de models)
+>   - Migradas chamadas do frontend para `api.<dominio>.<metodo>` e imports de tipos para `../../models`
+>   - Adicionados testes de contrato por dominio (HttpTestingController) para travar URL/metodo/body/headers em chamadas criticas
+> - **Prazo limite:** 2026-05-21
+> - **Ultima atualizacao:** 2026-05-21
+> - **Data de inicio:** 2026-05-21
+> - **Data de conclusao:** 2026-05-21
+> - **Validacao (resultados):** `npm test` (Vitest), `npm run lint` e `npm run build` executados com sucesso
+> - **Referencias:**
+>   - `frontend/src/app/services/backend-api.service.ts`
+>   - `frontend/src/app/services/domain/system-api-service.contract.spec.ts`
+>   - `frontend/src/app/services/domain/chat-api-service.contract.spec.ts`
+>   - `frontend/src/app/services/domain/knowledge-api-service.contract.spec.ts`
+>   - `frontend/src/app/services/domain/tools-api-service.contract.spec.ts`
 
 > [!risk] RISK-002 - ConversationsComponent concentra subfluxos demais
 > - **Descricao (cenario):** "`ConversationsComponent` concentra subfluxos demais."

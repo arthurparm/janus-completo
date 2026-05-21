@@ -8,7 +8,7 @@ import { Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/r
 import { Observable, of, catchError, tap } from 'rxjs';
 import { LoadingStateService } from '../services/loading-state.service';
 import { NotificationService } from '../notifications/notification.service';
-import { ChatMessage } from '../../services/backend-api.service';
+import type { ChatMessage } from '../../models';
 
 /**
  * Interface base para resolvers com loading e tratamento de erros

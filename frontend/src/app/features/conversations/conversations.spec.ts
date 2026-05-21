@@ -15,21 +15,31 @@ import { ConversationsComponent } from './conversations'
 describe('ConversationsComponent', () => {
   let routeParams$: BehaviorSubject<ReturnType<typeof convertToParamMap>>
   let routerNavigateSpy: ReturnType<typeof vi.fn>
-  let apiStub: Record<string, ReturnType<typeof vi.fn>>
+  let apiStub: any
 
   beforeEach(async () => {
     routeParams$ = new BehaviorSubject(convertToParamMap({ conversationId: 'legacy' }))
     routerNavigateSpy = vi.fn()
     apiStub = {
-      listConversations: vi.fn(() => of({ conversations: [] })),
-      startChat: vi.fn(() => of({ conversation_id: 'fresh' })),
-      getChatHistoryPaginated: vi.fn(() => of({ conversation_id: 'legacy', messages: [] })),
-      listDocuments: vi.fn(() => of({ items: [] })),
-      getMemoryTimeline: vi.fn(() => of([])),
-      getAutonomyStatus: vi.fn(() => of(null)),
-      listGoals: vi.fn(() => of([])),
-      getTools: vi.fn(() => of({ tools: [] })),
-      getConversationTrace: vi.fn(() => of([]))
+      chat: {
+        listConversations: vi.fn(() => of({ conversations: [] })),
+        startChat: vi.fn(() => of({ conversation_id: 'fresh' })),
+        getChatHistoryPaginated: vi.fn(() => of({ conversation_id: 'legacy', messages: [] })),
+        getConversationTrace: vi.fn(() => of([]))
+      },
+      documents: {
+        listDocuments: vi.fn(() => of({ items: [] }))
+      },
+      memory: {
+        getMemoryTimeline: vi.fn(() => of([]))
+      },
+      autonomy: {
+        getAutonomyStatus: vi.fn(() => of(null)),
+        listGoals: vi.fn(() => of([]))
+      },
+      tools: {
+        getTools: vi.fn(() => of({ tools: [] }))
+      }
     }
 
     await TestBed.configureTestingModule({
@@ -109,13 +119,13 @@ describe('ConversationsComponent', () => {
     expect(component.messages()).toEqual([])
     expect(component.docs()).toEqual([])
     expect(component.memoryUser()).toEqual([])
-    expect(apiStub.getChatHistoryPaginated).toHaveBeenCalledWith('fresh', { limit: 80, offset: 0 })
-    expect(apiStub.listDocuments).toHaveBeenCalledWith('fresh', '2')
+    expect(apiStub.chat.getChatHistoryPaginated).toHaveBeenCalledWith('fresh', { limit: 80, offset: 0 })
+    expect(apiStub.documents.listDocuments).toHaveBeenCalledWith('fresh', '2')
     expect(routerNavigateSpy).toHaveBeenCalledWith(['/conversations', 'fresh'], { replaceUrl: true })
   })
 
   it('reconciles resolved pending actions when history already contains the system approval message', () => {
-    apiStub.getChatHistoryPaginated.mockReturnValue(
+    apiStub.chat.getChatHistoryPaginated.mockReturnValue(
       of({
         conversation_id: 'legacy',
         messages: [

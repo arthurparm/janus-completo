@@ -5,11 +5,8 @@ import { SystemStatusWidgetComponent } from './widgets/system-status-widget/syst
 import { DatabaseHealthWidgetComponent } from './widgets/database-health-widget/database-health-widget';
 import { KnowledgeHealthWidgetComponent } from './widgets/knowledge-health-widget/knowledge-health-widget';
 import { AppLoggerService } from '../../core/services/app-logger.service';
-import {
-  BackendApiService,
-  OrchestratorWorkerTaskStatus,
-  QueueInfoResponse,
-} from '../../services/backend-api.service';
+import { BackendApiService } from '../../services/backend-api.service';
+import { OrchestratorWorkerTaskStatus, QueueInfoResponse } from '../../models';
 
 @Component({
     selector: 'app-observability',
@@ -74,7 +71,7 @@ export class ObservabilityComponent implements OnInit, OnDestroy {
         this.operatorError.set(null);
 
         const queueRequests = this.queueNames.map((queueName) =>
-            this.api.getQueueInfo(queueName).pipe(
+            this.api.system.getQueueInfo(queueName).pipe(
                 catchError(() =>
                     of({
                         name: queueName,
@@ -86,7 +83,7 @@ export class ObservabilityComponent implements OnInit, OnDestroy {
         );
 
         forkJoin({
-            workers: this.api.getWorkersStatus().pipe(map((response) => response.workers || [])),
+            workers: this.api.system.getWorkersStatus().pipe(map((response) => response.workers || [])),
             queues: queueRequests.length ? forkJoin(queueRequests) : of([] as QueueInfoResponse[]),
         })
             .pipe(

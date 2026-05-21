@@ -9,8 +9,8 @@ import { Observable } from 'rxjs'
 
 import { AgentEventsService } from '../../core/services/agent-events.service'
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
+import { BackendApiService } from '../../services/backend-api.service'
 import {
-  BackendApiService,
   ChatAgentState,
   ChatConfirmationState,
   ChatMessage,
@@ -31,7 +31,7 @@ import {
   RagUserChatResponse,
   RagUserChatV2Response,
   Tool
-} from '../../services/backend-api.service'
+} from '../../models'
 import { Header } from '../../core/layout/header/header'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
@@ -738,7 +738,7 @@ export class ConversationsComponent {
     this.clearNotice('docs')
     this.docUploadInFlight.set(true)
     this.docUploadProgress.set(0)
-    this.api.uploadDocument(file, this.selectedId() || undefined, userId || undefined)
+    this.api.documents.uploadDocument(file, this.selectedId() || undefined, userId || undefined)
       .pipe(catchError((err) => {
         this.docUploadError.set(extractErrorMessage(err, 'Falha no upload do documento.'))
         this.docUploadInFlight.set(false)
@@ -782,7 +782,7 @@ export class ConversationsComponent {
     this.docLinkError.set('')
     this.clearNotice('docs')
     this.docLinkLoading.set(true)
-    this.api.linkUrl(conversationId, url, this.userIdString() || undefined)
+    this.api.documents.linkUrl(conversationId, url, this.userIdString() || undefined)
       .pipe(catchError((err) => {
         this.docLinkError.set(extractErrorMessage(err, 'Falha ao vincular URL.'))
         this.docLinkLoading.set(false)
@@ -814,7 +814,7 @@ export class ConversationsComponent {
     this.docSearchError.set('')
     this.clearNotice('docs')
     this.docSearchLoading.set(true)
-    this.api.searchDocuments(query, undefined, undefined, this.userIdString())
+    this.api.documents.searchDocuments(query, undefined, undefined, this.userIdString())
       .pipe(catchError((err) => {
         this.docSearchError.set(extractErrorMessage(err, 'Falha ao buscar documentos.'))
         this.docSearchLoading.set(false)
@@ -833,7 +833,7 @@ export class ConversationsComponent {
     if (!docId) return
     if (typeof window !== 'undefined' && !window.confirm('Excluir este documento?')) return
     this.deletingDocIds.update((curr) => ({ ...curr, [docId]: true }))
-    this.api.deleteDocument(docId, this.userIdString())
+    this.api.documents.deleteDocument(docId, this.userIdString())
       .pipe(catchError((err) => {
         this.docSearchError.set(extractErrorMessage(err, 'Falha ao excluir documento.'))
         this.deletingDocIds.update((curr) => {
@@ -868,7 +868,7 @@ export class ConversationsComponent {
     const importance = this.memoryImportance()
     const userId = this.userIdString()
     const conversationId = this.selectedId() || undefined
-    this.api.addGenerativeMemory(content, {
+    this.api.memory.addGenerativeMemory(content, {
       type: this.memoryType(),
       importance: typeof importance === 'number' ? importance : undefined,
       userId,
@@ -902,7 +902,7 @@ export class ConversationsComponent {
     this.memorySearchError.set('')
     this.clearNotice('memory')
     this.memorySearchLoading.set(true)
-    this.api.getGenerativeMemories(query, this.memorySearchLimit(), {
+    this.api.memory.getGenerativeMemories(query, this.memorySearchLimit(), {
       userId: this.userIdString(),
       conversationId: this.selectedId() || undefined
     })
@@ -937,7 +937,7 @@ export class ConversationsComponent {
     let request$: Observable<unknown>
 
     if (mode === 'search') {
-      request$ = this.api.ragSearch({ query, limit: 5 })
+      request$ = this.api.knowledge.ragSearch({ query, limit: 5 })
     } else if (mode === 'user-chat') {
       if (!userId) {
         this.ragLoading.set(false)
@@ -945,9 +945,9 @@ export class ConversationsComponent {
         this.setNotice('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
         return
       }
-      request$ = this.api.ragUserChat({ query, user_id: userId, session_id: conversationId, limit: 5 })
+      request$ = this.api.knowledge.ragUserChat({ query, user_id: userId, session_id: conversationId, limit: 5 })
     } else if (mode === 'user_chat') {
-      request$ = this.api.ragUserChatV2({ query, user_id: userId || undefined, session_id: conversationId, limit: 5 })
+      request$ = this.api.knowledge.ragUserChatV2({ query, user_id: userId || undefined, session_id: conversationId, limit: 5 })
     } else if (mode === 'productivity') {
       if (!userId) {
         this.ragLoading.set(false)
@@ -955,9 +955,9 @@ export class ConversationsComponent {
         this.setNotice('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
         return
       }
-      request$ = this.api.ragProductivitySearch({ query, user_id: userId, limit: 5 })
+      request$ = this.api.knowledge.ragProductivitySearch({ query, user_id: userId, limit: 5 })
     } else {
-      request$ = this.api.ragHybridSearch({ query, user_id: userId || undefined, limit: 5 })
+      request$ = this.api.knowledge.ragHybridSearch({ query, user_id: userId || undefined, limit: 5 })
     }
 
     request$
@@ -1033,7 +1033,7 @@ export class ConversationsComponent {
     this.goalCreateError.set('')
     this.clearNotice('autonomy')
     this.goalCreateLoading.set(true)
-    this.api.createGoal({
+    this.api.autonomy.createGoal({
       title,
       description,
       priority: 2
@@ -1064,8 +1064,8 @@ export class ConversationsComponent {
     this.clearNotice('autonomy')
     const active = Boolean(this.autonomyStatus()?.active)
     const request$ = active
-      ? this.api.stopAutonomy()
-      : this.api.startAutonomy({
+      ? this.api.autonomy.stopAutonomy()
+      : this.api.autonomy.startAutonomy({
         interval_seconds: 60,
         risk_profile: 'balanced',
         user_id: this.user()?.id ? String(this.user()?.id) : undefined
@@ -1087,7 +1087,7 @@ export class ConversationsComponent {
     this.autonomySaving.set(true)
     this.autonomyError.set('')
     this.clearNotice('autonomy')
-    this.api.updateGoalStatus(goal.id, status)
+    this.api.autonomy.updateGoalStatus(goal.id, status)
       .pipe(catchError((err) => {
         this.autonomyError.set(extractErrorMessage(err, 'Falha ao atualizar meta.'))
         return of(null)
@@ -1122,7 +1122,7 @@ export class ConversationsComponent {
   }
 
   private loadTrace(conversationId: string): void {
-    this.api.getConversationTrace(conversationId).pipe(
+    this.api.chat.getConversationTrace(conversationId).pipe(
       catchError(() => of([]))
     ).subscribe(steps => {
       this.traceSteps.set(steps)
@@ -1202,7 +1202,7 @@ export class ConversationsComponent {
   private loadConversations(): void {
     this.listLoading.set(true)
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    this.api.listConversations(userId ? { user_id: userId, limit: 60 } : { limit: 60 })
+    this.api.chat.listConversations(userId ? { user_id: userId, limit: 60 } : { limit: 60 })
       .pipe(
         map((resp) => resp.conversations || []),
         catchError(() => of([]))
@@ -1215,7 +1215,7 @@ export class ConversationsComponent {
 
   private loadHistory(conversationId: string): void {
     this.historyLoading.set(true)
-    this.api.getChatHistoryPaginated(conversationId, { limit: 80, offset: 0 })
+    this.api.chat.getChatHistoryPaginated(conversationId, { limit: 80, offset: 0 })
       .pipe(
         map((resp) => resp.messages || []),
         catchError(() => of([]))
@@ -1232,11 +1232,11 @@ export class ConversationsComponent {
     this.contextLoading.set(true)
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
     forkJoin({
-      docs: this.api.listDocuments(conversationId, userId).pipe(
+      docs: this.api.documents.listDocuments(conversationId, userId).pipe(
         map((resp) => resp.items || []),
         catchError(() => of([]))
       ),
-      memory: this.api.getMemoryTimeline({
+      memory: this.api.memory.getMemoryTimeline({
         limit: 24,
         user_id: userId,
         conversation_id: conversationId
@@ -1345,8 +1345,8 @@ export class ConversationsComponent {
     }))
 
     const request$ = rating === 'positive'
-      ? this.api.thumbsUpFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
-      : this.api.thumbsDownFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
+      ? this.api.feedback.thumbsUpFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
+      : this.api.feedback.thumbsDownFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
 
     request$
       .pipe(catchError((err) => {
@@ -1383,7 +1383,7 @@ export class ConversationsComponent {
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
     try {
       const response = await firstValueFrom(
-        this.api.startChat(undefined, undefined, userId).pipe(catchError(() => of(null)))
+        this.api.chat.startChat(undefined, undefined, userId).pipe(catchError(() => of(null)))
       )
       const conversationId = response?.conversation_id
       if (!conversationId) return null
@@ -1430,7 +1430,7 @@ export class ConversationsComponent {
 
   private sendClassic(conversationId: string, message: string): void {
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    this.api.sendChatMessage(conversationId, message, this.selectedRole(), this.selectedPriority(), undefined, userId)
+    this.api.chat.sendChatMessage(conversationId, message, this.selectedRole(), this.selectedPriority(), undefined, userId)
       .pipe(catchError(() => of(null)))
       .subscribe((resp) => {
         const latencyMs = this.consumeResponseLatency()
@@ -1480,7 +1480,7 @@ export class ConversationsComponent {
   }
 
   private sendAdminCodeQa(conversationId: string, message: string): void {
-    this.api.askAutonomyAdminCodeQa({
+    this.api.autonomy.askAutonomyAdminCodeQa({
       question: message,
       limit: 12,
       citation_limit: 8
@@ -1733,7 +1733,7 @@ export class ConversationsComponent {
     const existing = this.studyPollTimers.get(jobId)
     if (existing) clearTimeout(existing)
 
-    this.api.getChatStudyJob(jobId)
+    this.api.chat.getChatStudyJob(jobId)
       .pipe(catchError(() => of(null)))
       .subscribe((resp) => {
         if (!resp) {
@@ -1900,7 +1900,7 @@ export class ConversationsComponent {
     if (typeof actionId !== 'number') return
     this.setPendingActionBusy(actionId, true)
     const action: PendingAction = { status: 'pending', source: 'sql', action_id: actionId }
-    this.api.approvePendingAction(action)
+    this.api.observability.approvePendingAction(action)
       .pipe(catchError(() => of(null)))
       .subscribe((resp) => {
         this.setPendingActionBusy(actionId, false)
@@ -1927,7 +1927,7 @@ export class ConversationsComponent {
     if (typeof actionId !== 'number') return
     this.setPendingActionBusy(actionId, true)
     const action: PendingAction = { status: 'pending', source: 'sql', action_id: actionId }
-    this.api.rejectPendingAction(action)
+    this.api.observability.rejectPendingAction(action)
       .pipe(catchError(() => of(null)))
       .subscribe((resp) => {
         this.setPendingActionBusy(actionId, false)
@@ -2009,9 +2009,9 @@ export class ConversationsComponent {
   private loadAutonomyContext(): void {
     this.autonomyLoading.set(true)
     forkJoin({
-      status: this.api.getAutonomyStatus().pipe(catchError(() => of(null))),
-      goals: this.api.listGoals().pipe(catchError(() => of([] as Goal[]))),
-      tools: this.api.getTools().pipe(
+      status: this.api.autonomy.getAutonomyStatus().pipe(catchError(() => of(null))),
+      goals: this.api.autonomy.listGoals().pipe(catchError(() => of([] as Goal[]))),
+      tools: this.api.tools.getTools().pipe(
         map((resp) => resp.tools || []),
         catchError(() => of([] as Tool[]))
       )

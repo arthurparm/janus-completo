@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { interval, Subscription } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
-import { BackendApiService, DbValidationResponse, DbValidationCheck } from '../../../../services/backend-api.service';
+import { BackendApiService } from '../../../../services/backend-api.service';
+import { DbValidationCheck, DbValidationResponse } from '../../../../models';
 
 @Component({
     selector: 'app-database-health-widget',
@@ -34,7 +35,7 @@ export class DatabaseHealthWidgetComponent implements OnInit, OnDestroy {
         this.loading.set(true);
         this.error.set(null);
 
-        this.api.getSystemDbValidate().pipe(
+        this.api.system.getSystemDbValidate().pipe(
             catchError((err) => {
                 this.error.set(err.message || 'Failed to load DB validation');
                 return of(null);
@@ -47,7 +48,7 @@ export class DatabaseHealthWidgetComponent implements OnInit, OnDestroy {
 
     private startAutoRefresh(): void {
         this.refreshSub = interval(5000).pipe(
-            switchMap(() => this.api.getSystemDbValidate().pipe(catchError(() => of(null))))
+            switchMap(() => this.api.system.getSystemDbValidate().pipe(catchError(() => of(null))))
         ).subscribe(data => {
             if (data) this.validation.set(data);
         });

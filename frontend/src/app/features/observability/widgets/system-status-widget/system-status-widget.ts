@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { interval, Subscription } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
-import { BackendApiService, SystemStatus, ServiceHealthItem } from '../../../../services/backend-api.service';
+import { BackendApiService } from '../../../../services/backend-api.service';
+import { ServiceHealthItem, SystemStatus } from '../../../../models';
 
 @Component({
     selector: 'app-system-status-widget',
@@ -34,14 +35,14 @@ export class SystemStatusWidgetComponent implements OnInit, OnDestroy {
         this.loading.set(true);
         this.error.set(null);
 
-        this.api.getSystemStatus().pipe(
+        this.api.system.getSystemStatus().pipe(
             catchError(() => of(null))
         ).subscribe(status => {
             this.systemStatus.set(status);
             this.loading.set(false);
         });
 
-        this.api.getServicesHealth().pipe(
+        this.api.system.getServicesHealth().pipe(
             catchError(() => of({ services: [] }))
         ).subscribe(res => {
             this.services.set(res.services);
@@ -51,7 +52,7 @@ export class SystemStatusWidgetComponent implements OnInit, OnDestroy {
     private startAutoRefresh(): void {
         this.refreshSub = interval(5000).pipe(
             switchMap(() => {
-                return this.api.getSystemStatus().pipe(catchError(() => of(null)));
+                return this.api.system.getSystemStatus().pipe(catchError(() => of(null)));
             })
         ).subscribe(status => {
             if (status) this.systemStatus.set(status);

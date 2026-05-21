@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { interval, Subscription } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
-import { BackendApiService, KnowledgeHealthResponse, KnowledgeHealthDetailedResponse } from '../../../../services/backend-api.service';
+import { BackendApiService } from '../../../../services/backend-api.service';
+import { KnowledgeHealthResponse, KnowledgeHealthDetailedResponse } from '../../../../models';
 
 @Component({
     selector: 'app-knowledge-health-widget',
@@ -36,7 +37,7 @@ export class KnowledgeHealthWidgetComponent implements OnInit, OnDestroy {
         this.loading.set(true);
         this.error.set(null);
 
-        this.api.getKnowledgeHealth().pipe(
+        this.api.knowledge.getKnowledgeHealth().pipe(
             catchError((err) => {
                 this.error.set(err.message || 'Failed to load knowledge health');
                 return of(null);
@@ -46,7 +47,7 @@ export class KnowledgeHealthWidgetComponent implements OnInit, OnDestroy {
             this.loading.set(false);
         });
 
-        this.api.getKnowledgeHealthDetailed().pipe(
+        this.api.knowledge.getKnowledgeHealthDetailed().pipe(
             catchError(() => of(null))
         ).subscribe(data => {
             this.detailed.set(data);
@@ -55,7 +56,7 @@ export class KnowledgeHealthWidgetComponent implements OnInit, OnDestroy {
 
     private startAutoRefresh(): void {
         this.refreshSub = interval(5000).pipe(
-            switchMap(() => this.api.getKnowledgeHealth().pipe(catchError(() => of(null))))
+            switchMap(() => this.api.knowledge.getKnowledgeHealth().pipe(catchError(() => of(null))))
         ).subscribe(data => {
             if (data) this.health.set(data);
         });
@@ -65,7 +66,7 @@ export class KnowledgeHealthWidgetComponent implements OnInit, OnDestroy {
         if (!confirm('Are you sure you want to reset the circuit breaker?')) return;
 
         this.resetting.set(true);
-        this.api.resetKnowledgeCircuitBreaker().pipe(
+        this.api.knowledge.resetKnowledgeCircuitBreaker().pipe(
             catchError((err) => {
                 alert('Failed to reset circuit breaker: ' + err.message);
                 return of(null);

@@ -1,7 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { BackendApiService, KnowledgeStats } from '../../../../services/backend-api.service';
+import { BackendApiService } from '../../../../services/backend-api.service';
+import { KnowledgeStats } from '../../../../models';
 import { Observable, of } from 'rxjs';
 import { catchError, shareReplay } from 'rxjs/operators';
 
@@ -19,7 +20,7 @@ export class KnowledgeWidget {
   stats$: Observable<KnowledgeStats | null>;
 
   constructor() {
-    this.stats$ = this.api.getKnowledgeStats().pipe(
+    this.stats$ = this.api.knowledge.getKnowledgeStats().pipe(
       catchError(() => of(null)),
       shareReplay({ bufferSize: 1, refCount: true })
     );

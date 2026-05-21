@@ -1,12 +1,12 @@
 import { Injectable, signal } from '@angular/core';
+import { BackendApiService } from '../../services/backend-api.service';
 import {
-  BackendApiService,
   OrchestratorWorkerTaskStatus,
   ServiceHealthItem,
   SystemOverviewResponse,
   SystemStatus,
   WorkerStatusResponse,
-} from '../../services/backend-api.service';
+} from '../../models';
 import { take, timeout, retry } from 'rxjs/operators';
 import { Subscription, timer } from 'rxjs';
 import { switchMap } from 'rxjs';
@@ -32,7 +32,7 @@ export class GlobalStateStore {
   private fetchOverviewOnce(): Promise<boolean> {
     return new Promise((resolve) => {
       this.logger.debug('[Store] Fetching system overview');
-      this.api.getSystemOverview().pipe(
+      this.api.system.getSystemOverview().pipe(
         take(1),
         timeout({ each: 5000 }),
         retry({ count: 1 })
@@ -75,7 +75,7 @@ export class GlobalStateStore {
     this.pollSub = timer(0, intervalMs).pipe(
       switchMap(() => {
         this.logger.debug('[Store] polling tick');
-        return this.api.getSystemOverview().pipe(
+        return this.api.system.getSystemOverview().pipe(
           take(1),
           timeout({ each: 5000 }),
           retry({ count: 1 })
@@ -121,7 +121,7 @@ export class GlobalStateStore {
   // Ações de workers
   startAllWorkers(): void {
     this.logger.debug('[Store] startAllWorkers');
-    this.api.startAllWorkers().pipe(take(1)).subscribe({
+    this.api.system.startAllWorkers().pipe(take(1)).subscribe({
       next: () => { this.logger.debug('[Store] startAllWorkers -> ok'); this.refreshWorkers(); },
       error: (e) => { this.logger.debug('[Store] startAllWorkers -> error', e?.message || e); }
     });
@@ -129,7 +129,7 @@ export class GlobalStateStore {
 
   stopAllWorkers(): void {
     this.logger.debug('[Store] stopAllWorkers');
-    this.api.stopAllWorkers().pipe(take(1)).subscribe({
+    this.api.system.stopAllWorkers().pipe(take(1)).subscribe({
       next: () => { this.logger.debug('[Store] stopAllWorkers -> ok'); this.refreshWorkers(); },
       error: (e) => { this.logger.debug('[Store] stopAllWorkers -> error', e?.message || e); }
     });
@@ -137,7 +137,7 @@ export class GlobalStateStore {
 
   refreshWorkers(): void {
     this.logger.debug('[Store] refreshWorkers');
-    this.api.getWorkersStatus().pipe(take(1)).subscribe({
+    this.api.system.getWorkersStatus().pipe(take(1)).subscribe({
       next: (resp) => { this.logger.debug('[Store] refreshWorkers -> received', (resp.workers || []).length); this.workers.set(resp.workers || []); },
       error: (e) => { this.logger.debug('[Store] refreshWorkers -> error', e?.message || e); }
     });

@@ -3,14 +3,8 @@ import { CommonModule } from '@angular/common'
 import { catchError, finalize, of } from 'rxjs'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
-import {
-  AdminBacklogSprintType,
-  AdminCodeQaResponse,
-  BackendApiService,
-  Citation,
-  SelfStudyRun,
-  SelfStudyStatusResponse
-} from '../../../services/backend-api.service'
+import { BackendApiService } from '../../../services/backend-api.service'
+import { AdminBacklogSprintType, AdminCodeQaResponse, Citation, SelfStudyRun, SelfStudyStatusResponse } from '../../../models'
 import { Header } from '../../../core/layout/header/header'
 import { UiBadgeComponent } from '../../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
@@ -66,7 +60,7 @@ export class AdminAutonomiaComponent {
   }
 
   refreshBoard() {
-    this.api.getAutonomyAdminBoard({ limit: 400 })
+    this.api.autonomy.getAutonomyAdminBoard({ limit: 400 })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError((err) => {
@@ -80,7 +74,7 @@ export class AdminAutonomiaComponent {
 
   refreshSelfStudy() {
     this.refreshSelfStudyStatus()
-    this.api.listAutonomyAdminSelfStudyRuns(20)
+    this.api.autonomy.listAutonomyAdminSelfStudyRuns(20)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError((err) => {
@@ -92,7 +86,7 @@ export class AdminAutonomiaComponent {
   }
 
   private refreshSelfStudyStatus() {
-    this.api.getAutonomyAdminSelfStudyStatus()
+    this.api.autonomy.getAutonomyAdminSelfStudyStatus()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError((err) => {
@@ -116,7 +110,7 @@ export class AdminAutonomiaComponent {
   }
 
   private refreshSelfStudyRuns() {
-    this.api.listAutonomyAdminSelfStudyRuns(20)
+    this.api.autonomy.listAutonomyAdminSelfStudyRuns(20)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError((err) => {
@@ -143,7 +137,7 @@ export class AdminAutonomiaComponent {
     this.syncing.set(true)
     this.error.set('')
     this.notice.set('')
-    this.api.syncAutonomyAdminBacklog()
+    this.api.autonomy.syncAutonomyAdminBacklog()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.syncing.set(false)),
@@ -166,7 +160,7 @@ export class AdminAutonomiaComponent {
     this.runningStudy.set(true)
     this.error.set('')
     this.notice.set('')
-    this.api.runAutonomyAdminSelfStudy({
+    this.api.autonomy.runAutonomyAdminSelfStudy({
       mode,
       reason: `admin_panel_${mode}`
     })
@@ -196,7 +190,7 @@ export class AdminAutonomiaComponent {
     this.asking.set(true)
     this.error.set('')
     this.notice.set('')
-    this.api.askAutonomyAdminCodeQa({
+    this.api.autonomy.askAutonomyAdminCodeQa({
       question,
       limit: 12,
       citation_limit: 8

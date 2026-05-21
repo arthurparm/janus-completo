@@ -1,7 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { BackendApiService, AutonomyStatusResponse } from '../../../../services/backend-api.service';
+import { BackendApiService } from '../../../../services/backend-api.service';
+import { AutonomyStatusResponse } from '../../../../models';
 import { Observable, of } from 'rxjs';
 import { catchError, shareReplay } from 'rxjs/operators';
 
@@ -19,7 +20,7 @@ export class AutonomyWidget {
   status$: Observable<AutonomyStatusResponse | null>;
 
   constructor() {
-    this.status$ = this.api.getAutonomyStatus().pipe(
+    this.status$ = this.api.autonomy.getAutonomyStatus().pipe(
       catchError(() => of(null)),
       shareReplay({ bufferSize: 1, refCount: true })
     );

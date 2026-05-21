@@ -8,10 +8,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 import { Router } from '@angular/router'
 
 import { AuthService } from '../../core/auth/auth.service'
-import {
-  ConversationMeta,
-  BackendApiService
-} from '../../services/backend-api.service'
+import { BackendApiService } from '../../services/backend-api.service'
+import { ConversationMeta } from '../../models'
 import { Header } from '../../core/layout/header/header'
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 
@@ -86,7 +84,7 @@ export class HomeComponent {
     // mas vamos criar e depois enviar mensagem ou assumir que o fluxo de chat lida com isso. 
     // Por enquanto, criamos a conversa e navegamos.)
     
-    this.api.startChat(undefined, undefined, userId)
+    this.api.chat.startChat(undefined, undefined, userId)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError(() => {
@@ -114,7 +112,7 @@ export class HomeComponent {
 
   private loadRecentConversations() {
     const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    this.api.listConversations(userId ? { user_id: userId, limit: 4 } : { limit: 4 })
+    this.api.chat.listConversations(userId ? { user_id: userId, limit: 4 } : { limit: 4 })
       .pipe(
         map((resp) => (resp.conversations || []).map((conv) => this.normalizeConversationTimestamps(conv))),
         catchError(() => of([]))

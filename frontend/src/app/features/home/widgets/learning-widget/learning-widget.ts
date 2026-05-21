@@ -1,7 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { BackendApiService, PostSprintSummaryResponse } from '../../../../services/backend-api.service';
+import { BackendApiService } from '../../../../services/backend-api.service';
+import { PostSprintSummaryResponse } from '../../../../models';
 import { Observable, of } from 'rxjs';
 import { catchError, shareReplay } from 'rxjs/operators';
 
@@ -19,7 +20,7 @@ export class LearningWidget {
   summary$: Observable<PostSprintSummaryResponse | null>;
 
   constructor() {
-    this.summary$ = this.api.getReflexionSummary(5).pipe(
+    this.summary$ = this.api.observability.getReflexionSummary(5).pipe(
       catchError(() => of(null)),
       shareReplay({ bufferSize: 1, refCount: true })
     );

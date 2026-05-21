@@ -1,4 +1,4 @@
-import { ConversationMeta, MemoryItem } from '../../services/backend-api.service'
+import { ConversationMeta, MemoryItem } from '../../models'
 
 export function conversationUpdatedAt(conv: ConversationMeta): number {
   const updated = Number(conv.updated_at)
