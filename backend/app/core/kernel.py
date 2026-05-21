@@ -22,12 +22,12 @@ from app.core.workers.document_ingestion_worker import start_document_ingestion_
 from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.core.workers.life_cycle_worker import LifeCycleWorker
 from app.core.workers.neural_training_worker import start_neural_training_worker
-from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
-from app.planes.inference import InferenceFacade
-from app.planes.knowledge import KnowledgeFacade, set_knowledge_facade
 
 # from app.core.infrastructure.auth import get_actor_user_id
 from app.db import db
+from app.db.graph import close_graph_db, get_graph_db, initialize_graph_db
+from app.planes.inference import InferenceFacade
+from app.planes.knowledge import KnowledgeFacade, set_knowledge_facade
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.repositories.collaboration_repository import CollaborationRepository
@@ -39,19 +39,19 @@ from app.repositories.knowledge_repository import KnowledgeRepository
 from app.repositories.llm_repository import LLMRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.observability_repository import ObservabilityRepository
-from app.repositories.outbox_repository import OutboxRepository
 from app.repositories.optimization_repository import OptimizationRepository
+from app.repositories.outbox_repository import OutboxRepository
+from app.repositories.prompt_repository import PromptRepository
 from app.repositories.reflexion_repository import ReflexionRepository
 from app.repositories.sandbox_repository import SandboxRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.tool_repository import ToolRepository
-from app.repositories.prompt_repository import PromptRepository
 
 # Services
 from app.services.agent_service import AgentService
 from app.services.assistant_service import AssistantService
-from app.services.autonomy_service import AutonomyService
 from app.services.autonomy_lock_service import AutonomyLockService
+from app.services.autonomy_service import AutonomyService
 from app.services.chat_service import ChatService
 from app.services.collaboration_service import CollaborationService
 from app.services.context_service import ContextService
@@ -60,9 +60,10 @@ from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
 from app.services.observability_service import ObservabilityService
-from app.services.outbox_service import OutboxService
 from app.services.optimization_service import OptimizationService
+from app.services.outbox_service import OutboxService
 from app.services.prompt_builder_service import PromptBuilderService
+from app.services.prompt_service import PromptService
 from app.services.rag_service import RAGService
 from app.services.reflexion_service import ReflexionService
 from app.services.sandbox_service import SandboxService
@@ -70,7 +71,6 @@ from app.services.scheduler_service import get_scheduler, initialize_default_job
 from app.services.task_service import TaskService
 from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
-from app.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
 
@@ -153,12 +153,28 @@ class Kernel:
         self.scheduler = None
 
     @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = Kernel()
+    def get_instance(cls, *, force_new: bool = False):
+        if force_new or cls._instance is None:
+            cls._instance = cls()
         return cls._instance
 
-    async def startup(self):
+    @classmethod
+    def reset_instance(cls):
+        cls._instance = None
+
+    async def startup(
+        self,
+        *,
+        init_infrastructure: bool = True,
+        init_mas_actors: bool = True,
+        build_dependency_graph: bool = True,
+        set_global_facades: bool = True,
+        register_tools: bool = True,
+        start_background_processes: bool = True,
+        auto_index: bool | None = None,
+        warmup_llms: bool = True,
+        init_senses: bool = True,
+    ):
         """Initializes the entire system in a coordinated sequence."""
         import os
 
@@ -168,31 +184,42 @@ class Kernel:
 
         try:
             # 1. Infrastructure (Critical)
-            await self._init_infrastructure()
+            if init_infrastructure:
+                await self._init_infrastructure()
 
             # 2. Actors (Critical)
-            await self._init_mas_actors()
+            if init_mas_actors:
+                await self._init_mas_actors()
 
             # 3. Dependencies & Services (Critical)
-            self._build_dependency_graph()
+            if build_dependency_graph:
+                self._build_dependency_graph(set_global_facades=set_global_facades)
 
             # 4. Agentic Capabilities (OS Tools)
-            register_os_tools()
-            from app.core.ui.ui_tools import register_ui_tools
-            register_ui_tools()
+            if register_tools:
+                register_os_tools()
+                from app.core.ui.ui_tools import register_ui_tools
+
+                register_ui_tools()
 
             # 5. Workers & Observability
-            await self._start_background_processes()
+            if start_background_processes:
+                await self._start_background_processes()
 
             # 6. Auto-Index (Self-Healing)
-            if getattr(settings, "AUTO_INDEX_ON_STARTUP", True):
+            resolved_auto_index = auto_index
+            if resolved_auto_index is None:
+                resolved_auto_index = getattr(settings, "AUTO_INDEX_ON_STARTUP", True)
+            if resolved_auto_index:
                 asyncio.create_task(self._run_auto_index())
 
             # 7. Warm-up (Background)
-            asyncio.create_task(self._warm_up_llms_async())
+            if warmup_llms:
+                asyncio.create_task(self._warm_up_llms_async())
 
             # 8. Senses (Optional)
-            await self._init_senses()
+            if init_senses:
+                await self._init_senses()
 
             logger.info("Kernel startup complete. System is ready.")
         except KernelError as ke:
@@ -328,7 +355,7 @@ class Kernel:
             logger.error("log_error", message=f"Failed to initialize Multi-Agent System actors: {e}")
             raise KernelError("Failed to initialize system agents") from e
 
-    def _build_dependency_graph(self):
+    def _build_dependency_graph(self, *, set_global_facades: bool = True):
         logger.info("Building dependency graph...")
         try:
             # Repositories
@@ -406,7 +433,8 @@ class Kernel:
                 rag_service=self.rag_service,
             )
             self.inference_facade = InferenceFacade(llm_service=self.llm_service)
-            set_knowledge_facade(self.knowledge_facade)
+            if set_global_facades:
+                set_knowledge_facade(self.knowledge_facade)
             self.chat_service = ChatService(
                 self.chat_repo,
                 self.llm_service,
@@ -476,12 +504,13 @@ class Kernel:
 
             # Register a failing health check so /health endpoint reports the error
             if hasattr(self, "monitor") and self.monitor:
+                error_text = str(e)
                 self.monitor.register_health_check(
                     "background_workers",
-                    lambda: {
+                    lambda error_text=error_text: {
                         "status": "unhealthy",
-                        "message": f"Startup failed: {e}",
-                        "details": {"error": str(e)},
+                        "message": f"Startup failed: {error_text}",
+                        "details": {"error": error_text},
                     },
                     is_critical=True,
                 )

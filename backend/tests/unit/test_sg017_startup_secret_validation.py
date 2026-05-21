@@ -1,8 +1,6 @@
-from types import SimpleNamespace
-
-import pytest
 
 import app.main as main_module
+import pytest
 
 
 @pytest.mark.asyncio
@@ -18,6 +16,22 @@ async def test_lifespan_validates_secrets_before_kernel_startup(monkeypatch):
             self.memory_db = object()
             self.broker = object()
             self.agent_manager = object()
+            self.knowledge_repo = object()
+            self.memory_repo = object()
+            self.agent_repo = object()
+            self.task_repo = object()
+            self.context_repo = object()
+            self.sandbox_repo = object()
+            self.tool_repo = object()
+            self.collaboration_repo = object()
+            self.llm_repo = object()
+            self.chat_repo = object()
+            self.optimization_repo = object()
+            self.observability_repo = object()
+            self.reflexion_repo = object()
+            self.prompt_repo = object()
+            self.outbox_repo = object()
+            self.document_manifest_repo = object()
             self.agent_service = object()
             self.memory_service = object()
             self.knowledge_service = object()
@@ -32,11 +46,21 @@ async def test_lifespan_validates_secrets_before_kernel_startup(monkeypatch):
             self.optimization_service = object()
             self.autonomy_service = object()
             self.llm_service = object()
+            self.inference_facade = object()
             self.chat_service = object()
             self.assistant_service = object()
             self.outbox_service = object()
+            self.knowledge_facade = object()
+            self.prompt_builder_service = object()
+            self.prompt_service = object()
+            self.rag_service = object()
+            self.tool_executor = object()
             self.goal_manager = object()
+            self.scheduler = object()
             self.workers = []
+            self.config_service = object()
+            self.voice_manager = object()
+            self.monitor = object()
 
         async def startup(self):
             order.append("startup")

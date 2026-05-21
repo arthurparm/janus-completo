@@ -28,6 +28,7 @@ from app.api.exception_handlers import add_exception_handlers
 from app.api.v1.router import api_router
 from app.config import settings
 from app.core.agents.graph_orchestrator import close_graph, init_graph
+from app.core.bootstrap import bootstrap_dependencies
 from app.core.infrastructure import (
     CorrelationMiddleware,
     DomainSLOMetricsMiddleware,
@@ -35,7 +36,6 @@ from app.core.infrastructure import (
     setup_logging,
     setup_tracing,
 )
-from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
 from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
@@ -92,32 +92,7 @@ async def lifespan(app: FastAPI):
         logger.error("log_error", message=f"Failed to load global prompts: {e}")
         # We don't raise here to allow startup with empty prompts (they might be fetched on demand or fallback)
 
-    # 2. Map Kernel services to FastAPI app state for endpoint access
-    app.state.graph_db = kernel.graph_db
-    app.state.memory_db = kernel.memory_db
-    app.state.broker = kernel.broker
-    app.state.agent_manager = kernel.agent_manager
-
-    app.state.agent_service = kernel.agent_service
-    app.state.memory_service = kernel.memory_service
-    app.state.knowledge_service = kernel.knowledge_service
-    app.state.task_service = kernel.task_service
-    app.state.context_service = kernel.context_service
-    app.state.sandbox_service = kernel.sandbox_service
-    app.state.reflexion_service = kernel.reflexion_service
-    app.state.tool_service = kernel.tool_service
-    app.state.collaboration_service = kernel.collaboration_service
-    app.state.document_service = kernel.document_service
-    app.state.observability_service = kernel.observability_service
-    app.state.optimization_service = kernel.optimization_service
-    app.state.autonomy_service = kernel.autonomy_service
-    app.state.llm_service = kernel.llm_service
-    app.state.inference_facade = kernel.inference_facade
-    app.state.chat_service = kernel.chat_service
-    app.state.assistant_service = kernel.assistant_service
-    app.state.outbox_service = kernel.outbox_service
-    app.state.knowledge_facade = kernel.knowledge_facade
-    app.state.goal_manager = kernel.goal_manager
+    await bootstrap_dependencies(app)
     try:
         from app.services.autonomy_admin_service import AutonomyAdminService
 
@@ -127,9 +102,6 @@ async def lifespan(app: FastAPI):
         )
     except Exception as e:
         logger.warning("autonomy_admin_service_init_failed", error=str(e), exc_info=e)
-
-    # Store workers in app state for status endpoints and diagnostics
-    app.state.workers = kernel.workers
 
     # 2.5 Ensure system user (optional)
     try:

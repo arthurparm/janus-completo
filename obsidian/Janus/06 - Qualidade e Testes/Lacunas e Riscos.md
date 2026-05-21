@@ -74,7 +74,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RISK-001 | BackendApiService concentra contratos demais | tecnica | 3 | 3 | 9 | mitigado | Frontend/QA | `frontend/src/app/services/backend-api.service.ts` |
 | RISK-002 | ConversationsComponent concentra subfluxos demais | tecnica | 3 | 3 | 9 | mitigado | Trae | `frontend/src/app/features/conversations/conversations.ts`, `frontend/src/app/features/conversations/conversations.html`, `frontend/src/app/features/conversations/conversations-context.service.ts`, `frontend/src/app/features/conversations/conversations-docs.service.ts`, `frontend/src/app/features/conversations/conversations-memory.service.ts`, `frontend/src/app/features/conversations/conversations-rag.service.ts`, `frontend/src/app/features/conversations/conversations-autonomy.service.ts`, `frontend/src/app/features/conversations/conversations-notice.service.ts`, `frontend/src/app/features/conversations/conversations-flows.spec.ts` |
-| RISK-003 | Kernel compoe quase tudo manualmente | tecnica | 3 | 3 | 9 | identificado | a definir | `backend/app/core/kernel.py` |
+| RISK-003 | Kernel compoe quase tudo manualmente | tecnica | 3 | 3 | 9 | mitigado | Backend/QA | `backend/app/core/kernel.py`, `backend/app/core/bootstrap.py`, `backend/app/main.py`, `backend/app/planes/knowledge/facade.py`, `backend/tests/unit/test_core_kernel_bootstrap_contract.py` |
 | RISK-004 | Deploy distribuido PC1/PC2 aumenta superficie de falha | processo | 3 | 3 | 9 | identificado | a definir | [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]] |
 | RISK-005 | Backend tem capacidades maiores que a UX operacional atual | processo | 3 | 3 | 9 | identificado | a definir | a definir |
 | RISK-006 | REST e SSE do chat divergem apesar da mesma UX | qualidade | 4 | 4 | 16 | identificado | a definir | [[04 - Fluxos End-to-End/Conversa e Chat]] |
@@ -114,7 +114,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 > - **Probabilidade (1-5):** 3
 > - **Impacto (1-5):** 3
 > - **Nivel (PxI):** 9
-> - **Status:** mitigado
+> - **Status:** mitigado (tratado)
 > - **Responsavel:** Frontend/QA
 > - **Plano de mitigacao:**
 >   - Refatorado `BackendApiService` para fachada minima por dominio (sem proxies e sem reexport de models)
@@ -168,17 +168,36 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 >   - `frontend/src/app/features/conversations/conversations-flows.spec.ts`
 
 > [!risk] RISK-003 - Kernel compoe quase tudo manualmente
-> - **Descricao (cenario):** "O kernel compoe quase tudo manualmente."
+> - **Descricao (cenario):** "O kernel compoe quase tudo manualmente." O bootstrap inicial concentrava composicao manual/imperativa e efeitos colaterais (registro de tools, side-effects globais e tasks em background), alem de duplicar a vinculacao de dependencias no `app.state` no `main.py`, elevando risco de drift e dificultando testes (isolamento de singleton e controle de fases).
 > - **Categoria:** tecnica
 > - **Probabilidade (1-5):** 3
 > - **Impacto (1-5):** 3
 > - **Nivel (PxI):** 9
-> - **Status:** identificado
-> - **Responsavel:** a definir
-> - **Plano de mitigacao:** mapear dependencias criticas e reduzir composicao manual onde impacta testabilidade; padronizar bootstrap e testes de inicializacao
-> - **Prazo limite:** a definir
-> - **Ultima atualizacao:** a definir
-> - **Referencias:** `backend/app/core/kernel.py`
+> - **Status:** mitigado
+> - **Responsavel:** Backend/QA
+> - **Plano de mitigacao:**
+>   - Padronizar contrato de bootstrap: centralizar o binding de `Kernel` -> `app.state` num unico lugar e travar regressao com teste de contrato.
+>   - Reduzir acoplamento do singleton: permitir reset/forcar nova instancia do Kernel em testes.
+>   - Tornar o startup testavel: permitir desligar fases (tools/background/warmup/auto-index/senses) via flags em `Kernel.startup`.
+>   - Remover ciclos de import no bootstrap: transformar dependencias de tipo em imports sob `TYPE_CHECKING` para evitar falhas em import/colecao de testes.
+>   - Fluxo de verificacao: `ruff check` + testes unitarios focados em bootstrap (contrato e modos de startup) + teste existente de ordem de secrets.
+> - **Prazo limite:** 2026-05-21
+> - **Ultima atualizacao:** 2026-05-21
+> - **Data de inicio:** 2026-05-21
+> - **Data de conclusao:** 2026-05-21
+> - **Validacao (resultados):**
+>   - `backend\\.venv\\Scripts\\ruff check --config backend\\pyproject.toml ...` (OK)
+>   - `backend\\.venv\\Scripts\\python -m pytest -q backend\\tests\\unit\\test_sg017_startup_secret_validation.py backend\\tests\\unit\\test_core_kernel_bootstrap_contract.py` (4 passed)
+> - **Licoes aprendidas:**
+>   - Reexports em `__init__.py` podem ativar imports pesados e criar ciclos durante bootstrap; preferir imports de tipos via `TYPE_CHECKING` quando o runtime nao precisa do simbolo.
+>   - O binding `Kernel` -> `app.state` precisa ser tratado como contrato testavel, sob risco de drift silencioso ao longo do tempo.
+> - **Referencias:**
+>   - `backend/app/core/kernel.py`
+>   - `backend/app/core/bootstrap.py`
+>   - `backend/app/main.py`
+>   - `backend/app/planes/knowledge/facade.py`
+>   - `backend/tests/unit/test_core_kernel_bootstrap_contract.py`
+>   - `backend/tests/unit/test_sg017_startup_secret_validation.py`
 
 > [!risk] RISK-004 - Deploy distribuido PC1/PC2 aumenta superficie de falha
 > - **Descricao (cenario):** "O deploy distribuido PC1/PC2 aumenta superficie de falha."

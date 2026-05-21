@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import time
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
 from app.config import settings
-from app.services.document_service import DocumentIngestionService
 from app.services.knowledge_service import KnowledgeService
 from app.services.memory_service import MemoryService
 from app.services.rag_service import RAGService
+
+if TYPE_CHECKING:
+    from app.services.document_service import DocumentIngestionService
 
 from .adapters import (
     ExperimentalQuantizedRetrievalAdapter,
@@ -91,7 +93,7 @@ class KnowledgeFacade:
         *,
         memory_service: MemoryService,
         knowledge_service: KnowledgeService,
-        document_service: DocumentIngestionService,
+        document_service: "DocumentIngestionService",
         rag_service: RAGService | None = None,
         qdrant_adapter: QdrantKnowledgeAdapter | None = None,
         graph_adapter: GraphKnowledgeAdapter | None = None,
