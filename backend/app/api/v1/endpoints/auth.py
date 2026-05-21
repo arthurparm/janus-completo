@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.core.infrastructure.auth import create_token
+from app.core.infrastructure.auth import create_refresh_token, create_token, verify_refresh_token
 from app.core.security.auth_rate_limiter import enforce_auth_rate_limit
 from app.core.security.cpf import is_valid_cpf, normalize_cpf
 from app.core.security.passwords import hash_password, verify_password
@@ -129,7 +129,12 @@ class LocalAuthUserResponse(BaseModel):
 
 class LocalAuthResponse(BaseModel):
     token: str
+    refresh_token: str
     user: LocalAuthUserResponse
+
+
+class LocalRefreshRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=10)
 
 
 class LocalResetResponse(BaseModel):
@@ -344,7 +349,8 @@ async def local_register(
         pass
 
     tok = create_token(int(user.id), 3600)
-    return LocalAuthResponse(token=tok, user=_build_local_user(repo, user))
+    refresh = create_refresh_token(int(user.id))
+    return LocalAuthResponse(token=tok, refresh_token=refresh, user=_build_local_user(repo, user))
 
 
 @router.post("/local/login", response_model=LocalAuthResponse)
@@ -372,7 +378,28 @@ async def local_login(
         _ensure_admin_role_for_user(repo, int(user.id))
 
     tok = create_token(int(user.id), 3600)
-    return LocalAuthResponse(token=tok, user=_build_local_user(repo, user))
+    refresh = create_refresh_token(int(user.id))
+    return LocalAuthResponse(token=tok, refresh_token=refresh, user=_build_local_user(repo, user))
+
+
+@router.post("/local/refresh", response_model=LocalAuthResponse)
+async def local_refresh(
+    payload: LocalRefreshRequest, request: Request, repo: UserRepository = Depends(get_user_repo)
+):
+    limiter_id = getattr(getattr(request, "client", None), "host", None) or "-"
+    enforce_auth_rate_limit(request, endpoint_key="auth.local_refresh", identifier=limiter_id)
+
+    uid = verify_refresh_token(payload.refresh_token)
+    if uid is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    user = repo.get_user(uid)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    tok = create_token(uid, 3600)
+    refresh = create_refresh_token(uid)
+    return LocalAuthResponse(token=tok, refresh_token=refresh, user=_build_local_user(repo, user))
 
 
 @router.get("/local/me", response_model=LocalAuthUserResponse)

@@ -1,5 +1,7 @@
 export const API_BASE_URL: string = import.meta.env?.VITE_API_BASE_URL ?? '/api';
 export const AUTH_TOKEN_KEY: string = import.meta.env?.VITE_AUTH_TOKEN_KEY ?? 'JANUS_AUTH_TOKEN';
+export const AUTH_REFRESH_TOKEN_KEY: string =
+  import.meta.env?.VITE_AUTH_REFRESH_TOKEN_KEY ?? 'JANUS_REFRESH_TOKEN';
 const env = (import.meta as unknown as { env: Record<string, string> }).env || {};
 export const FEATURE_SSE: boolean = (env['VITE_FEATURE_SSE'] ?? 'true') === 'true';
 export const UX_METRICS_SAMPLING: number = Number(env['VITE_UX_METRICS_SAMPLING'] ?? '0.3');

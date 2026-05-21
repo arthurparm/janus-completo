@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing'
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
+import { HttpHeaders } from '@angular/common/http'
 import { AuthService } from './auth.service'
-import { API_BASE_URL, AUTH_TOKEN_KEY } from '../../services/api.config'
+import { API_BASE_URL, AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY } from '../../services/api.config'
 
 describe('AuthService', () => {
   let http: HttpTestingController
@@ -35,24 +36,36 @@ describe('AuthService', () => {
     const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
     expect(req.request.method).toBe('POST')
     expect(req.request.body).toEqual({ email: 'a@b.com', password: '123456' })
-    req.flush({ token: 'janus.jwt', user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] } })
+    req.flush({
+      token: 'janus.jwt',
+      refresh_token: 'janus.refresh',
+      user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] }
+    })
 
     const result = await promise
     expect(result.ok).toBe(true)
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBe('janus.refresh')
+    expect(sessionStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBeNull()
   })
 
   it('deve fazer login com remember=false e salvar token no sessionStorage', async () => {
     const svc = TestBed.inject(AuthService)
     const promise = svc.loginWithPassword('a@b.com', '123456', false)
     const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
-    req.flush({ token: 'janus.jwt', user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] } })
+    req.flush({
+      token: 'janus.jwt',
+      refresh_token: 'janus.refresh',
+      user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] }
+    })
 
     const result = await promise
     expect(result.ok).toBe(true)
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBe('janus.jwt')
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBe('janus.refresh')
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBeNull()
   })
 
   it('deve retornar erro mapeado para 401', async () => {
@@ -117,6 +130,7 @@ describe('AuthService', () => {
 
   it('deve restaurar sessao quando existir token local', async () => {
     localStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
+    localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, 'persisted.refresh')
 
     const svc = TestBed.inject(AuthService)
     const req = http.expectOne(meEndpoint)
@@ -131,6 +145,7 @@ describe('AuthService', () => {
 
   it('deve restaurar sessao quando existir token na sessionStorage', async () => {
     sessionStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
+    sessionStorage.setItem(AUTH_REFRESH_TOKEN_KEY, 'persisted.refresh')
 
     const svc = TestBed.inject(AuthService)
     const req = http.expectOne(meEndpoint)
@@ -169,6 +184,90 @@ describe('AuthService', () => {
     expect(svc.currentUserValue).toBeNull()
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBeNull()
     expect(svc.authReady()).toBe(true)
+  })
+
+  it('deve tentar refresh e repetir /me quando token expirar na inicializacao', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
+    localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, 'persisted.refresh')
+
+    const svc = TestBed.inject(AuthService)
+
+    const me1 = http.expectOne(meEndpoint)
+    expect(me1.request.method).toBe('GET')
+    me1.flush({ detail: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' })
+
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve()
+    }
+
+    const refresh = http.expectOne(`${API_BASE_URL}/v1/auth/local/refresh`)
+    expect(refresh.request.method).toBe('POST')
+    refresh.flush({
+      token: 'new.jwt',
+      refresh_token: 'new.refresh',
+      user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] }
+    })
+
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve()
+    }
+
+    const me2 = http.expectOne(meEndpoint)
+    expect(me2.request.method).toBe('GET')
+    me2.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
+
+    await waitForAuthReady(svc)
+    expect(svc.isAuthenticated()).toBe(true)
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('new.jwt')
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBe('new.refresh')
+  })
+
+  it('deve mapear 429 usando Retry-After e bloquear novas tentativas ate expirar', async () => {
+    const svc = TestBed.inject(AuthService)
+    const promise = svc.loginWithPassword('a@b.com', '12345678', true)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush(
+      { detail: 'Too many authentication attempts' },
+      { status: 429, statusText: 'Too Many Requests', headers: new HttpHeaders({ 'Retry-After': '12' }) }
+    )
+
+    const result = await promise
+    expect(result.ok).toBe(false)
+    expect(result.statusCode).toBe(429)
+    expect(result.reason).toBe('rate_limited')
+    expect(result.error).toMatch(/Aguarde\s+\d+/)
+
+    const blocked = await svc.loginWithPassword('a@b.com', '12345678', true)
+    http.expectNone(`${API_BASE_URL}/v1/auth/local/login`)
+    expect(blocked.ok).toBe(false)
+    expect(blocked.reason).toBe('rate_limited')
+  })
+
+  it('refreshAccessToken deve usar lock e emitir apenas uma chamada HTTP', async () => {
+    const svc = TestBed.inject(AuthService)
+    await waitForAuthReady(svc)
+
+    localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, 'persisted.refresh')
+    localStorage.setItem(AUTH_TOKEN_KEY, 'persisted.jwt')
+
+    const p1 = svc.refreshAccessToken()
+    const p2 = svc.refreshAccessToken()
+
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/refresh`)
+    expect(req.request.method).toBe('POST')
+    req.flush({
+      token: 'new.jwt',
+      refresh_token: 'new.refresh',
+      user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] }
+    })
+
+    const [r1, r2] = await Promise.all([p1, p2])
+    expect(r1).toBe(true)
+    expect(r2).toBe(true)
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('new.jwt')
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_KEY)).toBe('new.refresh')
   })
 })

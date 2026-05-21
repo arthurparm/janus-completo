@@ -55,11 +55,13 @@
           <input type="checkbox" formControlName="remember" />
           <span>Manter sessao</span>
         </label>
-        <button type="button" class="recover" (click)="recoverAccess()">Recuperar acesso</button>
+        <button type="button" class="recover" (click)="recoverAccess()" [disabled]="loading || isRateLimited">
+          Recuperar acesso
+        </button>
       </div>
 
       <!-- Submit -->
-      <button class="glass-button primary" type="submit" [disabled]="form.invalid || loading">
+      <button class="glass-button primary" type="submit" [disabled]="form.invalid || loading || isRateLimited">
         <span>{{ loading ? 'ENTRANDO...' : 'ENTRAR NO JANUS' }}</span>
         @if (!loading) {
           <span class="material-icons">login</span>
@@ -68,10 +70,10 @@
 
       <!-- SSO Alt -->
       <div class="sso">
-        <button type="button" class="glass-button secondary" (click)="loginWithGoogle()" [disabled]="loading">
+        <button type="button" class="glass-button secondary" (click)="loginWithGoogle()" [disabled]="loading || isRateLimited">
           Entrar com Google
         </button>
-        <button type="button" class="glass-button secondary" (click)="loginWithGithub()" [disabled]="loading">
+        <button type="button" class="glass-button secondary" (click)="loginWithGithub()" [disabled]="loading || isRateLimited">
           Entrar com GitHub
         </button>
       </div>
@@ -82,8 +84,13 @@
         <a routerLink="/registro">Criar conta</a>
       </div>
 
+      @if (isRateLimited) {
+        <div class="notice-box" role="status" aria-live="polite">
+          > {{ rateLimitNotice }}
+        </div>
+      }
       @if (error) {
-        <div class="error-box">
+        <div class="error-box" role="alert" aria-live="assertive">
           > {{ error }}
           @if (showRecoveryHint) {
             <div class="error-action">
@@ -93,7 +100,7 @@
         </div>
       }
       @if (notice) {
-        <div class="notice-box">
+        <div class="notice-box" role="status" aria-live="polite">
           > {{ notice }}
         </div>
       }

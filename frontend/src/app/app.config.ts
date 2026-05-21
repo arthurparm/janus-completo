@@ -9,6 +9,7 @@ import { baseUrlInterceptor } from './core/interceptors/base-url.interceptor';
 import { errorLoggerInterceptor } from './core/interceptors/error-logger.interceptor';
 import { errorMappingInterceptor } from './core/interceptors/error-mapping.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { authSessionInterceptor } from './core/interceptors/auth-session.interceptor';
 
 import { routes } from './app.routes';
 import { initializeApp, provideFirebaseApp } from '@angular/fire/app';
@@ -26,7 +27,15 @@ export const appConfig: ApplicationConfig = {
       routes,
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })
     ),
-    provideHttpClient(withInterceptors([baseUrlInterceptor, authInterceptor, errorLoggerInterceptor, errorMappingInterceptor])),
+    provideHttpClient(
+      withInterceptors([
+        baseUrlInterceptor,
+        authInterceptor,
+        authSessionInterceptor,
+        errorLoggerInterceptor,
+        errorMappingInterceptor
+      ])
+    ),
     importProvidersFrom(
       TranslateModule.forRoot({
         fallbackLang: 'pt-BR'

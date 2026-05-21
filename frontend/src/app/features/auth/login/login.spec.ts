@@ -20,7 +20,9 @@ describe('LoginComponent', () => {
       loginWithPassword: vi.fn(),
       loginWithProvider: vi.fn(),
       requestPasswordReset: vi.fn(),
-      resetPassword: vi.fn()
+      resetPassword: vi.fn(),
+      isAuthRateLimited: vi.fn().mockReturnValue(false),
+      authRateLimitRemainingSeconds: vi.fn().mockReturnValue(0)
     }
 
     TestBed.configureTestingModule({
@@ -69,5 +71,16 @@ describe('LoginComponent', () => {
     expect(comp.error).toContain('invalidos')
     expect(comp.showRecoveryHint).toBe(true)
     expect(comp.notice).toContain('Recuperar acesso')
+  })
+
+  it('deve bloquear tentativa de login quando houver cooldown de rate limit', async () => {
+    comp.form.setValue({ email: 'a@b.com', password: 'password123', remember: true })
+    authSpy.isAuthRateLimited.mockReturnValue(true)
+    authSpy.authRateLimitRemainingSeconds.mockReturnValue(10)
+
+    await comp.loginEmailPassword()
+
+    expect(authSpy.loginWithPassword).not.toHaveBeenCalled()
+    expect(comp.error).toContain('Aguarde 10')
   })
 })

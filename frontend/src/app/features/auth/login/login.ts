@@ -1,10 +1,12 @@
 import { ChangeDetectorRef, Component, inject } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms'
 import { FormsModule } from '@angular/forms'
-import { Router } from '@angular/router'
+import { ActivatedRoute, Router } from '@angular/router'
 import { RouterLink } from '@angular/router'
 import { AuthService } from '../../../core/auth/auth.service'
 import { AppLoggerService } from '../../../core/services/app-logger.service'
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
+import { DestroyRef } from '@angular/core'
 
 @Component({
   selector: 'app-login',
@@ -17,8 +19,10 @@ export class LoginComponent {
   private fb = inject(FormBuilder)
   private auth = inject(AuthService)
   private router = inject(Router)
+  private route = inject(ActivatedRoute)
   private logger = inject(AppLoggerService)
   private cdr = inject(ChangeDetectorRef)
+  private destroyRef = inject(DestroyRef)
   form = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required]],
@@ -33,8 +37,29 @@ export class LoginComponent {
   resetToken = ''
   newPassword = ''
   confirmPassword = ''
-  attempts = 0
-  lockedUntil = 0
+
+  constructor() {
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      const msg = String(params.get('message') || '').trim()
+      if (msg) {
+        this.notice = msg
+        this.cdr.markForCheck()
+      }
+    })
+  }
+
+  get isRateLimited(): boolean {
+    return this.auth.isAuthRateLimited()
+  }
+
+  get rateLimitSeconds(): number {
+    return this.auth.authRateLimitRemainingSeconds()
+  }
+
+  get rateLimitNotice(): string {
+    if (!this.isRateLimited) return ''
+    return `Bloqueio temporário por excesso de tentativas. Aguarde ${Math.max(1, this.rateLimitSeconds)} segundo(s) e tente novamente.`
+  }
 
   togglePassword() {
     this.showPassword = !this.showPassword
@@ -42,8 +67,11 @@ export class LoginComponent {
 
   async loginEmailPassword() {
     if (this.loading) return
-    const now = Date.now()
-    if (this.lockedUntil && now < this.lockedUntil) return
+    if (this.isRateLimited) {
+      this.error = this.rateLimitNotice
+      this.cdr.markForCheck()
+      return
+    }
     this.error = ''
     this.notice = ''
     if (this.form.invalid) { this.form.markAllAsTouched(); return }
@@ -59,7 +87,7 @@ export class LoginComponent {
         await this.router.navigate(['/'])
       } else {
         this.logger.warn('[LoginComponent] Login failed', { reason: result.reason, statusCode: result.statusCode })
-        this.handleFailure(result.error, result.statusCode === 401)
+        this.handleFailure(result.error, result.statusCode === 401, result.reason === 'rate_limited')
       }
     } catch (error) {
       this.logger.error('[LoginComponent] Login error', error)
@@ -110,13 +138,9 @@ export class LoginComponent {
     }
   }
 
-  handleFailure(errorMessage?: string, withRecoveryHint = false) {
-    this.attempts += 1
+  handleFailure(errorMessage?: string, withRecoveryHint = false, rateLimited = false) {
     this.showRecoveryHint = withRecoveryHint
-    if (this.attempts >= 5) {
-      this.lockedUntil = Date.now() + 60_000
-    }
-    this.error = errorMessage || 'Falha no login. Verifique seus dados.'
+    this.error = errorMessage || (rateLimited ? this.rateLimitNotice : 'Falha no login. Verifique seus dados.')
     if (withRecoveryHint) {
       this.notice = 'Se voce esqueceu a senha, use Recuperar acesso para receber instrucoes.'
     }

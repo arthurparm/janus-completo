@@ -137,6 +137,7 @@ class TestAuthEndpointsContract:
         )
         assert resp.status_code == 200
         assert "token" in resp.json()
+        assert "refresh_token" in resp.json()
         assert resp.json()["user"]["email"] == "test@example.com"
 
     async def test_local_login_invalid_password(self, async_client):
@@ -166,6 +167,24 @@ class TestAuthEndpointsContract:
         )
         assert resp.status_code == 200, resp.json()
         assert "token" in resp.json()
+        assert "refresh_token" in resp.json()
+
+    async def test_local_refresh_success(self, async_client):
+        login = await async_client.post(
+            "/api/v1/auth/local/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
+        assert login.status_code == 200, login.json()
+        refresh_token = login.json().get("refresh_token")
+        assert refresh_token
+
+        resp = await async_client.post(
+            "/api/v1/auth/local/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        assert resp.status_code == 200, resp.json()
+        assert "token" in resp.json()
+        assert "refresh_token" in resp.json()
 
     async def test_local_register_existing_user(self, async_client):
         resp = await async_client.post(
@@ -181,15 +200,30 @@ class TestAuthEndpointsContract:
         assert resp.status_code == 409
 
     async def test_local_me_success(self, async_client):
-        # Setting X-Actor-User-Id to "system" will work because of my int() override,
-        # but wait, the middleware overrides request.state.actor_user_id to "system"
-        # which means my int() patch handles it and maps it to 1.
-        resp = await async_client.get("/api/v1/auth/local/me")
+        login = await async_client.post(
+            "/api/v1/auth/local/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
+        assert login.status_code == 200, login.json()
+        token = login.json().get("token")
+        assert token
+
+        resp = await async_client.get(
+            "/api/v1/auth/local/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert resp.status_code == 200, resp.json()
         assert resp.json()["email"] == "test@example.com"
 
     async def test_local_me_unauthorized(self, async_client):
-        # We simulate user not found since middleware always injects 'system'
+        login = await async_client.post(
+            "/api/v1/auth/local/login",
+            json={"email": "test@example.com", "password": "password123"},
+        )
+        assert login.status_code == 200, login.json()
+        token = login.json().get("token")
+        assert token
+
         import app.api.v1.endpoints.auth as auth_mod
         from app.main import app
         
@@ -197,7 +231,10 @@ class TestAuthEndpointsContract:
             def get_user(self, uid): return None
             
         app.dependency_overrides[auth_mod.get_user_repo] = lambda: MockRepoNotFound()
-        resp = await async_client.get("/api/v1/auth/local/me")
+        resp = await async_client.get(
+            "/api/v1/auth/local/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert resp.status_code == 404
         
         # We must restore the original dummy repo override or just clear it.

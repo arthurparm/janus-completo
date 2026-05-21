@@ -384,6 +384,7 @@ class AppSettings(BaseSettings):
 
     AUTH_JWT_SECRET: str | None = None
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
+    AUTH_REFRESH_EXPIRES_SECONDS: int = 30 * 24 * 60 * 60
     AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
     AUTH_RESET_RETURN_TOKEN: bool = False
     AUTH_TRUST_X_USER_ID_HEADER: bool = False
@@ -395,6 +396,7 @@ class AppSettings(BaseSettings):
         "auth.local_login": {"max_attempts": 10, "window_seconds": 60},
         "auth.local_request_reset": {"max_attempts": 5, "window_seconds": 60},
         "auth.local_reset": {"max_attempts": 10, "window_seconds": 60},
+        "auth.local_refresh": {"max_attempts": 30, "window_seconds": 60},
     }
     AI_INTENT_ROUTING_ENABLED: bool = True
     AI_INTENT_RISK_ESCALATION_ENABLED: bool = True

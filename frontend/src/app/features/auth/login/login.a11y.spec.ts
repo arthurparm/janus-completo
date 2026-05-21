@@ -8,7 +8,15 @@ describe('LoginComponent A11y', () => {
     const fixture = TestBed.configureTestingModule({
       imports: [LoginComponent, RouterTestingModule],
       providers: [
-        { provide: AuthService, useValue: { loginWithPassword: () => Promise.resolve(true), loginWithProvider: () => Promise.resolve(true) } }
+        {
+          provide: AuthService,
+          useValue: {
+            loginWithPassword: () => Promise.resolve({ ok: true }),
+            loginWithProvider: () => Promise.resolve(true),
+            isAuthRateLimited: () => false,
+            authRateLimitRemainingSeconds: () => 0,
+          }
+        }
       ]
     }).createComponent(LoginComponent)
     fixture.detectChanges()

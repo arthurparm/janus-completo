@@ -1,4 +1,4 @@
-import { AUTH_TOKEN_KEY } from './api.config'
+import { AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY } from './api.config'
 
 export function decodeTokenUserId(token: string | null): number | null {
   if (!token) return null
@@ -38,10 +38,41 @@ export function storeAuthToken(token: string, rememberSession: boolean): void {
   }
 }
 
+export function getStoredRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(AUTH_REFRESH_TOKEN_KEY) || sessionStorage.getItem(AUTH_REFRESH_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function storeRefreshToken(token: string, rememberSession: boolean): void {
+  try {
+    if (rememberSession) {
+      localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, token)
+      sessionStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+      return
+    }
+    sessionStorage.setItem(AUTH_REFRESH_TOKEN_KEY, token)
+    localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+  } catch {
+    // no-op
+  }
+}
+
 export function clearStoredAuthToken(): void {
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY)
     sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    // no-op
+  }
+}
+
+export function clearStoredRefreshToken(): void {
+  try {
+    localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
   } catch {
     // no-op
   }

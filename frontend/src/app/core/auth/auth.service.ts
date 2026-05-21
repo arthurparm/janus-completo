@@ -1,10 +1,17 @@
 import { Injectable, inject, signal, computed } from '@angular/core'
 import { HttpClient, HttpErrorResponse } from '@angular/common/http'
-import { API_BASE_URL, VISITOR_MODE_KEY } from '../../services/api.config'
+import { API_BASE_URL, AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
 import { firstValueFrom } from 'rxjs'
 import { toObservable } from '@angular/core/rxjs-interop'
 import { AppLoggerService } from '../services/app-logger.service'
-import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from '../../services/auth.utils'
+import {
+  clearStoredAuthToken,
+  clearStoredRefreshToken,
+  getStoredAuthToken,
+  getStoredRefreshToken,
+  storeAuthToken,
+  storeRefreshToken
+} from '../../services/auth.utils'
 
 export interface User {
   id: string
@@ -18,6 +25,7 @@ export interface User {
 
 export interface LocalAuthResponse {
   token: string
+  refresh_token: string
   user: User
 }
 
@@ -37,11 +45,14 @@ export class AuthService {
   private readonly _user = signal<User | null>(null)
   private readonly _firebaseAuthReady = signal<boolean>(false)
   private readonly _authReady = signal<boolean>(false)
+  private readonly _authRateLimitUntilMs = signal<number>(0)
+  private refreshPromise: Promise<boolean> | null = null
 
   readonly isAuthenticated = this._isAuthenticated.asReadonly()
   readonly user = this._user.asReadonly()
   readonly firebaseAuthReady = this._firebaseAuthReady.asReadonly()
   readonly authReady = this._authReady.asReadonly()
+  readonly authRateLimitUntilMs = this._authRateLimitUntilMs.asReadonly()
 
   readonly isAuthenticated$ = toObservable(this._isAuthenticated)
   readonly user$ = toObservable(this._user)
@@ -50,6 +61,18 @@ export class AuthService {
 
   readonly isAdmin = computed(() => this._user()?.roles?.includes('admin') ?? false)
   readonly userEmail = computed(() => this._user()?.email ?? '')
+
+  authRateLimitRemainingSeconds(): number {
+    const until = this._authRateLimitUntilMs()
+    if (!until) return 0
+    const delta = until - Date.now()
+    if (delta <= 0) return 0
+    return Math.ceil(delta / 1000)
+  }
+
+  isAuthRateLimited(): boolean {
+    return this.authRateLimitRemainingSeconds() > 0
+  }
 
   get currentUserValue(): User | null {
     return this._user()
@@ -74,8 +97,27 @@ export class AuthService {
         )
         this._isAuthenticated.set(true)
         this._user.set(user)
-      } catch {
-        this.clearSession()
+      } catch (err) {
+        if (err instanceof HttpErrorResponse && err.status === 401) {
+          const refreshed = await this.refreshAccessToken()
+          if (refreshed) {
+            try {
+              const user = await firstValueFrom(
+                this.http.get<User>(`${API_BASE_URL}/v1/auth/local/me`)
+              )
+              this._isAuthenticated.set(true)
+              this._user.set(user)
+              this._authReady.set(true)
+              return
+            } catch {
+              this.clearSession()
+            }
+          } else {
+            this.clearSession()
+          }
+        } else {
+          this.clearSession()
+        }
       }
     } else {
       this._isAuthenticated.set(false)
@@ -86,6 +128,14 @@ export class AuthService {
   }
 
   async loginWithPassword(email: string, password: string, remember: boolean): Promise<LoginResult> {
+    if (this.isAuthRateLimited()) {
+      return {
+        ok: false,
+        statusCode: 429,
+        reason: 'rate_limited',
+        error: this.formatRateLimitMessage(this.authRateLimitRemainingSeconds())
+      }
+    }
     try {
       const out = await firstValueFrom(
         this.http.post<LocalAuthResponse>(`${API_BASE_URL}/v1/auth/local/login`, {
@@ -94,8 +144,10 @@ export class AuthService {
         })
       )
       const token = String(out?.token || '')
-      if (token) {
+      const refreshToken = String(out?.refresh_token || '')
+      if (token && refreshToken) {
         storeAuthToken(token, remember)
+        storeRefreshToken(refreshToken, remember)
         localStorage.removeItem(VISITOR_MODE_KEY)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
@@ -134,8 +186,10 @@ export class AuthService {
         })
       )
       const token = String(out?.token || '')
-      if (token) {
+      const refreshToken = String(out?.refresh_token || '')
+      if (token && refreshToken) {
         storeAuthToken(token, true)
+        storeRefreshToken(refreshToken, true)
         localStorage.removeItem(VISITOR_MODE_KEY)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
@@ -187,6 +241,7 @@ export class AuthService {
 
   private clearSession() {
     clearStoredAuthToken()
+    clearStoredRefreshToken()
     localStorage.removeItem(VISITOR_MODE_KEY)
     this._isAuthenticated.set(false)
     this._user.set(null)
@@ -240,11 +295,16 @@ export class AuthService {
         }
       }
       if (err.status === 429) {
+        this.captureRateLimit(err, 'auth.local_login')
+        this.logger.warn('[AuthService] Rate limited (login)', {
+          status: err.status,
+          retryAfterSeconds: this.authRateLimitRemainingSeconds(),
+        })
         return {
           ok: false,
           statusCode: 429,
           reason: 'rate_limited',
-          error: 'Muitas tentativas. Aguarde 1 minuto e tente novamente.'
+          error: this.formatRateLimitMessage(this.authRateLimitRemainingSeconds())
         }
       }
       return {
@@ -255,6 +315,89 @@ export class AuthService {
       }
     }
     return { ok: false, reason: 'unknown', error: 'Falha no login. Tente novamente.' }
+  }
+
+  async refreshAccessToken(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise
+    this.refreshPromise = this.refreshAccessTokenInternal()
+    try {
+      return await this.refreshPromise
+    } finally {
+      this.refreshPromise = null
+    }
+  }
+
+  private async refreshAccessTokenInternal(): Promise<boolean> {
+    const refreshToken = getStoredRefreshToken()
+    if (!refreshToken) return false
+
+    const remember = this.isRefreshTokenRemembered()
+    try {
+      const out = await firstValueFrom(
+        this.http.post<LocalAuthResponse>(`${API_BASE_URL}/v1/auth/local/refresh`, {
+          refresh_token: refreshToken
+        })
+      )
+      const token = String(out?.token || '')
+      const newRefreshToken = String(out?.refresh_token || '')
+      if (!token || !newRefreshToken) return false
+      storeAuthToken(token, remember)
+      storeRefreshToken(newRefreshToken, remember)
+      localStorage.removeItem(VISITOR_MODE_KEY)
+      this._isAuthenticated.set(true)
+      this._user.set(out.user)
+      return true
+    } catch (err) {
+      if (err instanceof HttpErrorResponse) {
+        if (err.status === 401 || err.status === 403) {
+          this.clearSession()
+          return false
+        }
+        if (err.status === 429) {
+          this.captureRateLimit(err, 'auth.local_refresh')
+          return false
+        }
+      }
+      return false
+    }
+  }
+
+  private isRefreshTokenRemembered(): boolean {
+    try {
+      return Boolean(localStorage.getItem(AUTH_REFRESH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY))
+    } catch {
+      return false
+    }
+  }
+
+  captureRateLimit(err: HttpErrorResponse, source: string): void {
+    const retryAfterSeconds = this.readRetryAfterSeconds(err)
+    const seconds = retryAfterSeconds ?? 60
+    const until = Date.now() + Math.max(1, seconds) * 1000
+    const current = this._authRateLimitUntilMs()
+    if (until > current) {
+      this._authRateLimitUntilMs.set(until)
+      this.logger.warn('[AuthService] Rate limit captured', { source, retryAfterSeconds: seconds })
+    }
+  }
+
+  private readRetryAfterSeconds(err: HttpErrorResponse): number | null {
+    const value = err.headers?.get('Retry-After') ?? null
+    if (!value) return null
+    const asNum = Number.parseInt(value, 10)
+    if (Number.isFinite(asNum) && asNum > 0) return asNum
+    const asDate = Date.parse(value)
+    if (!Number.isNaN(asDate)) {
+      const deltaMs = asDate - Date.now()
+      const seconds = Math.ceil(deltaMs / 1000)
+      return seconds > 0 ? seconds : null
+    }
+    return null
+  }
+
+  private formatRateLimitMessage(seconds: number): string {
+    const s = Math.max(1, Number(seconds) || 1)
+    return `Muitas tentativas. Aguarde ${s} segundo(s) e tente novamente.`
   }
 
   private readErrorDetail(err: HttpErrorResponse): string {

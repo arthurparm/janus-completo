@@ -55,7 +55,19 @@ def create_token(user_id: int, expires_in: int | None = None) -> str:
     return f"{body}.{sig}"
 
 
-def verify_token(token: str) -> int | None:
+def create_refresh_token(user_id: int, expires_in: int | None = None) -> str:
+    exp = int(time.time()) + int(expires_in or settings.AUTH_REFRESH_EXPIRES_SECONDS)
+    payload = {"user_id": int(user_id), "exp": exp, "typ": "refresh"}
+    sig = _sign(payload)
+    body = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        .decode("ascii")
+        .rstrip("=")
+    )
+    return f"{body}.{sig}"
+
+
+def _decode_token_payload(token: str) -> dict | None:
     try:
         if "." not in token:
             return None
@@ -63,10 +75,36 @@ def verify_token(token: str) -> int | None:
         padded = body + "=" * (-len(body) % 4)
         payload_json = base64.urlsafe_b64decode(padded.encode("ascii"))
         payload = json.loads(payload_json.decode("utf-8"))
+        if not isinstance(payload, dict):
+            return None
         if not hmac.compare_digest(_sign(payload), sig):
             return None
         if int(payload.get("exp", 0)) < int(time.time()):
             return None
+        return payload
+    except Exception:
+        return None
+
+
+def verify_token(token: str) -> int | None:
+    payload = _decode_token_payload(token)
+    if not payload:
+        return None
+    if payload.get("typ") == "refresh":
+        return None
+    try:
+        return int(payload.get("user_id"))
+    except Exception:
+        return None
+
+
+def verify_refresh_token(token: str) -> int | None:
+    payload = _decode_token_payload(token)
+    if not payload:
+        return None
+    if payload.get("typ") != "refresh":
+        return None
+    try:
         return int(payload.get("user_id"))
     except Exception:
         return None
