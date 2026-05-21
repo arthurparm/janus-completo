@@ -615,13 +615,13 @@
                             type="url"
                             placeholder="https://..."
                             [value]="docLinkUrl()"
-                            (input)="onDocLinkInput($event)" />
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="linkDocumentUrl()" [disabled]="docLinkLoading()">
+                            (input)="docsFlow.onDocLinkInput($event)" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="docsFlow.linkDocumentUrl()" [disabled]="docLinkLoading()">
                             {{ docLinkLoading() ? 'Vinculando...' : 'Vincular' }}
                           </button>
                         </div>
                         @if (docLinkError()) {
-                          <p class="muted field-error" [class.is-business]="isBusinessDocError(docLinkError())">{{ docLinkError() }}</p>
+                          <p class="muted field-error" [class.is-business]="docsFlow.isBusinessDocError(docLinkError())">{{ docLinkError() }}</p>
                         }
                       </div>
                     </div>
@@ -631,8 +631,8 @@
                         <label class="field-label">Upload de arquivo</label>
                         <p class="muted section-help compact">Arquivos ficam vinculados à conversa e entram no contexto das próximas respostas.</p>
                         <div class="inline-form file-form">
-                          <input type="file" (change)="onDocFileSelected($event)" />
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="uploadSelectedDoc()" [disabled]="docUploadInFlight() || !selectedUploadFile()">
+                          <input type="file" (change)="docsFlow.onDocFileSelected($event)" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="docsFlow.uploadSelectedDoc()" [disabled]="docUploadInFlight() || !selectedUploadFile()">
                             {{ docUploadInFlight() ? 'Enviando...' : 'Upload' }}
                           </button>
                         </div>
@@ -649,7 +649,7 @@
                           <p class="muted section-help compact">Progresso do envio e processamento inicial do arquivo.</p>
                         }
                         @if (docUploadError()) {
-                          <p class="muted field-error" [class.is-business]="isBusinessDocError(docUploadError())">{{ docUploadError() }}</p>
+                          <p class="muted field-error" [class.is-business]="docsFlow.isBusinessDocError(docUploadError())">{{ docUploadError() }}</p>
                         }
                       </div>
                     </div>
@@ -663,9 +663,9 @@
                             type="text"
                             placeholder="Buscar por conteúdo/index..."
                             [value]="docSearchQuery()"
-                            (input)="onDocSearchInput($event)"
-                            (keydown.enter)="searchDocs()" />
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="searchDocs()" [disabled]="docSearchLoading()">
+                            (input)="docsFlow.onDocSearchInput($event)"
+                            (keydown.enter)="docsFlow.searchDocs()" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="docsFlow.searchDocs()" [disabled]="docSearchLoading()">
                             {{ docSearchLoading() ? 'Buscando...' : 'Buscar' }}
                           </button>
                         </div>
@@ -706,7 +706,7 @@
                             <li class="rail-item compact-item doc-library-item">
                               <div class="rail-title doc-action-row">
                                 <span class="item-title">{{ doc.file_name || doc.doc_id }}</span>
-                                <button ui-button variant="ghost" size="sm" type="button" (click)="deleteDoc(doc.doc_id)" [disabled]="deletingDocIds()[doc.doc_id]">
+                                <button ui-button variant="ghost" size="sm" type="button" (click)="docsFlow.deleteDoc(doc.doc_id)" [disabled]="deletingDocIds()[doc.doc_id]">
                                   {{ deletingDocIds()[doc.doc_id] ? 'Excluindo...' : 'Excluir' }}
                                 </button>
                               </div>
@@ -746,7 +746,7 @@
                           rows="2"
                           placeholder="Fato, preferência ou contexto importante do cliente..."
                           [value]="memoryDraft()"
-                          (input)="onMemoryDraftInput($event)">
+                          (input)="memoryFlow.onMemoryDraftInput($event)">
                         </textarea>
                         <div class="memory-config-group">
                           <p class="field-label">Configurações</p>
@@ -758,13 +758,13 @@
                               step="1"
                               placeholder="Importância 0-10 (opcional)"
                               [value]="memoryImportance() ?? ''"
-                              (input)="onMemoryImportanceInput($event)" />
-                            <select [value]="memoryType()" (change)="onMemoryTypeChange($event)">
+                              (input)="memoryFlow.onMemoryImportanceInput($event)" />
+                            <select [value]="memoryType()" (change)="memoryFlow.onMemoryTypeChange($event)">
                               <option value="episodic">Episódica</option>
                               <option value="semantic">Semântica</option>
                               <option value="procedural">Procedural</option>
                             </select>
-                            <button ui-button variant="ghost" size="sm" type="button" (click)="addMemory()" [disabled]="memoryAddLoading()">
+                            <button ui-button variant="ghost" size="sm" type="button" (click)="memoryFlow.addMemory()" [disabled]="memoryAddLoading()">
                               {{ memoryAddLoading() ? 'Salvando...' : 'Adicionar' }}
                             </button>
                           </div>
@@ -783,9 +783,9 @@
                             type="text"
                             placeholder="Ex.: preferências do cliente"
                             [value]="memorySearchQuery()"
-                            (input)="onMemorySearchQueryInput($event)"
-                            (keydown.enter)="searchGenerativeMemory()" />
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="searchGenerativeMemory()" [disabled]="memorySearchLoading()">
+                            (input)="memoryFlow.onMemorySearchQueryInput($event)"
+                            (keydown.enter)="memoryFlow.searchGenerativeMemory()" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="memoryFlow.searchGenerativeMemory()" [disabled]="memorySearchLoading()">
                             {{ memorySearchLoading() ? 'Buscando...' : 'Buscar' }}
                           </button>
                         </div>
@@ -797,7 +797,7 @@
                             @for (item of generativeMemoryResults(); track $index) {
                               <li class="rail-item compact-item memory-list-item">
                                 <p class="memory-content">{{ item.content }}</p>
-                                <span class="muted memory-meta-line">{{ generativeMemoryMetaLine(item) }}</span>
+                                <span class="muted memory-meta-line">{{ memoryFlow.generativeMemoryMetaLine(item) }}</span>
                               </li>
                             }
                           </ul>
@@ -816,7 +816,7 @@
                         <app-skeleton variant="text" [count]="3"></app-skeleton>
                       } @else if (conversationMemory().length) {
                         <ul class="rail-list compact">
-                          @for (item of conversationMemory(); track memoryTrackKey(item, $index)) {
+                          @for (item of conversationMemory(); track memoryFlow.memoryTrackKey(item, $index)) {
                             <li class="rail-item compact-item memory-list-item">
                               <p class="memory-content">{{ item.content }}</p>
                               <span class="muted memory-meta-line">{{ formatDate(item.ts_ms) }}</span>
@@ -837,7 +837,7 @@
                         <app-skeleton variant="text" [count]="3"></app-skeleton>
                       } @else if (userMemory().length) {
                         <ul class="rail-list compact">
-                          @for (item of userMemory(); track memoryTrackKey(item, $index)) {
+                          @for (item of userMemory(); track memoryFlow.memoryTrackKey(item, $index)) {
                             <li class="rail-item compact-item memory-list-item">
                               <p class="memory-content">{{ item.content }}</p>
                               <span class="muted memory-meta-line">{{ formatDate(item.ts_ms) }}</span>
@@ -872,14 +872,14 @@
                     <div class="customer-subcard">
                       <div class="stack-gap-sm">
                         <label class="field-label">Modo de consulta</label>
-                        <select [value]="ragMode()" (change)="onRagModeChange($event)">
+                        <select [value]="ragMode()" (change)="ragFlow.onRagModeChange($event)">
                           <option value="hybrid_search">Híbrido (Vetor + Grafo)</option>
                           <option value="search">Busca vetorial</option>
                           <option value="user-chat">Chat pessoal (v1)</option>
                           <option value="user_chat">Chat pessoal (v2)</option>
                           <option value="productivity">Produtividade</option>
                         </select>
-                        <p class="muted rag-mode-hint">{{ ragModeHint(ragMode()) }}</p>
+                        <p class="muted rag-mode-hint">{{ ragFlow.ragModeHint(ragMode()) }}</p>
                       </div>
                     </div>
 
@@ -891,9 +891,9 @@
                             type="text"
                             placeholder="Pergunte sobre contexto, docs ou conversa..."
                             [value]="ragQuery()"
-                            (input)="onRagQueryInput($event)"
-                            (keydown.enter)="runRagQuery()" />
-                          <button ui-button variant="ghost" size="sm" type="button" (click)="runRagQuery()" [disabled]="ragLoading()">
+                            (input)="ragFlow.onRagQueryInput($event)"
+                            (keydown.enter)="ragFlow.runRagQuery()" />
+                          <button ui-button variant="ghost" size="sm" type="button" (click)="ragFlow.runRagQuery()" [disabled]="ragLoading()">
                             {{ ragLoading() ? 'Consultando...' : 'Executar' }}
                           </button>
                         </div>
@@ -907,14 +907,14 @@
                       <div class="panel-head compact-head">
                         <h4>Resultado</h4>
                         @if (ragResult(); as rr) {
-                          <ui-badge variant="neutral">{{ ragModeLabel(rr.mode) }}</ui-badge>
+                          <ui-badge variant="neutral">{{ ragFlow.ragModeLabel(rr.mode) }}</ui-badge>
                         }
                       </div>
 
                       @if (ragResult(); as rr) {
                         <div class="rag-result-card">
                           <div class="rag-result-head">
-                            <span class="metric-pill">Modo: {{ ragModeLabel(rr.mode) }}</span>
+                            <span class="metric-pill">Modo: {{ ragFlow.ragModeLabel(rr.mode) }}</span>
                             <span class="metric-pill">Fontes: {{ rr.citations?.length || 0 }}</span>
                             <span class="metric-pill">Resultados: {{ rr.results?.length || 0 }}</span>
                           </div>
@@ -1027,7 +1027,7 @@
                   <h3>Autonomia</h3>
                   <p class="muted">Controle do loop, metas em andamento e ferramentas disponíveis.</p>
                 </div>
-                <button ui-button variant="ghost" size="sm" type="button" (click)="refreshAutonomy()" [disabled]="autonomyLoading() || autonomySaving()">
+                <button ui-button variant="ghost" size="sm" type="button" (click)="autonomyFlow.refreshAutonomy()" [disabled]="autonomyLoading() || autonomySaving()">
                   Atualizar
                 </button>
               </div>
@@ -1053,7 +1053,7 @@
                     <span class="metric-pill">Risco: {{ autonomyStatus()?.config?.risk_profile || 'balanced' }}</span>
                   </div>
                   <div class="autonomy-actions">
-                    <button ui-button variant="default" size="sm" type="button" (click)="toggleAutonomyLoop()" [disabled]="autonomySaving()">
+                    <button ui-button variant="default" size="sm" type="button" (click)="autonomyFlow.toggleAutonomyLoop()" [disabled]="autonomySaving()">
                       {{ autonomyStatus()?.active ? 'Parar loop' : 'Iniciar loop' }}
                     </button>
                   </div>
@@ -1070,15 +1070,15 @@
                     type="text"
                     placeholder="Título da meta"
                     [value]="goalCreateTitle()"
-                    (input)="onGoalCreateTitleInput($event)" />
+                    (input)="autonomyFlow.onGoalCreateTitleInput($event)" />
                   <textarea
                     rows="2"
                     placeholder="Descrição (opcional)"
                     [value]="goalCreateDescription()"
-                    (input)="onGoalCreateDescriptionInput($event)">
+                    (input)="autonomyFlow.onGoalCreateDescriptionInput($event)">
                   </textarea>
                   <div class="goal-create-actions">
-                    <button ui-button variant="ghost" size="sm" type="button" (click)="createGoal()" [disabled]="goalCreateLoading() || autonomySaving()">
+                    <button ui-button variant="ghost" size="sm" type="button" (click)="autonomyFlow.createGoal()" [disabled]="goalCreateLoading() || autonomySaving()">
                       {{ goalCreateLoading() ? 'Criando...' : 'Criar meta' }}
                     </button>
                   </div>
@@ -1098,10 +1098,10 @@
                         @for (goal of autonomyActiveGoals(); track goal.id) {
                           <li class="rail-item">
                             <p class="item-title">{{ goal.title }}</p>
-                            <span class="muted">{{ goalStatusLabel(goal) }}</span>
+                            <span class="muted">{{ autonomyFlow.goalStatusLabel(goal) }}</span>
                             <div class="goal-actions">
-                              <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'in_progress')" [disabled]="autonomySaving()">Andamento</button>
-                              <button ui-button variant="ghost" size="sm" type="button" (click)="markGoalStatus(goal, 'completed')" [disabled]="autonomySaving()">Concluir</button>
+                              <button ui-button variant="ghost" size="sm" type="button" (click)="autonomyFlow.markGoalStatus(goal, 'in_progress')" [disabled]="autonomySaving()">Andamento</button>
+                              <button ui-button variant="ghost" size="sm" type="button" (click)="autonomyFlow.markGoalStatus(goal, 'completed')" [disabled]="autonomySaving()">Concluir</button>
                             </div>
                           </li>
                         }

@@ -2,10 +2,9 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, ViewChild, 
 import { CommonModule } from '@angular/common'
 import { FormControl, ReactiveFormsModule } from '@angular/forms'
 import { ActivatedRoute, Router } from '@angular/router'
-import { firstValueFrom, forkJoin, of } from 'rxjs'
+import { firstValueFrom, of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
-import { Observable } from 'rxjs'
 
 import { AgentEventsService } from '../../core/services/agent-events.service'
 import { ChatStreamService, StreamDone } from '../../services/chat-stream.service'
@@ -19,18 +18,9 @@ import {
   ChatUnderstanding,
   ConversationMeta,
   CitationStatus,
-  DocSearchResultItem,
   FeedbackQuickResponse,
-  GenerativeMemoryItem,
-  MemoryItem,
   PendingAction,
-  Citation,
-  Goal,
-  RagHybridResponse,
-  RagSearchResponse,
-  RagUserChatResponse,
-  RagUserChatV2Response,
-  Tool
+  Citation
 } from '../../models'
 import { Header } from '../../core/layout/header/header'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
@@ -40,19 +30,21 @@ import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.com
 import { MarkdownPipe } from '../../shared/pipes/markdown.pipe'
 import { parseAdminCodeQaCommand } from './admin-code-qa.util'
 import { ConversationStateFacade } from './conversations-state.facade'
+import { ConversationsAutonomyService } from './conversations-autonomy.service'
+import { ConversationsContextService } from './conversations-context.service'
+import { ConversationsDocsService } from './conversations-docs.service'
+import { ConversationsMemoryService } from './conversations-memory.service'
+import { ConversationsNoticeService } from './conversations-notice.service'
+import { ConversationsRagService } from './conversations-rag.service'
 import type {
   AdvancedRailTab,
   ChatMessageView,
   ChatRole,
   CustomerTab,
   FeedbackUiState,
-  GoalStatus,
   PendingActionResolution,
   PriorityOption,
-  RagMode,
   RagResultViewTab,
-  RailNoticeKind,
-  RailNoticeSection,
   RoleOption,
   TabGroup,
   ThoughtKind,
@@ -64,7 +56,6 @@ import {
   conversationUpdatedAt,
   createConversationViewId,
   extractErrorMessage,
-  isConversationMemory,
   sanitizeChatText,
   sanitizeDiagnosticText,
   sanitizeStreamingText
@@ -98,6 +89,13 @@ export class ConversationsComponent {
   private eventsService = inject(AgentEventsService)
   private stream = inject(ChatStreamService)
   private state = inject(ConversationStateFacade)
+  private notices = inject(ConversationsNoticeService)
+  private context = inject(ConversationsContextService)
+
+  readonly docsFlow = inject(ConversationsDocsService)
+  readonly memoryFlow = inject(ConversationsMemoryService)
+  readonly ragFlow = inject(ConversationsRagService)
+  readonly autonomyFlow = inject(ConversationsAutonomyService)
 
   @ViewChild('messageList') messageList?: ElementRef<HTMLDivElement>
 
@@ -220,7 +218,6 @@ export class ConversationsComponent {
   private pendingConversationRouteId: string | null = null
   private scrollQueued = false
   private responseStartedAt: number | null = null
-  private readonly noticeTimers = new Map<RailNoticeSection, ReturnType<typeof setTimeout>>()
   private readonly studyPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   readonly quickPrompts = [
     'Resuma esta conversa em 5 pontos.',
@@ -288,8 +285,6 @@ export class ConversationsComponent {
       })
 
     this.destroyRef.onDestroy(() => {
-      this.noticeTimers.forEach((timer) => clearTimeout(timer))
-      this.noticeTimers.clear()
       this.studyPollTimers.forEach((timer) => clearTimeout(timer))
       this.studyPollTimers.clear()
       this.eventsService.disconnect()
@@ -377,7 +372,7 @@ export class ConversationsComponent {
     const id = this.selectedId()
     if (id) {
       this.loadHistory(id)
-      this.loadContext(id)
+      this.context.loadContext(id)
     }
   }
 
@@ -561,124 +556,6 @@ export class ConversationsComponent {
     )
   }
 
-  onDocLinkInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    this.docLinkUrl.set(target?.value || '')
-  }
-
-  onDocSearchInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    this.docSearchQuery.set(target?.value || '')
-  }
-
-  onMemoryDraftInput(event: Event): void {
-    const target = event.target as HTMLTextAreaElement | null
-    this.memoryDraft.set(target?.value || '')
-  }
-
-  onMemoryImportanceInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    const raw = target?.value?.trim() || ''
-    if (!raw) {
-      this.memoryImportance.set(null)
-      return
-    }
-    const n = Number(raw)
-    this.memoryImportance.set(Number.isFinite(n) ? n : null)
-  }
-
-  onMemoryTypeChange(event: Event): void {
-    const target = event.target as HTMLSelectElement | null
-    this.memoryType.set(target?.value || 'episodic')
-  }
-
-  onMemorySearchQueryInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    this.memorySearchQuery.set(target?.value || '')
-  }
-
-  onRagQueryInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    this.ragQuery.set(target?.value || '')
-  }
-
-  onRagModeChange(event: Event): void {
-    const target = event.target as HTMLSelectElement | null
-    const value = (target?.value || 'hybrid_search') as RagMode
-    this.ragMode.set(value)
-  }
-
-  ragModeLabel(mode: RagMode): string {
-    if (mode === 'hybrid_search') return 'Híbrido (Vetor + Grafo)'
-    if (mode === 'search') return 'Busca vetorial'
-    if (mode === 'user-chat') return 'Chat pessoal (v1)'
-    if (mode === 'user_chat') return 'Chat pessoal (v2)'
-    return 'Produtividade'
-  }
-
-  ragModeHint(mode: RagMode): string {
-    if (mode === 'hybrid_search') return 'Combina busca vetorial e grafo para contexto mais completo.'
-    if (mode === 'search') return 'Busca vetorial direta em documentos e memória indexada.'
-    if (mode === 'user-chat') return 'Consulta contexto pessoal legado (v1).'
-    if (mode === 'user_chat') return 'Consulta contexto pessoal atual (v2).'
-    return 'Consulta dados de produtividade do usuário.'
-  }
-
-  memoryTypeLabel(value: string | null | undefined): string {
-    if (value === 'episodic') return 'Episódica'
-    if (value === 'semantic') return 'Semântica'
-    if (value === 'procedural') return 'Procedural'
-    return value || 'Memória'
-  }
-
-  generativeMemoryMetaLine(item: GenerativeMemoryItem): string {
-    const parts = [this.memoryTypeLabel(item.type)]
-
-    const meta = item.metadata || {}
-    const rawImportance = typeof meta === 'object'
-      ? (meta as Record<string, unknown>)['importance']
-      : undefined
-    const importance = typeof rawImportance === 'number'
-      ? rawImportance
-      : typeof rawImportance === 'string'
-        ? Number(rawImportance)
-        : NaN
-    if (Number.isFinite(importance)) {
-      parts.push(`Importância ${Math.round(importance)}`)
-    }
-
-    const scoreValue = item['score']
-    const score = typeof scoreValue === 'number'
-      ? scoreValue
-      : typeof scoreValue === 'string'
-        ? Number(scoreValue)
-        : NaN
-    if (Number.isFinite(score)) {
-      parts.push(`Score ${score.toFixed(2)}`)
-    }
-
-    const timestamp = coerceDateInputToMs(item.created_at ?? item.updated_at)
-    if (timestamp) {
-      parts.push(new Date(timestamp).toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      }))
-    }
-
-    return parts.join(' · ')
-  }
-
-  memoryTrackKey(item: MemoryItem, index: number): string {
-    const compositeId = String(item.composite_id || '').trim()
-    if (compositeId) return compositeId
-    const ts = Number(item.ts_ms)
-    const normalizedTs = Number.isFinite(ts) ? ts : (coerceDateInputToMs(item.metadata?.timestamp) || 0)
-    const content = sanitizeDiagnosticText(item.content, 'memory').slice(0, 48)
-    return `${normalizedTs}:${content}:${index}`
-  }
-
   setRagResultViewTab(tab: RagResultViewTab): void {
     this.ragResultViewTab.set(tab)
   }
@@ -691,421 +568,6 @@ export class ConversationsComponent {
       (tab) => this.setRagResultViewTab(tab),
       'ragResult'
     )
-  }
-
-  ragHasAnswer(): boolean {
-    return Boolean(this.ragResult()?.answer?.trim())
-  }
-
-  ragHasSources(): boolean {
-    return Boolean(this.ragResult()?.citations?.length)
-  }
-
-  ragHasRows(): boolean {
-    return Boolean(this.ragResult()?.results?.length)
-  }
-
-  isBusinessDocError(message: string | null | undefined): boolean {
-    const value = String(message || '').toLowerCase()
-    return value.includes('quota') || value.includes('limite') || value.includes('maior')
-  }
-
-  onGoalCreateTitleInput(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    this.goalCreateTitle.set(target?.value || '')
-  }
-
-  onGoalCreateDescriptionInput(event: Event): void {
-    const target = event.target as HTMLTextAreaElement | null
-    this.goalCreateDescription.set(target?.value || '')
-  }
-
-  onDocFileSelected(event: Event): void {
-    const target = event.target as HTMLInputElement | null
-    const file = target?.files?.[0] || null
-    this.selectedUploadFile.set(file)
-    this.docUploadError.set('')
-  }
-
-  uploadSelectedDoc(): void {
-    const file = this.selectedUploadFile()
-    if (!file) {
-      this.docUploadError.set('Selecione um arquivo para upload.')
-      return
-    }
-    const userId = this.userIdString()
-    this.docUploadError.set('')
-    this.clearNotice('docs')
-    this.docUploadInFlight.set(true)
-    this.docUploadProgress.set(0)
-    this.api.documents.uploadDocument(file, this.selectedId() || undefined, userId || undefined)
-      .pipe(catchError((err) => {
-        this.docUploadError.set(extractErrorMessage(err, 'Falha no upload do documento.'))
-        this.docUploadInFlight.set(false)
-        this.docUploadProgress.set(null)
-        return of(null)
-      }))
-      .subscribe((evt) => {
-        if (!evt) return
-        if (typeof evt.progress === 'number') {
-          this.docUploadProgress.set(evt.progress)
-        }
-        if (evt.response) {
-          const status = String(evt.response.status || '')
-          if (status === 'file_too_large') {
-            this.docUploadError.set('Arquivo maior que o limite permitido.')
-          } else if (status === 'quota_exceeded') {
-            this.docUploadError.set('Quota de documentos excedida para este usuário.')
-          } else {
-            this.docUploadError.set('')
-            this.setNotice('docs', 'success', 'Upload concluído.')
-          }
-          this.docUploadInFlight.set(false)
-          this.docUploadProgress.set(status ? 100 : null)
-          this.selectedUploadFile.set(null)
-          this.refreshConversationContext()
-        }
-      })
-  }
-
-  linkDocumentUrl(): void {
-    const url = this.docLinkUrl().trim()
-    const conversationId = this.selectedId()
-    if (!url) {
-      this.docLinkError.set('Informe uma URL para vincular.')
-      return
-    }
-    if (!conversationId) {
-      this.docLinkError.set('Selecione ou crie uma conversa antes de vincular URL.')
-      return
-    }
-    this.docLinkError.set('')
-    this.clearNotice('docs')
-    this.docLinkLoading.set(true)
-    this.api.documents.linkUrl(conversationId, url, this.userIdString() || undefined)
-      .pipe(catchError((err) => {
-        this.docLinkError.set(extractErrorMessage(err, 'Falha ao vincular URL.'))
-        this.docLinkLoading.set(false)
-        return of(null)
-      }))
-      .subscribe((resp) => {
-        if (!resp) return
-        this.docLinkLoading.set(false)
-        if (resp.status === 'file_too_large') {
-          this.docLinkError.set('Conteúdo remoto acima do limite.')
-        } else if (resp.status === 'quota_exceeded') {
-          this.docLinkError.set('Quota de documentos excedida.')
-        } else {
-          this.docLinkUrl.set('')
-          this.docLinkError.set('')
-          this.setNotice('docs', 'success', 'Documento vinculado.')
-        }
-        this.refreshConversationContext()
-      })
-  }
-
-  searchDocs(): void {
-    const query = this.docSearchQuery().trim()
-    if (!query) {
-      this.docSearchError.set('Digite um termo para buscar documentos.')
-      this.docSearchResults.set([])
-      return
-    }
-    this.docSearchError.set('')
-    this.clearNotice('docs')
-    this.docSearchLoading.set(true)
-    this.api.documents.searchDocuments(query, undefined, undefined, this.userIdString())
-      .pipe(catchError((err) => {
-        this.docSearchError.set(extractErrorMessage(err, 'Falha ao buscar documentos.'))
-        this.docSearchLoading.set(false)
-        return of({ results: [] as DocSearchResultItem[] })
-      }))
-      .subscribe((resp) => {
-        this.docSearchResults.set(resp.results || [])
-        this.docSearchLoading.set(false)
-        if ((resp.results || []).length > 0) {
-          this.setNotice('docs', 'info', 'Busca concluída.')
-        }
-      })
-  }
-
-  deleteDoc(docId: string): void {
-    if (!docId) return
-    if (typeof window !== 'undefined' && !window.confirm('Excluir este documento?')) return
-    this.deletingDocIds.update((curr) => ({ ...curr, [docId]: true }))
-    this.api.documents.deleteDocument(docId, this.userIdString())
-      .pipe(catchError((err) => {
-        this.docSearchError.set(extractErrorMessage(err, 'Falha ao excluir documento.'))
-        this.deletingDocIds.update((curr) => {
-          const next = { ...curr }
-          delete next[docId]
-          return next
-        })
-        return of(null)
-      }))
-      .subscribe((resp) => {
-        this.deletingDocIds.update((curr) => {
-          const next = { ...curr }
-          delete next[docId]
-          return next
-        })
-        if (!resp) return
-        this.docs.update((items) => items.filter((d) => d.doc_id !== docId))
-        this.docSearchResults.update((items) => items.filter((d) => String(d.doc_id) !== docId))
-        this.setNotice('docs', 'success', 'Documento removido.')
-      })
-  }
-
-  addMemory(): void {
-    const content = this.memoryDraft().trim()
-    if (!content) {
-      this.memoryAddError.set('Digite uma memória para adicionar.')
-      return
-    }
-    this.memoryAddError.set('')
-    this.clearNotice('memory')
-    this.memoryAddLoading.set(true)
-    const importance = this.memoryImportance()
-    const userId = this.userIdString()
-    const conversationId = this.selectedId() || undefined
-    this.api.memory.addGenerativeMemory(content, {
-      type: this.memoryType(),
-      importance: typeof importance === 'number' ? importance : undefined,
-      userId,
-      conversationId,
-      sessionId: conversationId
-    })
-      .pipe(catchError((err) => {
-        this.memoryAddError.set(extractErrorMessage(err, 'Falha ao adicionar memória.'))
-        this.memoryAddLoading.set(false)
-        return of(null)
-      }))
-      .subscribe((resp) => {
-        if (!resp) return
-        this.memoryDraft.set('')
-        this.memoryAddLoading.set(false)
-        this.setNotice('memory', 'success', 'Memória adicionada.')
-        this.refreshConversationContext()
-        if (this.memorySearchQuery().trim()) {
-          this.searchGenerativeMemory()
-        }
-      })
-  }
-
-  searchGenerativeMemory(): void {
-    const query = this.memorySearchQuery().trim()
-    if (!query) {
-      this.memorySearchError.set('Digite um termo para buscar memória generativa.')
-      this.generativeMemoryResults.set([])
-      return
-    }
-    this.memorySearchError.set('')
-    this.clearNotice('memory')
-    this.memorySearchLoading.set(true)
-    this.api.memory.getGenerativeMemories(query, this.memorySearchLimit(), {
-      userId: this.userIdString(),
-      conversationId: this.selectedId() || undefined
-    })
-      .pipe(catchError((err) => {
-        this.memorySearchError.set(extractErrorMessage(err, 'Falha ao buscar memória generativa.'))
-        this.memorySearchLoading.set(false)
-        return of([] as GenerativeMemoryItem[])
-      }))
-      .subscribe((items) => {
-        const next = items || []
-        this.generativeMemoryResults.set(next)
-        this.memorySearchLoading.set(false)
-        this.setNotice('memory', 'info', next.length ? 'Busca concluída.' : 'Consulta concluída sem resultados.')
-      })
-  }
-
-  runRagQuery(): void {
-    const query = this.ragQuery().trim()
-    if (!query) {
-      this.ragError.set('Digite uma consulta para executar no RAG.')
-      this.ragResult.set(null)
-      return
-    }
-    const mode = this.ragMode()
-    const userId = this.userIdString()
-    const conversationId = this.selectedId() || undefined
-    this.ragError.set('')
-    this.clearNotice('rag')
-    this.ragResultViewTab.set('resposta')
-    this.ragLoading.set(true)
-
-    let request$: Observable<unknown>
-
-    if (mode === 'search') {
-      request$ = this.api.knowledge.ragSearch({ query, limit: 5 })
-    } else if (mode === 'user-chat') {
-      if (!userId) {
-        this.ragLoading.set(false)
-        this.ragError.set('Usuário autenticado necessário para RAG user-chat.')
-        this.setNotice('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
-        return
-      }
-      request$ = this.api.knowledge.ragUserChat({ query, user_id: userId, session_id: conversationId, limit: 5 })
-    } else if (mode === 'user_chat') {
-      request$ = this.api.knowledge.ragUserChatV2({ query, user_id: userId || undefined, session_id: conversationId, limit: 5 })
-    } else if (mode === 'productivity') {
-      if (!userId) {
-        this.ragLoading.set(false)
-        this.ragError.set('Usuário autenticado necessário para RAG productivity.')
-        this.setNotice('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
-        return
-      }
-      request$ = this.api.knowledge.ragProductivitySearch({ query, user_id: userId, limit: 5 })
-    } else {
-      request$ = this.api.knowledge.ragHybridSearch({ query, user_id: userId || undefined, limit: 5 })
-    }
-
-    request$
-      .pipe(catchError((err) => {
-        this.ragError.set(extractErrorMessage(err, 'Falha ao executar consulta RAG.'))
-        this.ragLoading.set(false)
-        return of(null)
-      }))
-      .subscribe((resp: unknown) => {
-        this.ragLoading.set(false)
-        if (!resp) {
-          this.ragResult.set(null)
-          return
-        }
-        if (typeof resp === 'object' && resp !== null && 'results' in resp) {
-          const v2 = resp as RagUserChatV2Response
-          const results = (v2.results || []) as Record<string, unknown>[]
-          this.ragResult.set({ mode, results })
-          this.setNotice('rag', 'info', results.length ? 'Consulta RAG concluída.' : 'Consulta concluída sem resultados.')
-          return
-        }
-        if (typeof resp === 'object' && resp !== null && 'answer' in resp) {
-          const standard = resp as RagSearchResponse | RagUserChatResponse | RagHybridResponse
-          const answer = standard.answer || ''
-          const citations = standard.citations || []
-          this.ragResult.set({ mode, answer, citations })
-          const hasAnswer = Boolean(answer.trim())
-          const hasCitations = citations.length > 0
-          this.setNotice('rag', 'info', hasAnswer || hasCitations ? 'Consulta RAG concluída.' : 'Consulta concluída sem resultados.')
-          return
-        }
-        this.ragResult.set({ mode, results: [] })
-        this.setNotice('rag', 'info', 'Consulta concluída sem resultados.')
-      })
-  }
-
-  feedbackState(message: ChatMessageView): FeedbackUiState {
-    return this.feedbackStateByMessageId()[message.id] || {}
-  }
-
-  feedbackCommentDraft(messageId: string): string {
-    return this.feedbackCommentDraftByMessageId()[messageId] || ''
-  }
-
-  onFeedbackCommentInput(messageId: string, event: Event): void {
-    const target = event.target as HTMLTextAreaElement | null
-    const value = target?.value || ''
-    this.feedbackCommentDraftByMessageId.update((curr) => ({ ...curr, [messageId]: value }))
-  }
-
-  toggleFeedbackComment(messageId: string): void {
-    this.feedbackStateByMessageId.update((curr) => {
-      const prev = curr[messageId] || {}
-      return { ...curr, [messageId]: { ...prev, commentOpen: !prev.commentOpen } }
-    })
-  }
-
-  sendThumbsUp(msg: ChatMessageView): void {
-    this.submitFeedback(msg, 'positive')
-  }
-
-  sendThumbsDown(msg: ChatMessageView): void {
-    this.submitFeedback(msg, 'negative')
-  }
-
-  createGoal(): void {
-    const title = this.goalCreateTitle().trim()
-    const description = this.goalCreateDescription().trim()
-    if (!title) {
-      this.goalCreateError.set('Informe um título para a meta.')
-      return
-    }
-    this.goalCreateError.set('')
-    this.clearNotice('autonomy')
-    this.goalCreateLoading.set(true)
-    this.api.autonomy.createGoal({
-      title,
-      description,
-      priority: 2
-    })
-      .pipe(catchError((err) => {
-        this.goalCreateError.set(extractErrorMessage(err, 'Falha ao criar meta.'))
-        this.goalCreateLoading.set(false)
-        return of(null)
-      }))
-      .subscribe((goal) => {
-        this.goalCreateLoading.set(false)
-        if (!goal) return
-        this.goalCreateTitle.set('')
-        this.goalCreateDescription.set('')
-        this.autonomyGoals.update((items) => [goal, ...items])
-        this.setNotice('autonomy', 'success', 'Meta criada.')
-      })
-  }
-
-  refreshAutonomy(): void {
-    this.loadAutonomyContext()
-  }
-
-  toggleAutonomyLoop(): void {
-    if (this.autonomySaving()) return
-    this.autonomySaving.set(true)
-    this.autonomyError.set('')
-    this.clearNotice('autonomy')
-    const active = Boolean(this.autonomyStatus()?.active)
-    const request$ = active
-      ? this.api.autonomy.stopAutonomy()
-      : this.api.autonomy.startAutonomy({
-        interval_seconds: 60,
-        risk_profile: 'balanced',
-        user_id: this.user()?.id ? String(this.user()?.id) : undefined
-      })
-    request$
-      .pipe(catchError((err) => {
-        this.autonomyError.set(extractErrorMessage(err, 'Falha ao atualizar autonomia.'))
-        return of(null)
-      }))
-      .subscribe(() => {
-        this.autonomySaving.set(false)
-        this.setNotice('autonomy', 'success', active ? 'Loop autônomo interrompido.' : 'Loop autônomo iniciado.')
-        this.loadAutonomyContext()
-      })
-  }
-
-  markGoalStatus(goal: Goal, status: GoalStatus): void {
-    if (!goal?.id || this.autonomySaving()) return
-    this.autonomySaving.set(true)
-    this.autonomyError.set('')
-    this.clearNotice('autonomy')
-    this.api.autonomy.updateGoalStatus(goal.id, status)
-      .pipe(catchError((err) => {
-        this.autonomyError.set(extractErrorMessage(err, 'Falha ao atualizar meta.'))
-        return of(null)
-      }))
-      .subscribe((updated) => {
-        if (updated) {
-          this.autonomyGoals.update((items) => items.map((item) => item.id === updated.id ? updated : item))
-          this.setNotice('autonomy', 'success', 'Status da meta atualizado.')
-        }
-        this.autonomySaving.set(false)
-      })
-  }
-
-  goalStatusLabel(goal: Goal): string {
-    if (goal.status === 'in_progress') return 'Em andamento'
-    if (goal.status === 'completed') return 'Concluida'
-    if (goal.status === 'failed') return 'Falhou'
-    return 'Pendente'
   }
 
   private readonly advancedModeStorageKey = 'janus.conversations.show_advanced_mode'
@@ -1150,7 +612,7 @@ export class ConversationsComponent {
 
     if (preserveActiveStreamForTarget && id) {
       this.eventsService.connect(id)
-      this.loadContext(id)
+      this.context.loadContext(id)
       if (this.showTrace()) {
         this.loadTrace(id)
       }
@@ -1168,10 +630,10 @@ export class ConversationsComponent {
     this.ragResultViewTab.set('resposta')
     this.docSearchError.set('')
     this.memorySearchError.set('')
-    this.clearNotice('docs')
-    this.clearNotice('memory')
-    this.clearNotice('rag')
-    this.clearNotice('autonomy')
+    this.notices.clear('docs')
+    this.notices.clear('memory')
+    this.notices.clear('rag')
+    this.notices.clear('autonomy')
     this.traceSteps.set([]) // Clear trace
     this.thoughtStream.set([])
     this.copiedCitation.set('')
@@ -1193,7 +655,7 @@ export class ConversationsComponent {
 
     this.eventsService.connect(id)
     this.loadHistory(id)
-    this.loadContext(id)
+    this.context.loadContext(id)
     if (this.showTrace()) {
       this.loadTrace(id)
     }
@@ -1228,71 +690,33 @@ export class ConversationsComponent {
       })
   }
 
-  private loadContext(conversationId: string): void {
-    this.contextLoading.set(true)
-    const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    forkJoin({
-      docs: this.api.documents.listDocuments(conversationId, userId).pipe(
-        map((resp) => resp.items || []),
-        catchError(() => of([]))
-      ),
-      memory: this.api.memory.getMemoryTimeline({
-        limit: 24,
-        user_id: userId,
-        conversation_id: conversationId
-      }).pipe(
-        map((items) => items.filter((item) => isConversationMemory(item, conversationId))),
-        catchError(() => of([] as MemoryItem[]))
-      )
-    }).subscribe((result) => {
-      this.docs.set(result.docs)
-      this.memoryUser.set(result.memory)
-      this.contextLoading.set(false)
+  feedbackState(message: ChatMessageView): FeedbackUiState {
+    return this.feedbackStateByMessageId()[message.id] || {}
+  }
+
+  feedbackCommentDraft(messageId: string): string {
+    return this.feedbackCommentDraftByMessageId()[messageId] || ''
+  }
+
+  onFeedbackCommentInput(messageId: string, event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null
+    const value = target?.value || ''
+    this.feedbackCommentDraftByMessageId.update((curr) => ({ ...curr, [messageId]: value }))
+  }
+
+  toggleFeedbackComment(messageId: string): void {
+    this.feedbackStateByMessageId.update((curr) => {
+      const prev = curr[messageId] || {}
+      return { ...curr, [messageId]: { ...prev, commentOpen: !prev.commentOpen } }
     })
-    this.loadAutonomyContext()
   }
 
-  private refreshConversationContext(): void {
-    const id = this.selectedId()
-    if (!id) return
-    this.loadContext(id)
+  sendThumbsUp(msg: ChatMessageView): void {
+    this.submitFeedback(msg, 'positive')
   }
 
-  private userIdString(): string | undefined {
-    const id = this.user()?.id
-    return id != null ? String(id) : undefined
-  }
-
-  private setNotice(section: RailNoticeSection, kind: RailNoticeKind, message: string, autoHideMs = 2800): void {
-    const setter = this.noticeSignal(section)
-    const existingTimer = this.noticeTimers.get(section)
-    if (existingTimer) {
-      clearTimeout(existingTimer)
-      this.noticeTimers.delete(section)
-    }
-    setter.set({ kind, message, visible: true })
-    if (kind === 'error') return
-    const timer = setTimeout(() => {
-      setter.set(null)
-      this.noticeTimers.delete(section)
-    }, autoHideMs)
-    this.noticeTimers.set(section, timer)
-  }
-
-  private clearNotice(section: RailNoticeSection): void {
-    const existingTimer = this.noticeTimers.get(section)
-    if (existingTimer) {
-      clearTimeout(existingTimer)
-      this.noticeTimers.delete(section)
-    }
-    this.noticeSignal(section).set(null)
-  }
-
-  private noticeSignal(section: RailNoticeSection) {
-    if (section === 'docs') return this.docsNotice
-    if (section === 'memory') return this.memoryNotice
-    if (section === 'rag') return this.ragNotice
-    return this.autonomyNotice
+  sendThumbsDown(msg: ChatMessageView): void {
+    this.submitFeedback(msg, 'negative')
   }
 
   private moveTabSelection<T extends string>(
@@ -1336,7 +760,7 @@ export class ConversationsComponent {
     const state = this.feedbackState(msg)
     if (state.submitting || state.submitted) return
     const messageId = String(msg.backendMessageId || msg.id)
-    const userId = this.userIdString()
+    const userId = this.context.userIdString()
     const comment = this.feedbackCommentDraft(msg.id).trim() || undefined
 
     this.feedbackStateByMessageId.update((curr) => ({
@@ -2004,22 +1428,5 @@ export class ConversationsComponent {
     const latencyMs = Math.max(0, Date.now() - this.responseStartedAt)
     this.responseStartedAt = null
     return latencyMs
-  }
-
-  private loadAutonomyContext(): void {
-    this.autonomyLoading.set(true)
-    forkJoin({
-      status: this.api.autonomy.getAutonomyStatus().pipe(catchError(() => of(null))),
-      goals: this.api.autonomy.listGoals().pipe(catchError(() => of([] as Goal[]))),
-      tools: this.api.tools.getTools().pipe(
-        map((resp) => resp.tools || []),
-        catchError(() => of([] as Tool[]))
-      )
-    }).subscribe((result) => {
-      this.autonomyStatus.set(result.status)
-      this.autonomyGoals.set(result.goals)
-      this.autonomyTools.set(result.tools)
-      this.autonomyLoading.set(false)
-    })
   }
 }

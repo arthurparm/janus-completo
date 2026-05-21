@@ -73,7 +73,7 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 | ID | Titulo | Categoria | Prob. | Impacto | Nivel | Status | Responsavel | Referencias |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RISK-001 | BackendApiService concentra contratos demais | tecnica | 3 | 3 | 9 | mitigado | Frontend/QA | `frontend/src/app/services/backend-api.service.ts` |
-| RISK-002 | ConversationsComponent concentra subfluxos demais | tecnica | 3 | 3 | 9 | identificado | a definir | `frontend/src/app/features/conversations/conversations.ts` |
+| RISK-002 | ConversationsComponent concentra subfluxos demais | tecnica | 3 | 3 | 9 | mitigado | Trae | `frontend/src/app/features/conversations/conversations.ts`, `frontend/src/app/features/conversations/conversations.html`, `frontend/src/app/features/conversations/conversations-context.service.ts`, `frontend/src/app/features/conversations/conversations-docs.service.ts`, `frontend/src/app/features/conversations/conversations-memory.service.ts`, `frontend/src/app/features/conversations/conversations-rag.service.ts`, `frontend/src/app/features/conversations/conversations-autonomy.service.ts`, `frontend/src/app/features/conversations/conversations-notice.service.ts`, `frontend/src/app/features/conversations/conversations-flows.spec.ts` |
 | RISK-003 | Kernel compoe quase tudo manualmente | tecnica | 3 | 3 | 9 | identificado | a definir | `backend/app/core/kernel.py` |
 | RISK-004 | Deploy distribuido PC1/PC2 aumenta superficie de falha | processo | 3 | 3 | 9 | identificado | a definir | [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]] |
 | RISK-005 | Backend tem capacidades maiores que a UX operacional atual | processo | 3 | 3 | 9 | identificado | a definir | a definir |
@@ -133,17 +133,39 @@ Registrar as fragilidades percebidas a partir do codigo e da cobertura.
 >   - `frontend/src/app/services/domain/tools-api-service.contract.spec.ts`
 
 > [!risk] RISK-002 - ConversationsComponent concentra subfluxos demais
-> - **Descricao (cenario):** "`ConversationsComponent` concentra subfluxos demais."
+> - **Descricao (cenario):** "`ConversationsComponent` concentra subfluxos demais." Historicamente o componente atuava como ponto unico de orquestracao de multiplas responsabilidades (roteamento/selecao de conversa, carregamento de lista e historico, integracao com streaming via `ChatStreamService`, conciliacao de pending actions, eventos de agente, trilha/trace, trilhos/abas avancadas, alem de operacoes de documentos, memoria, RAG e autonomia), elevando acoplamento e dificultando testes por subfluxo. A mitigacao foi feita extraindo a logica dos subfluxos (docs/memoria/RAG/autonomia e notices) para servicos dedicados, mantendo o componente como "shell" de composicao e reduzindo o volume de efeitos colaterais e chamadas HTTP no arquivo principal.
 > - **Categoria:** tecnica
 > - **Probabilidade (1-5):** 3
 > - **Impacto (1-5):** 3
 > - **Nivel (PxI):** 9
-> - **Status:** identificado
-> - **Responsavel:** a definir
-> - **Plano de mitigacao:** separar subfluxos por componentes/servicos e adicionar cobertura de testes de integracao por fluxo principal
-> - **Prazo limite:** a definir
-> - **Ultima atualizacao:** a definir
-> - **Referencias:** `frontend/src/app/features/conversations/conversations.ts`
+> - **Status:** mitigado
+> - **Responsavel:** Trae
+> - **Plano de mitigacao:**
+>   - Extrair subfluxos e efeitos colaterais para servicos dedicados:
+>     - `ConversationsDocsService` (vinculo URL, upload, busca e remocao)
+>     - `ConversationsMemoryService` (adicao e busca de memoria generativa)
+>     - `ConversationsRagService` (modo/execucao de consulta e normalizacao de resultado)
+>     - `ConversationsAutonomyService` (status/goals/tools e acoes do loop)
+>     - `ConversationsNoticeService` (notices com auto-hide)
+>     - `ConversationsContextService` (carregamento/refresh do contexto da conversa)
+>   - Ajustar template para chamar os servicos (`docsFlow`, `memoryFlow`, `ragFlow`, `autonomyFlow`) sem alterar o layout/estilos existentes.
+>   - Travar regressao com testes unitarios dos subfluxos (validacoes e precondicoes), garantindo que erros de entrada nao disparem chamadas indevidas.
+> - **Prazo limite:** 2026-05-21
+> - **Ultima atualizacao:** 2026-05-21
+> - **Data de inicio:** 2026-05-21
+> - **Data de conclusao:** 2026-05-21
+> - **Validacao (resultados):** `npm run lint`, `npm run test` e `npx ng build --configuration development` executados com sucesso
+> - **Referencias:**
+>   - `frontend/src/app/features/conversations/conversations.ts`
+>   - `frontend/src/app/features/conversations/conversations.html`
+>   - `frontend/src/app/features/conversations/conversations-context.service.ts`
+>   - `frontend/src/app/features/conversations/conversations-docs.service.ts`
+>   - `frontend/src/app/features/conversations/conversations-memory.service.ts`
+>   - `frontend/src/app/features/conversations/conversations-rag.service.ts`
+>   - `frontend/src/app/features/conversations/conversations-autonomy.service.ts`
+>   - `frontend/src/app/features/conversations/conversations-notice.service.ts`
+>   - `frontend/src/app/features/conversations/conversations.spec.ts`
+>   - `frontend/src/app/features/conversations/conversations-flows.spec.ts`
 
 > [!risk] RISK-003 - Kernel compoe quase tudo manualmente
 > - **Descricao (cenario):** "O kernel compoe quase tudo manualmente."
