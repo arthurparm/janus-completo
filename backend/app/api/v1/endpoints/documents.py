@@ -352,34 +352,36 @@ def _is_allowlisted_host(raw_url: str) -> bool:
     return hostname.lower().strip(".") in _ALLOWED_LINK_URL_HOSTS
 
 
-def _is_public_http_url(raw_url: str) -> bool:
+def _resolve_safe_http_target(raw_url: str) -> tuple[str, str, int, str] | None:
     try:
         parsed = urlparse(raw_url)
     except Exception:
-        return False
+        return None
 
     if parsed.scheme not in {"http", "https"}:
-        return False
+        return None
 
     hostname = parsed.hostname
     if not hostname:
-        return False
+        return None
 
     lowered = hostname.lower().strip(".")
     if lowered in {"localhost"} or lowered.endswith(".localhost"):
-        return False
+        return None
 
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
-        addrinfo = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        addrinfo = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except Exception:
-        return False
+        return None
 
+    resolved_ip: str | None = None
     for entry in addrinfo:
         ip_text = entry[4][0]
         try:
             ip_obj = ipaddress.ip_address(ip_text)
         except ValueError:
-            return False
+            return None
 
         if (
             ip_obj.is_private
@@ -389,9 +391,21 @@ def _is_public_http_url(raw_url: str) -> bool:
             or ip_obj.is_reserved
             or ip_obj.is_unspecified
         ):
-            return False
+            return None
+        if resolved_ip is None:
+            resolved_ip = ip_text
 
-    return True
+    if not resolved_ip:
+        return None
+
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    return parsed.scheme, hostname, port, resolved_ip + path
+
+
+def _is_public_http_url(raw_url: str) -> bool:
+    return _resolve_safe_http_target(raw_url) is not None
 
 
 class LinkUrlResponse(BaseModel):
@@ -424,9 +438,20 @@ async def link_url(
             detail="URL inválida ou não permitida",
         )
 
+    safe_target = _resolve_safe_http_target(url)
+    if not safe_target:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL inválida ou não permitida",
+        )
+
+    scheme, original_host, port, ip_with_path = safe_target
+    fetch_url = f"{scheme}://{ip_with_path}"
+    headers = {"Host": original_host}
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, follow_redirects=False)
+            resp = await client.get(fetch_url, headers=headers, follow_redirects=False)
             content_type = resp.headers.get("content-type", "text/html")
             data = resp.content
     except Exception as exc:
