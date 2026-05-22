@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.routing import RouteIntent, RouteTarget, get_knowledge_routing_policy
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.services.code_hybrid_search_service import get_code_hybrid_search_service
 from app.services.memory_service import MemoryService, get_memory_service
 
@@ -194,6 +195,7 @@ class RAGUserChatResponse(BaseModel):
     response_model=RAGUserChatResponse,
     summary="Busca em mensagens pessoais indexadas por usuário")
 async def rag_user_chat_search(
+    request: Request,
     query: str = Query(..., description="Pergunta ou texto de busca"),
     session_id: str | None = Query(None, description="ID da conversa para filtrar"),
     role: str | None = Query(None, description="Filtrar por role (user|assistant)"),
@@ -202,7 +204,7 @@ async def rag_user_chat_search(
     knowledge = Depends(get_knowledge_facade),
 ):
     started_at = time.perf_counter()
-    user_id = "default"
+    user_id = require_authenticated_actor_id(request)
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_USER_CHAT_SEARCH,
         user_id=user_id,
@@ -315,6 +317,7 @@ class RAGProductivityResponse(BaseModel):
     response_model=RAGProductivityResponse,
     summary="Busca em itens de produtividade (calendar/mail/notes) do usuário")
 async def rag_productivity_search(
+    request: Request,
     query: str = Query(..., description="Consulta"),
     type: str | None = Query(None, description="calendar_event|email_message|note_item"),
     limit: int | None = Query(5, ge=1, le=10),
@@ -322,7 +325,7 @@ async def rag_productivity_search(
     knowledge = Depends(get_knowledge_facade),
 ):
     started_at = time.perf_counter()
-    user_id = "default"
+    user_id = require_authenticated_actor_id(request)
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_PRODUCTIVITY_SEARCH,
         user_id=user_id,
@@ -445,17 +448,7 @@ async def rag_user_chat_search_v2(
     knowledge = Depends(get_knowledge_facade),
 ):
     started_at = time.perf_counter()
-    user_id = "default"
-    if not user_id:
-        _emit_rag_step(
-            endpoint="/rag/user_chat",
-            step="retrieval",
-            source="vector",
-            db="qdrant",
-            started_at=started_at,
-            confidence=0.0,
-            error_code="SKIPPED_MISSING_USER_ID")
-        return RAGUserChatResponseV2(results=[])
+    user_id = require_authenticated_actor_id(http)
 
     try:
         points = await knowledge.search_user_chat(
@@ -538,10 +531,10 @@ async def rag_hybrid_search(
     min_score: float | None = None,
     http: Request = None):
     started_at = time.perf_counter()
-    uid = "default"
+    uid = require_authenticated_actor_id(http)
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_HYBRID_SEARCH,
-        user_id="default",
+        user_id=uid,
         include_graph=True,
         query=query)
     route_meta = {
@@ -561,7 +554,7 @@ async def rag_hybrid_search(
                 query=query,
                 limit=limit,
                 min_score=min_score,
-                user_id="default",
+                user_id=uid,
                 route_decision=route_decision)
         _RAG_REQ.labels("hybrid", "success").inc()
         _RAG_LAT.labels("hybrid", "success").observe(max(0.0, time.perf_counter() - started_at))

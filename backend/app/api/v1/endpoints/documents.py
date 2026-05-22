@@ -3,9 +3,9 @@ from __future__ import annotations
 import ipaddress
 import os
 import socket
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
-from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -21,6 +21,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.services.document_service import DocumentFileTooLargeError, DocumentIngestionService
 
 try:
@@ -77,7 +78,9 @@ def get_knowledge_facade(request: Request):
 def _resolve_upload_user_scope(
     request: Request | None,
 ) -> str | None:
-    return "default"
+    if request is None:
+        return None
+    return require_authenticated_actor_id(request)
 
 
 class UploadResponse(BaseModel):
@@ -115,11 +118,12 @@ async def upload_document(
             detail="Tipo de arquivo não suportado para upload",
         )
     try:
+        uid = require_authenticated_actor_id(request)
         cm = _tracer.start_as_current_span("docs.upload") if _OTEL else nullcontext()
         with cm:  # type: ignore
             result = await service.stage_upload(
                 file=file,
-                user_id="default",
+                user_id=uid,
                 conversation_id=conversation_id,
                 knowledge_space_id=knowledge_space_id,
                 source_type=source_type,
@@ -177,11 +181,7 @@ async def search_documents(
     import time as _t
 
     _t0 = _t.perf_counter()
-    uid = "default"
-    if not uid:
-        _DOC_SEARCH_REQ.labels("error").inc()
-        _DOC_SEARCH_LAT.observe(max(0.0, _t.perf_counter() - _t0))
-        return DocSearchResponse(results=[])
+    uid = require_authenticated_actor_id(request)
     cm = _tracer.start_as_current_span("docs.search") if _OTEL else nullcontext()
     with cm:  # type: ignore
         results = await knowledge.search_documents(
@@ -232,13 +232,11 @@ async def list_documents(
     request: Request = None,
     limit: int = 100,
     knowledge = Depends(get_knowledge_facade)):
-    uid = "default"
-    if not uid:
-        return DocListResponse(items=[])
+    uid = require_authenticated_actor_id(request)
 
     service: DocumentIngestionService = request.app.state.document_service
     manifest_rows = service._manifest_repo.list_manifests(
-        user_id="default",
+        user_id=uid,
         conversation_id=conversation_id,
         knowledge_space_id=knowledge_space_id,
         limit=limit)
@@ -276,7 +274,7 @@ async def list_documents(
 
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, request: Request = None, knowledge = Depends(get_knowledge_facade)):
-    uid = "default"
+    uid = require_authenticated_actor_id(request)
     try:
         await knowledge.delete_document(doc_id=doc_id, user_id=uid)
     except Exception as exc:
@@ -432,6 +430,7 @@ async def link_url(
     service: DocumentIngestionService = Depends(get_doc_service)):
     import httpx
 
+    uid = require_authenticated_actor_id(request)
     if not (_is_allowed_link_url(url) and _is_allowlisted_host(url)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -459,7 +458,7 @@ async def link_url(
 
     filename = url.split("/")[-1] or "page.html"
     result = await service.ingest_file(
-        user_id="default",
+        user_id=uid,
         filename=filename,
         content_type=content_type,
         data=data,
@@ -474,7 +473,7 @@ async def link_url(
     if result.get("status") == "indexed":
         service._manifest_repo.create_manifest(
             doc_id=result.get("doc_id"),
-            user_id="default",
+            user_id=uid,
             conversation_id=conversation_id,
             knowledge_space_id=knowledge_space_id,
             source_type=source_type,
@@ -549,7 +548,7 @@ async def document_status(doc_id: str, request: Request = None, knowledge = Depe
     import time as _t
 
     _t0 = _t.perf_counter()
-    uid = "default"
+    uid = require_authenticated_actor_id(request)
 
     service = request.app.state.document_service
     manifest = service._manifest_repo.get_manifest(doc_id, uid)

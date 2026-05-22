@@ -311,10 +311,10 @@ def _channel_limit(channel: SSEChannel) -> int:
     return max(1, int(os.getenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", legacy_limit)))
 
 
-async def acquire_sse_slot(*, channel: SSEChannel) -> str:
+async def acquire_sse_slot(*, channel: SSEChannel, user_id: str) -> str:
     max_per_user_channel = _channel_limit(channel)
     max_global = max(1, int(os.getenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "250")))
-    slot_user = "system"
+    slot_user = str(user_id).strip()
     if is_chat_unlimited_user(slot_user):
         return f"unlimited:{slot_user}"
 

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
@@ -23,13 +23,13 @@ def get_knowledge_facade(request: Request) -> KnowledgeFacade:
 
 
 def _resolve_knowledge_user_id(request: Request | None, explicit_user_id: str | None) -> str:
-    if explicit_user_id is not None and str(explicit_user_id).strip():
-        return str(explicit_user_id).strip()
     if request is not None:
-        header_user_id = (request.headers.get("X-User-Id") or "").strip()
-        if header_user_id:
-            return header_user_id
-    return "default"
+        actor = getattr(request.state, "actor_user_id", None)
+        actor_str = str(actor).strip() if actor is not None else ""
+        explicit = str(explicit_user_id).strip() if explicit_user_id is not None else ""
+        if actor_str:
+            return explicit if explicit and explicit == actor_str else actor_str
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
 
 class IndexResponse(BaseModel):
@@ -549,10 +549,12 @@ class DocConsolidationRequest(BaseModel):
     summary="Consolida conhecimento a partir de um documento (doc_id) do usuário",
 )
 async def consolidate_document(
-    request: DocConsolidationRequest, service: KnowledgeService = Depends(get_knowledge_service)
+    request: DocConsolidationRequest,
+    http: Request,
+    service: KnowledgeService = Depends(get_knowledge_service),
 ):
     stats = await service.consolidate_document(
-        user_id="default", doc_id=request.doc_id, limit=request.limit
+        user_id=_resolve_knowledge_user_id(http, None), doc_id=request.doc_id, limit=request.limit
     )
     return ConsolidationResponse(message="Consolidação de documento concluída.", stats=stats)
 

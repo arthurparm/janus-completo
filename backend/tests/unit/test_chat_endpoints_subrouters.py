@@ -1,8 +1,7 @@
 import pytest
-from fastapi import HTTPException
-
 from app.api.v1.endpoints.chat import router
 from app.api.v1.endpoints.chat.deps import acquire_sse_slot, release_sse_slot
+from fastapi import HTTPException
 
 
 def test_chat_router_preserves_expected_public_paths():
@@ -27,11 +26,11 @@ async def test_sse_slot_limit_per_channel_user(monkeypatch):
     monkeypatch.setenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", "1")
     monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "10")
 
-    event_slot = await acquire_sse_slot(channel="agent_events")
-    chat_slot = await acquire_sse_slot(channel="chat_stream")
+    event_slot = await acquire_sse_slot(channel="agent_events", user_id="u1")
+    chat_slot = await acquire_sse_slot(channel="chat_stream", user_id="u1")
     try:
         with pytest.raises(HTTPException) as exc:
-            await acquire_sse_slot(channel="chat_stream")
+            await acquire_sse_slot(channel="chat_stream", user_id="u1")
         assert exc.value.status_code == 429
     finally:
         await release_sse_slot(chat_slot, channel="chat_stream")
@@ -44,10 +43,10 @@ async def test_sse_slot_limit_global_across_channels(monkeypatch):
     monkeypatch.setenv("CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER", "5")
     monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "1")
 
-    slot = await acquire_sse_slot(channel="agent_events")
+    slot = await acquire_sse_slot(channel="agent_events", user_id="u1")
     try:
         with pytest.raises(HTTPException) as exc:
-            await acquire_sse_slot(channel="chat_stream")
+            await acquire_sse_slot(channel="chat_stream", user_id="u1")
         assert exc.value.status_code == 429
     finally:
         await release_sse_slot(slot, channel="agent_events")
@@ -60,8 +59,8 @@ async def test_sse_slot_bypasses_unlimited_user(monkeypatch):
     monkeypatch.setenv("CHAT_SSE_MAX_GLOBAL_CONNECTIONS", "1")
     monkeypatch.setattr("app.api.v1.endpoints.chat.deps.is_chat_unlimited_user", lambda _: True)
 
-    first_slot = await acquire_sse_slot(channel="chat_stream")
-    second_slot = await acquire_sse_slot(channel="chat_stream")
+    first_slot = await acquire_sse_slot(channel="chat_stream", user_id="anonymous")
+    second_slot = await acquire_sse_slot(channel="chat_stream", user_id="anonymous")
     try:
         assert first_slot == "unlimited:anonymous"
         assert second_slot == "unlimited:anonymous"

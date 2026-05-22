@@ -81,8 +81,17 @@ async def bootstrap_dependencies(app: FastAPI):
     logger.info("Mapping Kernel dependencies to FastAPI state...")
     kernel = Kernel.get_instance()
 
+    missing: list[tuple[str, str]] = []
     for state_key, kernel_attr in KERNEL_STATE_BINDINGS.items():
+        if not hasattr(kernel, kernel_attr):
+            missing.append((state_key, kernel_attr))
+            continue
         value: Any = getattr(kernel, kernel_attr)
         setattr(app.state, state_key, value)
+
+    if missing:
+        details = ", ".join(f"{state_key}<-{kernel_attr}" for state_key, kernel_attr in missing)
+        logger.error("kernel_state_mapping_missing_attributes", missing=details)
+        raise RuntimeError(f"Kernel is missing attributes required for app.state mapping: {details}")
 
     logger.info("Kernel dependencies mapped to FastAPI state.")

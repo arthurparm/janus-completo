@@ -1,19 +1,25 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Request, status
-
 from app.config import settings
+from fastapi import HTTPException, Request, status
 
 
 def get_request_actor_id(request: Request | None) -> str | None:
-    # Deprecated/removed: always returns a static system identifier or None
-    return "system"
+    if request is None:
+        return None
+    try:
+        actor = getattr(request.state, "actor_user_id", None)
+        return str(actor) if actor else None
+    except Exception:
+        return None
 
 
 def require_authenticated_actor_id(request: Request) -> str:
-    # Ensure API Key if configured
+    actor = get_request_actor_id(request)
     require_api_key(request)
-    return "system"
+    if actor:
+        return actor
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
 
 def require_admin_actor(request: Request) -> str:
@@ -25,7 +31,9 @@ def require_same_user_or_admin(request: Request, target_user_id: str) -> str:
 
 
 def resolve_user_scope_id(request: Request | None, explicit_user_id: str | None) -> str | None:
-    return explicit_user_id or "system"
+    if explicit_user_id:
+        return str(explicit_user_id)
+    return get_request_actor_id(request)
 
 
 def require_api_key(request: Request) -> None:

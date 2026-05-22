@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, Field, ValidationError
 
 from app.core.autonomy.goal_manager import GoalManager, GoalStatus, get_goal_manager
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.core.tools.action_module import action_registry
 from app.services.autonomy_admin_service import maybe_trigger_self_study_on_goal_completion
 from app.services.autonomy_service import AutonomyConfig, AutonomyService, get_autonomy_service
@@ -138,7 +139,9 @@ class GoalResponse(BaseModel):
 
 @router.post("/start", summary="Inicia o AutonomyLoop contínuo")
 async def start_autonomy(
-    request: AutonomyStartRequest, service: AutonomyService = Depends(get_autonomy_service)
+    request: AutonomyStartRequest,
+    http: Request,
+    service: AutonomyService = Depends(get_autonomy_service),
 ):
     # Validação do plano (se fornecido), incluindo schema e políticas
     if request.plan:
@@ -148,7 +151,7 @@ async def start_autonomy(
 
     config = AutonomyConfig(
         interval_seconds=request.interval_seconds,
-        user_id="default",
+        user_id=require_authenticated_actor_id(http),
         project_id=request.project_id,
         risk_profile=request.risk_profile,
         auto_confirm=request.auto_confirm,

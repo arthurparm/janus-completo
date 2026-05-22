@@ -29,6 +29,22 @@ async def test_bootstrap_dependencies_maps_all_bindings(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_dependencies_raises_when_kernel_attr_is_missing(monkeypatch):
+    attrs = {attr: object() for attr in KERNEL_STATE_BINDINGS.values()}
+    missing_attr = "graph_db"
+    del attrs[missing_attr]
+    kernel = SimpleNamespace(**attrs)
+
+    monkeypatch.setattr(Kernel, "get_instance", staticmethod(lambda *args, **kwargs: kernel))
+
+    app = FastAPI()
+    with pytest.raises(RuntimeError) as exc_info:
+        await bootstrap_dependencies(app)
+
+    assert missing_attr in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_kernel_startup_flags_control_phases(monkeypatch):
     kernel = Kernel()
     calls: list[object] = []
@@ -87,4 +103,3 @@ async def test_kernel_startup_flags_control_phases(monkeypatch):
         init_senses=False,
     )
     assert calls == [("build_dependency_graph", False)]
-

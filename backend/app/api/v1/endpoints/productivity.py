@@ -96,8 +96,8 @@ def _is_unlimited_user(user_id: str | None = None) -> bool:
         return False
 
 
-def _ensure_consent(repo: ConsentRepository, scope: str) -> None:
-    if not repo.has_consent("default", scope):
+def _ensure_consent(repo: ConsentRepository, user_id: str, scope: str) -> None:
+    if not repo.has_consent(str(user_id), scope):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=f"Consent required: {scope}"
         )
@@ -122,18 +122,18 @@ async def calendar_add_event(
     repo: ConsentRepository = Depends(get_consent_repo),
     knowledge = Depends(get_knowledge_facade),
 ):
-    require_authenticated_actor_id(request)
+    actor = require_authenticated_actor_id(request)
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        if not _is_unlimited_user("default"):
+        if not _is_unlimited_user(actor):
             max_per_day = int(
                 getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("calendar.write", 0)
             )
             if max_per_day > 0:
                 evts = svc.get_audit_events(
-                    "default",
+                    actor,
                     tool="calendar_add_event",
                     status="ok",
                     start_ts=start_ts,
@@ -157,12 +157,12 @@ async def calendar_add_event(
     )
     with cm:  # type: ignore
         task_id = await publish_google_calendar_add_event(
-            user_id="default", event=payload.event.model_dump(), index=bool(payload.index)
+            user_id=actor, event=payload.event.model_dump(), index=bool(payload.index)
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("calendar_add_event", "queued").inc()
             _PROD_REQUESTS_USER_TOTAL.labels(
-                "default", "calendar_add_event", "queued"
+                actor, "calendar_add_event", "queued"
             ).inc()
         except Exception:
             pass
@@ -170,7 +170,7 @@ async def calendar_add_event(
         if bool(payload.index):
             evt = payload.event.model_dump()
             content = f"{evt.get('title', '')} @ {evt.get('location', '')}"
-            pid = f"calendar:default:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
+            pid = f"calendar:{actor}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
             payload_q = {
                 "content": content,
                 "type": "calendar_event",
@@ -178,21 +178,21 @@ async def calendar_add_event(
                 "composite_id": pid,
                 "metadata": {
                     "type": "calendar_event",
-                    "user_id": "default",
+                    "user_id": actor,
                     "timestamp": int(evt.get("start_ts") or 0),
                     "ts_ms": int(evt.get("start_ts") or 0),
                     "origin": "productivity.calendar.endpoint",
                 },
             }
             await knowledge.index_memory_event(
-                user_id="default",
+                user_id=actor,
                 content=content,
                 point_id=pid,
                 payload=payload_q,
             )
             try:
                 _PROD_REQUESTS_TOTAL.labels("calendar_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels("default", "calendar_index", "ok").inc()
+                _PROD_REQUESTS_USER_TOTAL.labels(actor, "calendar_index", "ok").inc()
             except Exception:
                 pass
     except Exception:
@@ -201,7 +201,7 @@ async def calendar_add_event(
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": "default",
+                "user_id": actor,
                 "tool": "calendar_add_event",
                 "status": "queued",
                 "detail": {"task_id": task_id},
@@ -218,7 +218,7 @@ async def calendar_add_event(
 
 @router.post("/oauth/google/start")
 async def oauth_google_start(payload: OAuthStartRequest, request: Request):
-    require_authenticated_actor_id(request)
+    actor = require_authenticated_actor_id(request)
     try:
         _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
     except Exception:
@@ -236,11 +236,11 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
         "response_type": "code",
         "scope": scope,
         "access_type": "offline",
-        "state": "user:default:scope:custom",
+        "state": f"user:{actor}:scope:custom",
         "include_granted_scopes": "true",
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
-    return OAuthStartResponse(authorize_url=url, state="default")
+    return OAuthStartResponse(authorize_url=url, state=str(actor))
 
 
 @router.get("/calendar/events")
@@ -275,16 +275,16 @@ class MailSendRequest(BaseModel):
 async def mail_send(
     payload: MailSendRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
-    require_authenticated_actor_id(request)
+    actor = require_authenticated_actor_id(request)
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        if not _is_unlimited_user("default"):
+        if not _is_unlimited_user(actor):
             max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("mail.send", 0))
             if max_per_day > 0:
                 evts = svc.get_audit_events(
-                    "default",
+                    actor,
                     tool="mail_send",
                     status="ok",
                     start_ts=start_ts,
@@ -306,11 +306,11 @@ async def mail_send(
     cm = _tracer.start_as_current_span("productivity.mail_send") if _OTEL else nullcontext()
     with cm:  # type: ignore
         task_id = await publish_google_mail_send(
-            user_id="default", message=payload.message.model_dump(), index=bool(payload.index)
+            user_id=actor, message=payload.message.model_dump(), index=bool(payload.index)
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("mail_send", "queued").inc()
-            _PROD_REQUESTS_USER_TOTAL.labels("default", "mail_send", "queued").inc()
+            _PROD_REQUESTS_USER_TOTAL.labels(actor, "mail_send", "queued").inc()
         except Exception:
             pass
     # Indexação opcional será tratada pelo worker em uma versão futura
@@ -318,7 +318,7 @@ async def mail_send(
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": "default",
+                "user_id": actor,
                 "tool": "mail_send",
                 "status": "queued",
                 "detail": {"task_id": task_id},
@@ -367,16 +367,16 @@ async def notes_add(
     repo: ConsentRepository = Depends(get_consent_repo),
     knowledge = Depends(get_knowledge_facade),
 ):
-    require_authenticated_actor_id(request)
+    actor = require_authenticated_actor_id(request)
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
         start_ts = float(_t.time()) - 86400.0
-        if not _is_unlimited_user("default"):
+        if not _is_unlimited_user(actor):
             max_per_day = int(getattr(settings, "PRODUCTIVITY_DAILY_LIMITS", {}).get("notes.write", 0))
             if max_per_day > 0:
                 evts = svc.get_audit_events(
-                    "default",
+                    actor,
                     tool="notes_add",
                     status="ok",
                     start_ts=start_ts,
@@ -424,7 +424,7 @@ async def notes_add(
             now_ts_ms = int(__import__("time").time() * 1000)
             pid = build_deterministic_point_id(
                 "productivity-note",
-                "default",
+                actor,
                 note.get("title", ""),
                 content,
             )
@@ -435,21 +435,21 @@ async def notes_add(
                 "composite_id": pid,
                 "metadata": {
                     "type": "note_item",
-                    "user_id": "default",
+                    "user_id": actor,
                     "timestamp": now_ts_ms,
                     "ts_ms": now_ts_ms,
                     "origin": "productivity.notes.endpoint",
                 },
             }
             await knowledge.index_memory_event(
-                user_id="default",
+                user_id=actor,
                 content=content,
                 point_id=pid,
                 payload=payload_q,
             )
             try:
                 _PROD_REQUESTS_TOTAL.labels("notes_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels("default", "notes_index", "ok").inc()
+                _PROD_REQUESTS_USER_TOTAL.labels(actor, "notes_index", "ok").inc()
             except Exception:
                 pass
     except Exception:
@@ -458,7 +458,7 @@ async def notes_add(
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": "default",
+                "user_id": actor,
                 "tool": "notes_add",
                 "status": "ok",
                 "detail": {"title": payload.note.title},
@@ -466,7 +466,7 @@ async def notes_add(
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("notes_add", "ok").inc()
-            _PROD_REQUESTS_USER_TOTAL.labels("default", "notes_add", "ok").inc()
+            _PROD_REQUESTS_USER_TOTAL.labels(actor, "notes_add", "ok").inc()
         except Exception:
             pass
     except Exception:
@@ -548,7 +548,7 @@ async def limits_status(request: Request):
 
 @router.get("/oauth/google/start")
 async def google_oauth_start(request: Request, scope: str = "calendar"):
-    require_authenticated_actor_id(request)
+    actor = require_authenticated_actor_id(request)
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
     redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
     if not client_id or not str(client_id):
@@ -567,7 +567,7 @@ async def google_oauth_start(request: Request, scope: str = "calendar"):
         "response_type": "code",
         "access_type": "offline",
         "include_granted_scopes": "true",
-        "state": f"user::scope:{scope}",
+        "state": f"user:{actor}:scope:{scope}",
         "scope": scopes_map.get(scope, scopes_map["calendar"]),
         "prompt": "consent",
     }
@@ -576,7 +576,7 @@ async def google_oauth_start(request: Request, scope: str = "calendar"):
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
             {
-                "user_id": "default",
+                "user_id": actor,
                 "tool": "google_oauth_start",
                 "status": "ok",
                 "detail": {"scope": scope},
@@ -674,7 +674,7 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 
 @router.post("/oauth/google/refresh")
 async def google_oauth_refresh(request: Request):
-    require_authenticated_actor_id(request)
+    actor = require_authenticated_actor_id(request)
     repo_tok = OAuthTokenRepository()
     tok = repo_tok.get(user_id=0, provider="google")
     if not tok or not tok.refresh_token:
@@ -720,7 +720,7 @@ async def google_oauth_refresh(request: Request):
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
-            {"user_id": "default", "tool": "google_oauth_refresh", "status": "ok"}
+            {"user_id": actor, "tool": "google_oauth_refresh", "status": "ok"}
         )
     except Exception:
         pass

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from app.core.memory.generative_memory import generative_memory_service
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.models.schemas import Experience, ScoredExperience
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.secret_memory_service import secret_memory_service
@@ -189,37 +190,23 @@ async def get_memories_timeline(
             detail=f"Invalid date format. Use ISO 8601 (e.g., 2023-01-01T12:00:00Z). Error: {e}",
         )
 
-    resolved_user_id = "default"
-
-    if resolved_user_id:
-        try:
-            fetch_limit = min(500, max(limit * 5, limit))
-            points = await knowledge.load_user_timeline_points(
-                user_id=str(resolved_user_id),
-                conversation_id=conversation_id,
-                query=query,
-                start_ts=start_ts,
-                end_ts=end_ts,
-                limit=fetch_limit,
-            )
-            return _sort_and_dedupe_timeline([_point_to_item(p) for p in points], limit)
-        except Exception as e:
-            logger.error("log_error", message=f"Error retrieving user timeline: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to retrieve user timeline memories",
-            )
-
+    resolved_user_id = require_authenticated_actor_id(request)
     try:
-        memories = await service.recall_by_timeframe(
-            query=query, start_ts_ms=start_ts, end_ts_ms=end_ts, limit=limit, min_score=min_score
+        fetch_limit = min(500, max(limit * 5, limit))
+        points = await knowledge.load_user_timeline_points(
+            user_id=str(resolved_user_id),
+            conversation_id=conversation_id,
+            query=query,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            limit=fetch_limit,
         )
-        return [_experience_to_item(exp) for exp in memories]
+        return _sort_and_dedupe_timeline([_point_to_item(p) for p in points], limit)
     except Exception as e:
-        logger.error("log_error", message=f"Error retrieving timeline: {e}", exc_info=True)
+        logger.error("log_error", message=f"Error retrieving user timeline: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve timeline memories",
+            detail="Failed to retrieve user timeline memories",
         )
 
 @router.get("/generative", response_model=list[ScoredExperience])
@@ -234,6 +221,7 @@ async def get_generative_memories(
     Retrieves memories using the Generative Agents scoring (Recency * Importance * Relevance).
     """
     try:
+        resolved_user_id = require_authenticated_actor_id(request)
         resolved_conversation_id = (
             conversation_id
             or request.headers.get("X-Conversation-Id")
@@ -243,7 +231,7 @@ async def get_generative_memories(
             query,
             limit=limit,
             type_filter=type,
-            user_id="default",
+            user_id=resolved_user_id,
             conversation_id=resolved_conversation_id,
         )
         return memories
@@ -270,7 +258,7 @@ async def add_generative_memory(
         meta = {}
         if importance is not None:
             meta["importance"] = importance
-        resolved_user_id = "default"
+        resolved_user_id = require_authenticated_actor_id(request)
         resolved_conversation_id = (
             conversation_id or request.headers.get("X-Conversation-Id") or request.headers.get("X-Session-Id")
         )
@@ -301,12 +289,7 @@ async def get_user_preferences(
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
 ):
-    resolved_user_id = "default"
-    if not resolved_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required (query param or authenticated actor)",
-        )
+    resolved_user_id = require_authenticated_actor_id(request)
     try:
         items = await user_preference_memory_service.list_preferences(
             user_id=str(resolved_user_id),
@@ -332,12 +315,7 @@ async def get_user_secrets(
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
 ):
-    resolved_user_id = "default"
-    if not resolved_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required (query param or authenticated actor)",
-        )
+    resolved_user_id = require_authenticated_actor_id(request)
     try:
         items = await secret_memory_service.list_secrets(
             user_id=str(resolved_user_id),
@@ -361,12 +339,7 @@ async def add_user_secret(
     request: Request,
     body: SecretMemoryCreateRequest,
 ):
-    resolved_user_id = "default"
-    if not resolved_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required (body or authenticated actor)",
-        )
+    resolved_user_id = require_authenticated_actor_id(request)
     try:
         stored = await secret_memory_service.store_secret(
             user_id=str(resolved_user_id),

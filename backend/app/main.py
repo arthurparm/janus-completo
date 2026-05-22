@@ -36,6 +36,7 @@ from app.core.infrastructure import (
     setup_logging,
     setup_tracing,
 )
+from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
 from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
@@ -227,7 +228,9 @@ if API_KEY:
 
 @app.middleware("http")
 async def actor_binding(request: Request, call_next):
-    request.state.actor_user_id = "system"
+    actor = get_actor_user_id(request)
+    request.state.actor_user_id = str(actor) if actor is not None else None
+    request.state.actor_project_id = (request.headers.get("X-Project-Id") or "").strip() or None
     return await call_next(request)
 
 

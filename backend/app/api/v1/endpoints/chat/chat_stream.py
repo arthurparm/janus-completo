@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.core.llm import ModelPriority, ModelRole
+from app.services.chat.chat_contracts import chat_http_error_detail
 from app.services.chat_service import (
     ChatService,
     ConversationNotFoundError,
@@ -10,7 +11,6 @@ from app.services.chat_service import (
 )
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.trace_service import TraceService, get_trace_service
-from app.services.chat.chat_contracts import chat_http_error_detail
 
 from .deps import (
     acquire_sse_slot,
@@ -151,6 +151,7 @@ async def stream_message(
 
         slot_user = await acquire_sse_slot(
             channel="chat_stream",
+            user_id=user_id,
         )
         gen = service.stream_message(
             conversation_id=conversation_id,
@@ -314,6 +315,7 @@ async def stream_agent_events(
                 raise
         slot_user = await acquire_sse_slot(
             channel="agent_events",
+            user_id=user_id,
         )
         gen = service.stream_events(conversation_id=conversation_id, user_id=user_id)
     except HTTPException:
