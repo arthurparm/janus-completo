@@ -650,6 +650,46 @@ Acredito que migrar o stream principal para `POST` com payload JSON autenticado 
 - Nao houve validacao manual em browser real nem subida completa da stack PC1/PC2; ainda falta evidenciar o comportamento de rede no app completo com backend real.
 - O risco residual prioritario seguinte permanece no frontend de historico paginado: `getChatHistoryPaginated(...)` ainda chama `/history` em vez de `/history/paginated`, embora isso nao tenha prioridade maior do que a exposicao de prompts corrigida neste ciclo.
 
+## Ciclo 14 - Frontend do historico paginado chamava endpoint incorreto e quebrava consistencia de contrato
+
+### Problema
+
+- Categoria: disponibilidade funcional, consistencia frontend/backend e auditabilidade do fluxo de conversa.
+- Fato observado: `frontend/src/app/services/domain/chat-api-service.ts` implementava `getChatHistoryPaginated(...)`, mas ainda chamava `/api/v1/chat/{conversation_id}/history` em vez de `/history/paginated`.
+- Fato observado: o backend ja expunha `GET /api/v1/chat/{conversation_id}/history/paginated` em `backend/app/api/v1/endpoints/chat/chat_history.py`, e os contratos QA ja validavam esse endpoint dedicado.
+- Impacto antes: a UI principal carregava mensagens usando um metodo chamado "paginado", mas recebia a resposta do endpoint simples, perdendo `total_count`, `has_more`, `next_offset` e qualquer evolucao futura de navegacao/telemetria do historico. Isso criava uma integracao silenciosamente inconsistente entre frontend e backend no fluxo central de conversa.
+
+### Hipotese
+
+Acredito que alinhar `getChatHistoryPaginated(...)` ao endpoint correto e reforcar o contrato com testes de frontend e QA elimina a divergencia silenciosa entre as camadas, porque o cliente passa a consumir o mesmo shape paginado que o backend ja expunha e os testes impedem regressao futura para o endpoint simples.
+
+### Implementacao
+
+- `frontend/src/app/services/domain/chat-api-service.ts`: `getChatHistoryPaginated(...)` passou a chamar `/api/v1/chat/{conversation_id}/history/paginated`.
+- `frontend/src/app/services/domain/chat-api-service.contract.spec.ts`: adicionada cobertura de contrato para garantir a URL correta e a preservacao de `total_count`, `has_more`, `next_offset`, `limit` e `offset`.
+- `qa/test_chat_history_contract.py`: fortalecido o contrato backend do endpoint paginado para verificar explicitamente os metadados de paginação, e nao apenas a lista de mensagens.
+- Commit correspondente da implementacao: [e3e9516e](https://github.com/arthurparm/janus-completo/commit/e3e9516e6cd7d258de0401ea64e266cbcbb3ea51)
+
+### Metricas
+
+- Baseline observado por auditoria de codigo:
+  - 1 metodo central do frontend com nome/contrato paginado chamava o endpoint nao paginado.
+  - 100% dos carregamentos via `getChatHistoryPaginated(...)` perdiam metadados reais de paginação do backend.
+- Depois da correcao:
+  - 0 chamadas de `getChatHistoryPaginated(...)` usam o endpoint simples `/history`.
+  - 100% das chamadas do metodo passam a consumir `/history/paginated` com metadados coerentes.
+- Testes e validacoes executados nesta iteracao:
+  - `backend\.venv\Scripts\python.exe -m pytest -q qa/test_chat_history_contract.py`: 10 passed.
+  - `npm run test -- --watch=false --include src/app/services/domain/chat-api-service.contract.spec.ts --include src/app/features/conversations/conversations.spec.ts --include src/app/features/conversations/conversations-flows.spec.ts`: o `npm` voltou a encaminhar os argumentos de forma ampla para o Vitest; resultado efetivo: 29 arquivos, 125 testes passados, incluindo o novo contrato de `ChatApiService` e os fluxos de `Conversations`.
+  - `npm run lint`: passou.
+  - `npx ng build --configuration development`: passou.
+
+### Riscos e limitacoes
+
+- Nao houve validacao browser-guided contra backend real nesta iteracao; a confianca vem de contratos frontend/backend, QA HTTP e build Angular.
+- O comando padrao `npm run build -- --configuration development` continua sensivel ao encaminhamento de argumentos nesta workspace; a validacao real do ciclo foi feita com `npx ng build --configuration development`.
+- Permanecem fora do escopo desta iteracao os itens residuais de full-stack PC1/PC2, validacao browser real do stream e fechamento da trilha `thread_id`/LangGraph em `pending_actions`.
+
 ## Decisão
 
 Recomendação: manter as correções. Confiança: média-alta para os contratos corrigidos, limitada por ausência de validação full-stack com infraestrutura PC2 ativa.
