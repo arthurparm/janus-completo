@@ -64,7 +64,7 @@ def faulty_calculator(expression: str) -> str:
 
     # Funcionamento normal (70%)
     try:
-        result = eval(expression)
+        result = eval(expression, {"__builtins__": {}}, {})
         return json.dumps({"success": True, "result": result, "expression": expression})
     except Exception as e:
         return json.dumps({"success": False, "error": str(e)})

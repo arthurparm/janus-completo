@@ -4,6 +4,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import json
 
 from app.config import settings
 
@@ -14,6 +15,36 @@ _DEFAULT_ALLOWED_COMMANDS = (
 _DEFAULT_BLOCKLIST_TOKENS = (
     "rm -rf,del /f,format ,shutdown,reboot,powershell -enc,curl |,wget |,nc ,netcat "
 )
+_DEFAULT_ALLOWED_ARGV_PREFIXES: dict[str, list[tuple[str, ...]]] = {
+    "echo": [("echo",)],
+    "pwd": [("pwd",)],
+    "ls": [("ls",)],
+    "cat": [("cat",)],
+    "head": [("head",)],
+    "tail": [("tail",)],
+    "wc": [("wc",)],
+    "grep": [("grep",)],
+    "find": [("find",)],
+    "date": [("date",)],
+    "whoami": [("whoami",)],
+    "pytest": [("pytest",)],
+    "git": [
+        ("git", "status"),
+        ("git", "diff"),
+        ("git", "log"),
+        ("git", "show"),
+        ("git", "rev-parse"),
+        ("git", "ls-files"),
+    ],
+    "python": [
+        ("python", "-m", "pytest"),
+        ("python", "-m", "ruff"),
+        ("python", "-m", "mypy"),
+        ("python", "-m", "pip", "list"),
+        ("python", "-m", "pip", "freeze"),
+        ("python", "-m", "pip", "show"),
+    ],
+}
 
 
 def _parse_csv_set(raw: str) -> set[str]:
@@ -26,6 +57,38 @@ def get_allowed_commands() -> set[str]:
 
 def get_blocked_command_tokens() -> set[str]:
     return _parse_csv_set(os.getenv("CHAT_TOOL_COMMAND_BLOCKLIST", _DEFAULT_BLOCKLIST_TOKENS))
+
+
+def _normalize_argv_prefixes(payload: object) -> dict[str, list[tuple[str, ...]]]:
+    if not isinstance(payload, dict):
+        return {}
+    normalized: dict[str, list[tuple[str, ...]]] = {}
+    for key, value in payload.items():
+        if not isinstance(key, str) or not isinstance(value, list):
+            continue
+        prefixes: list[tuple[str, ...]] = []
+        for item in value:
+            if not isinstance(item, list):
+                continue
+            parts = tuple(str(part).strip().lower() for part in item if str(part).strip())
+            if parts:
+                prefixes.append(parts)
+        if prefixes:
+            normalized[key.strip().lower()] = prefixes
+    return normalized
+
+
+def get_allowed_argv_prefixes() -> dict[str, list[tuple[str, ...]]]:
+    raw = os.getenv("CHAT_TOOL_COMMAND_ARG_ALLOWLIST_JSON")
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            parsed = None
+        normalized = _normalize_argv_prefixes(parsed)
+        if normalized:
+            return normalized
+    return _DEFAULT_ALLOWED_ARGV_PREFIXES
 
 
 def _has_blocked_operators(command: str) -> bool:
@@ -70,6 +133,15 @@ def validate_command(command: str) -> tuple[bool, str | None, list[str] | None]:
             f"Executable '{executable}' is outside allowlist. Allowed examples: {allowed_preview}",
             None,
         )
+
+    lowered_parts = [Path(parts[0]).name.lower(), *[str(p).lower() for p in parts[1:]]]
+    argv_prefixes = get_allowed_argv_prefixes()
+    allowed_prefixes = argv_prefixes.get(executable)
+    if not allowed_prefixes:
+        return False, f"Executable '{executable}' is missing argv allowlist rules.", None
+    if not any(tuple(lowered_parts[: len(prefix)]) == prefix for prefix in allowed_prefixes):
+        prefix_preview = "; ".join(" ".join(prefix) for prefix in allowed_prefixes[:8])
+        return False, f"Command arguments are outside allowlist. Allowed prefixes: {prefix_preview}", None
 
     return True, None, parts
 

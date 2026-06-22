@@ -256,18 +256,29 @@ class DynamicToolGenerator:
 
         async def api_call(**kwargs) -> str:
             try:
+                from app.core.security.egress_policy import enforce_tool_http_egress
+
+                safe_target = enforce_tool_http_egress(endpoint_url, tool=name)
+                if not safe_target:
+                    return "URL bloqueada por política de egress/SSRF"
+
+                effective_headers = dict(headers or {})
+                effective_headers["Host"] = safe_target.original_host
+
                 async with httpx.AsyncClient(timeout=30) as client:
                     if method.upper() == "GET":
                         response = await client.get(
-                            endpoint_url,
+                            safe_target.fetch_url,
                             params=kwargs,
-                            headers=headers or {},
+                            headers=effective_headers,
+                            follow_redirects=False,
                         )
                     elif method.upper() == "POST":
                         response = await client.post(
-                            endpoint_url,
+                            safe_target.fetch_url,
                             json=kwargs,
-                            headers=headers or {},
+                            headers=effective_headers,
+                            follow_redirects=False,
                         )
                     else:
                         return f"Método HTTP '{method}' não suportado"

@@ -1,8 +1,7 @@
 import asyncio
+import httpx
 import json
 import structlog
-import urllib.error
-import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -10,6 +9,7 @@ from langchain.tools import BaseTool, tool
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
+from app.core.security.egress_policy import enforce_tool_http_egress
 from app.core.evolution import EvolutionManager
 from app.core.infrastructure import filesystem_manager
 from app.core.infrastructure.context_manager import context_manager
@@ -708,33 +708,32 @@ def browse_url(url: str) -> str:
     if not url.startswith("http"):
         return "Erro: A URL deve começar com http:// ou https://"
 
+    safe_target = enforce_tool_http_egress(url, tool="browse_url")
+    if not safe_target:
+        return "Erro: URL bloqueada por política de egress/SSRF"
+
     logger.info("log_info", message=f"Browsing URL: {url}")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            html_content = response.read().decode(charset, errors="replace")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Host": safe_target.original_host,
+        }
+        with httpx.Client(timeout=15, follow_redirects=False) as client:
+            resp = client.get(safe_target.fetch_url, headers=headers)
+            resp.raise_for_status()
+            data = resp.content or b""
 
-            # Extrair texto limpo
-            text_content = strip_tags(html_content)
+        html_content = data[:2_000_000].decode(resp.encoding or "utf-8", errors="replace")
+        text_content = strip_tags(html_content)
+        text_content = "\n".join([line.strip() for line in text_content.splitlines() if line.strip()])
+        return text_content[:20000]
 
-            # Limpeza básica de white-space
-            text_content = "\n".join(
-                [line.strip() for line in text_content.splitlines() if line.strip()]
-            )
-
-            # Limitar tamanho para não estourar contexto
-            return text_content[:20000]  # Retorna os primeiros 20k caracteres
-
-    except urllib.error.HTTPError as e:
-        return f"Erro HTTP {e.code}: {e.reason}"
-    except urllib.error.URLError as e:
-        return f"Erro de Conexão: {e.reason}"
+    except httpx.HTTPStatusError as e:
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        return f"Erro HTTP {status_code}: {e}"
+    except httpx.HTTPError as e:
+        return f"Erro de Conexão: {e}"
     except Exception as e:
         logger.error("log_error", message=f"Erro ao navegar na URL {url}: {e}", exc_info=True)
         return f"Erro inesperado ao acessar URL: {e}"
