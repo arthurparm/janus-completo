@@ -5,6 +5,12 @@ from fastapi import HTTPException, Request, status
 
 
 def get_request_actor_id(request: Request | None) -> str | None:
+    """
+    Extrai o actor_user_id do request.state.
+
+    Este é o identificador de ator (usuário humano ou system actor) materializado
+    pelo middleware de binding (ver app/main.py).
+    """
     if request is None:
         return None
     try:
@@ -15,6 +21,13 @@ def get_request_actor_id(request: Request | None) -> str | None:
 
 
 def require_authenticated_actor_id(request: Request) -> str:
+    """
+    Garante que existe um ator autenticado no contexto da requisição.
+
+    Regras:
+    - valida a existência do actor_user_id
+    - aplica validação de API key quando configurada
+    """
     actor = get_request_actor_id(request)
     require_api_key(request)
     if actor:
@@ -23,11 +36,61 @@ def require_authenticated_actor_id(request: Request) -> str:
 
 
 def require_admin_actor(request: Request) -> str:
-    return require_authenticated_actor_id(request)
+    """
+    Guard administrativo (RBAC):
+    - exige autenticação (actor_user_id)
+    - exige role ADMIN no banco
+    - bloqueia system actor (role SYSTEM) para separar identidade técnica de usuário humano
+    """
+    actor = require_authenticated_actor_id(request)
+    try:
+        actor_id = int(actor)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden") from exc
+
+    try:
+        from app.repositories.user_repository import UserRepository
+
+        repo = UserRepository()
+        if repo.has_role(actor_id, getattr(settings, "SYSTEM_USER_ROLE", "SYSTEM")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        if repo.is_admin(actor_id):
+            return actor
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Authz check failed") from exc
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
-def require_same_user_or_admin(request: Request, target_user_id: str) -> str:
-    return require_authenticated_actor_id(request)
+def require_same_user_or_admin(request: Request, target_user_id: str | int) -> str:
+    """
+    Guard para recursos por usuário:
+    - permite acesso ao próprio usuário (owner)
+    - permite acesso a admin (role ADMIN)
+    """
+    actor = require_authenticated_actor_id(request)
+    if str(target_user_id) == str(actor):
+        return actor
+
+    try:
+        actor_id = int(actor)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden") from exc
+
+    try:
+        from app.repositories.user_repository import UserRepository
+
+        repo = UserRepository()
+        if repo.is_admin(actor_id):
+            return actor
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Authz check failed") from exc
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
 def resolve_user_scope_id(request: Request | None, explicit_user_id: str | None) -> str | None:
