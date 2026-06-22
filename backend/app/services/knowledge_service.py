@@ -491,8 +491,8 @@ class KnowledgeService:
                 if self._index_task is task and task.done():
                     self._index_task = None
 
-    async def clear_graph(self) -> int:
-        return await self._repo.clear_all_data()
+    async def clear_graph(self, *, user_id: str) -> int:
+        return await self._repo.delete_user_data(user_id)
 
     # --- Sprint 8 Operations ---
 

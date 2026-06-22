@@ -25,6 +25,7 @@ from qdrant_client import models
 
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
+from app.core.governance.data_classification import classify_text, default_retention_decision
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.protocols import MemoryRepositoryProtocol
 from app.db.vector_store import (
@@ -34,6 +35,7 @@ from app.db.vector_store import (
     build_user_chat_collection_name,
     get_async_qdrant_client,
 )
+from app.repositories.data_governance_repository import DataGovernanceRepository
 from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
@@ -299,6 +301,26 @@ class MemoryService:
             point = models.PointStruct(id=point_id, vector=vec, payload=payload)
 
             await client.upsert(collection_name=collection_name, points=[point])
+            try:
+                decision = default_retention_decision(classify_text(content))
+                retention_until = None
+                if decision.retention_policy == "days" and decision.retention_days is not None:
+                    from datetime import datetime, timedelta, timezone
+
+                    retention_until = datetime.now(timezone.utc) + timedelta(days=decision.retention_days)
+                DataGovernanceRepository().upsert_record(
+                    user_id=None,
+                    resource_type="memory_point",
+                    resource_id=str(point_id),
+                    classification=decision.classification,
+                    classification_source="auto",
+                    retention_policy=decision.retention_policy,
+                    retention_days=decision.retention_days,
+                    retention_until=retention_until,
+                    metadata_json={"session_id": str(session_id), "role": str(role)},
+                )
+            except Exception:
+                pass
             if bool(getattr(settings, "KNOWLEDGE_EXPERIMENTAL_WRITE_DUAL", False)):
                 try:
                     from app.planes.knowledge import get_knowledge_facade

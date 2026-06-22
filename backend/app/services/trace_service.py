@@ -45,14 +45,22 @@ class TraceService:
         """
         Formats a raw audit event into a standardized trace step.
         """
-        # details_json contains the original payload logged by ChatEventDbLogger
-        details_str = event.get("details_json")
-        if not details_str:
+        details_value = event.get("details_json")
+        if not details_value:
             return None
-        
-        try:
-            payload = json.loads(details_str)
-        except Exception:
+
+        payload: dict[str, Any] | None = None
+        if isinstance(details_value, dict):
+            payload = details_value
+        elif isinstance(details_value, str):
+            try:
+                loaded = json.loads(details_value)
+                if isinstance(loaded, dict):
+                    payload = loaded
+            except Exception:
+                payload = None
+
+        if payload is None:
             return None
 
         # Standardize schema for Frontend

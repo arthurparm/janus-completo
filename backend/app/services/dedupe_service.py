@@ -88,16 +88,24 @@ class DedupeService:
                 dup_ids = [u[0] for u in users[1:]]
 
                 # Remapear FKs
-                for table in ["profiles", "sessions", "audit_events"]:
+                for table in ["profiles", "sessions"]:
                     s.execute(
-                        text(f"UPDATE {table} SET profile_id = :canon WHERE profile_id IN :dups"),
-                        {"canon": canonical_id, "dups": tuple(dup_ids)})
+                        text(f"UPDATE {table} SET user_id = :canon WHERE user_id IN :dups"),
+                        {"canon": canonical_id, "dups": tuple(dup_ids)},
+                    )
+                s.execute(
+                    text(
+                        "UPDATE audit_ledger_events SET actor_user_id = :canon WHERE actor_user_id IN :dups"
+                    ),
+                    {"canon": canonical_id, "dups": tuple(dup_ids)},
+                )
 
                 # Deletar duplicatas de tabelas dependentes
-                for table in ["user_roles", "consents", "oauth_tokens"]:
+                for table in ["user_roles", "user_privacy_consents", "oauth_tokens"]:
                     s.execute(
-                        text(f"DELETE FROM {table} WHERE profile_id IN :dups"),
-                        {"dups": tuple(dup_ids)})
+                        text(f"DELETE FROM {table} WHERE user_id IN :dups"),
+                        {"dups": tuple(dup_ids)},
+                    )
 
                 # Deletar usuário duplicado
                 s.execute(text("DELETE FROM users WHERE id IN :dups"), {"dups": tuple(dup_ids)})

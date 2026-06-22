@@ -8,15 +8,26 @@ from typing import Any
 import structlog
 from qdrant_client import models as qdrant_models
 
+from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
-from app.core.memory.security import decrypt_text, encrypt_text
+from app.core.infrastructure.logging_config import TRACE_ID
+from app.core.memory.security import decrypt_text, encrypt_text, get_active_key_id
 from app.db.vector_store import (
     aget_or_create_collection,
     build_deterministic_point_id,
     build_user_secret_collection_name,
     get_async_qdrant_client)
+from app.repositories.observability_repository import record_audit_event_direct
+from app.repositories.data_governance_repository import DataGovernanceRepository
 
 logger = structlog.get_logger(__name__)
+
+
+def _try_int(value: str | None) -> int | None:
+    try:
+        return int(str(value))
+    except Exception:
+        return None
 
 
 class SecretMemoryService:
@@ -86,6 +97,7 @@ class SecretMemoryService:
     async def maybe_capture_from_message(
         self,
         *,
+        user_id: str,
         message: str,
         conversation_id: str | None,
         threshold: float = 0.9) -> dict[str, Any] | None:
@@ -95,6 +107,7 @@ class SecretMemoryService:
         if float(extracted.get("confidence") or 0.0) < threshold:
             return None
         stored = await self.store_secret(
+            user_id=user_id,
             label=str(extracted["secret_label"]),
             value=str(extracted["secret_value"]),
             secret_type=str(extracted["secret_type"]),
@@ -106,18 +119,20 @@ class SecretMemoryService:
     async def store_secret(
         self,
         *,
+        user_id: str,
         label: str,
         value: str,
         secret_type: str,
         secret_scope: str | None = None,
         conversation_id: str | None = None,
         source: str = "memory.secret_api") -> dict[str, Any]:
-        collection_name = await aget_or_create_collection(build_user_secret_collection_name())
+        collection_name = await aget_or_create_collection(build_user_secret_collection_name(user_id))
         client = get_async_qdrant_client()
         now_ms = int(time.time() * 1000)
         normalized_label = self._normalize_label(label)
         point_id = build_deterministic_point_id("user-secret", secret_type, normalized_label)
-        encrypted_value, enc_method = encrypt_text(str(value))
+        encrypted_value, enc_method = encrypt_text(str(value), require_key=True)
+        key_id = get_active_key_id()
         summary_text = f"Segredo do usuário: {normalized_label}"
         try:
             vector = await aembed_text(summary_text)
@@ -147,13 +162,58 @@ class SecretMemoryService:
                 "ts_ms": now_ms,
                 "active": True,
                 "enc": enc_method,
+                "kid": str(key_id) if key_id else None,
+                "owner_user_id": str(user_id),
                 "consent_source": source,
                 "consent_captured_at": now_ms,
             },
         }
+        if enc_method == "vault_transit":
+            payload["metadata"]["kid"] = None
+            payload["metadata"]["vault_mount"] = str(getattr(settings, "VAULT_TRANSIT_MOUNT", "transit") or "transit")
+            payload["metadata"]["vault_key"] = str(getattr(settings, "VAULT_TRANSIT_KEY_NAME", "") or "")
         await client.upsert(
             collection_name=collection_name,
             points=[qdrant_models.PointStruct(id=point_id, vector=vector, payload=payload)])
+        try:
+            DataGovernanceRepository().upsert_record(
+                user_id=_try_int(str(user_id)),
+                resource_type="secret",
+                resource_id=str(point_id),
+                classification="SECRET",
+                classification_source="auto",
+                retention_policy="persistent",
+                retention_days=None,
+                retention_until=None,
+                metadata_json={
+                    "secret_label": normalized_label,
+                    "secret_type": str(secret_type),
+                    "secret_scope": str(secret_scope or "personal"),
+                },
+            )
+        except Exception:
+            pass
+        try:
+            record_audit_event_direct(
+                user_id=_try_int(str(user_id)),
+                endpoint="secret_memory",
+                action="secret_write",
+                tool="secret_memory",
+                status="success",
+                trace_id=TRACE_ID.get(),
+                details_json={
+                    "secret_id": point_id,
+                    "secret_label": normalized_label,
+                    "secret_type": str(secret_type),
+                    "secret_scope": str(secret_scope or "personal"),
+                    "masked_value": self._mask_value(value),
+                    "conversation_id": str(conversation_id) if conversation_id else None,
+                    "key_id": str(key_id) if key_id else None,
+                    "source": source,
+                },
+            )
+        except Exception:
+            pass
         return {
             "id": point_id,
             "secret_label": normalized_label,
@@ -165,14 +225,21 @@ class SecretMemoryService:
     async def list_secrets(
         self,
         *,
+        user_id: str,
         query: str | None = None,
         conversation_id: str | None = None,
         limit: int = 20,
         active_only: bool = True,
         reveal: bool = False) -> list[dict[str, Any]]:
-        collection_name = await aget_or_create_collection(build_user_secret_collection_name())
+        collection_name = await aget_or_create_collection(build_user_secret_collection_name(user_id))
         client = get_async_qdrant_client()
         must: list[qdrant_models.FieldCondition] = []
+        must.append(
+            qdrant_models.FieldCondition(
+                key="metadata.owner_user_id",
+                match=qdrant_models.MatchValue(value=str(user_id)),
+            )
+        )
         if active_only:
             must.append(
                 qdrant_models.FieldCondition(
@@ -215,17 +282,38 @@ class SecretMemoryService:
             if current is None or int(item.get("ts_ms") or 0) > int(current.get("ts_ms") or 0):
                 deduped[key] = item
         ranked = sorted(deduped.values(), key=lambda item: int(item.get("ts_ms") or 0), reverse=True)
-        return ranked[:limit]
+        result = ranked[:limit]
+        if reveal and result:
+            try:
+                record_audit_event_direct(
+                    user_id=_try_int(str(user_id)),
+                    endpoint="secret_memory",
+                    action="secret_read",
+                    tool="secret_memory",
+                    status="success",
+                    trace_id=TRACE_ID.get(),
+                    details_json={
+                        "count": len(result),
+                        "secret_ids": [str(item.get("id") or "") for item in result],
+                        "secret_labels": [str(item.get("secret_label") or "") for item in result],
+                        "conversation_id": str(conversation_id) if conversation_id else None,
+                    },
+                )
+            except Exception:
+                pass
+        return result
 
     async def build_authorized_prompt_context(
         self,
         *,
+        user_id: str,
         message: str,
         conversation_id: str | None = None,
         limit: int = 3) -> str | None:
         if not self.should_authorize_prompt_recall(message):
             return None
         items = await self.list_secrets(
+            user_id=user_id,
             query=message,
             conversation_id=conversation_id,
             limit=limit,

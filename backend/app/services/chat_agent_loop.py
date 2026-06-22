@@ -3,15 +3,14 @@ Chat Agent Loop Service.
 Executes ReAct (Reasoning + Acting) loop with tool execution fallbacks.
 """
 
-import asyncio
 import re
-import structlog
 from typing import Any
+
+import structlog
 from app.config import settings
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
-from app.core.llm import ModelRole, ModelPriority
 from app.core.infrastructure.fallback_chain import FallbackChain
-from app.core.exceptions.chat_exceptions import LLMInvocationError, ToolExecutionError
+from app.core.llm import ModelPriority, ModelRole
 
 logger = structlog.get_logger(__name__)
 _PENDING_ACTION_ID_RE = re.compile(r"Pending action id:\s*(\d+)", re.IGNORECASE)
@@ -373,17 +372,6 @@ class ChatAgentLoop:
                 project_id=project_id,
             )
 
-        async def fallback_permissive():
-            # Try with relaxed parameters if primary fails
-            logger.info("tool_execution_fallback_permissive")
-            return await self.tool_executor.execute_tool_calls(
-                tool_calls,
-                strict=False,
-                policy=policy,
-                user_id=user_id,
-                project_id=project_id,
-            )
-
         async def minimal_fallback():
             # Return error messages for all tools
             return [
@@ -395,7 +383,7 @@ class ChatAgentLoop:
             ]
 
         chain = FallbackChain(
-            strategies=[primary, fallback_permissive, minimal_fallback],
+            strategies=[primary, minimal_fallback],
             component_name="tool_execution",
         )
 

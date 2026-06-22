@@ -423,12 +423,14 @@ class RAGService:
             episodic_context = self._format_episodic_context(episodic_items)
             secret_context = None
             secret_items: list[dict[str, Any]] = []
-            if secret_memory_service.should_authorize_prompt_recall(message):
+            if user_id and secret_memory_service.should_authorize_prompt_recall(message):
                 secret_context = await secret_memory_service.build_authorized_prompt_context(
+                    user_id=str(user_id),
                     message=message,
                     conversation_id=conversation_id,
                     limit=min(3, max(1, limit)))
                 secret_items = await secret_memory_service.list_secrets(
+                    user_id=str(user_id),
                     query=message,
                     conversation_id=conversation_id,
                     limit=min(3, max(1, limit)),

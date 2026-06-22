@@ -1,21 +1,33 @@
 from typing import Any
 
-from fastapi import Request
-
 from app.core.exceptions.chat_exceptions import (
-    ChatServiceError,
-    ConversationNotFoundError,
-    MessageTooLargeError,
+    ChatServiceError as ChatServiceError,
+)
+from app.core.exceptions.chat_exceptions import (
+    ConversationNotFoundError as ConversationNotFoundError,
+)
+from app.core.exceptions.chat_exceptions import (
+    MessageTooLargeError as MessageTooLargeError,
 )
 from app.core.llm import ModelPriority, ModelRole
 from app.repositories.chat_repository import ChatRepository
 from app.services.chat import ConversationService, MessageOrchestrationService, StreamingService
 from app.services.chat.message_helpers import (
     attach_understanding as helper_attach_understanding,
+)
+from app.services.chat.message_helpers import (
     build_understanding_payload as helper_build_understanding_payload,
+)
+from app.services.chat.message_helpers import (
     estimate_tokens as helper_estimate_tokens,
+)
+from app.services.chat.message_helpers import (
     format_tool_creation_response as helper_format_tool_creation_response,
+)
+from app.services.chat.message_helpers import (
     is_explicit_tool_creation as helper_is_explicit_tool_creation,
+)
+from app.services.chat.message_helpers import (
     split_ui as helper_split_ui,
 )
 from app.services.chat_agent_loop import ChatAgentLoop
@@ -28,6 +40,7 @@ from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
+from fastapi import Request
 
 
 class ChatService:
@@ -122,10 +135,11 @@ class ChatService:
         self,
         conversation_id: str,
         conv: dict[str, Any],
+        user_id: str | None,
         project_id: str | None,
     ) -> None:
         self._conversation_service.validate_conversation_access(
-            conversation_id, conv, project_id
+            conversation_id, conv, user_id, project_id
         )
 
     def _trigger_post_response_events(
@@ -145,14 +159,20 @@ class ChatService:
         )
 
     def start_conversation(
-        self, persona: str | None, project_id: str | None
+        self,
+        persona: str | None,
+        user_id: str | None = None,
+        project_id: str | None = None,
     ) -> str:
-        return self._conversation_service.start_conversation(persona, project_id)
+        return self._conversation_service.start_conversation(persona, user_id, project_id)
 
     async def start_conversation_async(
-        self, persona: str | None, project_id: str | None
+        self,
+        persona: str | None,
+        user_id: str | None = None,
+        project_id: str | None = None,
     ) -> str:
-        return await self._conversation_service.start_conversation_async(persona, project_id)
+        return await self._conversation_service.start_conversation_async(persona, user_id, project_id)
 
     async def send_message(
         self,
@@ -161,6 +181,7 @@ class ChatService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None = None,
+        user_id: str | None = None,
         project_id: str | None = None,
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
@@ -171,6 +192,7 @@ class ChatService:
             role=role,
             priority=priority,
             timeout_seconds=timeout_seconds,
+            user_id=user_id,
             project_id=project_id,
             knowledge_space_id=knowledge_space_id,
             identity_source=identity_source,
@@ -180,20 +202,23 @@ class ChatService:
         self,
         *,
         conversation_id: str,
+        user_id: str | None = None,
         requested_knowledge_space_id: str | None = None,
     ) -> str | None:
         return self._message_orchestration_service.resolve_active_knowledge_space_id(
             conversation_id=conversation_id,
+            user_id=user_id,
             requested_knowledge_space_id=requested_knowledge_space_id,
         )
 
     def get_history(
         self,
         conversation_id: str,
+        user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         return self._conversation_service.get_history(
-            conversation_id=conversation_id, project_id=project_id
+            conversation_id=conversation_id, user_id=user_id, project_id=project_id
         )
 
     def get_history_paginated(
@@ -203,6 +228,7 @@ class ChatService:
         offset: int = 0,
         before_ts: float | None = None,
         after_ts: float | None = None,
+        user_id: str | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         return self._conversation_service.get_history_paginated(
@@ -211,65 +237,72 @@ class ChatService:
             offset=offset,
             before_ts=before_ts,
             after_ts=after_ts,
+            user_id=user_id,
             project_id=project_id,
         )
 
     async def list_conversations(
-        self, project_id: str | None = None, limit: int = 50
+        self, user_id: str | None = None, project_id: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
         return await self._conversation_service.list_conversations(
-            project_id=project_id, limit=limit
+            user_id=user_id, project_id=project_id, limit=limit
         )
 
     async def rename_conversation(
         self,
         conversation_id: str,
         new_title: str,
+        user_id: str | None = None,
         project_id: str | None = None,
     ) -> None:
         await self._conversation_service.rename_conversation(
             conversation_id=conversation_id,
             new_title=new_title,
+            user_id=user_id,
             project_id=project_id,
         )
 
     async def delete_conversation(
-        self, conversation_id: str, project_id: str | None = None
+        self, conversation_id: str, user_id: str | None = None, project_id: str | None = None
     ) -> None:
         await self._conversation_service.delete_conversation(
             conversation_id=conversation_id,
+            user_id=user_id,
             project_id=project_id,
         )
 
     async def update_message(
-        self, conversation_id: str, message_id: int, new_text: str
+        self, conversation_id: str, message_id: int, new_text: str, user_id: str | None = None
     ) -> None:
         await self._conversation_service.update_message(
             conversation_id=conversation_id,
             message_id=message_id,
             new_text=new_text,
+            user_id=user_id,
         )
 
     async def delete_message(
-        self, conversation_id: str, message_id: int
+        self, conversation_id: str, message_id: int, user_id: str | None = None
     ) -> None:
         await self._conversation_service.delete_message(
-            conversation_id=conversation_id, message_id=message_id
+            conversation_id=conversation_id, message_id=message_id, user_id=user_id
         )
 
     async def replace_last_assistant_message(
-        self, conversation_id: str, new_text: str
+        self, conversation_id: str, new_text: str, user_id: str | None = None
     ) -> None:
         await self._conversation_service.replace_last_assistant_message(
             conversation_id=conversation_id,
             new_text=new_text,
+            user_id=user_id,
         )
 
     async def get_last_assistant_message(
-        self, conversation_id: str
+        self, conversation_id: str, user_id: str | None = None
     ) -> dict[str, Any]:
         return await self._conversation_service.get_last_assistant_message(
             conversation_id=conversation_id,
+            user_id=user_id,
         )
 
     async def update_message_payload(
@@ -277,11 +310,13 @@ class ChatService:
         conversation_id: str,
         message_id: int,
         patch: dict[str, Any],
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         return await self._conversation_service.update_message_payload(
             conversation_id=conversation_id,
             message_id=message_id,
             patch=patch,
+            user_id=user_id,
         )
 
     async def stream_message(
@@ -291,6 +326,7 @@ class ChatService:
         role: ModelRole | None = None,
         priority: ModelPriority | None = None,
         timeout_seconds: int | None = None,
+        user_id: str | None = None,
         project_id: str | None = None,
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
@@ -304,6 +340,7 @@ class ChatService:
             role=role,
             priority=priority,
             timeout_seconds=timeout_seconds,
+            user_id=user_id,
             project_id=project_id,
             knowledge_space_id=knowledge_space_id,
             identity_source=identity_source,
@@ -313,9 +350,10 @@ class ChatService:
         ):
             yield chunk
 
-    async def stream_events(self, conversation_id: str):
+    async def stream_events(self, conversation_id: str, user_id: str | None = None):
         async for chunk in self._streaming_service.stream_events(
             conversation_id=conversation_id,
+            user_id=user_id,
         ):
             yield chunk
 

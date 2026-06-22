@@ -44,6 +44,13 @@ class DBMigrationService:
         except Exception:
             return False
 
+    def _table_exists(self, s: Session, table: str) -> bool:
+        try:
+            insp = inspect(s.get_bind())
+            return bool(insp.has_table(table))
+        except Exception:
+            return False
+
     def _dialect_name(self, s: Session) -> str:
         try:
             bind = s.get_bind()
@@ -58,11 +65,6 @@ class DBMigrationService:
         if dialect in ("mysql", "mariadb"):
             return f"ALTER TABLE {table} ADD CONSTRAINT {constraint} UNIQUE KEY ({columns_csv})"
         return f"ALTER TABLE {table} ADD CONSTRAINT {constraint} UNIQUE ({columns_csv})"
-
-    def _details_json_column_sql(self, *, dialect: str) -> str:
-        if dialect in ("postgresql", "postgres"):
-            return "ALTER TABLE audit_events ADD COLUMN details_json JSONB NULL"
-        return "ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL"
 
     def _message_json_column_sql(self, *, dialect: str, column: str) -> str:
         if dialect in ("postgresql", "postgres"):
@@ -264,6 +266,19 @@ class DBMigrationService:
                 "index",
                 self._index_exists(s, consent_table, "idx_privacy_consent_user_scope"),
             )
+            add(
+                "data_governance_records",
+                "data_governance_records",
+                "table",
+                self._table_exists(s, "data_governance_records"),
+            )
+            for idx in ("idx_data_gov_resource", "idx_data_gov_user", "idx_data_gov_retention"):
+                add(
+                    "data_governance_records",
+                    idx,
+                    "index",
+                    self._index_exists(s, "data_governance_records", idx),
+                )
             ok = all(c["exists"] for c in checks)
             return {"status": "ok" if ok else "missing", "checks": checks}
         finally:
@@ -565,22 +580,145 @@ class DBMigrationService:
                         f"messages.{column}",
                         applied,
                     )
-            # AuditEvent evolution
-            try:
-                s.execute(text("ALTER TABLE audit_events ADD COLUMN justification TEXT NULL"))
-                applied.append("audit_events.add_justification")
-            except Exception:
-                pass
-            try:
-                s.execute(text(self._details_json_column_sql(dialect=dialect)))
-                applied.append("audit_events.add_details_json")
-            except Exception:
-                pass
-            try:
-                s.execute(text("CREATE INDEX idx_audit_action ON audit_events (action)"))
-                applied.append("audit_events.idx_audit_action")
-            except Exception:
-                pass
+            # Audit ledger (append-only)
+            if dialect in ("postgresql", "postgres"):
+                if not self._table_exists(s, "audit_ledger_events"):
+                    try:
+                        s.execute(
+                            text(
+                                """
+                                CREATE TABLE IF NOT EXISTS audit_ledger_events (
+                                    id SERIAL PRIMARY KEY,
+                                    actor_user_id INTEGER NULL,
+                                    endpoint VARCHAR(200) NOT NULL,
+                                    action VARCHAR(100) NOT NULL,
+                                    tool VARCHAR(100) NULL,
+                                    status VARCHAR(20) NOT NULL,
+                                    trace_id VARCHAR(64) NULL,
+                                    payload_json JSONB NULL,
+                                    prev_hash VARCHAR(64) NULL,
+                                    entry_hash VARCHAR(64) NOT NULL,
+                                    signature VARCHAR(64) NOT NULL,
+                                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                            )
+                        )
+                        applied.append("audit_ledger_events.table")
+                    except Exception:
+                        pass
+                for idx_sql, idx_id in (
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_audit_ledger_ts ON audit_ledger_events (created_at)",
+                        "audit_ledger_events.idx_ts",
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_audit_ledger_trace ON audit_ledger_events (trace_id)",
+                        "audit_ledger_events.idx_trace",
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_audit_ledger_actor ON audit_ledger_events (actor_user_id, created_at)",
+                        "audit_ledger_events.idx_actor",
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_audit_ledger_action ON audit_ledger_events (action, created_at)",
+                        "audit_ledger_events.idx_action",
+                    ),
+                ):
+                    try:
+                        s.execute(text(idx_sql))
+                        applied.append(idx_id)
+                    except Exception:
+                        pass
+                try:
+                    s.execute(
+                        text(
+                            """
+                            CREATE OR REPLACE FUNCTION prevent_audit_ledger_mutation()
+                            RETURNS TRIGGER AS $$
+                            BEGIN
+                                RAISE EXCEPTION 'audit_ledger_events is append-only';
+                            END;
+                            $$ LANGUAGE plpgsql
+                            """
+                        )
+                    )
+                    applied.append("audit_ledger_events.fn_immutable")
+                except Exception:
+                    pass
+                try:
+                    s.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_audit_ledger_no_update'
+                                ) THEN
+                                    CREATE TRIGGER trg_audit_ledger_no_update
+                                    BEFORE UPDATE ON audit_ledger_events
+                                    FOR EACH ROW EXECUTE FUNCTION prevent_audit_ledger_mutation();
+                                END IF;
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_audit_ledger_no_delete'
+                                ) THEN
+                                    CREATE TRIGGER trg_audit_ledger_no_delete
+                                    BEFORE DELETE ON audit_ledger_events
+                                    FOR EACH ROW EXECUTE FUNCTION prevent_audit_ledger_mutation();
+                                END IF;
+                            END $$;
+                            """
+                        )
+                    )
+                    applied.append("audit_ledger_events.triggers_immutable")
+                except Exception:
+                    pass
+                if not self._table_exists(s, "data_governance_records"):
+                    try:
+                        s.execute(
+                            text(
+                                """
+                                CREATE TABLE IF NOT EXISTS data_governance_records (
+                                    id SERIAL PRIMARY KEY,
+                                    user_id INTEGER NULL,
+                                    resource_type VARCHAR(64) NOT NULL,
+                                    resource_id VARCHAR(255) NOT NULL,
+                                    classification VARCHAR(16) NOT NULL,
+                                    classification_source VARCHAR(16) NOT NULL,
+                                    retention_policy VARCHAR(32) NOT NULL,
+                                    retention_days INTEGER NULL,
+                                    retention_until TIMESTAMP NULL,
+                                    metadata_json JSONB NULL,
+                                    purge_job_id VARCHAR(64) NULL,
+                                    purged_at TIMESTAMP NULL,
+                                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                )
+                                """
+                            )
+                        )
+                        applied.append("data_governance_records.table")
+                    except Exception:
+                        pass
+                for idx_sql, idx_id in (
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_data_gov_resource ON data_governance_records (resource_type, resource_id)",
+                        "data_governance_records.idx_resource",
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_data_gov_user ON data_governance_records (user_id, resource_type)",
+                        "data_governance_records.idx_user",
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_data_gov_retention ON data_governance_records (retention_until, purged_at)",
+                        "data_governance_records.idx_retention",
+                    ),
+                ):
+                    try:
+                        s.execute(text(idx_sql))
+                        applied.append(idx_id)
+                    except Exception:
+                        pass
             try:
                 s.commit()
             except Exception:

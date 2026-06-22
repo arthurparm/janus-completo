@@ -403,29 +403,123 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         metadata={"description": "Limpeza diária de logs e cache"},
     )
 
-    # Job: SG-013 Audit Retention Cleanup (intervalo configurável)
-    async def audit_retention_cleanup():
+    # Job: Audit Ledger Integrity Check (intervalo configurável)
+    async def audit_ledger_integrity_check():
         try:
-            retention_days = max(1, int(getattr(settings, "AUDIT_RETENTION_DAYS", 30)))
-            repo = ObservabilityRepository(get_health_monitor(), get_poison_pill_handler())
-            service = ObservabilityService(repo)
-            result = service.purge_old_audit_events(retention_days)
-            logger.info(
-                "log_info",
-                message="Expurgo automático de auditoria executado",
-                removed=result.get("removed", 0),
-                retention_days=retention_days,
+            from app.repositories.audit_ledger_repository import audit_ledger_repository
+            from app.repositories.observability_repository import record_audit_event_direct
+
+            result = audit_ledger_repository.verify_integrity(max_errors=25)
+            if result.get("ok") is True:
+                return
+
+            record_audit_event_direct(
+                endpoint="audit_ledger",
+                action="ledger_integrity_alert",
+                tool="audit_ledger",
+                status="error",
+                details_json=result,
+            )
+            logger.error(
+                "log_error",
+                message="Audit ledger integrity violation detected",
+                details=result,
             )
         except Exception as e:
-            logger.error("log_error", message=f"Audit retention cleanup failed: {e}")
+            logger.error("log_error", message=f"Audit ledger integrity check failed: {e}")
 
     scheduler.register_job(
-        name="audit_retention_cleanup",
-        callback=audit_retention_cleanup,
+        name="audit_ledger_integrity_check",
+        callback=audit_ledger_integrity_check,
         schedule_type=ScheduleType.INTERVAL,
-        interval_seconds=max(60, int(getattr(settings, "AUDIT_PURGE_INTERVAL_SECONDS", 3600))),
+        interval_seconds=max(
+            60, int(getattr(settings, "AUDIT_LEDGER_INTEGRITY_CHECK_INTERVAL_SECONDS", 600))
+        ),
         metadata={
-            "description": "Expurgo automático de eventos de auditoria baseado em AUDIT_RETENTION_DAYS",
+            "description": "Verificação de integridade do ledger de auditoria (hash-chain + assinatura)",
+        },
+    )
+
+    async def data_purge_job():
+        try:
+            from app.services.data_purge_service import data_purge_service
+
+            limit = max(1, int(getattr(settings, "DATA_PURGE_BATCH_LIMIT", 250)))
+            await data_purge_service.run_expired_purge(limit=limit)
+        except Exception as e:
+            logger.error("log_error", message=f"Data purge job failed: {e}")
+
+    scheduler.register_job(
+        name="data_purge_job",
+        callback=data_purge_job,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(300, int(getattr(settings, "DATA_PURGE_INTERVAL_SECONDS", 86400))),
+        metadata={"description": "Expurgo auditável baseado em retenção/classificação (cross-store)"},
+    )
+
+    # Job: Secret Key Rotation (recriptografia gradual, intervalado)
+    async def secret_reencrypt_batch():
+        try:
+            from app.services.secret_key_rotation_service import secret_key_rotation_service
+
+            batch_size = max(1, int(getattr(settings, "SECRET_REENCRYPT_BATCH_SIZE", 100)))
+            await secret_key_rotation_service.reencrypt_batch(limit=batch_size, active_only=True)
+        except Exception as e:
+            logger.error("log_error", message=f"Secret reencrypt batch failed: {e}")
+
+    scheduler.register_job(
+        name="secret_reencrypt_batch",
+        callback=secret_reencrypt_batch,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(60, int(getattr(settings, "SECRET_REENCRYPT_INTERVAL_SECONDS", 600))),
+        metadata={
+            "description": "Recriptografia gradual da secret memory para a chave ativa (MEMORY_ACTIVE_KEY_ID)",
+        },
+    )
+
+    async def vault_transit_rotate():
+        try:
+            provider = str(getattr(settings, "MEMORY_ENCRYPTION_PROVIDER", "keyring") or "keyring").strip()
+            if provider != "vault_transit":
+                return
+            if not str(getattr(settings, "VAULT_ADDR", "") or "").strip():
+                return
+            from app.services.vault_transit_rotation_service import vault_transit_rotation_service
+
+            await asyncio.to_thread(vault_transit_rotation_service.rotate)
+        except Exception as e:
+            logger.error("log_error", message=f"Vault transit rotate failed: {e}")
+
+    scheduler.register_job(
+        name="vault_transit_rotate",
+        callback=vault_transit_rotate,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(
+            3600, int(getattr(settings, "VAULT_TRANSIT_ROTATE_INTERVAL_SECONDS", 2592000))
+        ),
+        metadata={
+            "description": "Rotação automatizada da chave no Vault Transit (secret memory)",
+        },
+    )
+
+    async def secret_retention_purge():
+        try:
+            from app.services.secret_retention_service import secret_retention_service
+
+            batch_size = max(1, int(getattr(settings, "SECRET_RETENTION_PURGE_BATCH_SIZE", 200)))
+            await secret_retention_service.purge_expired_batch(limit=batch_size, active_only=True)
+        except Exception as e:
+            logger.error("log_error", message=f"Secret retention purge failed: {e}")
+
+    scheduler.register_job(
+        name="secret_retention_purge",
+        callback=secret_retention_purge,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(
+            300, int(getattr(settings, "SECRET_RETENTION_PURGE_INTERVAL_SECONDS", 86400))
+        ),
+        metadata={
+            "description": "Expurgo auditável de secret memory expirada (RETENTION_PURGE_ENABLED)",
         },
     )
 

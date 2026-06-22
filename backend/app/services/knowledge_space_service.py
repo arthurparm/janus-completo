@@ -12,12 +12,10 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
-from fastapi import HTTPException, Request, status
-from qdrant_client import models
-
 from app.config import settings
 from app.core.agents.utils import parse_json_lenient
 from app.core.embeddings.embedding_manager import aembed_text, aembed_texts
+from app.core.governance.data_classification import classify_text, default_retention_decision
 from app.core.llm import ModelPriority, ModelRole
 from app.db.graph import get_graph_db
 from app.db.vector_store import (
@@ -26,8 +24,11 @@ from app.db.vector_store import (
     build_user_docs_collection_name,
     get_async_qdrant_client,
 )
+from app.repositories.data_governance_repository import DataGovernanceRepository
 from app.repositories.document_manifest_repository import DocumentManifestRepository
 from app.repositories.knowledge_space_repository import KnowledgeSpaceRepository
+from fastapi import HTTPException, Request, status
+from qdrant_client import models
 
 logger = structlog.get_logger(__name__)
 
@@ -420,7 +421,7 @@ class KnowledgeSpaceService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"source_type inválido: {normalized_source_type}",
             )
-        return self._space_repo.create_space(
+        created = self._space_repo.create_space(
             knowledge_space_id=self.build_space_id(str(user_id)),
             user_id=str(user_id),
             name=str(name or "").strip() or "Knowledge Space",
@@ -431,6 +432,38 @@ class KnowledgeSpaceService:
             parent_collection_id=parent_collection_id,
             description=description,
         )
+        try:
+            sample = "\n".join(
+                [
+                    str(created.get("name") or ""),
+                    str(created.get("description") or ""),
+                    str(created.get("source_type") or ""),
+                ]
+            )
+            decision = default_retention_decision(classify_text(sample))
+            retention_until = None
+            if decision.retention_policy == "days" and decision.retention_days is not None:
+                from datetime import datetime, timedelta, timezone
+
+                retention_until = datetime.now(timezone.utc) + timedelta(days=decision.retention_days)
+            DataGovernanceRepository().upsert_record(
+                user_id=int(str(user_id)) if str(user_id).isdigit() else None,
+                resource_type="knowledge_space",
+                resource_id=str(created.get("knowledge_space_id") or ""),
+                classification=decision.classification,
+                classification_source="auto",
+                retention_policy=decision.retention_policy,
+                retention_days=decision.retention_days,
+                retention_until=retention_until,
+                metadata_json={
+                    "name": created.get("name"),
+                    "source_type": created.get("source_type"),
+                    "source_id": created.get("source_id"),
+                },
+            )
+        except Exception:
+            pass
+        return created
 
     def list_spaces(self, *, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
         return self._space_repo.list_spaces(user_id=str(user_id), limit=limit)
@@ -940,7 +973,6 @@ class KnowledgeSpaceService:
         user_id: str,
         knowledge_space_id: str,
     ) -> list[dict[str, Any]]:
-        client = get_async_qdrant_client()
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         points = await self._scroll_points(
             collection_name=collection_name,
@@ -4269,6 +4301,7 @@ class KnowledgeSpaceService:
         active_doc_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         client = get_async_qdrant_client()
+        user_id = str(knowledge_space.get("user_id") or "system")
         collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         vector = await aembed_text(question)
         query_profile = self._build_query_profile(question)

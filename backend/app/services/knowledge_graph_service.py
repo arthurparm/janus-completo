@@ -70,6 +70,7 @@ class KnowledgeGraphService:
             MERGE (exp:Experience {id: $experience_id})
             SET exp.created_at = coalesce(exp.created_at, $now),
                 exp.updated_at = $now,
+                exp.user_id = coalesce($user_id, exp.user_id),
                 exp.origin = coalesce($origin, exp.origin),
                 exp.source_kind = coalesce($source_kind, exp.source_kind),
                 exp.content_kind = coalesce($content_kind, exp.content_kind),
@@ -82,6 +83,7 @@ class KnowledgeGraphService:
             {
                 "experience_id": experience_id,
                 "now": now,
+                "user_id": str(source_metadata.get("user_id")) if source_metadata.get("user_id") is not None else None,
                 "origin": source_metadata.get("origin"),
                 "source_kind": source_metadata.get("source_kind"),
                 "content_kind": source_metadata.get("content_kind") or source_metadata.get("type"),
@@ -134,6 +136,7 @@ class KnowledgeGraphService:
             props["preference_scope"] = meta.get("scope")
             props["preference_confidence"] = meta.get("confidence")
             props["conversation_id"] = str(meta.get("conversation_id")) if meta.get("conversation_id") is not None else None
+            props["user_id"] = str(meta.get("user_id")) if meta.get("user_id") is not None else None
             if meta.get("instruction_text"):
                 props["instruction_text"] = str(meta.get("instruction_text"))[:500]
 

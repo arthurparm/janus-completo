@@ -16,6 +16,7 @@ from qdrant_client import models
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_texts
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.governance.data_classification import classify_text, default_retention_decision
 from app.core.workers.document_ingestion_worker import publish_document_ingestion_task
 from app.db.vector_store import (
     aget_or_create_collection,
@@ -24,6 +25,7 @@ from app.db.vector_store import (
     build_user_docs_collection_name,
     get_async_qdrant_client,
 )
+from app.repositories.data_governance_repository import DataGovernanceRepository
 from app.repositories.document_manifest_repository import DocumentManifestRepository
 from app.repositories.observability_repository import record_audit_event_direct
 from app.services.document_parser_service import DocumentParserService
@@ -138,6 +140,8 @@ class DocumentIngestionService:
         max_bytes = int(getattr(settings, "DOCS_MAX_FILE_SIZE_BYTES", 100_000_000) or 100_000_000)
         chunk_bytes = int(getattr(settings, "DOC_UPLOAD_STREAM_CHUNK_BYTES", 1_048_576) or 1_048_576)
         written = 0
+        sample_bytes = b""
+        sample_limit = 8192
 
         try:
             with storage_path.open("wb") as handle:
@@ -148,6 +152,8 @@ class DocumentIngestionService:
                     written += len(chunk)
                     if written > max_bytes:
                         raise DocumentFileTooLargeError(written, max_bytes, doc_id)
+                    if len(sample_bytes) < sample_limit:
+                        sample_bytes += chunk[: max(0, sample_limit - len(sample_bytes))]
                     handle.write(chunk)
         except DocumentFileTooLargeError:
             self._manifest_repo.mark_failed(
@@ -176,6 +182,36 @@ class DocumentIngestionService:
                 pass
 
         self._manifest_repo.update_manifest(doc_id, file_size_bytes=written)
+        try:
+            sample_text = ""
+            try:
+                sample_text = sample_bytes.decode("utf-8", errors="ignore")
+            except Exception:
+                sample_text = ""
+            decision = default_retention_decision(classify_text(f"{filename}\n{sample_text}"))
+            retention_until = None
+            if decision.retention_policy == "days" and decision.retention_days is not None:
+                from datetime import datetime, timedelta, timezone
+
+                retention_until = datetime.now(timezone.utc) + timedelta(days=decision.retention_days)
+            DataGovernanceRepository().upsert_record(
+                user_id=int(str(user_id)) if str(user_id).isdigit() else None,
+                resource_type="document_manifest",
+                resource_id=str(doc_id),
+                classification=decision.classification,
+                classification_source="auto",
+                retention_policy=decision.retention_policy,
+                retention_days=decision.retention_days,
+                retention_until=retention_until,
+                metadata_json={
+                    "file_name": filename,
+                    "content_type": content_type,
+                    "conversation_id": str(conversation_id) if conversation_id is not None else None,
+                    "knowledge_space_id": str(knowledge_space_id) if knowledge_space_id is not None else None,
+                },
+            )
+        except Exception:
+            pass
         payload = {
             "doc_id": doc_id,
             "auto_consolidate": bool(auto_consolidate),

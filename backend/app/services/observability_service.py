@@ -287,27 +287,8 @@ class ObservabilityService:
             raise ObservabilityServiceError("Falha ao limpar a quarentena expirada.") from e
 
     def purge_old_audit_events(self, retention_days: int) -> dict[str, Any]:
-        op = "audit_purge"
-        op_start = self._observe_operation_start(op)
-        logger.info(
-            "observability_audit_purge_requested",
-            operation=op,
-            retention_days=retention_days,
-        )
-        try:
-            removed = self._repo.purge_old_audit_events(retention_days)
-            self._observe_operation_success(op, op_start)
-            self._observe_result_size(op, "events_removed", removed)
-            return {"removed": removed, "retention_days": retention_days}
-        except ObservabilityRepositoryError as e:
-            self._observe_operation_failure(op, op_start, e)
-            logger.exception(
-                "observability_audit_purge_failed",
-                operation=op,
-                retention_days=retention_days,
-                error=str(e),
-            )
-            raise ObservabilityServiceError("Falha ao expurgar eventos de auditoria antigos.") from e
+        _ = retention_days
+        raise ObservabilityServiceError("Audit ledger is immutable and cannot be purged.")
 
     def get_poison_pill_stats(self, queue: str | None = None) -> dict[str, Any]:
         logger.info(
@@ -853,6 +834,7 @@ class ObservabilityService:
 
     def get_audit_events(
         self,
+        user_id: str | None,
         tool: str | None,
         status: str | None,
         start_ts: float | None,
@@ -882,7 +864,7 @@ class ObservabilityService:
             )
             try:
                 result = self._repo.get_audit_events(
-                    tool, status, start_ts, end_ts, endpoint, limit, offset
+                    user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
                 )
                 self._set_span_attrs(span, **{"observability.event_count": len(result)})
                 self._observe_result_size(op, "events", len(result))
@@ -899,6 +881,7 @@ class ObservabilityService:
 
     def get_audit_events_count(
         self,
+        user_id: str | None,
         tool: str | None,
         status: str | None,
         start_ts: float | None,
@@ -915,7 +898,7 @@ class ObservabilityService:
         with self._span_context("observability.service.audit_events_count") as span:
             self._set_span_attrs(span, **{"observability.operation": op})
             try:
-                count = self._repo.get_audit_events_count(tool, status, start_ts, end_ts)
+                count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
                 self._set_span_attrs(span, **{"observability.event_count": count})
                 self._observe_result_size(op, "rows", count)
                 self._observe_operation_success(op, op_start)
@@ -945,10 +928,10 @@ class ObservabilityService:
         )
         try:
             o = self._repo.get_audit_events(
-                "openai", "ok", start_ts, end_ts, limit=10000, offset=0
+                None, "openai", "ok", start_ts, end_ts, limit=10000, offset=0
             )
             g = self._repo.get_audit_events(
-                "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0
+                None, "google_gemini", "ok", start_ts, end_ts, limit=10000, offset=0
             )
         except ObservabilityRepositoryError as e:
             self._observe_operation_failure(op, op_start, e)
@@ -971,7 +954,10 @@ class ObservabilityService:
                 if not d:
                     continue
                 try:
-                    dj = _json.loads(d)
+                    if isinstance(d, dict):
+                        dj = d
+                    else:
+                        dj = _json.loads(d)
                     s_in += int(dj.get("input_tokens") or 0)
                     s_out += int(dj.get("output_tokens") or 0)
                     s_cost += float(dj.get("cost_usd") or 0.0)
