@@ -6,6 +6,15 @@ Data: 2026-06-22
 
 Auditoria focada na funcionalidade de chat backend: endpoints REST/SSE, facade `ChatService`, serviços de conversa/orquestração/streaming, repositórios de chat e testes unitários de contrato.
 
+## Status atual
+
+- Estado geral: 11 ciclos críticos concluídos com foco em authz, isolamento por `user_id`, compatibilidade de transição, contratos de confirmação, segurança operacional de tools e ownership de `pending_actions` SQL.
+- Backend já endurecido em caminhos centrais: envio de mensagem, histórico, trace, stream, CRUD de conversa, study jobs e validação de escopo por projeto/usuário.
+- Frontend já alinhado em áreas críticas: render de confirmação heurística de baixa confiança e contrato de `pending_actions` sem `user_id` cliente-controlado.
+- Qualidade já demonstrada por evidências do documento: suites unitárias/QA verdes nos fluxos focados, `ruff check` e `py_compile` passando nos ciclos documentados.
+- Risco residual consolidado: ainda faltam validações full-stack/browser em ambiente semelhante ao real, revisão da trilha `thread_id`/LangGraph e fechamento explícito de evidências/compliance para signoff final.
+- Nível atual de confiança: alto para contratos e correções localizadas em backend/frontend; médio para comportamento ponta a ponta sob infraestrutura PC1/PC2 e fluxos operacionais reais.
+
 ## Ciclo 1 - Contrato de `user_id` quebrado no fluxo central de chat
 
 ### Problema
@@ -322,6 +331,49 @@ Acredito que resolver fallback anonimo estavel para endpoints de conversa existe
 - Decisao de engenharia: esse trade-off e aceitavel porque endpoints sobre conversas existentes nao devem operar sem identidade comparavel.
 - O endpoint `/chat/start` nao foi alterado neste ciclo; conversas novas sem dono continuam sendo uma compatibilidade legada separada.
 
+## Ciclo 11 - `pending_actions` SQL podiam ser listadas e resolvidas sem ownership persistido
+
+### Problema
+
+- Categoria: seguranca operacional, privacidade e isolamento entre usuarios.
+- Fato observado: `GET /api/v1/pending_actions/?include_sql=true` listava acoes SQL sem resolver identidade nem filtrar por dono.
+- Fato observado: `POST /api/v1/pending_actions/action/{action_id}/approve|reject` mudavam status apenas por `action_id`.
+- Fato observado: `PendingAction` e `PendingActionRepository` ainda nao persistiam nem consultavam `user_id`.
+- Fato observado: o frontend expunha `listPendingActions({ user_id })`, mas o backend nao implementava esse escopo; approve/reject eram chamados diretamente por chat e tools.
+- Impacto antes: qualquer cliente com acesso ao endpoint podia enumerar acoes pendentes SQL e aprovar/rejeitar acoes de outro usuario se soubesse o `action_id`.
+
+### Hipotese
+
+Acredito que persistir `user_id` em `pending_actions` SQL e exigir identidade resolvida nos endpoints de listagem/approve/reject elimina a aprovacao cruzada entre usuarios, porque o owner passa a fazer parte do modelo, do repositorio e do contrato HTTP. Para registros legados sem `user_id`, um fallback por `conversation_id` mantem compatibilidade apenas quando o acesso a conversa puder ser provado.
+
+### Implementacao
+
+- `pending_action_models.py`: adicionado campo nullable `user_id` e indice `idx_pending_actions_status_user`.
+- `db_migration_service.py`: adicionada migracao idempotente para `pending_actions.user_id` e para o indice composto por `status,user_id`.
+- `pending_action_repository.py`: `create`, `list`, `get` e `set_status` passaram a aceitar/filtrar `user_id`.
+- `chat_contracts.py`: fallback pending action de chat agora persiste `user_id` no caminho principal, sem depender de assinatura legada do repositorio.
+- `pending_actions.py`: `PendingActionDTO` passou a expor `user_id`; listagem SQL agora resolve identidade via semantica do chat e filtra por owner.
+- `pending_actions.py`: approve/reject SQL agora exigem identidade resolvida e retornam `403` quando a acao pertence a outro usuario.
+- `pending_actions.py`: para registros legados sem `user_id`, approve/reject usam `conversation_id` em `args_json` e validam acesso via `chat_service.get_history(...)`; sem prova de ownership, negam acesso.
+- `chat_service.py`: reexportadas excecoes usadas pelos endpoints para restaurar compatibilidade de import do facade.
+- `observability-api-service.ts`: removido `user_id` cliente-controlado de `listPendingActions(...)`.
+- `observability-api-service.contract.spec.ts`: adicionado contrato garantindo que a querystring de pending actions nao expoe `user_id`.
+- `qa/test_pending_actions_contract.py`: atualizada fixture e adicionados testes para owner correto, bloqueio de outro usuario e fallback legado por conversa.
+
+### Metricas
+
+- Baseline inferido por leitura: os endpoints SQL de pending actions nao resolviam ator nem cruzavam owner persistido antes de alterar status.
+- Depois: `qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py` resultou em 15 passed.
+- Gate estatico: `ruff check` dos arquivos tocados passou.
+- Compilacao Python dos arquivos tocados passou.
+- Validacao frontend: a execucao de `npm run test` que incluiu o novo contrato de `ObservabilityApiService` resultou em 27 arquivos de teste passados, 120 testes passados.
+
+### Riscos e limitacoes
+
+- A trilha `thread_id`/LangGraph em `pending_actions.py` continua fora do endurecimento principal deste ciclo; o codigo explorado nao expunha owner persistido equivalente para checkpoints.
+- Registros SQL legados sem `user_id` dependem de `conversation_id` em `args_json` para autorizacao de fallback; se esse vinculo nao existir, o endpoint passa a negar acesso.
+- A validacao frontend foi por contrato de servico e suite Vitest focada/ampla; nao houve e2e real em browser para approve/reject.
+
 ## Validação executada
 
 ```powershell
@@ -474,6 +526,124 @@ $env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m py_compile backen
 
 Resultado: passou.
 
+```powershell
+$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py
+```
+
+Resultado: 15 passed.
+
+```powershell
+$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/models/pending_action_models.py backend/app/repositories/pending_action_repository.py backend/app/services/chat/chat_contracts.py backend/app/services/chat_service.py backend/app/api/v1/endpoints/pending_actions.py backend/app/services/db_migration_service.py qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py
+```
+
+Resultado: passou.
+
+```powershell
+$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m py_compile backend/app/models/pending_action_models.py backend/app/repositories/pending_action_repository.py backend/app/services/chat/chat_contracts.py backend/app/services/chat_service.py backend/app/api/v1/endpoints/pending_actions.py backend/app/services/db_migration_service.py qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py
+```
+
+Resultado: passou.
+
+```powershell
+npm run test -- --watch=false --include src/app/services/domain/observability-api-service.contract.spec.ts
+```
+
+Resultado: a suite Vitest executada nesta rodada resultou em 27 arquivos passados, 120 testes passados, incluindo `observability-api-service.contract.spec.ts`.
+
+## Ciclo 12 - Modulo de chat ainda aceitava identidade fraca e legado cliente-controlado
+
+### Problema
+
+- Categoria: seguranca, privacidade e disponibilidade funcional do chat.
+- Fato observado: `backend/app/api/v1/endpoints/chat/deps.py` ainda aceitava `explicit_user_id`, `X-User-Id`, fallback anonimo `anon:*` e bifurcacao por `CHAT_AUTH_ENFORCE_REQUIRED` para fluxos de chat.
+- Fato observado: endpoints centrais de chat (`message`, `history`, `history/paginated`, `conversations`, `stream`, `trace`, `events`, `rename`, `delete`, `study-jobs`) ainda operavam com `allow_anonymous_fallback=True` em diferentes pontos.
+- Fato observado: o frontend ainda enviava `user_id` em chamadas de chat, ainda anexava `X-User-Id` derivado do token e o canal `AgentEventsService` usava `EventSource` com `?user_id=...`, sem bearer.
+- Impacto antes: o modulo de chat ainda dependia de identidade fraca em 8 caminhos principais de backend e 4 superficies centrais de frontend, mantendo risco de impersonation, autorizacao inconsistente, auditoria fragil e quebra futura quando a autenticacao forte fosse exigida em todos os fluxos.
+
+### Hipotese
+
+Acredito que remover toda resolucao legada de identidade no modulo de chat e alinhar o frontend para bearer-only elimina a superficie de autenticacao fraca sem quebrar o app Angular atual, porque o frontend ja possui trilha de `Authorization` e apenas o stream complementar de eventos precisava sair de `EventSource` para `fetch` autenticado.
+
+### Implementacao
+
+- `backend/app/api/v1/endpoints/chat/deps.py`: simplificada a resolucao de identidade para aceitar apenas ator autenticado por bearer; removidos caminhos legados de `explicit_user_id`, `X-User-Id`, fallback anonimo e modo de transicao do chat.
+- `backend/app/api/v1/endpoints/chat/chat_message.py`, `chat_history.py`, `chat_stream.py`, `chat_admin.py` e `chat_study_jobs.py`: todos os endpoints centrais passaram a usar `allow_anonymous_fallback=False`; `stream` e `events` deixaram de aceitar `user_id` funcional.
+- `frontend/src/app/services/domain/chat-api-service.ts` e `frontend/src/app/models/chat.models.ts`: removido `user_id` das assinaturas/contratos de `startChat`, `sendChatMessage` e `listConversations`.
+- `frontend/src/app/features/conversations/conversations.ts` e `frontend/src/app/features/home/home.ts`: removido envio de `user_id` do cliente para criacao/listagem/envio no chat.
+- `frontend/src/app/services/chat-auth-headers.util.ts` e `frontend/src/app/core/interceptors/auth.interceptor.ts`: removida a emissao de `X-User-Id`; mantido apenas `Authorization` e headers de correlacao.
+- `frontend/src/app/core/services/agent-events.service.ts`: substituido `EventSource` com query string por consumo SSE autenticado via `fetch` + `ReadableStream`.
+- `backend/tests/unit/test_chat_deps_identity.py`, `backend/tests/unit/test_chat_project_scope.py`, `backend/tests/unit/test_chat_trace_access.py`, `qa/test_chat_endpoint_contract.py`, `qa/test_chat_history_contract.py`, `qa/test_chat_stream_sse_contract.py`, `frontend/src/app/services/domain/chat-api-service.contract.spec.ts`, `frontend/src/app/services/chat-auth-headers.util.spec.ts` e `frontend/src/app/core/services/agent-events.service.spec.ts`: atualizados para o contrato bearer-only.
+- `documentation/api/chat-contract.md`: removidos campos legados de identidade cliente-controlada e documentada autenticacao obrigatoria por bearer.
+- Commit correspondente da implementacao: [f80d24e8](https://github.com/arthurparm/janus-completo/commit/f80d24e863e6c1ace71362f2eb32f363d6e0b91c)
+
+### Metricas
+
+- Baseline inferido por leitura e auditoria do estado atual:
+  - 8 caminhos principais de backend ainda aceitavam identidade fraca ou fallback anonimo.
+  - 4 superficies centrais de frontend ainda dependiam de `user_id` cliente-controlado, `X-User-Id` ou `EventSource` sem bearer.
+- Depois da correcao:
+  - 0 endpoints centrais de chat aceitam `anon:*`, `X-User-Id` ou `user_id` do cliente como mecanismo de autenticacao.
+  - 100% dos fluxos centrais cobertos nesta iteracao dependem de ator autenticado por bearer.
+- Testes executados nesta iteracao:
+  - `backend/tests/unit/test_chat_deps_identity.py qa/test_chat_endpoint_contract.py qa/test_chat_history_contract.py qa/test_chat_stream_sse_contract.py`: 29 passed.
+  - `backend/tests/unit/test_chat_project_scope.py backend/tests/unit/test_chat_trace_access.py`: 3 passed.
+  - `src/app/services/domain/chat-api-service.contract.spec.ts src/app/services/chat-auth-headers.util.spec.ts src/app/core/services/agent-events.service.spec.ts src/app/features/conversations/conversations.spec.ts`: 11 passed.
+  - `ruff check` dos arquivos Python tocados: passou.
+  - `py_compile` dos arquivos Python tocados: passou.
+  - `npm run lint`: passou.
+  - `npx ng build --configuration development`: passou.
+
+### Riscos e limitacoes
+
+- O stream principal de chat ainda transporta `message` por query string; esse risco permanece fora do escopo desta iteracao.
+- O endpoint `/trace` continua com limitacoes contratuais separadas; esta iteracao endureceu autenticacao, mas nao redesenhou o contrato de trace.
+- Nao houve validacao manual em browser real nem ciclo full-stack PC1/PC2; a confianca desta iteracao vem de contratos, unitarios, lint e build.
+- O arquivo de audit log ja continha um ciclo 11 previo no workspace; esta entrada foi adicionada como novo ciclo consolidado para o endurecimento bearer-only do modulo de chat.
+
 ## Decisão
 
 Recomendação: manter as correções. Confiança: média-alta para os contratos corrigidos, limitada por ausência de validação full-stack com infraestrutura PC2 ativa.
+
+## Próximos passos
+
+- `D+1` | Owner: `Backend` | Revisar a trilha `thread_id`/LangGraph em `pending_actions.py` e documentar se haverá owner persistido, negação explícita por ausência de owner ou escopo limitado por design.
+- `D+1` | Owner: `QA` | Consolidar uma matriz curta de fluxos críticos ainda não validados ponta a ponta: `chat/start`, `chat/message`, `stream`, `trace`, `study-jobs`, `pending_actions approve/reject`.
+- `D+3` | Owner: `Backend` | Definir estratégia para registros legados de `pending_actions` sem `user_id`: backfill, expiração controlada ou manutenção do fallback por `conversation_id` com critérios explícitos.
+- `D+3` | Owner: `Frontend` | Executar validação guiada dos fluxos visíveis ao usuário para confirmação `low_confidence`, aprovação e rejeição de `pending_actions`, com evidência de comportamento esperado e mensagens de erro.
+- `D+3` | Owner: `Security` | Revisar os ciclos 9, 10 e 11 como bloco de authz para confirmar que os caminhos em modo de transição não deixam endpoints de conversa existente, study jobs ou pending actions operarem sem identidade comparável.
+- `D+7` | Owner: `Ops/Platform` | Executar um ciclo de validação em stack PC1/PC2 com coleta de evidências operacionais: health, logs, request IDs/trace IDs e resultado dos fluxos críticos.
+- `Próxima sprint` | Owner: `QA` | Promover pelo menos um fluxo crítico de chat para cobertura browser/e2e reproduzível, priorizando aprovação/rejeição de pending action e polling de study job.
+- `Pré-release` | Owner: `Backend + Frontend + QA + Security + Ops/Platform` | Fazer revisão final de readiness com checklist de evidências, critérios de validação e limitações remanescentes antes de declarar o esforço de audit log como concluído.
+
+## Requisitos técnicos restantes
+
+- Todos os caminhos de resolução de ação pendente devem operar com owner explícito ou justificativa documentada de por que o fluxo não admite owner persistido.
+- A trilha `thread_id`/LangGraph precisa de decisão de engenharia registrada: persistir owner, validar por contexto externo de forma confiável ou limitar o endpoint por política.
+- Registros legados sem `user_id` em `pending_actions` precisam de regra final de tratamento: backfill, expiração, bloqueio por padrão ou fallback controlado por `conversation_id`.
+- Endpoints que operam sobre conversa existente devem continuar exigindo identidade comparável mesmo em modo de transição; qualquer exceção deve ser explicitamente documentada e testada.
+- Fluxos sensíveis de chat precisam manter rastreabilidade mínima entre request, decisão e evidência operacional por `request_id`, `trace_id` ou identificador equivalente.
+- O frontend deve continuar tratando corretamente confirmações heurísticas versus confirmações acionáveis, sem exibir botões de aprovação falsos para fluxos que exigem `pending_action_id`.
+- O documento precisa manter uma visão consolidada do que já está endurecido, do que ainda depende de validação real e de quais limitações são aceitas temporariamente.
+
+## Critérios de validação
+
+- Suites de backend citadas nos ciclos devem permanecer verdes para os caminhos críticos já corrigidos, incluindo contratos HTTP/SSE, testes unitários focados e testes de `pending_actions`.
+- Gates estáticos usados nesta auditoria devem continuar passando nos arquivos tocados: no mínimo `ruff check` e `py_compile`; quando aplicável ao frontend, lint/build ou suite equivalente.
+- Deve existir validação focada dos fluxos de confirmação do chat no frontend, cobrindo `low_confidence`, approve e reject com comportamento consistente entre UI e contrato backend.
+- Deve existir pelo menos uma validação ponta a ponta ou browser-guided dos fluxos críticos remanescentes antes do encerramento do esforço.
+- Mudanças futuras que alterem authz, ownership ou transição anônima precisam atualizar este log com baseline, hipótese, implementação, métricas e riscos/limitações.
+
+## Checks de compliance e evidência
+
+- Cada validação crítica deve deixar evidência mínima anexável ou reproduzível: comando executado, resultado, data e artefato associado quando existir.
+- Fluxos de aprovação/rejeição de ações sensíveis devem manter evidência suficiente para explicar quem aprovou, em qual contexto e com qual identificador técnico correlacionável.
+- Logs e testes usados para signoff devem permitir correlação entre falha observada e caminho de código corrigido, preferencialmente com `request_id`, `trace_id` ou identificador de conversa/job/action.
+- Limitações aceitas temporariamente devem permanecer explícitas no documento até serem eliminadas ou formalmente aceitas no gate pré-release.
+- O fechamento do esforço exige revisão conjunta por papéis de `Backend`, `QA` e `Security`; quando houver dependência de ambiente real, incluir `Ops/Platform`.
+
+## Prontidão para conclusão
+
+- O esforço de chat critical audit log pode ser considerado concluído quando os riscos residuais principais estiverem reduzidos a itens explicitamente aceitos, e não a gaps implícitos de validação.
+- Para isso, o documento precisa mostrar três coisas com clareza: o que já foi endurecido, o que ainda falta e quais evidências sustentam a confiança operacional atual.
+- No estado atual, a maior parte do backend e dos contratos críticos já está estabilizada, mas a conclusão ainda depende de validação full-stack/browser, fechamento da trilha `thread_id`/LangGraph e definição final para legado de `pending_actions` sem owner.
+- Até esse fechamento, este documento deve ser tratado como fonte viva de progresso, critérios de aceite e backlog crítico do sistema de chat.
