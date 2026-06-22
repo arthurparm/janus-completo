@@ -115,6 +115,7 @@ def maybe_create_fallback_pending_action(
     message: str,
     assistant_response: str | None = None,
     conversation_id: str | None = None,
+    user_id: str | None = None,
     existing_pending_action_id: int | None = None,
     understanding: dict[str, Any] | None = None,
 ) -> tuple[int | None, str | None]:
@@ -144,20 +145,28 @@ def maybe_create_fallback_pending_action(
         from app.repositories.pending_action_repository import PendingActionRepository
 
         repo = PendingActionRepository()
-        pending = repo.create(
-            tool_name="chat_high_risk_request",
-            args_json=json.dumps(
+        create_kwargs = {
+            "tool_name": "chat_high_risk_request",
+            "args_json": json.dumps(
                 {
                     "source": "chat_confirmation_fallback",
                     "conversation_id": conversation_id,
                     "message": message,
                     "risk_reason": reason,
+                    "user_id": user_id,
                 },
                 ensure_ascii=False,
             ),
-            run_id=None,
-            cycle=None,
-        )
+            "run_id": None,
+            "cycle": None,
+        }
+        if user_id is not None:
+            create_kwargs["user_id"] = str(user_id)
+        try:
+            pending = repo.create(**create_kwargs)
+        except TypeError:
+            create_kwargs.pop("user_id", None)
+            pending = repo.create(**create_kwargs)
         pending_id = getattr(pending, "id", None)
         if pending_id is None:
             return None, reason
@@ -204,7 +213,7 @@ def build_confirmation_payload(
     reason: str | None,
 ) -> dict[str, Any] | None:
     normalized_reason = _normalize_confirmation_reason(reason)
-    if pending_action_id is None and normalized_reason is None:
+    if pending_action_id is None and normalized_reason != "low_confidence":
         return None
     payload: dict[str, Any] = {
         "required": True,
@@ -213,7 +222,6 @@ def build_confirmation_payload(
     if pending_action_id is None:
         payload["source"] = "heuristic"
         return payload
-
     payload.update(
         {
             "source": "pending_actions_sql",

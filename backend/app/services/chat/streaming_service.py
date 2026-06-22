@@ -7,7 +7,6 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
-
 from app.core.exceptions.chat_exceptions import ChatServiceError
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
@@ -41,6 +40,26 @@ from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 
 logger = structlog.get_logger(__name__)
+
+
+def _call_sync_with_user_scope(func: Any, **kwargs: Any) -> Any:
+    try:
+        return func(**kwargs)
+    except TypeError as exc:
+        message = str(exc)
+        unsupported_user_scope = (
+            "user_id" in message or "project_id" in message
+        ) and "unexpected keyword" in message
+        if not unsupported_user_scope:
+            raise
+        reduced = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in {"user_id", "project_id"}
+        }
+        if "project_id" in message and "user_id" not in message:
+            reduced["user_id"] = kwargs.get("user_id")
+        return func(**reduced)
 
 
 class StreamingService:
@@ -108,7 +127,7 @@ class StreamingService:
         try:
             conv = self._repo.get_conversation(conversation_id)
             self._conversation_service.validate_conversation_access(
-                conversation_id, conv, project_id
+                conversation_id, conv, user_id, project_id
             )
         except ChatRepositoryError:
             err = json.dumps(
@@ -160,6 +179,7 @@ class StreamingService:
 
         self._repo.add_message(conversation_id, role="user", text=message)
         self._message_orchestration_service.schedule_active_memory_capture(
+            user_id=user_id,
             message=message,
             conversation_id=conversation_id,
         )
@@ -566,14 +586,14 @@ class StreamingService:
                 )
             else:
                 pre = await asyncio.to_thread(
+                    _call_sync_with_user_scope,
                     self._llm.select_provider,
-                    role,
-                    priority,
-                    user_id,
-                    project_id,
+                    role=role,
+                    priority=priority,
+                    user_id=user_id,
+                    project_id=project_id,
                 )
             current_provider = pre.get("provider")
-            current_model = pre.get("model")
             if self._llm.is_provider_open(current_provider or ""):
                 err = json.dumps(
                     chat_sse_error_payload(
@@ -608,6 +628,7 @@ class StreamingService:
             else:
                 task = asyncio.create_task(
                     asyncio.to_thread(
+                        _call_sync_with_user_scope,
                         self._llm.invoke_llm,
                         prompt=prompt,
                         role=role,
@@ -700,10 +721,10 @@ class StreamingService:
 
             pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
             pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
-                user_id=str(user_id) if user_id is not None else None,
                 message=message,
                 assistant_response=str(result.get("response") or ""),
                 conversation_id=conversation_id,
+                user_id=str(user_id) if user_id is not None else None,
                 existing_pending_action_id=pending_action_id,
                 understanding=result_understanding if isinstance(result_understanding, dict) else None,
             )

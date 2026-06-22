@@ -7,43 +7,46 @@ import time as _time
 from typing import Any
 
 import structlog
-
 from app.core.agents.utils import parse_json_lenient
 from app.core.exceptions.chat_exceptions import (
     ChatServiceError,
     ConversationNotFoundError,
-    MessageTooLargeError)
+    MessageTooLargeError,
+)
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
 from app.core.monitoring.chat_metrics import (
     CHAT_LATENCY_SECONDS,
     CHAT_MESSAGES_TOTAL,
     CHAT_SPEND_USD_TOTAL,
-    CHAT_TOKENS_TOTAL)
+    CHAT_TOKENS_TOTAL,
+)
 from app.core.routing import RouteIntent, get_knowledge_routing_policy
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.repositories.document_manifest_repository import DocumentManifestRepository
+from app.services.active_memory_service import active_memory_service
 from app.services.chat.chat_citation_service import (
     build_citation_status,
     collect_document_citations,
-    references_uploaded_material)
-from app.services.knowledge_space_service import KnowledgeSpaceService
+    references_uploaded_material,
+)
+from app.services.chat.conversation_service import ConversationService
 from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
     estimate_tokens,
     format_tool_creation_response,
     is_explicit_tool_creation,
-    split_ui)
-from app.services.chat.conversation_service import ConversationService
+    split_ui,
+)
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
+from app.services.knowledge_space_service import KnowledgeSpaceService
 from app.services.outbox_service import OutboxService
 from app.services.procedural_memory_service import procedural_memory_service
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
-from app.services.active_memory_service import active_memory_service
 from app.services.secret_memory_service import secret_memory_service
 
 logger = structlog.get_logger(__name__)
@@ -121,12 +124,14 @@ class MessageOrchestrationService:
     def schedule_active_memory_capture(
         self,
         *,
+        user_id: str | None,
         message: str,
         conversation_id: str) -> None:
 
         async def _capture() -> None:
             try:
                 await active_memory_service.maybe_capture_from_message(
+                    user_id=user_id,
                     message=message,
                     conversation_id=conversation_id)
             except Exception as exc:
@@ -346,11 +351,6 @@ class MessageOrchestrationService:
         prefer_primary_only = cls._message_prefers_primary_only(
             message=message,
             understanding=understanding)
-        manifest_by_doc_id = {
-            str(row.get("doc_id") or "").strip(): row
-            for row in indexed
-            if str(row.get("doc_id") or "").strip()
-        }
         ordered_primary_docs = [
             str(row.get("doc_id") or "").strip()
             for row in sorted(indexed, key=cls._manifest_primary_rank, reverse=True)
@@ -486,6 +486,7 @@ class MessageOrchestrationService:
         *,
         conversation_id: str,
         message: str,
+        user_id: str | None = None,
         requested_knowledge_space_id: str | None = None) -> dict[str, Any] | None:
         manifests = self._list_document_manifests(
             conversation_id=conversation_id)
@@ -504,6 +505,7 @@ class MessageOrchestrationService:
         self,
         *,
         conversation_id: str,
+        user_id: str | None = None,
         requested_knowledge_space_id: str | None = None) -> str | None:
         manifests = self._list_document_manifests(
             conversation_id=conversation_id)
@@ -536,7 +538,6 @@ class MessageOrchestrationService:
             for row in manifests
             if str(row.get("status") or "") in {"queued", "processing"}
         ]
-        status = "processing" if any(str(row.get("status")) == "processing" for row in processing) else "queued"
         file_names = [str(row.get("file_name") or "documento") for row in processing[:3]]
         suffix = f" Arquivos: {', '.join(file_names)}." if file_names else ""
         response = (
@@ -615,8 +616,12 @@ class MessageOrchestrationService:
         *,
         message: str,
         role: ModelRole,
+        user_id: str | None,
         conversation_id: str | None) -> dict[str, Any] | None:
+        if not user_id:
+            return None
         items = await secret_memory_service.list_secrets(
+            user_id=str(user_id),
             query=message,
             conversation_id=conversation_id,
             limit=1,
@@ -660,6 +665,7 @@ class MessageOrchestrationService:
         *,
         assistant_text: str,
         user_message: str,
+        user_id: str | None = None,
         conversation_id: str) -> str:
         try:
             rules = await procedural_memory_service.list_rules(
@@ -1079,7 +1085,8 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None,
-        project_id: str | None,
+        user_id: str | None = None,
+        project_id: str | None = None,
         requested_knowledge_space_id: str | None = None,
         understanding: dict[str, Any] | None) -> dict[str, Any] | None:
         manifests = self._list_document_manifests(
@@ -1256,6 +1263,31 @@ class MessageOrchestrationService:
             },
         }
 
+    def _validate_conversation_access(
+        self,
+        conversation_id: str,
+        conv: dict[str, Any],
+        *,
+        user_id: str | None,
+        project_id: str | None,
+    ) -> None:
+        try:
+            self._conversation_service.validate_conversation_access(
+                conversation_id,
+                conv,
+                user_id=user_id,
+                project_id=project_id,
+            )
+        except TypeError as exc:
+            message = str(exc)
+            if "user_id" not in message and "positional" not in message:
+                raise
+            self._conversation_service.validate_conversation_access(
+                conversation_id,
+                conv,
+                project_id,
+            )
+
     async def send_message(
         self,
         conversation_id: str,
@@ -1263,6 +1295,7 @@ class MessageOrchestrationService:
         role: ModelRole,
         priority: ModelPriority,
         timeout_seconds: int | None = None,
+        user_id: str | None = None,
         project_id: str | None = None,
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown") -> dict[str, Any]:
@@ -1271,8 +1304,11 @@ class MessageOrchestrationService:
         except ChatRepositoryError as e:
             raise ConversationNotFoundError(str(e)) from e
 
-        self._conversation_service.validate_conversation_access(
-            conversation_id, conv, project_id
+        self._validate_conversation_access(
+            conversation_id,
+            conv,
+            user_id=user_id,
+            project_id=project_id,
         )
 
         max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
@@ -1292,6 +1328,7 @@ class MessageOrchestrationService:
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         self.schedule_active_memory_capture(
+            user_id=user_id or conv.get("user_id"),
             message=message,
             conversation_id=conversation_id)
         self._schedule_rag_index_message(
@@ -1593,6 +1630,11 @@ class MessageOrchestrationService:
         secret_result = await self.generate_secret_recall_reply(
             message=message,
             role=role,
+            user_id=(
+                str(user_id or conv.get("user_id") or "")
+                if isinstance(conv, dict)
+                else user_id
+            ),
             conversation_id=conversation_id)
         if secret_result is not None:
             assistant_text = str(secret_result.get("response") or "")
@@ -1760,7 +1802,7 @@ class MessageOrchestrationService:
                     "provider": result.get("provider"),
                     "model": result.get("model"),
                     "user_message": (user_message or "")[:500],
-                    
+
                     "project_id": project_id,
                     "dedupe_key": dedupe_key,
                 },

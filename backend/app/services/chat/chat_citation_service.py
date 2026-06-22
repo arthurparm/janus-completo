@@ -3,13 +3,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from qdrant_client import models
-
 from app.core.embeddings.embedding_manager import aembed_text
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_docs_collection_name,
-    get_async_qdrant_client)
+    get_async_qdrant_client,
+)
+from qdrant_client import models
 
 MANDATORY_CITATION_GUARD_TEXT = (
     "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "

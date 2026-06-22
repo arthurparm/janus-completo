@@ -2,6 +2,7 @@ import json
 import re
 from typing import Any
 
+
 def estimate_tokens(prompt_service: Any, text: str) -> int:
     if not text:
         return 0
@@ -144,6 +145,8 @@ def build_understanding_payload(message: str) -> dict[str, Any] | None:
             "how",
             "why",
             "can you",
+            "consegue",
+            "pode",
         )
         if normalized.endswith("?") or any(lowered.startswith(k) for k in question_leads):
             intent = "question"
