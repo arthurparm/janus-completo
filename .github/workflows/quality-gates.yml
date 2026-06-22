@@ -117,7 +117,8 @@ jobs:
             qa/test_chat_endpoint_contract.py \
             qa/test_observability_request_dashboard.py \
             qa/test_db_migration_service_contract.py \
-            qa/test_knowledge_code_query_contract.py
+            qa/test_knowledge_code_query_contract.py \
+            qa/test_third_party_registry_enforced.py
 
       - name: Run MR-013 offline evaluation gate
         run: |
@@ -140,6 +141,34 @@ jobs:
         with:
           name: mr013-offline-eval-artifacts
           path: outputs/qa/technical-qa/runs
+
+  security-asvs-lite:
+    name: Security ASVS-lite Gate
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run ASVS-lite report gate
+        run: |
+          python tooling/asvs_lite_report.py \
+            --fail-on-p0-missing \
+            --fail-on-missing-evidence
+
+      - name: Upload ASVS-lite artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: asvs-lite-artifacts
+          path: |
+            outputs/qa/asvs_lite_report.json
+            outputs/qa/asvs_lite_report.md
 
   frontend-quality:
     name: Frontend Lint/Test/Build
