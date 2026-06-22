@@ -8,6 +8,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.config import settings
+from app.core.security.egress_policy import enforce_worker_http_egress
 
 from .resilience import LLM_POOL_WARMS, _add_to_pool, _get_from_pool, _pool_key
 
@@ -136,8 +137,15 @@ def _get_openai_http_client() -> httpx.Client:
             except Exception as e:
                 logger.warning("log_warning", message=f"Erro no hook de rate limit: {e}")
 
+        def _egress_request_hook(request: httpx.Request):
+            allowed = enforce_worker_http_egress(str(request.url), tool="llm:openai")
+            if not allowed:
+                raise httpx.RequestError("Egress blocked by policy", request=request)
+
         _openai_http_client = httpx.Client(
-            limits=limits, timeout=timeout, event_hooks={"response": [_rate_limit_hook]}
+            limits=limits,
+            timeout=timeout,
+            event_hooks={"request": [_egress_request_hook], "response": [_rate_limit_hook]},
         )
     return _openai_http_client
 

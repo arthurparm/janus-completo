@@ -8,6 +8,7 @@ import structlog
 
 from app.core.infrastructure.logging_config import TRACE_ID
 from app.core.infrastructure.message_broker import get_broker
+from app.core.security.egress_policy import enforce_worker_http_egress
 from app.models.schemas import TaskMessage
 from app.planes.knowledge import get_knowledge_facade
 from app.repositories.observability_repository import record_audit_event_direct
@@ -172,9 +173,15 @@ async def start_google_productivity_consumer():
                         cid = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None)
                         cs = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None)
                         if cid and cs:
+                            token_url = "https://oauth2.googleapis.com/token"
+                            allowed_token_url = enforce_worker_http_egress(
+                                token_url, tool="google_productivity_worker"
+                            )
+                            if not allowed_token_url:
+                                raise RuntimeError("Egress blocked for google oauth token refresh")
                             async with httpx.AsyncClient(timeout=30) as client:
                                 r = await client.post(
-                                    "https://oauth2.googleapis.com/token",
+                                    allowed_token_url,
                                     data={
                                         "client_id": str(cid),
                                         "client_secret": str(cs),
@@ -201,6 +208,14 @@ async def start_google_productivity_consumer():
                                 )
                     if access:
                         _t0 = __import__("time").perf_counter()
+                        calendar_url = (
+                            "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+                        )
+                        allowed_calendar_url = enforce_worker_http_egress(
+                            calendar_url, tool="google_productivity_worker"
+                        )
+                        if not allowed_calendar_url:
+                            raise RuntimeError("Egress blocked for google calendar")
                         async with httpx.AsyncClient(timeout=30) as client:
                             req = {
                                 "summary": ev.get("title"),
@@ -220,7 +235,7 @@ async def start_google_productivity_consumer():
                                 "description": ev.get("notes") or None,
                             }
                             resp = await client.post(
-                                "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                                allowed_calendar_url,
                                 json=req,
                                 headers={
                                     "Authorization": f"Bearer {access}",
@@ -355,9 +370,15 @@ async def start_google_productivity_consumer():
                         cid = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None)
                         cs = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None)
                         if cid and cs:
+                            token_url = "https://oauth2.googleapis.com/token"
+                            allowed_token_url = enforce_worker_http_egress(
+                                token_url, tool="google_productivity_worker"
+                            )
+                            if not allowed_token_url:
+                                raise RuntimeError("Egress blocked for google oauth token refresh")
                             async with httpx.AsyncClient(timeout=30) as client:
                                 r = await client.post(
-                                    "https://oauth2.googleapis.com/token",
+                                    allowed_token_url,
                                     data={
                                         "client_id": str(cid),
                                         "client_secret": str(cs),
@@ -389,9 +410,15 @@ async def start_google_productivity_consumer():
                         body = str(msg.get("body", ""))
                         raw = f"To: {to}\r\nSubject: {subject}\r\n\r\n{body}".encode()
                         b64 = base64.urlsafe_b64encode(raw).decode("ascii")
+                        gmail_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+                        allowed_gmail_url = enforce_worker_http_egress(
+                            gmail_url, tool="google_productivity_worker"
+                        )
+                        if not allowed_gmail_url:
+                            raise RuntimeError("Egress blocked for gmail send")
                         async with httpx.AsyncClient(timeout=30) as client:
                             resp = await client.post(
-                                "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                                allowed_gmail_url,
                                 json={"raw": b64},
                                 headers={
                                     "Authorization": f"Bearer {access}",

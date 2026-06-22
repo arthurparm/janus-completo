@@ -6,7 +6,7 @@ import inspect
 
 from langsmith import traceable
 
-from app.core.tools.sandbox_executor import sandbox
+from app.core.tools.command_sandbox import run_restricted_command
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
 logger = structlog.get_logger(__name__)
@@ -75,12 +75,7 @@ class LeafWorker:
             
             if original_tool.__name__ == "run_command":
                 cmd = kwargs.get("command") or args[0]
-                # Wrap shell command in python
-                python_code = f"import subprocess; print(subprocess.check_output('{cmd}', shell=True).decode())"
-                stdout, stderr = sandbox.run_code(python_code)
-                if stderr:
-                    return f"Error: {stderr}"
-                return stdout
+                return run_restricted_command(str(cmd), timeout_seconds=300)
                 
             # For other tools, we might just warn or block if not compatible
             # Ideally, we should have a generic 'execute_in_sandbox' tool instead.

@@ -39,13 +39,17 @@ class TestGhostDataMitigation(unittest.TestCase):
         
         # VERIFY QDRANT
         print("[CHECK] Vector Store Deletion...")
-        mock_vector_delete.assert_any_call("janus_memory", {})
-        mock_vector_delete.assert_any_call("janus_knowledge", {})
+        expected_filter = {"metadata.user_id": str(user_id)}
+        mock_vector_delete.assert_any_call("global_chat", expected_filter)
+        mock_vector_delete.assert_any_call("global_docs", expected_filter)
+        mock_vector_delete.assert_any_call("global_memory", expected_filter)
+        mock_vector_delete.assert_any_call("global_secret", expected_filter)
+        mock_vector_delete.assert_any_call("janus_episodic_memory", expected_filter)
         print("✅ Qdrant delete called for both collections.")
 
         # VERIFY NEO4J
         print("[CHECK] Graph Store Deletion...")
-        mock_repo_instance.delete_user_data.assert_called_once_with()
+        mock_repo_instance.delete_user_data.assert_called_once_with(str(user_id))
         print("✅ Neo4j delete called.")
 
     def test_sqlalchemy_listener_registration(self):
