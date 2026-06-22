@@ -37,6 +37,7 @@ from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.core.security.egress_policy import enforce_tool_http_egress
 
 logger = structlog.get_logger(__name__)
 
@@ -107,6 +108,16 @@ class ContextManager:
             # Extrai o valor da SecretStr se existir
             tavily_key = getattr(tavily_secret, "get_secret_value", lambda: tavily_secret)()
             if tavily_key and str(tavily_key).strip():
+                allowed = enforce_tool_http_egress(
+                    "https://api.tavily.com/", tool="search_web"
+                )
+                if not allowed:
+                    logger.warning(
+                        "Tavily configurado, mas bloqueado pela política de egress. "
+                        "Adicione 'api.tavily.com' ao TOOL_EGRESS_ALLOW_HOSTS para habilitar."
+                    )
+                    self._tavily_client = None
+                    return
                 self._tavily_client = TavilySearchAPIWrapper(tavily_api_key=str(tavily_key).strip())
                 logger.info("Cliente Tavily inicializado com sucesso.")
             else:

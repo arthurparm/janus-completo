@@ -22,6 +22,7 @@ from prometheus_client import Counter
 
 from app.config import settings
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.security.egress_policy import enforce_worker_http_egress
 
 try:
     import msgpack
@@ -768,7 +769,10 @@ class MessageBroker:
 
         def _fetch() -> dict[str, Any] | None:
             try:
-                req = Request(url)
+                allowed_url = enforce_worker_http_egress(url, tool="rabbitmq_management")
+                if not allowed_url:
+                    raise RuntimeError("Egress blocked for RabbitMQ management API")
+                req = Request(allowed_url)
                 token = base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
                 req.add_header("Authorization", f"Basic {token}")
                 import time as _t
@@ -867,7 +871,10 @@ class MessageBroker:
 
         def _delete() -> bool:
             try:
-                req = Request(url, method="DELETE")
+                allowed_url = enforce_worker_http_egress(url, tool="rabbitmq_management")
+                if not allowed_url:
+                    raise RuntimeError("Egress blocked for RabbitMQ management API")
+                req = Request(allowed_url, method="DELETE")
                 token = base64.b64encode(f"{user}:{password}".encode()).decode("ascii")
                 req.add_header("Authorization", f"Basic {token}")
                 with urlopen(req, timeout=5) as resp:
