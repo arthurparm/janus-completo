@@ -8,15 +8,22 @@ status: ativo
 
 # Bem-vindo
 
-Este vault foi reconstruído a partir da lógica do código da aplicação.
+## Em uma frase
+Este vault existe para qualquer pessoa entender o que o Janus faz, como ele roda e como ele falha.
 
+## O que é o Janus
+- Um sistema de chat e automação (“agentic”) usado internamente.
+- Ele tem:
+  - Frontend Angular (interface do operador)
+  - Backend FastAPI (API e motor de execução)
+  - Workers assíncronos (tarefas em filas e loops)
+  - Infra distribuída (PC1/PC2): Postgres/Redis/RabbitMQ/Neo4j/Qdrant/Ollama
+
+## Onde começar
 - Ponto de entrada: [[00 - Índice/Home]]
-- Mapa geral: [[00 - Índice/Mapa Mestre do Sistema]]
-- Backend: [[02 - Backend/Como o Backend Pensa]]
-- Frontend: [[03 - Frontend/Shell e Navegação]]
-- Operação: [[05 - Infra e Operação/PC1 PC2 e Docker]]
+- Mapa único do sistema: [[00 - Índice/Mapa Mestre do Sistema]]
 
-## Arquivos-fonte
+## Referências de código (onde a verdade está)
 - `backend/app/main.py`
 - `backend/app/core/kernel.py`
 - `frontend/src/app/app.routes.ts`
@@ -25,4 +32,3 @@ Este vault foi reconstruído a partir da lógica do código da aplicação.
 
 ## Riscos/Lacunas
 - O vault depende de manutenção conforme o código evolui.
-- A documentação existente do repositório foi deliberadamente ignorada como base de conteúdo.

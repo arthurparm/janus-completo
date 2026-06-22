@@ -8,28 +8,33 @@ status: ativo
 
 # Home
 
-## Objetivo
-Ser a porta de entrada para entender o Janus a partir da implementação real.
+## Em uma frase
+Este vault é o “manual do Janus” baseado no que o sistema realmente faz.
 
-## Responsabilidades
-- Apontar para a espinha dorsal do sistema.
-- Organizar a leitura por domínio, fluxo e operação.
-- Explicitar onde a verdade está no código.
+## O que é
+O Janus é um sistema full stack (Frontend Angular + Backend FastAPI) que executa chat, memória/RAG, autonomia (tarefas assíncronas) e observabilidade, usando múltiplos bancos (Postgres/Redis/RabbitMQ/Neo4j/Qdrant) e provedores de LLM (cloud e local).
 
-## Entradas
-- Estrutura do monorepo.
-- Entry points do backend, frontend e compose.
+## Como ler (sem se perder)
+- Comece pelo mapa único: [[00 - Índice/Mapa Mestre do Sistema]]
+- Depois escolha um caminho:
+  - Por domínio: [[00 - Índice/Mapa por Domínio]]
+  - Por fluxos críticos: [[00 - Índice/Mapa por Fluxos Críticos]]
 
-## Saídas
-- Navegação inicial do vault.
-- Roteiro de leitura por profundidade.
+## Para dev júnior (onboarding rápido)
+- Entenda a regra de ouro: endpoint → service → repository → core/model.
+- Leia: [[02 - Backend/Como o Backend Pensa]] e [[03 - Frontend/Shell e Navegação]].
 
-## Dependências
-- [[00 - Índice/Mapa Mestre do Sistema]]
-- [[00 - Índice/Mapa por Domínio]]
-- [[00 - Índice/Mapa por Fluxos Críticos]]
+## Para dev sênior (orientação arquitetural)
+- Leia: [[01 - Visão do Sistema/Arquitetura Geral]], [[01 - Visão do Sistema/Sequência de Boot]] e [[01 - Visão do Sistema/Topologia Runtime]].
+- Use os inventários: [[07 - Glossário e Inventários/Inventário de Serviços]], [[07 - Glossário e Inventários/Inventário de Endpoints]], [[07 - Glossário e Inventários/Inventário de Workers]].
 
-## Arquivos-fonte
+## Para operação (rodar e diagnosticar)
+- Leia: [[05 - Infra e Operação/PC1 PC2 e Docker]] e [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]].
+
+## Para não-técnico (o que o produto entrega)
+- Leia os fluxos: [[04 - Fluxos End-to-End/Conversa e Chat]], [[04 - Fluxos End-to-End/Login e Identidade]], [[04 - Fluxos End-to-End/Autonomia]], [[04 - Fluxos End-to-End/Observabilidade]].
+
+## Referências de código (onde a verdade está)
 - `backend/app/main.py`
 - `backend/app/core/kernel.py`
 - `backend/app/api/v1/router.py`
@@ -38,19 +43,6 @@ Ser a porta de entrada para entender o Janus a partir da implementação real.
 - `docker-compose.pc1.yml`
 - `docker-compose.pc2.yml`
 
-## Leituras principais
-- Visão sistêmica: [[01 - Visão do Sistema/Arquitetura Geral]]
-- Boot e runtime: [[01 - Visão do Sistema/Sequência de Boot]], [[01 - Visão do Sistema/Topologia Runtime]]
-- Backend: [[02 - Backend/Como o Backend Pensa]]
-- Frontend: [[03 - Frontend/Shell e Navegação]]
-- Fluxos críticos: [[04 - Fluxos End-to-End/Conversa e Chat]], [[04 - Fluxos End-to-End/Autonomia]]
-- Operação: [[05 - Infra e Operação/PC1 PC2 e Docker]]
-- Qualidade: [[06 - Qualidade e Testes/Mapa de Testes]]
-
-## Fluxos relacionados
-- [[04 - Fluxos End-to-End/Login e Identidade]]
-- [[04 - Fluxos End-to-End/Observabilidade]]
-
 ## Riscos/Lacunas
-- O sistema é maior que a superfície usada pelo frontend atual.
-- Alguns módulos existem como capacidade de plataforma, mas não estão expostos igualmente na UI.
+- O sistema é maior que o conjunto de telas mais usadas no frontend.
+- Algumas capacidades existem como plataforma e podem estar menos conectadas à UX atual.

@@ -8,49 +8,40 @@ status: ativo
 
 # Mapa Mestre do Sistema
 
-## Objetivo
-Condensar a topologia lógica do Janus em um único mapa operacional.
+## Em uma frase
+Este é o mapa mínimo para entender “quem chama quem” e “onde os dados vivem”.
 
-## Responsabilidades
-- Mostrar fronteiras entre frontend, API, workers e infraestrutura.
-- Explicar a divisão PC1/PC2.
-- Ligar componentes aos fluxos críticos.
+## O que existe (as peças)
+- Frontend (`janus-frontend`): a interface Angular que o operador usa.
+- Backend (`janus-api`): a API FastAPI e o motor que toma decisões.
+- Kernel: composição interna (dependências, serviços, workers).
+- Infra PC1: Postgres + Redis + RabbitMQ (transação, cache, filas).
+- Infra PC2: Neo4j + Qdrant + Ollama (grafo, vetores/memória, LLM local).
 
-## Entradas
-- Boot FastAPI.
-- Kernel de dependências.
-- Rotas Angular.
-- Compose de PC1 e PC2.
+## Como funciona (do clique ao resultado)
+1. O operador faz algo no frontend.
+2. O frontend chama um endpoint do backend.
+3. O endpoint delega para um serviço.
+4. O serviço usa repositórios e “cores” (memória/LLM/tools).
+5. Se for assíncrono, o backend publica em filas e workers processam.
+6. O resultado volta para a UI (ou fica disponível por status/observabilidade).
 
-## Saídas
-- Modelo mental único do sistema.
+## Para dev júnior
+- Regra prática: “endpoint só traduz HTTP; o serviço decide; o repositório persiste”.
+- Leia os fluxos: [[04 - Fluxos End-to-End/Conversa e Chat]] e [[04 - Fluxos End-to-End/Login e Identidade]].
 
-## Dependências
-- [[01 - Visão do Sistema/Arquitetura Geral]]
-- [[01 - Visão do Sistema/Topologia Runtime]]
-- [[05 - Infra e Operação/PC1 PC2 e Docker]]
+## Para dev sênior
+- Entenda a composição e boot: [[01 - Visão do Sistema/Arquitetura Geral]] e [[01 - Visão do Sistema/Sequência de Boot]].
+- Entenda o runtime assíncrono: [[02 - Backend/Autonomia e Workers]].
 
-## Mapa
-1. `janus-frontend` entrega a interface Angular.
-2. `janus-api` expõe a superfície FastAPI e inicializa o kernel.
-3. O kernel conecta repositórios, serviços, monitoramento, scheduler e workers.
-4. O backend usa Postgres, Redis e RabbitMQ no PC1.
-5. O backend usa Neo4j, Qdrant e Ollama no PC2.
-6. A camada de chat, autonomia e observabilidade concentra os fluxos principais.
+## Para operação
+- Ponto crítico: a ordem PC2 → PC1 evita dependências faltando no startup.
+- Healthchecks e status: [[05 - Infra e Operação/Healthchecks e Contratos Operacionais]].
 
-## Núcleos do sistema
-- Núcleo de composição: [[02 - Backend/Kernel e Startup]]
-- Núcleo cognitivo: [[02 - Backend/LLM Routing e Prompts]]
-- Núcleo de memória: [[02 - Backend/Memória Conhecimento e RAG]]
-- Núcleo de execução: [[02 - Backend/Autonomia e Workers]]
-- Núcleo de experiência: [[03 - Frontend/Shell e Navegação]]
+## Para não-técnico
+- Janus é um “assistente operacional”: você conversa, o sistema busca contexto, executa ações controladas e registra evidências.
 
-## Fluxos relacionados
-- [[04 - Fluxos End-to-End/Conversa e Chat]]
-- [[04 - Fluxos End-to-End/Autonomia]]
-- [[04 - Fluxos End-to-End/Observabilidade]]
-
-## Arquivos-fonte
+## Referências de código (onde a verdade está)
 - `backend/app/main.py`
 - `backend/app/core/kernel.py`
 - `backend/app/api/v1/router.py`
@@ -59,5 +50,5 @@ Condensar a topologia lógica do Janus em um único mapa operacional.
 - `docker-compose.pc2.yml`
 
 ## Riscos/Lacunas
-- O backend é mais amplo do que o conjunto de rotas e telas usadas com frequência.
-- Existem capacidades de MAS, audio e vision que podem estar parcialmente conectadas à UX atual.
+- O backend tem capacidades além do que a UI expõe todo dia.
+- Há subsistemas (ex.: MAS/audio/vision) que podem estar mais “plataforma” do que “produto” no uso atual.

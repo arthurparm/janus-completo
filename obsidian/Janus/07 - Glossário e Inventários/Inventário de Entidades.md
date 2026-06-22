@@ -26,10 +26,12 @@ Listar os grupos de modelos explícitos do backend.
 ## Modelos
 - `ab_assignment_models`
 - `ab_experiment_models`
+- `audit_ledger_models`
 - `autonomy_models`
 - `config_models`
 - `consent_models`
 - `consent_scopes`
+- `data_governance_models`
 - `document_models`
 - `knowledge`
 - `knowledge_space_models`
@@ -39,7 +41,6 @@ Listar os grupos de modelos explícitos do backend.
 - `schemas`
 - `tool_usage_models`
 - `user_models`
-
 ## Arquivos-fonte
 - `backend/app/models/*.py`
 

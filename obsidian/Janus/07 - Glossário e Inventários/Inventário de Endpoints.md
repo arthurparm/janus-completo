@@ -38,6 +38,9 @@ Listar os módulos de endpoint existentes para navegação rápida.
 - `chat/chat_message`
 - `chat/chat_stream`
 - `chat/chat_study_jobs`
+- `chat/deps`
+- `chat/models`
+- `chat/policies`
 - `collaboration`
 - `consents`
 - `context`
@@ -45,6 +48,7 @@ Listar os módulos de endpoint existentes para navegação rápida.
 - `documents`
 - `evaluation`
 - `feedback`
+- `governance`
 - `knowledge`
 - `learning`
 - `llm`
@@ -67,7 +71,6 @@ Listar os módulos de endpoint existentes para navegação rápida.
 - `users`
 - `workers`
 - `workspace`
-
 ## Recorte tools e sandbox
 - `tools`
   - `GET /api/v1/tools/`
