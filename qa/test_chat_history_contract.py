@@ -152,8 +152,12 @@ class TestChatHistoryContract:
     async def test_get_history_paginated(self, async_client):
         resp = await async_client.get("/api/v1/chat/conv-1/history/paginated?limit=10", headers=_auth_headers(1))
         assert resp.status_code == 200, resp.json()
-        assert "messages" in resp.json()
-        assert len(resp.json()["messages"]) == 1
+        payload = resp.json()
+        assert "messages" in payload
+        assert len(payload["messages"]) == 1
+        assert payload["total_count"] == 1
+        assert payload["has_more"] is False
+        assert payload["limit"] == 10
 
     async def test_rename_conversation(self, async_client):
         resp = await async_client.put(

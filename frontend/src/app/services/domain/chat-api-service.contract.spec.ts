@@ -57,5 +57,49 @@ describe('ChatApiService (contract)', () => {
     })
     req.flush({ response: 'ok' })
   })
+
+  it('getChatHistoryPaginated deve chamar /history/paginated e preservar metadados de paginação', () => {
+    svc.getChatHistoryPaginated('conv-1', { limit: 80, offset: 0, before_ts: 123 }).subscribe((resp) => {
+      expect(resp).toEqual({
+        conversation_id: 'conv-1',
+        messages: [
+          {
+            message_id: 'm1',
+            role: 'assistant',
+            text: 'ok',
+            timestamp: 321,
+            citations: undefined,
+            citation_status: undefined,
+            reasoning: undefined,
+            ui: undefined,
+            understanding: undefined,
+            confirmation: undefined,
+            agent_state: undefined,
+            delivery_status: undefined,
+            failure_classification: undefined,
+            provider: undefined,
+            model: undefined,
+          },
+        ],
+        total_count: 1,
+        has_more: false,
+        next_offset: undefined,
+        limit: 80,
+        offset: 0,
+      })
+    })
+
+    const req = http.expectOne('/api/v1/chat/conv-1/history/paginated?limit=80&before_ts=123')
+    expect(req.request.method).toBe('GET')
+    req.flush({
+      conversation_id: 'conv-1',
+      messages: [{ message_id: 'm1', role: 'assistant', text: 'ok', timestamp: 321 }],
+      total_count: 1,
+      has_more: false,
+      next_offset: null,
+      limit: 80,
+      offset: 0,
+    })
+  })
 })
 

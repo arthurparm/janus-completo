@@ -111,7 +111,7 @@ getChatHistoryPaginated(conversation_id: string, params: {
     if (params.before_ts) qs.set('before_ts', String(params.before_ts))
     if (params.after_ts) qs.set('after_ts', String(params.after_ts))
 
-    const url = this.apiContext.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history${qs.toString() ? '?' + qs.toString() : ''}`)
+    const url = this.apiContext.buildUrl(`/api/v1/chat/${encodeURIComponent(conversation_id)}/history/paginated${qs.toString() ? '?' + qs.toString() : ''}`)
 
     return this.http.get<ChatHistoryPaginatedResponse>(url).pipe(
       map((resp) => {
