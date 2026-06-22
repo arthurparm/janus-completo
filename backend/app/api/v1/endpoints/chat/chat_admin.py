@@ -11,6 +11,7 @@ from app.services.chat_service import (
 )
 
 from .deps import (
+    actor_project_id,
     is_chat_auth_enforced,
     resolve_authenticated_user_context,
 )
@@ -44,7 +45,7 @@ async def rename_conversation(
             conversation_id,
             payload.new_title,
             user_id=user_id,
-            project_id=payload.project_id,
+            project_id=actor_project_id(http) or payload.project_id,
         )
         return {"status": "ok"}
     except ConversationNotFoundError:
@@ -98,7 +99,7 @@ async def delete_conversation(
         await service.delete_conversation(
             conversation_id,
             user_id=resolved_user_id,
-            project_id=project_id,
+            project_id=actor_project_id(http) or project_id,
         )
         return {"status": "ok"}
     except ConversationNotFoundError:

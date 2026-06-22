@@ -114,8 +114,7 @@ async def stream_message(
             knowledge_space_id = active_knowledge_space_id
             role_enum = ModelRole.ORCHESTRATOR
             route_applied = False
-        if not project_id:
-            project_id = actor_project_id(http)
+        project_id = actor_project_id(http) or project_id
         get_history = getattr(service, "get_history", None)
         if callable(get_history):
             try:
@@ -206,7 +205,6 @@ async def get_conversation_trace(
     chat_service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
-    return service.get_trace(conversation_id)
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
@@ -249,9 +247,9 @@ async def get_conversation_trace(
                     retryable=False,
                     http_status=status.HTTP_403_FORBIDDEN,
                 ),
-            )
+        )
         raise
-    return service.get_trace_history(conversation_id)
+    return service.get_trace(conversation_id)
 
 
 @router.get(
@@ -288,7 +286,7 @@ async def stream_agent_events(
         get_history = getattr(service, "get_history", None)
         if callable(get_history):
             try:
-                get_history(conversation_id, user_id=user_id)
+                get_history(conversation_id, user_id=user_id, project_id=actor_project_id(http))
             except ConversationNotFoundError:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

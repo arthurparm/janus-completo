@@ -29,7 +29,7 @@ from app.services.chat_study_service import ChatStudyJobService, ChatStudyServic
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.memory_service import MemoryService, get_memory_service
 
-from .deps import resolve_authenticated_user_context
+from .deps import actor_project_id, resolve_authenticated_user_context
 from .models import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -77,7 +77,7 @@ async def start_chat(
             ),
         )
     conversation_id = await service.start_conversation_async(
-        request.persona, ctx.user_id, request.project_id
+        request.persona, ctx.user_id, actor_project_id(http) or request.project_id
     )
     return ChatStartResponse(conversation_id=conversation_id)
 
@@ -94,7 +94,7 @@ async def send_message(
     memory: MemoryService = Depends(get_memory_service),
 ):
     ctx = resolve_authenticated_user_context(
-        http, None, allow_anonymous_fallback=False, endpoint_label="/api/v1/chat/message"
+        http, None, allow_anonymous_fallback=True, endpoint_label="/api/v1/chat/message"
     )
     if not ctx.user_id:
         raise HTTPException(
@@ -106,8 +106,9 @@ async def send_message(
                 retryable=False,
                 http_status=status.HTTP_401_UNAUTHORIZED,
             ),
-        )
+    )
     user_id = ctx.user_id
+    project_id = actor_project_id(http) or payload.project_id
     active_knowledge_space_id = service.resolve_active_knowledge_space_id(
         conversation_id=payload.conversation_id,
         user_id=user_id,
@@ -152,7 +153,7 @@ async def send_message(
             priority=priority,
             timeout_seconds=payload.timeout_seconds,
             user_id=user_id,
-            project_id=payload.project_id,
+            project_id=project_id,
             knowledge_space_id=active_knowledge_space_id,
             identity_source=ctx.identity_source,
         )

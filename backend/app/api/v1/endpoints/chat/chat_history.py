@@ -244,9 +244,10 @@ async def list_conversations(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
         )
+    scoped_project_id = actor_project_id(http) or project_id
     items = await service.list_conversations(
         user_id=final_user_id,
-        project_id=project_id,
+        project_id=scoped_project_id,
         limit=limit,
     )
 
