@@ -94,7 +94,7 @@ async def send_message(
     memory: MemoryService = Depends(get_memory_service),
 ):
     ctx = resolve_authenticated_user_context(
-        http, None, allow_anonymous_fallback=True, endpoint_label="/api/v1/chat/message"
+        http, None, allow_anonymous_fallback=False, endpoint_label="/api/v1/chat/message"
     )
     if not ctx.user_id:
         raise HTTPException(

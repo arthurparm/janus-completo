@@ -1,4 +1,4 @@
-import { decodeTokenUserId, getStoredAuthToken } from './auth.utils'
+import { getStoredAuthToken } from './auth.utils'
 
 export interface ChatStreamAuthHeadersOptions {
   projectId?: string | null
@@ -44,10 +44,6 @@ export function buildChatStreamAuthHeaders(
     const token = getStoredAuthToken()
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
-      const uid = decodeTokenUserId(token)
-      if (uid !== null) {
-        headers.set('X-User-Id', String(uid))
-      }
     }
   } catch {
     /* noop */

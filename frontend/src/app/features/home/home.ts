@@ -78,13 +78,11 @@ export class HomeComponent {
     this.notice.set('')
     this.error.set('')
     
-    const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    
     // Se tiver intenção, passamos como mensagem inicial (ainda não suportado diretamente no startChat pelo front, 
     // mas vamos criar e depois enviar mensagem ou assumir que o fluxo de chat lida com isso. 
     // Por enquanto, criamos a conversa e navegamos.)
     
-    this.api.chat.startChat(undefined, undefined, userId)
+    this.api.chat.startChat()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         catchError(() => {
@@ -111,8 +109,7 @@ export class HomeComponent {
   }
 
   private loadRecentConversations() {
-    const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    this.api.chat.listConversations(userId ? { user_id: userId, limit: 4 } : { limit: 4 })
+    this.api.chat.listConversations({ limit: 4 })
       .pipe(
         map((resp) => (resp.conversations || []).map((conv) => this.normalizeConversationTimestamps(conv))),
         catchError(() => of([]))

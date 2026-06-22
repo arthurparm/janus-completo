@@ -32,20 +32,19 @@ describe('ChatApiService (contract)', () => {
   })
 
   it('startChat deve chamar POST /api/v1/chat/start com body coerente', () => {
-    svc.startChat('Nova conversa', 'orchestrator', 'user-1', 'proj-1').subscribe()
+    svc.startChat('Nova conversa', 'orchestrator', 'proj-1').subscribe()
     const req = http.expectOne('/api/v1/chat/start')
     expect(req.request.method).toBe('POST')
     expect(req.request.body).toEqual({
       title: 'Nova conversa',
       persona: 'orchestrator',
-      user_id: 'user-1',
       project_id: 'proj-1',
     })
     req.flush({ conversation_id: 'c1' })
   })
 
   it('sendChatMessage deve chamar POST /api/v1/chat/message e trimar conversation_id', () => {
-    svc.sendChatMessage('  c1  ', 'oi', 'reasoner', 'high_quality', 30, 'user-1', 'proj-1').subscribe()
+    svc.sendChatMessage('  c1  ', 'oi', 'reasoner', 'high_quality', 30, 'proj-1').subscribe()
     const req = http.expectOne('/api/v1/chat/message')
     expect(req.request.method).toBe('POST')
     expect(req.request.body).toEqual({
@@ -54,7 +53,6 @@ describe('ChatApiService (contract)', () => {
       role: 'reasoner',
       priority: 'high_quality',
       timeout_seconds: 30,
-      user_id: 'user-1',
       project_id: 'proj-1',
     })
     req.flush({ response: 'ok' })

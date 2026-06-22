@@ -1,5 +1,11 @@
 import pytest
+from app.core.infrastructure.auth import create_token, verify_token
 from httpx import ASGITransport, AsyncClient
+
+
+def _auth_headers(user_id: int | str) -> dict[str, str]:
+    token = create_token(int(user_id), expires_in=3600)
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -95,16 +101,32 @@ def async_client():
 
     app.dependency_overrides[get_memory_service] = lambda: DummyMemoryService()
     app.dependency_overrides[get_observability_service] = lambda: DummyObservabilityService()
-
     import app.api.v1.endpoints.chat.deps as chat_deps
     original_resolve = chat_deps.resolve_authenticated_user_context
     from app.api.v1.endpoints.chat.deps import ChatIdentityResolution
-    chat_deps.resolve_authenticated_user_context = lambda *args, **kwargs: ChatIdentityResolution(
-        user_id="1",
-        identity_source="mock",
-        auth_present=True,
-        authenticated=True
-    )
+
+    def _resolve_from_bearer(http, explicit_user_id, **kwargs):
+        del explicit_user_id
+        auth = http.headers.get("Authorization") or ""
+        actor = None
+        if auth.lower().startswith("bearer "):
+            token = auth.split(" ", 1)[1].strip()
+            actor = verify_token(token)
+        if actor is None:
+            return ChatIdentityResolution(
+                user_id=None,
+                identity_source="unknown",
+                auth_present=bool(auth),
+                authenticated=False,
+            )
+        return ChatIdentityResolution(
+            user_id=str(actor),
+            identity_source="actor",
+            auth_present=True,
+            authenticated=True,
+        )
+
+    chat_deps.resolve_authenticated_user_context = _resolve_from_bearer
 
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     yield client
@@ -116,19 +138,19 @@ def async_client():
 class TestChatHistoryContract:
 
     async def test_list_conversations(self, async_client):
-        resp = await async_client.get("/api/v1/chat/conversations")
+        resp = await async_client.get("/api/v1/chat/conversations", headers=_auth_headers(1))
         assert resp.status_code == 200
         assert len(resp.json()) == 1
         assert resp.json()[0]["conversation_id"] == "conv-1"
 
     async def test_get_history(self, async_client):
-        resp = await async_client.get("/api/v1/chat/conv-1/history")
+        resp = await async_client.get("/api/v1/chat/conv-1/history", headers=_auth_headers(1))
         assert resp.status_code == 200, resp.json()
         assert "messages" in resp.json()
         assert len(resp.json()["messages"]) == 1
 
     async def test_get_history_paginated(self, async_client):
-        resp = await async_client.get("/api/v1/chat/conv-1/history/paginated?limit=10")
+        resp = await async_client.get("/api/v1/chat/conv-1/history/paginated?limit=10", headers=_auth_headers(1))
         assert resp.status_code == 200, resp.json()
         assert "messages" in resp.json()
         assert len(resp.json()["messages"]) == 1
@@ -136,7 +158,8 @@ class TestChatHistoryContract:
     async def test_rename_conversation(self, async_client):
         resp = await async_client.put(
             "/api/v1/chat/conv-1/rename",
-            json={"new_title": "New Title"}
+            json={"new_title": "New Title"},
+            headers=_auth_headers(1),
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
@@ -144,24 +167,26 @@ class TestChatHistoryContract:
     async def test_rename_conversation_not_found(self, async_client):
         resp = await async_client.put(
             "/api/v1/chat/conv-404/rename",
-            json={"new_title": "New Title"}
+            json={"new_title": "New Title"},
+            headers=_auth_headers(1),
         )
         assert resp.status_code == 404
 
     async def test_rename_conversation_forbidden(self, async_client):
         resp = await async_client.put(
             "/api/v1/chat/conv-403/rename",
-            json={"new_title": "New Title"}
+            json={"new_title": "New Title"},
+            headers=_auth_headers(1),
         )
         assert resp.status_code == 403
 
     async def test_delete_conversation(self, async_client):
-        resp = await async_client.delete("/api/v1/chat/conv-1")
+        resp = await async_client.delete("/api/v1/chat/conv-1", headers=_auth_headers(1))
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
     async def test_delete_conversation_not_found(self, async_client):
-        resp = await async_client.delete("/api/v1/chat/conv-404")
+        resp = await async_client.delete("/api/v1/chat/conv-404", headers=_auth_headers(1))
         assert resp.status_code == 404
 
     async def test_chat_health(self, async_client):
@@ -182,6 +207,6 @@ class TestChatHistoryContract:
         assert resp.json()["status"] == "healthy"
 
     async def test_get_conversation_trace(self, async_client):
-        resp = await async_client.get("/api/v1/chat/conv-1/trace")
+        resp = await async_client.get("/api/v1/chat/conv-1/trace", headers=_auth_headers(1))
         assert resp.status_code == 200
         assert "steps" in resp.json()

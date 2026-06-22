@@ -12,7 +12,7 @@ describe('buildChatStreamAuthHeaders', () => {
     sessionStorage.clear()
   })
 
-  it('deve montar headers com bearer, x-user-id e x-project-id', () => {
+  it('deve montar headers com bearer e x-project-id', () => {
     const payload = btoa(JSON.stringify({ user_id: 42 }))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
@@ -23,7 +23,7 @@ describe('buildChatStreamAuthHeaders', () => {
     const headers = buildChatStreamAuthHeaders({ projectId: 'p-1' })
 
     expect(headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
-    expect(headers.get('X-User-Id')).toBe('42')
+    expect(headers.get('X-User-Id')).toBeNull()
     expect(headers.get('X-Project-Id')).toBe('p-1')
     expect(headers.get('X-Request-ID')).toBeTruthy()
     expect(headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
@@ -48,6 +48,6 @@ describe('buildChatStreamAuthHeaders', () => {
     const headers = buildChatStreamAuthHeaders()
 
     expect(headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
-    expect(headers.get('X-User-Id')).toBe('7')
+    expect(headers.get('X-User-Id')).toBeNull()
   })
 })

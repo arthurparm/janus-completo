@@ -51,7 +51,7 @@ async def chat_history(
         identity_ctx = resolve_authenticated_user_context(
             http,
             None,
-            allow_anonymous_fallback=True,
+            allow_anonymous_fallback=False,
             endpoint_label="/api/v1/chat/history",
         )
         user_id = identity_ctx.user_id
@@ -155,7 +155,7 @@ async def chat_history_paginated(
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
-        allow_anonymous_fallback=True,
+        allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat/history/paginated",
     )
     user_id = identity_ctx.user_id
@@ -234,7 +234,7 @@ async def list_conversations(
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
-        allow_anonymous_fallback=True,
+        allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat/conversations",
     )
     final_user_id = identity_ctx.user_id

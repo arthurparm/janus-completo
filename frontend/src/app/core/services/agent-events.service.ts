@@ -1,7 +1,7 @@
 import { Injectable, NgZone } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { API_BASE_URL } from '../../services/api.config';
-import { AuthService } from '../auth/auth.service';
+import { buildChatStreamAuthHeaders } from '../../services/chat-auth-headers.util';
 import { AppLoggerService } from './app-logger.service';
 
 export interface AgentEvent {
@@ -17,13 +17,13 @@ export interface AgentEvent {
     providedIn: 'root'
 })
 export class AgentEventsService {
-    private eventSource?: EventSource;
+    private abortController?: AbortController;
     private _events$ = new Subject<AgentEvent>();
     private currentConversationId?: string;
+    private connectSeq = 0;
 
     constructor(
         private zone: NgZone,
-        private auth: AuthService,
         private logger: AppLoggerService
     ) { }
 
@@ -32,69 +32,149 @@ export class AgentEventsService {
     }
 
     public connect(conversationId: string): void {
-        if (this.eventSource) {
-            this.eventSource.close();
-        }
+        this.disconnect();
         this.currentConversationId = conversationId;
-
-        // Prepare URL with user_id param for simple auth/tracking
-        let url = `${API_BASE_URL}/v1/chat/${conversationId}/events`;
-
-        // Attempt to get current user ID
-        // Note: AuthService might expose it synchronously or we might need to subscribe.
-        // For simplicity, we assume we can get it from localStorage or AuthService state if available.
-        // Let's rely on backend 'http.state' (cookies) mostly, but ideally we pass query param.
-        // Assuming auth.currentUser value is available or we decode token.
-        const user = this.auth.currentUserValue; // Hypothetical accessor
-        if (user?.id) {
-            url += `?user_id=${user.id}`;
-        }
-
-        this.logger.info('[AgentEvents] Connecting', { url });
-
-        this.eventSource = new EventSource(url);
-
-        this.eventSource.onmessage = (event) => {
-            this.zone.run(() => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this._events$.next(this.normalizeEvent(data));
-                } catch (e) {
-                    this.logger.error('[AgentEvents] Error parsing event', e);
-                }
-            });
-        };
-
-        this.eventSource.onerror = (_error) => {
-            this.zone.run(() => {
-                // EventSource automatically retries, but we logs it
-                // If state is CLOSED (2), we might need manual reconnect logic or let it be.
-                if (this.eventSource?.readyState === EventSource.CLOSED) {
-                    this.logger.warn('[AgentEvents] Connection closed');
-                }
-            });
-        };
-
-        // Listen for named events if the backend sends them (e.g. event: agent_event)
-        this.eventSource.addEventListener('agent_event', (event: MessageEvent) => {
-            this.zone.run(() => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this._events$.next(this.normalizeEvent(data));
-                } catch (e) {
-                    this.logger.error('[AgentEvents] Error parsing named event', e);
-                }
-            });
-        });
+        const url = `${API_BASE_URL}/v1/chat/${conversationId}/events`;
+        const controller = new AbortController();
+        const seq = ++this.connectSeq;
+        this.abortController = controller;
+        this.logger.info('[AgentEvents] Connecting', { url, conversationId });
+        void this.consume(url, controller, seq);
     }
 
     public disconnect(): void {
-        if (this.eventSource) {
+        if (this.abortController) {
             this.logger.info('[AgentEvents] Disconnecting');
-            this.eventSource.close();
-            this.eventSource = undefined;
+            try {
+                this.abortController.abort();
+            } catch {
+                /* noop */
+            }
+            this.abortController = undefined;
         }
         this.currentConversationId = undefined;
+    }
+
+    private async consume(url: string, controller: AbortController, seq: number): Promise<void> {
+        try {
+            const headers = buildChatStreamAuthHeaders();
+            headers.set('Accept', 'text/event-stream');
+            const response = await fetch(url, {
+                method: 'GET',
+                headers,
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                this.logger.warn('[AgentEvents] Stream request failed', {
+                    status: response.status,
+                    conversationId: this.currentConversationId,
+                });
+                return;
+            }
+
+            if (!response.body) {
+                this.logger.warn('[AgentEvents] Empty stream body', {
+                    conversationId: this.currentConversationId,
+                });
+                return;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (controller.signal.aborted || seq !== this.connectSeq) return;
+                buffer += decoder.decode(value, { stream: true });
+                const parsed = this.extractEvents(buffer);
+                buffer = parsed.remaining;
+                for (const evt of parsed.events) {
+                    this.handleEvent(evt.event, evt.data);
+                    if (controller.signal.aborted || seq !== this.connectSeq) return;
+                }
+            }
+
+            buffer += decoder.decode();
+            const trailing = this.extractEvents(buffer, true);
+            for (const evt of trailing.events) {
+                this.handleEvent(evt.event, evt.data);
+            }
+        } catch (error) {
+            if (controller.signal.aborted || seq !== this.connectSeq) {
+                return;
+            }
+            this.logger.error('[AgentEvents] Stream consumption failed', error);
+        } finally {
+            if (this.abortController === controller) {
+                this.abortController = undefined;
+            }
+        }
+    }
+
+    private extractEvents(input: string, flush = false): { events: Array<{ event: string; data: string }>; remaining: string } {
+        const normalized = input.replace(/\r\n/g, '\n');
+        const events: Array<{ event: string; data: string }> = [];
+        let cursor = 0;
+
+        while (true) {
+            const separatorIndex = normalized.indexOf('\n\n', cursor);
+            if (separatorIndex === -1) break;
+            const block = normalized.slice(cursor, separatorIndex);
+            cursor = separatorIndex + 2;
+            const parsed = this.parseBlock(block);
+            if (parsed) events.push(parsed);
+        }
+
+        let remaining = normalized.slice(cursor);
+        if (flush && remaining.trim()) {
+            const parsed = this.parseBlock(remaining);
+            if (parsed) events.push(parsed);
+            remaining = '';
+        }
+
+        return { events, remaining };
+    }
+
+    private parseBlock(block: string): { event: string; data: string } | null {
+        const lines = block.split('\n');
+        let event = 'message';
+        const dataLines: string[] = [];
+
+        for (const rawLine of lines) {
+            const line = rawLine ?? '';
+            if (!line || line.startsWith(':')) continue;
+            if (line.startsWith('event:')) {
+                event = line.slice('event:'.length).trim() || 'message';
+                continue;
+            }
+            if (line.startsWith('data:')) {
+                dataLines.push(line.slice('data:'.length).trimStart());
+            }
+        }
+
+        if (dataLines.length === 0) return null;
+        return { event, data: dataLines.join('\n') };
+    }
+
+    private handleEvent(event: string, data: string): void {
+        this.zone.run(() => {
+            try {
+                const payload = JSON.parse(data);
+                if (event === 'agent_event' || event === 'message') {
+                    this._events$.next(this.normalizeEvent(payload));
+                    return;
+                }
+                this._events$.next(this.normalizeEvent({
+                    ...payload,
+                    event_type: payload?.event_type || event,
+                }));
+            } catch (error) {
+                this.logger.error('[AgentEvents] Error parsing event', error);
+            }
+        });
     }
 
     /**

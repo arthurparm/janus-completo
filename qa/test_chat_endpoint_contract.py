@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.getcwd(), "backend"))
 from app.api.v1.endpoints.chat import router as chat_router
 from app.config import settings
 from app.core.exceptions.chat_exceptions import ChatServiceError
+from app.core.infrastructure.auth import create_token, verify_token
 from app.services.chat_service import get_chat_service
 from app.services.memory_service import get_memory_service
 
@@ -118,6 +119,11 @@ class _DummyMemoryService:
         return self._items
 
 
+def _auth_headers(user_id: int | str) -> dict[str, str]:
+    token = create_token(int(user_id), expires_in=3600)
+    return {"Authorization": f"Bearer {token}"}
+
+
 def _build_client(
     chat_service: _DummyChatService,
     memory_service: _DummyMemoryService | None = None,
@@ -132,9 +138,12 @@ def _build_client(
 
     @app.middleware("http")
     async def _inject_actor(request: Request, call_next):
-        actor = request.headers.get("X-Actor-User-Id")
-        if actor:
-            request.state.actor_user_id = actor
+        auth = request.headers.get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth.split(" ", 1)[1].strip()
+            actor = verify_token(token)
+            if actor is not None:
+                request.state.actor_user_id = str(actor)
         return await call_next(request)
 
     return TestClient(app)
@@ -172,13 +181,13 @@ def test_chat_start_uses_actor_user_id_when_payload_user_absent():
     svc = _DummyChatService()
     client = _build_client(svc)
 
-    resp = client.post("/api/v1/chat/start", json={}, headers={"X-Actor-User-Id": "42"})
+    resp = client.post("/api/v1/chat/start", json={}, headers=_auth_headers(42))
     assert resp.status_code == 200
     assert resp.json()["conversation_id"] == "conv-1"
     assert svc.last_start_user_id == "42"
 
 
-def test_chat_message_uses_anonymous_fallback_without_actor_or_payload_user():
+def test_chat_message_requires_bearer_auth_without_actor_or_payload_user():
     svc = _DummyChatService()
     client = _build_client(svc)
 
@@ -191,11 +200,8 @@ def test_chat_message_uses_anonymous_fallback_without_actor_or_payload_user():
             "priority": "fast_and_cheap",
         },
     )
-    assert resp.status_code == 200
-    assert isinstance(svc.last_message_user_id, str)
-    assert svc.last_message_user_id.startswith("anon:")
-    assert resp.json()["understanding"]["intent"] == "question"
-    assert resp.json()["citation_status"]["status"] in {"not_applicable", "retrieval_failed", "present"}
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
 
 
 def test_chat_message_requires_citations_for_code_or_docs_queries():
@@ -210,6 +216,7 @@ def test_chat_message_requires_citations_for_code_or_docs_queries():
             "role": "orchestrator",
             "priority": "fast_and_cheap",
         },
+        headers=_auth_headers(1),
     )
 
     assert resp.status_code == 200
@@ -223,8 +230,7 @@ def test_chat_message_requires_citations_for_code_or_docs_queries():
     assert svc.last_message_patch["patch"]["delivery_status"] == "pending_study"
 
 
-def test_chat_study_job_denies_anonymous_access_to_other_user_job(monkeypatch):
-    monkeypatch.setenv("CHAT_AUTH_ENFORCE_REQUIRED", "0")
+def test_chat_study_job_denies_access_to_other_user_with_authenticated_actor():
     svc = _DummyChatService()
     job = SimpleNamespace(
         job_id="job-victim",
@@ -241,11 +247,10 @@ def test_chat_study_job_denies_anonymous_access_to_other_user_job(monkeypatch):
     )
     client = _build_client(svc, study_jobs=_DummyStudyJobs(job))
 
-    resp = client.get("/api/v1/chat/study-jobs/job-victim")
+    resp = client.get("/api/v1/chat/study-jobs/job-victim", headers=_auth_headers(2))
 
     assert resp.status_code == 403
-    assert svc.last_history_user_id is not None
-    assert svc.last_history_user_id != "victim-user"
+    assert svc.last_history_user_id == "2"
 
 
 def test_chat_message_low_confidence_requires_confirmation(monkeypatch):
@@ -277,6 +282,7 @@ def test_chat_message_low_confidence_requires_confirmation(monkeypatch):
             "role": "orchestrator",
             "priority": "fast_and_cheap",
         },
+        headers=_auth_headers(1),
     )
 
     assert resp.status_code == 200
@@ -320,6 +326,7 @@ def test_chat_message_citations_include_clickable_source_metadata():
             "role": "orchestrator",
             "priority": "fast_and_cheap",
         },
+        headers=_auth_headers(1),
     )
 
     assert resp.status_code == 200
@@ -365,6 +372,7 @@ def test_chat_message_document_citations_prevent_pending_study(monkeypatch):
             "role": "orchestrator",
             "priority": "fast_and_cheap",
         },
+        headers=_auth_headers(1),
     )
 
     assert resp.status_code == 200
@@ -411,7 +419,7 @@ def test_chat_stream_contract_headers_events_and_actor_fallback_user():
     resp = client.get(
         "/api/v1/chat/stream/conv-1",
         params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
-        headers={"X-Actor-User-Id": "77"},
+        headers=_auth_headers(77),
     )
 
     assert resp.status_code == 200
@@ -426,19 +434,16 @@ def test_chat_stream_contract_headers_events_and_actor_fallback_user():
     assert svc.last_stream_user_id == "77"
 
 
-def test_chat_stream_denies_anonymous_access_to_other_user_conversation(monkeypatch):
-    monkeypatch.setenv("CHAT_AUTH_ENFORCE_REQUIRED", "0")
-    svc = _OwnerScopedChatService()
+def test_chat_stream_requires_bearer_auth_for_existing_conversation():
+    svc = _DummyChatService()
     client = _build_client(svc)
 
     resp = client.get(
-        "/api/v1/chat/stream/conv-victim",
+        "/api/v1/chat/stream/conv-1",
         params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
     )
 
-    assert resp.status_code == 403
-    assert svc.last_history_user_id is not None
-    assert svc.last_history_user_id != svc.owner_user_id
+    assert resp.status_code == 401
     assert svc.last_stream_conversation_id is None
 
 
@@ -483,7 +488,7 @@ def test_chat_events_contract_headers_event_and_actor_fallback_user():
 
     resp = client.get(
         "/api/v1/chat/conv-1/events",
-        headers={"X-Actor-User-Id": "99"},
+        headers=_auth_headers(99),
     )
 
     assert resp.status_code == 200
@@ -494,3 +499,16 @@ def test_chat_events_contract_headers_event_and_actor_fallback_user():
     assert "event: AgentThinking" in resp.text
     assert svc.last_events_conversation_id == "conv-1"
     assert svc.last_events_user_id == "99"
+
+
+def test_existing_chat_endpoints_require_bearer_auth():
+    svc = _DummyChatService()
+    client = _build_client(svc)
+
+    assert client.get("/api/v1/chat/conversations").status_code == 401
+    assert client.get("/api/v1/chat/conv-1/history").status_code == 401
+    assert client.get("/api/v1/chat/conv-1/history/paginated").status_code == 401
+    assert client.get("/api/v1/chat/conv-1/events").status_code == 401
+    assert client.get("/api/v1/chat/study-jobs/job-1").status_code == 401
+    assert client.put("/api/v1/chat/conv-1/rename", json={"new_title": "Renamed"}).status_code == 401
+    assert client.delete("/api/v1/chat/conv-1").status_code == 401

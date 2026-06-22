@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.api.v1.endpoints.chat import router as chat_router
+from app.core.infrastructure.auth import create_token
 from app.services.chat_service import get_chat_service
 from app.services.memory_service import get_memory_service
 from fastapi import FastAPI, Request
@@ -102,6 +103,11 @@ class _ProjectScopeChatService:
         return _gen()
 
 
+def _auth_headers(user_id: int | str) -> dict[str, str]:
+    token = create_token(int(user_id), expires_in=3600)
+    return {"Authorization": f"Bearer {token}"}
+
+
 def _client_with_actor_project(service: _ProjectScopeChatService) -> TestClient:
     app = FastAPI()
     app.include_router(chat_router, prefix="/api/v1/chat")
@@ -124,6 +130,7 @@ def test_chat_write_endpoints_prefer_authenticated_project_scope():
     start_response = client.post(
         "/api/v1/chat/start",
         json={"persona": "assistant", "project_id": "client-supplied-project"},
+        headers=_auth_headers(1),
     )
     message_response = client.post(
         "/api/v1/chat/message",
@@ -132,13 +139,16 @@ def test_chat_write_endpoints_prefer_authenticated_project_scope():
             "message": "hello",
             "project_id": "client-supplied-project",
         },
+        headers=_auth_headers(1),
     )
     rename_response = client.put(
         "/api/v1/chat/conv-1/rename",
         json={"new_title": "Renamed", "project_id": "client-supplied-project"},
+        headers=_auth_headers(1),
     )
     delete_response = client.delete(
-        "/api/v1/chat/conv-1?project_id=client-supplied-project"
+        "/api/v1/chat/conv-1?project_id=client-supplied-project",
+        headers=_auth_headers(1),
     )
 
     assert start_response.status_code == 200
@@ -156,7 +166,8 @@ def test_chat_read_and_stream_endpoints_prefer_authenticated_project_scope():
     client = _client_with_actor_project(service)
 
     list_response = client.get(
-        "/api/v1/chat/conversations?project_id=client-supplied-project"
+        "/api/v1/chat/conversations?project_id=client-supplied-project",
+        headers=_auth_headers(1),
     )
     stream_response = client.get(
         "/api/v1/chat/stream/conv-1",
@@ -164,8 +175,9 @@ def test_chat_read_and_stream_endpoints_prefer_authenticated_project_scope():
             "message": "hello",
             "project_id": "client-supplied-project",
         },
+        headers=_auth_headers(1),
     )
-    events_response = client.get("/api/v1/chat/conv-1/events")
+    events_response = client.get("/api/v1/chat/conv-1/events", headers=_auth_headers(1))
 
     assert list_response.status_code == 200
     assert stream_response.status_code == 200

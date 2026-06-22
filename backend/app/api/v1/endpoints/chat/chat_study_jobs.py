@@ -19,7 +19,7 @@ async def get_study_job(
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
-        allow_anonymous_fallback=True,
+        allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat/study-jobs",
     )
     user_id = identity_ctx.user_id

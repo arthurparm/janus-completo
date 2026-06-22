@@ -1,4 +1,5 @@
 from app.api.v1.endpoints.chat import router as chat_router
+from app.core.infrastructure.auth import create_token
 from app.services.chat_service import ChatServiceError, get_chat_service
 from app.services.trace_service import get_trace_service
 from fastapi import FastAPI, Request
@@ -23,6 +24,11 @@ class _TraceService:
         return {"steps": ["should-not-leak"]}
 
 
+def _auth_headers(user_id: int | str) -> dict[str, str]:
+    token = create_token(int(user_id), expires_in=3600)
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_trace_endpoint_checks_chat_access_before_returning_trace():
     chat_service = _DenyingChatService()
     trace_service = _TraceService()
@@ -37,7 +43,7 @@ def test_trace_endpoint_checks_chat_access_before_returning_trace():
         return await call_next(request)
 
     client = TestClient(app)
-    response = client.get("/api/v1/chat/conv-2/trace")
+    response = client.get("/api/v1/chat/conv-2/trace", headers=_auth_headers(1))
 
     assert response.status_code == 403
     assert chat_service.history_calls == 1

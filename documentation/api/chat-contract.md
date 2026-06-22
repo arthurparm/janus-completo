@@ -7,8 +7,8 @@
 - `GET /api/v1/chat/{conversation_id}/events` (eventos de agentes / observabilidade)
 
 ## Compatibilidade
-- Contrato **aditivo** (retrocompatível com frontend atual)
-- Campos legados permanecem
+- Contrato com autenticacao obrigatoria por bearer para os fluxos centrais de chat
+- Campos legados de identidade cliente-controlada nao fazem mais parte do contrato
 - Novos campos recomendados:
   - `citation_status`
   - `understanding.confirmation`
@@ -19,7 +19,6 @@
 ## `POST /api/v1/chat/start`
 ### Request
 - `persona?`
-- `user_id?`
 - `project_id?`
 - `title?`
 
@@ -35,7 +34,6 @@
 - `role?`
 - `priority?`
 - `timeout_seconds?`
-- `user_id?`
 - `project_id?`
 
 ### Response (campos principais)
@@ -93,8 +91,12 @@ Campos esperados:
 - `role?`
 - `priority?`
 - `timeout_seconds?`
-- `user_id?`
 - `project_id?`
+
+### Autenticacao
+- Requer `Authorization: Bearer <token>`
+- Nao aceita `user_id` no payload/query como mecanismo de autenticacao
+- Nao aceita `X-User-Id` como mecanismo de autenticacao
 
 ### Eventos suportados
 - `start`
@@ -185,4 +187,5 @@ Payload canônico com compat legado:
 ## `GET /api/v1/chat/{conversation_id}/events`
 - Fluxo de eventos de observabilidade do agente (tool calls, thinking, etc.)
 - Mantido como canal complementar para UX/observabilidade
+- Requer `Authorization: Bearer <token>`
 

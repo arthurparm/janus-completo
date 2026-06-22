@@ -663,8 +663,7 @@ export class ConversationsComponent {
 
   private loadConversations(): void {
     this.listLoading.set(true)
-    const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    this.api.chat.listConversations(userId ? { user_id: userId, limit: 60 } : { limit: 60 })
+    this.api.chat.listConversations({ limit: 60 })
       .pipe(
         map((resp) => resp.conversations || []),
         catchError(() => of([]))
@@ -804,10 +803,9 @@ export class ConversationsComponent {
   ): Promise<string | null> {
     const current = this.selectedId()
     if (current && !forceCreate) return current
-    const userId = this.user()?.id ? String(this.user()?.id) : undefined
     try {
       const response = await firstValueFrom(
-        this.api.chat.startChat(undefined, undefined, userId).pipe(catchError(() => of(null)))
+        this.api.chat.startChat().pipe(catchError(() => of(null)))
       )
       const conversationId = response?.conversation_id
       if (!conversationId) return null
@@ -853,8 +851,7 @@ export class ConversationsComponent {
   }
 
   private sendClassic(conversationId: string, message: string): void {
-    const userId = this.user()?.id ? String(this.user()?.id) : undefined
-    this.api.chat.sendChatMessage(conversationId, message, this.selectedRole(), this.selectedPriority(), undefined, userId)
+    this.api.chat.sendChatMessage(conversationId, message, this.selectedRole(), this.selectedPriority())
       .pipe(catchError(() => of(null)))
       .subscribe((resp) => {
         const latencyMs = this.consumeResponseLatency()

@@ -1,4 +1,4 @@
-from qa.test_chat_endpoint_contract import _build_client, _DummyChatService
+from qa.test_chat_endpoint_contract import _auth_headers, _build_client, _DummyChatService
 
 
 def test_chat_stream_sse_keeps_core_events_contract():
@@ -7,7 +7,7 @@ def test_chat_stream_sse_keeps_core_events_contract():
     resp = client.get(
         "/api/v1/chat/stream/conv-1",
         params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
-        headers={"X-Actor-User-Id": "1"},
+        headers=_auth_headers(1),
     )
     assert resp.status_code == 200
     body = resp.text

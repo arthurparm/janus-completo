@@ -31,7 +31,6 @@ async def stream_message(
     role: str = "auto",
     priority: str = "fast_and_cheap",
     timeout_seconds: int | None = None,
-    user_id: str | None = None,
     project_id: str | None = None,
     knowledge_space_id: str | None = None,
     service: ChatService = Depends(get_chat_service),
@@ -88,8 +87,8 @@ async def stream_message(
     try:
         identity_ctx = resolve_authenticated_user_context(
             http,
-            user_id,
-            allow_anonymous_fallback=True,
+            None,
+            allow_anonymous_fallback=False,
             endpoint_label="/api/v1/chat/stream",
         )
         user_id = identity_ctx.user_id
@@ -207,7 +206,7 @@ async def get_conversation_trace(
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
-        allow_anonymous_fallback=True,
+        allow_anonymous_fallback=False,
         endpoint_label="/api/v1/chat/trace",
     )
     user_id = identity_ctx.user_id
@@ -256,7 +255,6 @@ async def get_conversation_trace(
 )
 async def stream_agent_events(
     conversation_id: str,
-    user_id: str | None = None,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
@@ -266,8 +264,8 @@ async def stream_agent_events(
     try:
         identity_ctx = resolve_authenticated_user_context(
             http,
-            user_id,
-            allow_anonymous_fallback=True,
+            None,
+            allow_anonymous_fallback=False,
             endpoint_label="/api/v1/chat/events",
         )
         user_id = identity_ctx.user_id

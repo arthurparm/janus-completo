@@ -5,7 +5,6 @@ export interface ChatStartResponse {
 }
 export interface ChatStartRequest {
   persona?: string;
-  user_id?: string;
   project_id?: string;
   title?: string;
 }
@@ -16,7 +15,6 @@ export interface ChatMessageRequest {
   role?: string;
   priority?: string;
   timeout_seconds?: number;
-  user_id?: string;
   project_id?: string;
   knowledge_space_id?: string;
 }

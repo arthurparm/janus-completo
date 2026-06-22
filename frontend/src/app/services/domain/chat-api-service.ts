@@ -14,19 +14,18 @@ export class ChatApiService {
     private logger: AppLoggerService
   ) {}
 
-getConversationTrace(conversationId: string): Observable<TraceStep[]> {
+  getConversationTrace(conversationId: string): Observable<TraceStep[]> {
     return this.http.get<TraceStep[]>(this.apiContext.buildUrl(`/api/v1/chat/${encodeURIComponent(conversationId)}/trace`));
   }
 
-startChat(title?: string, persona?: string, user_id?: string, project_id?: string): Observable<ChatStartResponse> {
+  startChat(title?: string, persona?: string, project_id?: string): Observable<ChatStartResponse> {
     const body: ChatStartRequest = { title }
     if (persona) body.persona = persona
-    if (user_id) body.user_id = user_id
     if (project_id) body.project_id = project_id
     return this.http.post<ChatStartResponse>(this.apiContext.buildUrl(`/api/v1/chat/start`), body)
   }
 
-sendChatMessage(conversation_id: string, content: string, role: string = 'orchestrator', priority: string = 'fast_and_cheap', timeout_seconds?: number, user_id?: string, project_id?: string, knowledge_space_id?: string): Observable<ChatMessageResponse & { citations?: Citation[] }> {
+  sendChatMessage(conversation_id: string, content: string, role: string = 'orchestrator', priority: string = 'fast_and_cheap', timeout_seconds?: number, project_id?: string, knowledge_space_id?: string): Observable<ChatMessageResponse & { citations?: Citation[] }> {
     // Validate required fields
     // Validate required fields
     if (!conversation_id || conversation_id.trim().length < 1) {
@@ -49,7 +48,6 @@ sendChatMessage(conversation_id: string, content: string, role: string = 'orches
     };
 
     if (typeof timeout_seconds !== 'undefined') body.timeout_seconds = timeout_seconds
-    if (user_id) body.user_id = user_id
     if (project_id) body.project_id = project_id
     if (knowledge_space_id) body.knowledge_space_id = knowledge_space_id
 
@@ -153,9 +151,8 @@ checkChatHealth(): Observable<{ status: string, repository_accessible: boolean, 
     return this.http.get<{ status: string, repository_accessible: boolean, total_conversations: number }>(this.apiContext.buildUrl('/api/v1/chat/health'))
   }
 
-listConversations(params: { user_id?: string; project_id?: string; limit?: number } = {}): Observable<ConversationsListResponse> {
+  listConversations(params: { project_id?: string; limit?: number } = {}): Observable<ConversationsListResponse> {
     const qs = new URLSearchParams()
-    if (params.user_id) qs.set('user_id', params.user_id)
     if (params.project_id) qs.set('project_id', params.project_id)
     qs.set('limit', String(params.limit ?? 50))
 
