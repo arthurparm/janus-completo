@@ -1283,7 +1283,8 @@ export class ConversationsComponent {
     if (!conf) return null
     const hasPendingAction = typeof conf.pending_action_id === 'number'
     const hasEndpoints = typeof conf.approve_endpoint === 'string' && typeof conf.reject_endpoint === 'string'
-    if (!hasPendingAction && !hasEndpoints) return null
+    const isLowConfidence = conf.reason === 'low_confidence' || msg.understanding?.low_confidence === true
+    if (!hasPendingAction && !hasEndpoints && !isLowConfidence) return null
     if (conf.required === false && !hasPendingAction && !hasEndpoints) return null
     return conf
   }

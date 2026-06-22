@@ -168,4 +168,53 @@ describe('ConversationsComponent', () => {
     expect(assistant?.agent_state?.state).toBe('completed')
     expect(assistant?.agent_state?.reason).toBe('approved')
   })
+
+  it('keeps low-confidence heuristic confirmation visible without a pending action id', () => {
+    const fixture = TestBed.createComponent(ConversationsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    const confirmation = component.messageConfirmation({
+      id: 'assistant-low-confidence',
+      role: 'assistant',
+      text: 'Confirme antes de prosseguir.',
+      timestamp: Date.now(),
+      understanding: {
+        intent: 'action_request',
+        summary: 'acao incerta',
+        low_confidence: true,
+        requires_confirmation: true,
+        confirmation_reason: 'low_confidence',
+        confirmation: {
+          required: true,
+          reason: 'low_confidence',
+          source: 'heuristic'
+        }
+      }
+    })
+
+    expect(confirmation?.required).toBe(true)
+    expect(confirmation?.reason).toBe('low_confidence')
+    expect(confirmation?.pending_action_id).toBeUndefined()
+  })
+
+  it('does not expose high-risk confirmation controls without a structured pending action', () => {
+    const fixture = TestBed.createComponent(ConversationsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    const confirmation = component.messageConfirmation({
+      id: 'assistant-high-risk',
+      role: 'assistant',
+      text: 'Acao de alto risco.',
+      timestamp: Date.now(),
+      confirmation: {
+        required: true,
+        reason: 'high_risk',
+        source: 'heuristic'
+      }
+    })
+
+    expect(confirmation).toBeNull()
+  })
 })
