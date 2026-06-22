@@ -42,7 +42,9 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
     assert all("UNIQUE KEY" not in q for q in fake.executed_sql)
     assert any("ALTER TABLE user_privacy_consents ADD CONSTRAINT unique_user_privacy_scope_consent UNIQUE (user_id, scope)" in q for q in fake.executed_sql)
     assert any("CREATE INDEX idx_privacy_consent_user_scope ON user_privacy_consents (user_id, scope)" in q for q in fake.executed_sql)
-    assert any("ALTER TABLE audit_events ADD COLUMN details_json JSONB NULL" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE IF NOT EXISTS audit_ledger_events" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE IF NOT EXISTS data_governance_records" in q for q in fake.executed_sql)
+    assert all("audit_events" not in q for q in fake.executed_sql)
 
 
 def test_migrate_schema_uses_mysql_specific_unique_key_and_text_json(monkeypatch):
@@ -55,7 +57,7 @@ def test_migrate_schema_uses_mysql_specific_unique_key_and_text_json(monkeypatch
 
     assert result["status"] == "applied"
     assert any("UNIQUE KEY" in q for q in fake.executed_sql)
-    assert any("ALTER TABLE audit_events ADD COLUMN details_json TEXT NULL" in q for q in fake.executed_sql)
+    assert all("audit_events" not in q for q in fake.executed_sql)
 
 
 def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
@@ -77,6 +79,7 @@ def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
     monkeypatch.setattr(svc, "_constraint_exists", _constraint)
     monkeypatch.setattr(svc, "_index_exists", _index)
     monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args, **_kwargs: True)
 
     result = svc.validate_schema()
 

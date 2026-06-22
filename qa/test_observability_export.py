@@ -26,7 +26,7 @@ def test_export_sanitize_redacts_sensitive_fields(monkeypatch):
             "status": "ok",
             "latency_ms": 10,
             "trace_id": "abc",
-            "details_json": json.dumps({"email": "user@example.com", "token": "secret", "note": "ok"}),
+            "details_json": {"email": "user@example.com", "token": "secret", "note": "ok"},
             "created_at": 1730000000,
         }
     ]
@@ -37,7 +37,7 @@ def test_export_sanitize_redacts_sensitive_fields(monkeypatch):
     data = json.loads(text)
     assert "events" in data
     ev = data["events"][0]
-    dj = json.loads(ev["details_json"]) if ev.get("details_json") else {}
+    dj = ev.get("details_json") or {}
     assert dj.get("email") == "[REDACTED_EMAIL]"
     assert dj.get("token") == "[REDACTED_SECRET]"
     assert dj.get("note") == "ok"

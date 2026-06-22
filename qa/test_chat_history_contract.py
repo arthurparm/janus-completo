@@ -1,16 +1,17 @@
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
 
 @pytest.fixture
 def async_client():
     from app.main import app
     from app.services.chat_service import get_chat_service
     from app.services.memory_service import get_memory_service
-    
+
     class DummyChatService:
         async def list_conversations(self, **kwargs):
             return [{"conversation_id": "conv-1", "title": "Conv 1"}]
-            
+
         def get_history(self, conversation_id, user_id=None, project_id=None):
             return {
                 "conversation_id": conversation_id,
@@ -32,7 +33,7 @@ def async_client():
                 "next_offset": None,
                 "limit": limit
             }
-            
+
         async def rename_conversation(self, conversation_id, title, user_id=None, project_id=None):
             if conversation_id == "conv-404":
                 from app.services.chat_service import ConversationNotFoundError
@@ -43,7 +44,7 @@ def async_client():
             if conversation_id == "conv-1":
                 return True
             return False
-            
+
         async def delete_conversation(self, conversation_id, user_id=None, project_id=None):
             if conversation_id == "conv-404":
                 from app.services.chat_service import ConversationNotFoundError
@@ -54,7 +55,7 @@ def async_client():
             if conversation_id == "conv-1":
                 return True
             return False
-            
+
     class DummyMemoryService:
         async def fetch_paginated_history(self, **kwargs):
             return {
@@ -62,22 +63,22 @@ def async_client():
                 "next_cursor": None,
                 "has_more": False
             }
-            
+
         async def get_trace(self, conversation_id):
             return {"steps": ["thought 1", "thought 2"]}
-            
+
     from app.services.trace_service import get_trace_service
     class DummyTraceService:
         def get_trace(self, conversation_id):
             return {"steps": ["thought 1", "thought 2"]}
-            
+
     app.dependency_overrides[get_trace_service] = lambda: DummyTraceService()
-    
+
     from app.services.observability_service import get_observability_service
     class DummyObservabilityService:
         def register_event(self, *args, **kwargs):
             pass
-            
+
     import logging
     class RaiseLog(logging.Handler):
         def emit(self, record):
@@ -85,16 +86,16 @@ def async_client():
                 import traceback
                 traceback.print_exception(*record.exc_info)
     logging.getLogger("app.api.exception_handlers").addHandler(RaiseLog())
-            
+
     app.dependency_overrides[get_chat_service] = lambda: DummyChatService()
-    
+
     import app.api.exception_handlers as exc_handlers
     exc_handlers.global_exception_handler = None
     exc_handlers.http_exception_handler = None
-    
+
     app.dependency_overrides[get_memory_service] = lambda: DummyMemoryService()
     app.dependency_overrides[get_observability_service] = lambda: DummyObservabilityService()
-    
+
     import app.api.v1.endpoints.chat.deps as chat_deps
     original_resolve = chat_deps.resolve_authenticated_user_context
     from app.api.v1.endpoints.chat.deps import ChatIdentityResolution
@@ -104,10 +105,10 @@ def async_client():
         auth_present=True,
         authenticated=True
     )
-    
+
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     yield client
-    
+
     chat_deps.resolve_authenticated_user_context = original_resolve
     app.dependency_overrides.clear()
 
@@ -172,10 +173,10 @@ class TestChatHistoryContract:
             def count_conversations(self):
                 return 1
         chat_service._repo = DummyRepo()
-        
+
         # apply it to the override
         app.dependency_overrides[admin_mod.get_chat_service] = lambda: chat_service
-        
+
         resp = await async_client.get("/api/v1/chat/health")
         assert resp.status_code == 200
         assert resp.json()["status"] == "healthy"

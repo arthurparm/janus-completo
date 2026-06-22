@@ -1,5 +1,6 @@
 import os
 import sys
+from types import SimpleNamespace
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.chat import router as chat_router
 from app.config import settings
+from app.core.exceptions.chat_exceptions import ChatServiceError
 from app.services.chat_service import get_chat_service
 from app.services.memory_service import get_memory_service
 
@@ -34,6 +36,7 @@ class _DummyChatService:
         self.last_replaced_text = None
         self.last_replaced_user_id = None
         self.last_message_patch = None
+        self.last_history_user_id = None
         self.list_calls = 0
         self._assistant_message = {"id": "77", "role": "assistant", "text": "ok"}
 
@@ -71,6 +74,10 @@ class _DummyChatService:
 
     async def get_last_assistant_message(self, conversation_id, user_id=None):
         return dict(self._assistant_message)
+
+    def get_history(self, conversation_id, user_id=None, project_id=None):
+        self.last_history_user_id = user_id
+        return []
 
     async def update_message_payload(self, conversation_id, message_id, patch, user_id=None):
         self.last_message_patch = {
@@ -111,11 +118,17 @@ class _DummyMemoryService:
         return self._items
 
 
-def _build_client(chat_service: _DummyChatService, memory_service: _DummyMemoryService | None = None) -> TestClient:
+def _build_client(
+    chat_service: _DummyChatService,
+    memory_service: _DummyMemoryService | None = None,
+    study_jobs=None,
+) -> TestClient:
     app = FastAPI()
     app.include_router(chat_router, prefix="/api/v1/chat")
     app.dependency_overrides[get_chat_service] = lambda: chat_service
     app.dependency_overrides[get_memory_service] = lambda: memory_service or _DummyMemoryService()
+    if study_jobs is not None:
+        app.state.chat_study_job_service = study_jobs
 
     @app.middleware("http")
     async def _inject_actor(request: Request, call_next):
@@ -125,6 +138,34 @@ def _build_client(chat_service: _DummyChatService, memory_service: _DummyMemoryS
         return await call_next(request)
 
     return TestClient(app)
+
+
+class _DummyStudyJobs:
+    def __init__(self, job):
+        self._job = job
+
+    def get_job(self, job_id):
+        return self._job if job_id == self._job.job_id else None
+
+
+class _OwnerScopedChatService(_DummyChatService):
+    owner_user_id = "victim-user"
+
+    def get_history(self, conversation_id, user_id=None, project_id=None):
+        self.last_history_user_id = user_id
+        if conversation_id == "conv-victim" and user_id and user_id != self.owner_user_id:
+            raise ChatServiceError("Access denied: user_id mismatch")
+        return {
+            "conversation_id": conversation_id,
+            "persona": None,
+            "messages": [
+                {
+                    "timestamp": 1.0,
+                    "role": "assistant",
+                    "text": "private answer",
+                }
+            ],
+        }
 
 
 def test_chat_start_uses_actor_user_id_when_payload_user_absent():
@@ -180,6 +221,31 @@ def test_chat_message_requires_citations_for_code_or_docs_queries():
     assert data["study_job"]["job_id"]
     assert data["message_id"] == "77"
     assert svc.last_message_patch["patch"]["delivery_status"] == "pending_study"
+
+
+def test_chat_study_job_denies_anonymous_access_to_other_user_job(monkeypatch):
+    monkeypatch.setenv("CHAT_AUTH_ENFORCE_REQUIRED", "0")
+    svc = _DummyChatService()
+    job = SimpleNamespace(
+        job_id="job-victim",
+        status="completed",
+        progress=100,
+        conversation_id="conv-victim",
+        message_id="msg-1",
+        placeholder_message="aguarde",
+        failure_classification=None,
+        final_response={"response": "private answer"},
+        error=None,
+        updated_at=123.0,
+        user_id="victim-user",
+    )
+    client = _build_client(svc, study_jobs=_DummyStudyJobs(job))
+
+    resp = client.get("/api/v1/chat/study-jobs/job-victim")
+
+    assert resp.status_code == 403
+    assert svc.last_history_user_id is not None
+    assert svc.last_history_user_id != "victim-user"
 
 
 def test_chat_message_low_confidence_requires_confirmation(monkeypatch):
@@ -358,6 +424,22 @@ def test_chat_stream_contract_headers_events_and_actor_fallback_user():
     assert "event: done" in resp.text
     assert svc.last_stream_conversation_id == "conv-1"
     assert svc.last_stream_user_id == "77"
+
+
+def test_chat_stream_denies_anonymous_access_to_other_user_conversation(monkeypatch):
+    monkeypatch.setenv("CHAT_AUTH_ENFORCE_REQUIRED", "0")
+    svc = _OwnerScopedChatService()
+    client = _build_client(svc)
+
+    resp = client.get(
+        "/api/v1/chat/stream/conv-victim",
+        params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
+    )
+
+    assert resp.status_code == 403
+    assert svc.last_history_user_id is not None
+    assert svc.last_history_user_id != svc.owner_user_id
+    assert svc.last_stream_conversation_id is None
 
 
 def test_chat_stream_rejects_invalid_role_or_priority():

@@ -1,4 +1,4 @@
-from qa.test_chat_endpoint_contract import _DummyChatService, _build_client
+from qa.test_chat_endpoint_contract import _build_client, _DummyChatService
 
 
 def test_chat_stream_413_returns_canonical_error_detail():

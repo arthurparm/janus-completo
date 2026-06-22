@@ -10,8 +10,8 @@ sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 @pytest.fixture
 def client():
-    from app.api.v1.endpoints.chat.chat_history import router
     import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
 
     class DummyChatService:
         def get_history_paginated(self, **kwargs):
@@ -113,9 +113,9 @@ def test_history_401_branch(monkeypatch):
 
 
 def test_history_404(monkeypatch):
-    from app.services.chat_service import ConversationNotFoundError
-    from app.api.v1.endpoints.chat.chat_history import router
     import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import ConversationNotFoundError
 
     class Dummy:
         def get_history(self, *a, **k):
@@ -138,9 +138,9 @@ def test_history_404(monkeypatch):
 
 
 def test_history_access_denied_403(monkeypatch):
-    from app.services.chat_service import ChatServiceError
-    from app.api.v1.endpoints.chat.chat_history import router
     import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import ChatServiceError
 
     class Dummy:
         def get_history(self, *a, **k):

@@ -35,6 +35,18 @@ class DummyToolExecutor:
         return []
 
 
+class FailingToolExecutor:
+    def __init__(self):
+        self.calls = []
+
+    def parse_tool_calls(self, _text: str):
+        return []
+
+    async def execute_tool_calls(self, tool_calls, **kwargs):
+        self.calls.append({"tool_calls": tool_calls, "kwargs": kwargs})
+        raise RuntimeError("executor crashed after partial side effect")
+
+
 @pytest.mark.asyncio
 async def test_chat_loop_blocks_unsafe_user_message_before_llm_call():
     llm = DummyLLMService("normal response")
@@ -74,3 +86,24 @@ async def test_chat_loop_blocks_unsafe_model_response():
     assert "bloqueada por politica de seguranca" in result["response"].lower()
     assert llm.calls == 1
     assert tool_executor.parse_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_chat_loop_tool_fallback_does_not_retry_tool_batch_after_executor_error():
+    tool_executor = FailingToolExecutor()
+    loop = ChatAgentLoop(llm_service=DummyLLMService("unused"), tool_executor=tool_executor)
+
+    outputs = await loop._execute_tools_with_fallback(
+        [{"name": "side_effect_tool", "args": {"value": 1}}],
+        policy=None,
+        user_id="user-1",
+        project_id="project-1",
+    )
+
+    assert len(tool_executor.calls) == 1
+    assert outputs == [
+        {
+            "name": "side_effect_tool",
+            "result": "Tool execution failed for side_effect_tool. Please try a simpler approach.",
+        }
+    ]
