@@ -84,6 +84,26 @@ class AppSettings(BaseSettings):
     MEMORY_QUOTA_MAX_ITEMS_SELF_STUDY: int = 5000
     MEMORY_QUOTA_MAX_BYTES_SELF_STUDY: int = 25_000_000
     MEMORY_ENCRYPTION_KEY: str | None = None
+    MEMORY_KEYRING: dict[str, str] = Field(default_factory=dict)
+    MEMORY_ACTIVE_KEY_ID: str | None = None
+    MEMORY_KEY_ROTATION_DAYS: int = 30
+    MEMORY_ENCRYPTION_PROVIDER: str = "keyring"
+    VAULT_ADDR: str | None = None
+    VAULT_NAMESPACE: str | None = None
+    VAULT_AUTH_METHOD: str = "approle"
+    VAULT_TOKEN: SecretStr | None = None
+    VAULT_APPROLE_ROLE_ID: str | None = None
+    VAULT_APPROLE_SECRET_ID: SecretStr | None = None
+    VAULT_TRANSIT_MOUNT: str = "transit"
+    VAULT_TRANSIT_KEY_NAME: str = "janus-secret-memory"
+    VAULT_TRANSIT_ROTATE_INTERVAL_SECONDS: int = 2592000
+    SECRET_REENCRYPT_INTERVAL_SECONDS: int = 600
+    SECRET_REENCRYPT_BATCH_SIZE: int = 100
+    RETENTION_PURGE_ENABLED: bool = False
+    SECRET_RETENTION_DAYS: int = 180
+    SECRET_RETENTION_PURGE_INTERVAL_SECONDS: int = 86400
+    SECRET_RETENTION_PURGE_BATCH_SIZE: int = 200
+    DATA_CLASSIFICATION_ENFORCEMENT: str = "off"
     MEMORY_PII_REDACT: bool = True
     AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS: int = 600
     AUTONOMY_SELF_STUDY_RUN_DEADLINE_LOCAL: str | None = None
@@ -436,6 +456,8 @@ class AppSettings(BaseSettings):
 
     # Tooling safety
     LAUNCH_APP_ALLOWED_APPS: list[str] = []
+    TOOL_EGRESS_ALLOW_HOSTS: list[str] = Field(default_factory=list)
+    WORKER_EGRESS_ALLOW_HOSTS: list[str] = Field(default_factory=list)
 
     # Redis
     REDIS_ENABLED: bool = False
@@ -522,7 +544,7 @@ class AppSettings(BaseSettings):
     GOOGLE_OAUTH_REDIRECT_URI: str | None = None
     TRAINING_GPU_BUDGET_PER_USER: dict[str, float] = {}
     # CLI externo (Codex/Jules)
-    EXTERNAL_CLI_ENABLED: bool = True
+    EXTERNAL_CLI_ENABLED: bool = False
     EXTERNAL_CLI_TIMEOUT_SECONDS: int = 600
     EXTERNAL_CLI_MAX_OUTPUT_CHARS: int = 20000
     TOOL_DAILY_QUOTAS: dict[str, int] = {
@@ -564,6 +586,11 @@ class AppSettings(BaseSettings):
     LOG_FILE_RETENTION_DAYS: int = 14
     AUDIT_PURGE_INTERVAL_SECONDS: int = 3600
     AUDIT_RETENTION_DAYS: int = 30
+    AUDIT_LEDGER_ENABLED: bool = True
+    AUDIT_LEDGER_HMAC_KEY: SecretStr | None = None
+    AUDIT_LEDGER_INTEGRITY_CHECK_INTERVAL_SECONDS: int = 600
+    DATA_PURGE_INTERVAL_SECONDS: int = 86400
+    DATA_PURGE_BATCH_LIMIT: int = 250
     OQ_SLO_WINDOW_MINUTES: int = 15
     OQ_SLO_MIN_EVENTS_PER_DOMAIN: int = 20
     OQ_SLO_CHAT_MAX_ERROR_RATE_PCT: float = 5.0
@@ -677,7 +704,14 @@ class AppSettings(BaseSettings):
         normalized = [normalize_cpf(item) for item in items]
         return [cpf for cpf in normalized if is_valid_cpf(cpf)]
 
-    @field_validator("CHAT_UNLIMITED_USERS", "CHAT_TOOL_ALLOWLIST", "CHAT_TOOL_BLOCKLIST", mode="before")
+    @field_validator(
+        "CHAT_UNLIMITED_USERS",
+        "CHAT_TOOL_ALLOWLIST",
+        "CHAT_TOOL_BLOCKLIST",
+        "TOOL_EGRESS_ALLOW_HOSTS",
+        "WORKER_EGRESS_ALLOW_HOSTS",
+        mode="before",
+    )
     def _parse_chat_tool_lists(cls, v: Any):
         if isinstance(v, str):
             s = v.strip()
@@ -730,6 +764,39 @@ class AppSettings(BaseSettings):
                 items = [x.strip() for x in s.split(",") if x.strip()]
                 return {"orchestrator": items} if items else {}
         return v or {}
+
+    @field_validator("MEMORY_KEYRING", mode="before")
+    def _parse_memory_keyring(cls, v: Any):
+        if v is None:
+            return {}
+        if isinstance(v, dict):
+            return {str(k).strip(): str(val).strip() for k, val in v.items() if str(k).strip() and str(val).strip()}
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return {}
+            if s.startswith("{"):
+                try:
+                    obj = json.loads(s)
+                    if isinstance(obj, dict):
+                        return {
+                            str(k).strip(): str(val).strip()
+                            for k, val in obj.items()
+                            if str(k).strip() and str(val).strip()
+                        }
+                except Exception:
+                    pass
+            parsed: dict[str, str] = {}
+            for chunk in [c.strip() for c in s.split(",") if c.strip()]:
+                if ":" not in chunk:
+                    continue
+                kid, key = chunk.split(":", 1)
+                kid = kid.strip()
+                key = key.strip()
+                if kid and key:
+                    parsed[kid] = key
+            return parsed
+        return {}
 
     @field_validator("TOOL_DAILY_QUOTAS", mode="before")
     def _parse_tool_daily_quotas(cls, v: Any):
