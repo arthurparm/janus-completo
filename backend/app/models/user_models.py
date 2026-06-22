@@ -9,10 +9,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.config_models import Base
 
@@ -129,27 +128,6 @@ class Consent(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "scope", name="unique_user_privacy_scope_consent"),
         Index("idx_privacy_consent_user_scope", "user_id", "scope"),
-    )
-
-
-class AuditEvent(Base):
-    __tablename__ = "audit_events"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    endpoint = Column(String(200), nullable=False)
-    action = Column(String(100), nullable=False)
-    tool = Column(String(100), nullable=True)
-    status = Column(String(20), nullable=False)
-    latency_ms = Column(Integer, nullable=True)
-    trace_id = Column(String(64), nullable=True)
-    justification = Column(Text, nullable=True)
-    details_json = Column(JSONB, nullable=True)
-    created_at = Column(DateTime, default=func.current_timestamp())
-    __table_args__ = (
-        Index("idx_audit_user_ts", "user_id", "created_at"),
-        Index("idx_audit_trace", "trace_id"),
-        Index("idx_audit_endpoint", "endpoint"),
-        Index("idx_audit_action", "action"),
     )
 
 
