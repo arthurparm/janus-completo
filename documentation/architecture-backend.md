@@ -1,4 +1,4 @@
-﻿# Arquitetura - Backend (`backend`)
+# Arquitetura - Backend (`backend`)
 
 ## Escopo
 
@@ -59,7 +59,7 @@ API e runtime agentico responsavel por conversa, memoria, RAG, automacao e obser
 
 - API Key global opcional
 - JWT/local auth + consent/pending actions
-- trilha de auditoria (`audit_events`)
+- trilha de auditoria (audit ledger: `audit_ledger_events`)
 - limites de budget e quotas por usuario/projeto
 
 ## Riscos e Observacoes

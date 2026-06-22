@@ -1,4 +1,4 @@
-﻿# Data Models - Backend (`backend`)
+# Data Models - Backend (`backend`)
 
 ## Visao Geral
 
@@ -16,7 +16,7 @@ O backend usa modelos SQLAlchemy para persistencia relacional e modelos Pydantic
 
 - `users`, `profiles`, `roles`, `user_roles`
 - `sessions`, `messages`
-- `user_privacy_consents`, `oauth_tokens`, `audit_events`
+- `user_privacy_consents`, `oauth_tokens`, `audit_ledger_events`
 
 ### Autonomia e Workflow
 

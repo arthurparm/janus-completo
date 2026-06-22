@@ -1,8 +1,13 @@
-# Janus Security Guidelines
+# Janus Security Guidelines (Template / Non-Normative)
 
-## Overview
+Este documento é um **template** e contém exemplos e controles que podem **não** estar implementados no repositório.
 
-This document outlines comprehensive security policies, procedures, and best practices for the Janus multi-agent AI system. It covers authentication, authorization, data protection, LLM security, and compliance requirements.
+Para evitar “compliance washing”, a fonte canônica de evidências verificáveis é:
+
+- Matriz de rastreabilidade (internal-only): [compliance-traceability-matrix.json](file:///h:/repos/janus-completo/documentation/compliance/compliance-traceability-matrix.json)
+- DPIA/LIA simplificado (internal-only): [dpia-lia-internal.md](file:///h:/repos/janus-completo/documentation/compliance/dpia-lia-internal.md)
+
+Qualquer item descrito aqui deve ser tratado como **planejado** até existir evidência na matriz.
 
 ## Table of Contents
 

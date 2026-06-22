@@ -1,0 +1,294 @@
+{
+  "classification": "internal-only",
+  "owner_team": "security-governance",
+  "controls": [
+    {
+      "id": "CTRL-DPIA-001",
+      "title": "DPIA/LIA simplificado internal-only versionado e rastreável",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "doc",
+          "path": "documentation/compliance/dpia-lia-internal.md",
+          "note": "Define finalidade, base legal, retenção baseline e controles implementados"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-DPIA-002",
+      "title": "Controle de acesso e accountability para artefatos internal-only (Git + CODEOWNERS + auditoria da plataforma)",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": ".github/CODEOWNERS",
+          "note": "Restringe alterações em /documentation/compliance/ para equipe autorizada"
+        },
+        {
+          "type": "doc",
+          "path": "documentation/compliance/access-control-and-audit.md",
+          "note": "Define modelo operacional para logs de acesso/leitura via auditoria da plataforma Git"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-TRACE-001",
+      "title": "Matriz de rastreabilidade com verificador automatizado anti 'compliance washing'",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "doc",
+          "path": "documentation/compliance/compliance-traceability-matrix.md",
+          "note": "Documento operacional e fonte canônica JSON"
+        },
+        {
+          "type": "doc",
+          "path": "documentation/compliance/compliance-traceability-matrix.json",
+          "note": "Fonte canônica da matriz (internal-only)"
+        },
+        {
+          "type": "code",
+          "path": "tooling/validate_compliance_matrix.py",
+          "note": "Valida estrutura e existência das evidências referenciadas"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-RBAC-001",
+      "title": "Admin routes require explicit ADMIN role",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": "backend/app/core/security/request_guard.py",
+          "note": "require_admin_actor enforces UserRepository.is_admin and blocks SYSTEM role"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/api/v1/endpoints/users.py",
+          "note": "SYSTEM role is reserved and cannot be assigned via public API"
+        },
+        {
+          "type": "test",
+          "path": "backend/tests/unit/test_security_request_guard_rbac.py",
+          "note": "Covers allow/deny for admin, same-user-or-admin and blocks SYSTEM actor"
+        },
+        {
+          "type": "doc",
+          "path": "documentation/security/rbac.md",
+          "note": "Documenta RBAC e separação do system actor"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-EGRESS-TOOL-001",
+      "title": "Tools: egress HTTP deny-by-default com allowlist e mitigação SSRF",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": "backend/app/core/security/egress_policy.py",
+          "note": "enforce_tool_http_egress blocks unsafe/host-not-allowlisted and emits audit event"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/security/url_safety.py",
+          "note": "resolve_safe_http_target blocks private/loopback/link-local/multicast/reserved/unspecified targets"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/tools/agent_tools.py",
+          "note": "browse_url uses enforce_tool_http_egress",
+          "pattern": "enforce_tool_http_egress"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/tools/action_module.py",
+          "note": "DynamicToolGenerator.from_api_endpoint uses enforce_tool_http_egress",
+          "pattern": "enforce_tool_http_egress"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/config.py",
+          "note": "EXTERNAL_CLI_ENABLED defaults to false to avoid uncontrolled egress via external CLIs"
+        },
+        {
+          "type": "test",
+          "path": "backend/tests/unit/test_security_egress_policy.py",
+          "note": "Validates deny-by-default and allow-path behavior (with monkeypatch)"
+        },
+        {
+          "type": "doc",
+          "path": "documentation/security/egress-policy.md",
+          "note": "Documenta configuração e evidências de bloqueio"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-EGRESS-WORKER-001",
+      "title": "Workers: egress HTTP restrito por allowlist e auditável",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": "backend/app/core/security/egress_policy.py",
+          "note": "enforce_worker_http_egress applies allowlist+defaults and audits blocks"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/workers/google_productivity_worker.py",
+          "note": "Google worker enforces egress for token refresh, calendar and gmail calls"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/llm/factory.py",
+          "note": "OpenAI http client enforces egress per request via event hook"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/infrastructure/message_broker.py",
+          "note": "RabbitMQ management API calls are egress-checked"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/core/infrastructure/windows_agent_client.py",
+          "note": "Windows agent client checks egress before calling host.docker.internal"
+        },
+        {
+          "type": "test",
+          "path": "backend/tests/unit/test_security_worker_egress_policy.py",
+          "note": "Validates allow internal defaults, deny unknown host, and allow Google when configured"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-AUDIT-001",
+      "title": "Security-relevant blocks generate audit evidence",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": "backend/app/core/security/egress_policy.py",
+          "note": "Blocked egress emits audit ledger evidence with action=egress_blocked",
+          "pattern": "action=\"egress_blocked\""
+        },
+        {
+          "type": "code",
+          "path": "backend/app/models/audit_ledger_models.py",
+          "note": "Audit ledger model persists append-only evidence",
+          "pattern": "class AuditLedgerEvent"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/services/db_migration_service.py",
+          "note": "Postgres triggers enforce append-only behavior",
+          "pattern": "prevent_audit_ledger_mutation"
+        },
+        {
+          "type": "test",
+          "path": "qa/test_db_migration_service_contract.py",
+          "note": "Contract test covers audit_ledger_events DDL presence",
+          "pattern": "audit_ledger_events"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-THIRD-PARTY-001",
+      "title": "Registro de terceiros e transferências documentado e versionado",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "doc",
+          "path": "documentation/compliance/third-parties-register.md",
+          "note": "Inventário baseline de terceiros e transferência nacional/internacional"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-DOCS-NONWASH-001",
+      "title": "Documentos de segurança não podem afirmar controles sem evidência rastreável",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "doc",
+          "path": "documentation/security/security-guidelines.md",
+          "note": "Marcado como template e aponta matriz como fonte canônica de evidências"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-KEYMGMT-001",
+      "title": "Secret memory: keyring sem KMS, rotação mensal e recriptografia gradual sem downtime",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": "backend/app/core/memory/security.py",
+          "note": "Keyring com múltiplas chaves (kid) e decriptação com fallbacks pós-rotação"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/services/secret_memory_service.py",
+          "note": "Secret memory exige criptografia e grava metadados enc/kid + auditoria de leitura/escrita"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/services/secret_key_rotation_service.py",
+          "note": "Recriptografia gradual em lotes para a chave ativa"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/services/scheduler_service.py",
+          "note": "Job periódico secret_reencrypt_batch"
+        },
+        {
+          "type": "test",
+          "path": "backend/tests/unit/test_memory_keyring_encryption.py",
+          "note": "Cobre encrypt/decrypt com keyring e compatibilidade após rotação"
+        },
+        {
+          "type": "doc",
+          "path": "documentation/security/key-management.md",
+          "note": "Procedimento operacional de rotação e configuração de env"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-RETENTION-SECRET-001",
+      "title": "Secret memory: política de retenção e job de expurgo auditável (default disabled)",
+      "status": "implemented",
+      "evidence": [
+        {
+          "type": "code",
+          "path": "backend/app/services/secret_retention_service.py",
+          "note": "Implementa purge em lote por cutoff (ts_ms) e grava evidência no audit ledger",
+          "pattern": "secret_retention_purge"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/services/scheduler_service.py",
+          "note": "Job secret_retention_purge registrado no scheduler",
+          "pattern": "secret_retention_purge"
+        },
+        {
+          "type": "code",
+          "path": "backend/app/config.py",
+          "note": "Feature flag e parâmetros de retenção/expurgo",
+          "pattern": "RETENTION_PURGE_ENABLED"
+        }
+      ]
+    },
+    {
+      "id": "CTRL-KMS-001",
+      "title": "Key rotation for secret memory backed by KMS/Vault",
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "CTRL-CLASS-001",
+      "title": "Data classification (PII/SECRET/INTERNAL) with enforcement (redaction/retention)",
+      "status": "planned",
+      "evidence": []
+    }
+  ]
+}

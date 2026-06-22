@@ -4,6 +4,20 @@
 
 This runbook provides step-by-step procedures for responding to incidents in the Janus multi-agent AI system. It covers everything from minor issues to critical system failures, including security incidents, performance degradation, and service outages.
 
+## Evidence and Immutability
+
+All incident evidence and lifecycle events must be anchored in the audit ledger (`audit_ledger_events`). Incidents are considered formally opened/updated/closed only when the corresponding ledger entries exist.
+
+Canonical API (admin-only):
+
+- Open: `POST /api/v1/observability/incidents/open`
+- Add evidence: `POST /api/v1/observability/incidents/evidence`
+- Close: `POST /api/v1/observability/incidents/close`
+- List incidents: `GET /api/v1/observability/incidents`
+- List incident events: `GET /api/v1/observability/incidents/{incident_id}/events`
+
+Use hashes for all external evidence (files, dashboards, exports, logs). Store the evidence content in the appropriate storage location and record `evidence_hash` + `evidence_uri` in the ledger to guarantee traceability.
+
 ## Table of Contents
 
 1. [Incident Classification](#incident-classification)

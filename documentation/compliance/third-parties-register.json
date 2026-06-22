@@ -1,0 +1,97 @@
+{
+  "classification": "internal-only",
+  "version": "2026.05",
+  "providers": [
+    {
+      "id": "TP-LLM-OPENAI",
+      "category": "llm",
+      "provider_keys": ["openai"],
+      "hosts": ["api.openai.com"],
+      "enablement": ["OPENAI_API_KEY"],
+      "data_categories": ["chat_prompts", "documents", "metadata"],
+      "transfer": "international",
+      "code_refs": ["backend/app/core/llm/router.py", "backend/app/core/llm/factory.py"]
+    },
+    {
+      "id": "TP-LLM-GOOGLE-GEMINI",
+      "category": "llm",
+      "provider_keys": ["google_gemini"],
+      "hosts": ["generativelanguage.googleapis.com"],
+      "enablement": ["GEMINI_API_KEY"],
+      "data_categories": ["chat_prompts", "documents", "metadata"],
+      "transfer": "international",
+      "code_refs": ["backend/app/core/llm/router.py", "backend/app/core/llm/factory.py"]
+    },
+    {
+      "id": "TP-LLM-DEEPSEEK",
+      "category": "llm",
+      "provider_keys": ["deepseek"],
+      "hosts": ["api.deepseek.com"],
+      "enablement": ["DEEPSEEK_API_KEY"],
+      "data_categories": ["chat_prompts", "documents", "metadata"],
+      "transfer": "international",
+      "code_refs": ["backend/app/core/llm/router.py", "backend/app/core/llm/factory.py"]
+    },
+    {
+      "id": "TP-LLM-XAI",
+      "category": "llm",
+      "provider_keys": ["xai"],
+      "hosts": ["api.x.ai"],
+      "enablement": ["XAI_API_KEY"],
+      "data_categories": ["chat_prompts", "documents", "metadata"],
+      "transfer": "international",
+      "code_refs": ["backend/app/core/llm/router.py", "backend/app/core/llm/factory.py"]
+    },
+    {
+      "id": "TP-LLM-OPENROUTER",
+      "category": "llm",
+      "provider_keys": ["openrouter"],
+      "hosts": ["openrouter.ai"],
+      "enablement": ["OPENROUTER_API_KEY"],
+      "data_categories": ["chat_prompts", "documents", "metadata"],
+      "transfer": "international",
+      "code_refs": ["backend/app/core/llm/factory.py", "backend/app/config.py"]
+    },
+    {
+      "id": "TP-OAUTH-GOOGLE",
+      "category": "oauth",
+      "provider_keys": ["google"],
+      "hosts": ["oauth2.googleapis.com", "www.googleapis.com", "gmail.googleapis.com"],
+      "enablement": ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"],
+      "data_categories": ["oauth_tokens", "emails", "calendar_events"],
+      "transfer": "international",
+      "code_refs": ["backend/app/api/v1/endpoints/productivity.py", "backend/app/core/workers/google_productivity_worker.py"]
+    },
+    {
+      "id": "TP-WEB-TAVILY",
+      "category": "web_search",
+      "provider_keys": ["tavily"],
+      "hosts": ["api.tavily.com"],
+      "enablement": ["TAVILY_API_KEY"],
+      "data_categories": ["queries", "urls", "snippets"],
+      "transfer": "international",
+      "code_refs": ["backend/app/core/infrastructure/context_manager.py"]
+    },
+    {
+      "id": "TP-AUTH-FIREBASE",
+      "category": "auth",
+      "provider_keys": ["firebase"],
+      "hosts": ["identitytoolkit.googleapis.com", "securetoken.googleapis.com"],
+      "enablement": ["FIREBASE_ENABLED", "FIREBASE_CREDENTIALS_PATH"],
+      "data_categories": ["auth_tokens", "user_profile"],
+      "transfer": "international",
+      "code_refs": ["backend/app/api/v1/endpoints/auth.py", "backend/app/config.py"]
+    },
+    {
+      "id": "TP-AUTH-SUPABASE",
+      "category": "auth",
+      "provider_keys": ["supabase"],
+      "hosts": [],
+      "enablement": ["SUPABASE_JWT_SECRET"],
+      "data_categories": ["auth_tokens", "user_profile"],
+      "transfer": "international",
+      "code_refs": ["backend/app/api/v1/endpoints/auth.py", "backend/app/config.py"]
+    }
+  ]
+}
+
