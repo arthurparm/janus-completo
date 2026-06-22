@@ -19,23 +19,25 @@ from .deps import (
     release_sse_slot,
     resolve_authenticated_user_context,
 )
+from .models import ChatStreamRequest
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-@router.get("/stream/{conversation_id}", summary="Streaming de resposta via SSE")
+@router.post("/stream/{conversation_id}", summary="Streaming de resposta via SSE")
 async def stream_message(
     conversation_id: str,
-    message: str,
-    role: str = "auto",
-    priority: str = "fast_and_cheap",
-    timeout_seconds: int | None = None,
-    project_id: str | None = None,
-    knowledge_space_id: str | None = None,
+    payload: ChatStreamRequest,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
+    message = payload.message
+    role = payload.role
+    priority = payload.priority
+    timeout_seconds = payload.timeout_seconds
+    project_id = payload.project_id
+    knowledge_space_id = payload.knowledge_space_id
     routing_service = get_intent_routing_service()
     try:
         role_enum, routing_decision, route_applied = routing_service.resolve_role(role, message)

@@ -169,9 +169,9 @@ def test_chat_read_and_stream_endpoints_prefer_authenticated_project_scope():
         "/api/v1/chat/conversations?project_id=client-supplied-project",
         headers=_auth_headers(1),
     )
-    stream_response = client.get(
+    stream_response = client.post(
         "/api/v1/chat/stream/conv-1",
-        params={
+        json={
             "message": "hello",
             "project_id": "client-supplied-project",
         },

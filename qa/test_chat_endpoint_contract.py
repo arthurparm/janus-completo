@@ -416,9 +416,9 @@ def test_chat_stream_contract_headers_events_and_actor_fallback_user():
     svc = _DummyChatService()
     client = _build_client(svc)
 
-    resp = client.get(
+    resp = client.post(
         "/api/v1/chat/stream/conv-1",
-        params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
+        json={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
         headers=_auth_headers(77),
     )
 
@@ -438,9 +438,9 @@ def test_chat_stream_requires_bearer_auth_for_existing_conversation():
     svc = _DummyChatService()
     client = _build_client(svc)
 
-    resp = client.get(
+    resp = client.post(
         "/api/v1/chat/stream/conv-1",
-        params={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
+        json={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
     )
 
     assert resp.status_code == 401
@@ -451,17 +451,17 @@ def test_chat_stream_rejects_invalid_role_or_priority():
     svc = _DummyChatService()
     client = _build_client(svc)
 
-    resp = client.get(
+    resp = client.post(
         "/api/v1/chat/stream/conv-1",
-        params={"message": "hello", "role": "invalid", "priority": "fast_and_cheap"},
+        json={"message": "hello", "role": "invalid", "priority": "fast_and_cheap"},
     )
     assert resp.status_code == 422
     assert resp.json()["detail"]["code"] == "CHAT_INVALID_ROLE_OR_PRIORITY"
     assert resp.json()["detail"]["message"] == "Invalid role or priority"
 
-    resp2 = client.get(
+    resp2 = client.post(
         "/api/v1/chat/stream/conv-1",
-        params={"message": "hello", "role": "orchestrator", "priority": "invalid"},
+        json={"message": "hello", "role": "orchestrator", "priority": "invalid"},
     )
     assert resp2.status_code == 422
     assert resp2.json()["detail"]["code"] == "CHAT_INVALID_ROLE_OR_PRIORITY"
@@ -473,9 +473,9 @@ def test_chat_stream_reject_disallowed_origin(monkeypatch):
     client = _build_client(svc)
     monkeypatch.setattr(settings, "CORS_ALLOW_ORIGINS", ["https://allowed.example"])
 
-    resp = client.get(
+    resp = client.post(
         "/api/v1/chat/stream/conv-1",
-        params={"message": "hello"},
+        json={"message": "hello"},
         headers={"Origin": "https://evil.example"},
     )
     assert resp.status_code == 403

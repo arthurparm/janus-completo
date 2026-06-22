@@ -148,8 +148,11 @@ test.describe('Demo Agentic Flow', () => {
       })
     })
     await page.route('**/api/v1/chat/stream/**', async (route) => {
-      const url = new URL(route.request().url())
-      const promptText = url.searchParams.get('message') || demoPrompt
+      const request = route.request()
+      const requestBody = request.method() === 'POST'
+        ? request.postDataJSON() as { message?: string } | null
+        : null
+      const promptText = typeof requestBody?.message === 'string' ? requestBody.message : demoPrompt
       persistConversationHistory(promptText)
 
       const sse = [

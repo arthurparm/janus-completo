@@ -69,14 +69,28 @@ interface ParsedSseEvent {
   data: string
 }
 
+interface StreamRequestPayload {
+  message: string
+  role: string
+  priority: string
+  timeout_seconds?: number
+  project_id?: string
+  knowledge_space_id?: string
+}
+
+interface LastStreamRequest {
+  conversationId: string
+  body: StreamRequestPayload
+  projectId?: string
+  requestId: string
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatStreamService {
   private readonly logger = inject(AppLoggerService)
   private abortController?: AbortController
   private streamSeq = 0
-  private lastUrl?: string
-  private lastProjectId?: string
-  private lastRequestId?: string
+  private lastRequest?: LastStreamRequest
   private status$ = new BehaviorSubject<StreamStatus>('idle')
   private typing$ = new BehaviorSubject<boolean>(false)
   private partials$ = new Subject<{ text: string }>()
@@ -98,7 +112,13 @@ export class ChatStreamService {
   toolStatus(): Observable<StreamToolStatus> { return this.toolStatus$.asObservable() }
 
   start(params: StartParams): void {
-    this.logger.debug('[ChatStreamService] Iniciando stream', params)
+    this.logger.debug('[ChatStreamService] Iniciando stream', {
+      conversationId: params.conversationId,
+      role: params.role || 'orchestrator',
+      priority: params.priority || 'fast_and_cheap',
+      hasKnowledgeSpaceId: Boolean(params.knowledgeSpaceId),
+      messageLength: params.text.length,
+    })
     this.stop()
     this.status$.next('connecting')
     this.typing$.next(false)
@@ -106,25 +126,28 @@ export class ChatStreamService {
     this.startTs = Date.now()
     this.ttftCaptured = false
     this.streamMode = null
-    this.lastProjectId = params.projectId
-    this.lastRequestId = generateRequestId()
-
-    const role = params.role || 'orchestrator'
-    const priority = params.priority || 'fast_and_cheap'
-    const qs = new URLSearchParams({
+    const requestId = generateRequestId()
+    const body: StreamRequestPayload = {
       message: params.text,
-      role,
-      priority,
-    })
+      role: params.role || 'orchestrator',
+      priority: params.priority || 'fast_and_cheap',
+    }
     if (typeof params.timeoutSeconds !== 'undefined') {
-      qs.set('timeout_seconds', String(params.timeoutSeconds))
+      body.timeout_seconds = params.timeoutSeconds
+    }
+    if (params.projectId) {
+      body.project_id = params.projectId
     }
     if (params.knowledgeSpaceId) {
-      qs.set('knowledge_space_id', params.knowledgeSpaceId)
+      body.knowledge_space_id = params.knowledgeSpaceId
     }
-    const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(params.conversationId)}?${qs.toString()}`
-    this.logger.debug('[ChatStreamService] URL construída', { url })
-    this.open(url, params.projectId, this.lastRequestId)
+    const request: LastStreamRequest = {
+      conversationId: params.conversationId,
+      body,
+      projectId: params.projectId,
+      requestId,
+    }
+    this.open(request)
   }
 
   stop(): void {
@@ -141,31 +164,30 @@ export class ChatStreamService {
     this.typing$.next(false)
   }
 
-  private open(url: string, projectId?: string, requestId?: string): void {
-    this.lastUrl = url
-    this.lastProjectId = projectId
-    this.lastRequestId = requestId || this.lastRequestId || generateRequestId()
+  private open(request: LastStreamRequest): void {
+    this.lastRequest = request
     const seq = ++this.streamSeq
     const controller = new AbortController()
     this.abortController = controller
-    void this.consumeStream(url, controller, seq, projectId, this.lastRequestId)
+    void this.consumeStream(request, controller, seq)
   }
 
   private async consumeStream(
-    url: string,
+    request: LastStreamRequest,
     controller: AbortController,
     seq: number,
-    projectId?: string,
-    requestId?: string,
   ): Promise<void> {
+    const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(request.conversationId)}`
     this.logger.debug('[ChatStreamService] Abrindo fetch-SSE', { url, seq })
     try {
-      const headers = buildChatStreamAuthHeaders({ projectId, requestId })
+      const headers = buildChatStreamAuthHeaders({ projectId: request.projectId, requestId: request.requestId })
       headers.set('Accept', 'text/event-stream')
+      headers.set('Content-Type', 'application/json')
 
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers,
+        body: JSON.stringify(request.body),
         signal: controller.signal,
       })
 
@@ -500,13 +522,11 @@ export class ChatStreamService {
       try { ctrl.abort() } catch { /* noop */ }
       this.abortController = undefined
     }
-    const url = this.lastUrl
-    const projectId = this.lastProjectId
-    const requestId = this.lastRequestId
+    const request = this.lastRequest
     setTimeout(() => {
-      if (!url) return
+      if (!request) return
       this.status$.next('connecting')
-      this.open(url, projectId, requestId)
+      this.open(request)
     }, wait)
   }
 }

@@ -24,6 +24,15 @@ class ChatMessageRequest(BaseModel):
     knowledge_space_id: str | None = Field(None)
 
 
+class ChatStreamRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    role: str = Field("auto")
+    priority: str = Field("fast_and_cheap")
+    timeout_seconds: int | None = None
+    project_id: str | None = Field(None)
+    knowledge_space_id: str | None = Field(None)
+
+
 class ChatCitationStatus(BaseModel):
     mode: str = "optional"
     status: str = "not_applicable"

@@ -85,18 +85,20 @@ Campos esperados:
 }
 ```
 
-## `GET /api/v1/chat/stream/{conversation_id}` (SSE)
-### Query params
+## `POST /api/v1/chat/stream/{conversation_id}` (SSE)
+### Body JSON
 - `message` (obrigatório)
 - `role?`
 - `priority?`
 - `timeout_seconds?`
 - `project_id?`
+- `knowledge_space_id?`
 
 ### Autenticacao
 - Requer `Authorization: Bearer <token>`
-- Nao aceita `user_id` no payload/query como mecanismo de autenticacao
+- Nao aceita `user_id` no payload como mecanismo de autenticacao
 - Nao aceita `X-User-Id` como mecanismo de autenticacao
+- Nao transmite o prompt do usuario em query string
 
 ### Eventos suportados
 - `start`
