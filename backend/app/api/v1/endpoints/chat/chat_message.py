@@ -405,6 +405,7 @@ async def send_message(
             message=payload.message,
             assistant_response=str(result.get("response") or ""),
             conversation_id=str(result.get("conversation_id") or payload.conversation_id),
+            user_id=user_id,
             existing_pending_action_id=pending_action_id,
             understanding=understanding if isinstance(understanding, dict) else None,
         )
