@@ -454,6 +454,21 @@ async def delete_points_by_filter(collection_name: str, filter_conditions: dict)
         logger.error("log_error", message=f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
         raise
 
+
+async def delete_points_by_ids(collection_name: str, point_ids: list[str]) -> None:
+    collection_name = _validate_collection_name(collection_name)
+    if not point_ids:
+        return
+    client = get_async_qdrant_client()
+    try:
+        await client.delete(
+            collection_name=collection_name,
+            points_selector=models.PointIdsList(points=point_ids),
+        )
+    except Exception as e:
+        logger.error("log_error", message=f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
+        raise
+
 async def aget_collection_info(collection_name: str) -> dict:
     """Versão assíncrona para obter informações da coleção."""
     collection_name = _validate_collection_name(collection_name)

@@ -19,7 +19,7 @@ def _log_background_task_failure(task: asyncio.Task, user_id: int) -> None:
 
 def _run_cleanup_in_thread(user_id: int) -> None:
     try:
-        asyncio.run(DataRetentionService.cleanup_user_artifacts())
+        asyncio.run(DataRetentionService.cleanup_user_artifacts(user_id))
     except Exception as exc:
         logger.error("Threaded user cleanup failed.", user_id=user_id, exc_info=exc)
 
@@ -27,7 +27,7 @@ def _run_cleanup_in_thread(user_id: int) -> None:
 def _dispatch_user_cleanup(user_id: int) -> None:
     try:
         loop = asyncio.get_running_loop()
-        task = loop.create_task(DataRetentionService.cleanup_user_artifacts())
+        task = loop.create_task(DataRetentionService.cleanup_user_artifacts(user_id))
         task.add_done_callback(lambda t: _log_background_task_failure(t, user_id))
     except RuntimeError:
         thread = threading.Thread(
