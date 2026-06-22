@@ -600,6 +600,56 @@ Acredito que remover toda resolucao legada de identidade no modulo de chat e ali
 - Nao houve validacao manual em browser real nem ciclo full-stack PC1/PC2; a confianca desta iteracao vem de contratos, unitarios, lint e build.
 - O arquivo de audit log ja continha um ciclo 11 previo no workspace; esta entrada foi adicionada como novo ciclo consolidado para o endurecimento bearer-only do modulo de chat.
 
+## Ciclo 13 - Stream SSE principal expunha o prompt do usuario em query string
+
+### Problema
+
+- Categoria: seguranca, privacidade e experiencia central do usuario.
+- Fato observado: `backend/app/api/v1/endpoints/chat/chat_stream.py` ainda expunha o fluxo principal em `GET /api/v1/chat/stream/{conversation_id}` e recebia `message` via query param.
+- Fato observado: `frontend/src/app/services/chat-stream.service.ts` montava a URL do stream com `message`, `role` e `priority` em `URLSearchParams` e ainda retinha a URL completa em `lastUrl` para retry.
+- Fato observado: `documentation/api/chat-contract.md`, `qa/test_chat_endpoint_contract.py`, `qa/test_chat_stream_sse_contract.py`, `qa/test_chat_error_matrix.py` e `backend/tests/integration/test_chat_sse.py` ainda refletiam o contrato legado por query string.
+- Impacto antes: 100% das requisicoes do fluxo principal de streaming podiam expor o prompt do usuario em logs HTTP, proxies, historico de navegador, telemetria e memoria local do cliente, inclusive em retries automaticos.
+
+### Hipotese
+
+Acredito que migrar o stream principal para `POST` com payload JSON autenticado por bearer e eliminar a persistencia de `lastUrl` remove a superficie critica de exposicao do prompt sem alterar o contrato funcional dos eventos SSE, porque o backend e o frontend podem preservar os mesmos campos de negocio e o mesmo parser de stream trocando apenas o canal de transporte.
+
+### Implementacao
+
+- `backend/app/api/v1/endpoints/chat/models.py`: adicionado `ChatStreamRequest` para validar `message`, `role`, `priority`, `timeout_seconds`, `project_id` e `knowledge_space_id` em corpo JSON.
+- `backend/app/api/v1/endpoints/chat/chat_stream.py`: o stream principal passou de `GET` para `POST`, consumindo `ChatStreamRequest` e preservando auth bearer, escopo por projeto, limite de tamanho de mensagem, knowledge space e emissao SSE.
+- `frontend/src/app/services/chat-stream.service.ts`: removida a montagem da URL com query string; o servico agora usa `fetch` com `method: 'POST'`, `Content-Type: application/json` e retry baseado em request estruturado, sem reter prompt em URL.
+- `frontend/src/app/services/chat-stream.service.spec.ts`: criada cobertura nova para provar envio por `POST`, ausencia de query string com prompt e retry reutilizando payload estruturado.
+- `qa/test_chat_endpoint_contract.py`, `qa/test_chat_stream_sse_contract.py`, `qa/test_chat_error_matrix.py`, `backend/tests/unit/test_chat_project_scope.py` e `backend/tests/integration/test_chat_sse.py`: atualizados para o novo contrato `POST`.
+- `frontend/e2e/demo-agentic-flow.spec.ts`: ajustado o mock do stream para ler `message` do corpo do request `POST`.
+- `documentation/api/chat-contract.md`: documentado o stream principal como `POST /api/v1/chat/stream/{conversation_id}` com body JSON e sem prompt na query string.
+- Commit correspondente da implementacao: [996c707c](https://github.com/arthurparm/janus-completo/commit/996c707c55bbad51148776adc14c048501f65320)
+
+### Metricas
+
+- Baseline inferido por leitura e reproducao local:
+  - 1 endpoint central do chat expunha o prompt do usuario por query string.
+  - 1 servico central de frontend persistia a URL completa do stream em memoria para retry.
+  - 100% dos envios no modo streaming carregavam o prompt na URL.
+- Depois da correcao:
+  - 0 endpoints centrais de streaming do chat transmitem `message` em query string.
+  - 0 retries do `ChatStreamService` dependem de URL completa contendo prompt.
+  - 100% dos fluxos centrais de streaming cobertos nesta iteracao passam a enviar o prompt no corpo JSON autenticado.
+- Testes e validacoes executados nesta iteracao:
+  - `backend\.venv\Scripts\python.exe -m pytest -q qa/test_chat_endpoint_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py backend/tests/unit/test_chat_project_scope.py`: 19 passed, 2 warnings conhecidas de deprecacao `HTTP_413_REQUEST_ENTITY_TOO_LARGE`.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/api/v1/endpoints/chat/chat_stream.py backend/app/api/v1/endpoints/chat/models.py qa/test_chat_endpoint_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py backend/tests/unit/test_chat_project_scope.py backend/tests/integration/test_chat_sse.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/api/v1/endpoints/chat/chat_stream.py backend/app/api/v1/endpoints/chat/models.py`: passou.
+  - `npm run test -- --watch=false --include src/app/services/chat-stream.service.spec.ts --include src/app/features/conversations/conversations.spec.ts --include src/app/core/services/agent-events.service.spec.ts`: o `npm` nao encaminhou os filtros como esperado e executou a suite Vitest completa; resultado efetivo: 29 arquivos, 124 testes passados.
+  - `npm run lint`: passou.
+  - `npm run build -- --configuration development`: passou.
+  - Spot-check manual com `TestClient` e `POST /api/v1/chat/stream/conv-1`: HTTP 200, `content-type: text/event-stream; charset=utf-8`, eventos `protocol` e `token` presentes no corpo.
+
+### Riscos e limitacoes
+
+- `backend/tests/integration/test_chat_sse.py` foi atualizado para o novo contrato, mas a execucao agregada com o arquivo de integracao nao concluiu nesta sessao; a cobertura runtime desta iteracao ficou sustentada pelos contratos QA, pelo spot-check manual e pelos gates estaticos.
+- Nao houve validacao manual em browser real nem subida completa da stack PC1/PC2; ainda falta evidenciar o comportamento de rede no app completo com backend real.
+- O risco residual prioritario seguinte permanece no frontend de historico paginado: `getChatHistoryPaginated(...)` ainda chama `/history` em vez de `/history/paginated`, embora isso nao tenha prioridade maior do que a exposicao de prompts corrigida neste ciclo.
+
 ## Decisão
 
 Recomendação: manter as correções. Confiança: média-alta para os contratos corrigidos, limitada por ausência de validação full-stack com infraestrutura PC2 ativa.
