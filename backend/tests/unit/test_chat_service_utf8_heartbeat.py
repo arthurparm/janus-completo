@@ -1,7 +1,6 @@
 import os
 
 import pytest
-
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.services.chat_service import ChatService
 from app.services.llm_service import LLMService
@@ -20,7 +19,14 @@ class DummyLLM(LLMService):
 
 
 @pytest.mark.asyncio
-async def test_utf8_and_heartbeat_emission():
+async def test_utf8_and_heartbeat_emission(monkeypatch):
+    async def _no_citations(**kwargs):
+        return {"citations": [], "retrieval_failed": False}
+
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.collect_chat_citations",
+        _no_citations,
+    )
     os.environ["CHAT_HEARTBEAT_INTERVAL_SECONDS"] = "1"
     repo = ChatRepositorySQL()
     svc = ChatService(repo, DummyLLM(), None)

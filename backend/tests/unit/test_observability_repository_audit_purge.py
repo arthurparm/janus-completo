@@ -48,21 +48,7 @@ class _FakeSession:
         self.closed = True
 
 
-def test_purge_old_audit_events_removes_rows_and_commits(monkeypatch):
-    fake_session = _FakeSession(removed=7)
-    monkeypatch.setattr(repo_module.db, "get_session_direct", lambda: fake_session)
-
-    repo = ObservabilityRepository(_DummyMonitor(), _DummyPoisonPillHandler())
-    removed = repo.purge_old_audit_events(30)
-
-    assert removed == 7
-    assert fake_session.query_obj.filtered is True
-    assert fake_session.committed is True
-    assert fake_session.rolled_back is False
-    assert fake_session.closed is True
-
-
-def test_purge_old_audit_events_rejects_non_positive_retention():
+def test_purge_old_audit_events_is_rejected():
     repo = ObservabilityRepository(_DummyMonitor(), _DummyPoisonPillHandler())
     with pytest.raises(ObservabilityRepositoryError):
-        repo.purge_old_audit_events(0)
+        repo.purge_old_audit_events(30)

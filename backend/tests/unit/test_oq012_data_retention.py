@@ -16,11 +16,20 @@ async def test_cleanup_user_artifacts_awaits_vector_and_graph_cleanup():
         patch.object(
             DataRetentionService, "_async_graph_cleanup", new_callable=AsyncMock
         ) as mock_graph_cleanup):
-            await DataRetentionService.cleanup_user_artifacts()
+            await DataRetentionService.cleanup_user_artifacts("77")
     
-    # In single-user mode, it logs a recommendation instead of calling delete_points_by_filter
-    assert mock_delete.await_count == 0
-    assert mock_graph_cleanup.await_count == 1
+    expected_filter = {"metadata.user_id": "77"}
+    expected_collections = {
+        "global_chat",
+        "global_docs",
+        "global_memory",
+        "global_secret",
+        "janus_episodic_memory",
+    }
+    assert mock_delete.await_count == len(expected_collections)
+    for col in expected_collections:
+        mock_delete.assert_any_await(col, expected_filter)
+    mock_graph_cleanup.assert_awaited_once_with("77")
 
 
 def test_dispatch_user_cleanup_uses_running_loop_task():

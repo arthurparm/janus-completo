@@ -63,6 +63,7 @@ def test_maybe_create_fallback_pending_action_from_pending_marker(monkeypatch) -
         message="gere uma acao pendente",
         assistant_response="pending_action_id: clean_tmp_001",
         conversation_id="conv-123",
+        user_id="9",
         existing_pending_action_id=None,
         understanding={"intent": "action_request"},
     )

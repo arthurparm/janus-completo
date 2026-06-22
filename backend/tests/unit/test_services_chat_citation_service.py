@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.chat import chat_citation_service as citation_module
 
 

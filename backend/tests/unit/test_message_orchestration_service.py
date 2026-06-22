@@ -1,7 +1,7 @@
-import pytest
 import asyncio
 from unittest.mock import AsyncMock
 
+import pytest
 from app.core.exceptions.chat_exceptions import MessageTooLargeError
 from app.core.llm import ModelPriority, ModelRole
 from app.repositories.chat_repository import ChatRepositoryError
@@ -926,6 +926,7 @@ async def test_send_message_secret_recall_uses_explicit_authorized_path(monkeypa
         message="Qual é a minha senha fictícia do Wi-Fi?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
     )
 
     assert result["model"] == "secret_memory"

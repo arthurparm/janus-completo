@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.chat_command_handler import ChatCommandHandler
 
 

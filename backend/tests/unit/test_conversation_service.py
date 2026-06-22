@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.exceptions.chat_exceptions import ChatServiceError
 from app.services.chat.conversation_service import ConversationService
 
@@ -17,7 +16,7 @@ class _FakeRepo:
         self.update_args = None
         self.delete_message_args = None
 
-    def start_conversation(self, persona, project_id):
+    def start_conversation(self, persona, user_id=None, project_id=None):
         self.conv["persona"] = persona
         self.conv["user_id"] = user_id
         self.conv["project_id"] = project_id
@@ -42,28 +41,35 @@ class _FakeRepo:
             "offset": offset,
         }
 
-    def list_conversations(self, project_id=None, limit=50):
+    def list_conversations(self, user_id=None, project_id=None, limit=50):
         return [{"conversation_id": "conv-1"}][:limit]
 
-    def rename_conversation(self, conversation_id, new_title, project_id=None):
-        self.rename_args = (conversation_id, new_title, project_id)
+    def rename_conversation(self, conversation_id, new_title, user_id=None, project_id=None):
+        self.rename_args = (conversation_id, new_title, user_id, project_id)
 
-    def delete_conversation(self, conversation_id, project_id=None):
-        self.delete_args = (conversation_id, project_id)
+    def delete_conversation(self, conversation_id, user_id=None, project_id=None):
+        self.delete_args = (conversation_id, user_id, project_id)
 
-    def update_message_text(self, conversation_id, message_id, new_text):
-        self.update_args = (conversation_id, message_id, new_text)
+    def update_message_text(self, conversation_id, message_id, new_text, user_id=None):
+        self.update_args = (conversation_id, message_id, new_text, user_id)
 
-    def delete_message(self, conversation_id, message_id):
-        self.delete_message_args = (conversation_id, message_id)
+    def delete_message(self, conversation_id, message_id, user_id=None):
+        self.delete_message_args = (conversation_id, message_id, user_id)
 
 
 def test_validate_conversation_access_blocks_user_mismatch():
     service = ConversationService(_FakeRepo())
-    conv = {"project_id": "proj-1"}
+    conv = {"user_id": "user-2", "project_id": "proj-1"}
 
     with pytest.raises(ChatServiceError, match="user_id mismatch"):
-        service.validate_conversation_access("conv-1", conv, project_id=None)
+        service.validate_conversation_access("conv-1", conv, user_id="user-1", project_id=None)
+
+
+def test_validate_conversation_access_allows_matching_user():
+    service = ConversationService(_FakeRepo())
+    conv = {"user_id": "user-1", "project_id": "proj-1"}
+
+    service.validate_conversation_access("conv-1", conv, user_id="user-1", project_id="proj-1")
 
 
 def test_get_history_paginated_caps_limit():
@@ -145,10 +151,10 @@ async def test_crud_operations_delegate_to_repo():
     repo = _FakeRepo()
     service = ConversationService(repo)
 
-    await service.rename_conversation("conv-1", "Novo titulo", project_id="proj-1")
-    await service.delete_conversation("conv-1", project_id="proj-1")
-    await service.update_message("conv-1", 10, "Novo texto")
-    await service.delete_message("conv-1", 10)
+    await service.rename_conversation("conv-1", "Novo titulo", user_id="user-1", project_id="proj-1")
+    await service.delete_conversation("conv-1", user_id="user-1", project_id="proj-1")
+    await service.update_message("conv-1", 10, "Novo texto", user_id="user-1")
+    await service.delete_message("conv-1", 10, user_id="user-1")
 
     assert repo.rename_args == ("conv-1", "Novo titulo", "user-1", "proj-1")
     assert repo.delete_args == ("conv-1", "user-1", "proj-1")
