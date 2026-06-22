@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.core.security.request_guard import require_admin_actor
@@ -9,16 +9,26 @@ router = APIRouter(tags=["Resources"], prefix="/resources")
 
 
 @router.get("/gpu/usage/")
-async def gpu_usage():
+async def gpu_usage(request: Request, user_id: str = Query(..., min_length=1)):
+    """
+    Consulta uso de GPU por usuário.
+
+    A rota é administrativa por expor informações de orçamento/uso de terceiros.
+    """
+    require_admin_actor(request)
     return get_user_gpu_usage(user_id)
 
 
 class BudgetSetRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
     budget: float
 
 
 @router.post("/gpu/budget")
 async def set_gpu_budget(req: BudgetSetRequest, request: Request):
+    """
+    Define orçamento de GPU por usuário (admin-only).
+    """
     require_admin_actor(request)
     b = dict(getattr(settings, "TRAINING_GPU_BUDGET_PER_USER", {}) or {})
     b[str(req.user_id)] = float(req.budget)

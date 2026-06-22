@@ -309,9 +309,13 @@ async def get_entity_relationships(
     return EntityRelationshipsResponse(results=items)
 
 
-@router.delete("/clear", response_model=ClearGraphResponse, summary="Limpa todo o grafo")
-async def clear_knowledge_graph(service: KnowledgeService = Depends(get_knowledge_service)):
-    remaining_nodes = await service.clear_graph()
+@router.delete("/clear", response_model=ClearGraphResponse, summary="Limpa o grafo do usuário autenticado")
+async def clear_knowledge_graph(
+    request: Request,
+    service: KnowledgeService = Depends(get_knowledge_service),
+):
+    uid = _resolve_knowledge_user_id(request, None)
+    remaining_nodes = await service.clear_graph(user_id=uid)
     return {
         "status": "success",
         "message": "Grafo de conhecimento limpo com sucesso",

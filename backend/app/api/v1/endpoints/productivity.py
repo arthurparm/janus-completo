@@ -607,9 +607,15 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 
     tokens = None
     try:
+        from app.core.security.egress_policy import enforce_worker_http_egress
+
+        token_url = "https://oauth2.googleapis.com/token"
+        allowed_url = enforce_worker_http_egress(token_url, tool="google_oauth")
+        if not allowed_url:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Egress blocked by policy")
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                "https://oauth2.googleapis.com/token",
+                allowed_url,
                 data={
                     "code": payload.code,
                     "client_id": str(client_id),
@@ -676,7 +682,7 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 async def google_oauth_refresh(request: Request):
     actor = require_authenticated_actor_id(request)
     repo_tok = OAuthTokenRepository()
-    tok = repo_tok.get(user_id=0, provider="google")
+    tok = repo_tok.get(user_id=actor, provider="google")
     if not tok or not tok.refresh_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No refresh token")
     client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
@@ -688,9 +694,15 @@ async def google_oauth_refresh(request: Request):
     import httpx
 
     try:
+        from app.core.security.egress_policy import enforce_worker_http_egress
+
+        token_url = "https://oauth2.googleapis.com/token"
+        allowed_url = enforce_worker_http_egress(token_url, tool="google_oauth")
+        if not allowed_url:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Egress blocked by policy")
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                "https://oauth2.googleapis.com/token",
+                allowed_url,
                 data={
                     "client_id": str(client_id),
                     "client_secret": str(client_secret),
@@ -709,7 +721,7 @@ async def google_oauth_refresh(request: Request):
                 datetime.utcnow() + timedelta(seconds=int(expires_in or 0)) if expires_in else None
             )
             repo_tok.upsert(
-                user_id=0,
+                user_id=actor,
                 provider="google",
                 access_token=str(access_token or ""),
                 refresh_token=tok.refresh_token,

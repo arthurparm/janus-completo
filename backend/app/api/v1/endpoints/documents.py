@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import ipaddress
 import os
-import socket
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -22,6 +19,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.core.security.request_guard import require_authenticated_actor_id
+from app.core.security.url_safety import (
+    is_allowlisted_host,
+    parse_allowed_hosts_from_env,
+    resolve_safe_http_target,
+)
 from app.services.document_service import DocumentFileTooLargeError, DocumentIngestionService
 
 try:
@@ -330,76 +332,18 @@ def _is_allowed_link_url(raw_url: str) -> bool:
     return _is_public_http_url(raw_url)
 
 
-_ALLOWED_LINK_URL_HOSTS = {
-    h.strip().lower().strip(".")
-    for h in os.getenv("ALLOWED_LINK_URL_HOSTS", "").split(",")
-    if h.strip()
-}
+_ALLOWED_LINK_URL_HOSTS = parse_allowed_hosts_from_env("ALLOWED_LINK_URL_HOSTS")
 
 
 def _is_allowlisted_host(raw_url: str) -> bool:
-    if not _ALLOWED_LINK_URL_HOSTS:
-        return False
-    try:
-        parsed = urlparse(raw_url)
-    except Exception:
-        return False
-    hostname = parsed.hostname
-    if not hostname:
-        return False
-    return hostname.lower().strip(".") in _ALLOWED_LINK_URL_HOSTS
+    return is_allowlisted_host(raw_url, _ALLOWED_LINK_URL_HOSTS)
 
 
-def _resolve_safe_http_target(raw_url: str) -> tuple[str, str, int, str] | None:
-    try:
-        parsed = urlparse(raw_url)
-    except Exception:
+def _resolve_safe_http_target(raw_url: str) -> tuple[str, str, str] | None:
+    target = resolve_safe_http_target(raw_url)
+    if not target:
         return None
-
-    if parsed.scheme not in {"http", "https"}:
-        return None
-
-    hostname = parsed.hostname
-    if not hostname:
-        return None
-
-    lowered = hostname.lower().strip(".")
-    if lowered in {"localhost"} or lowered.endswith(".localhost"):
-        return None
-
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    try:
-        addrinfo = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-    except Exception:
-        return None
-
-    resolved_ip: str | None = None
-    for entry in addrinfo:
-        ip_text = entry[4][0]
-        try:
-            ip_obj = ipaddress.ip_address(ip_text)
-        except ValueError:
-            return None
-
-        if (
-            ip_obj.is_private
-            or ip_obj.is_loopback
-            or ip_obj.is_link_local
-            or ip_obj.is_multicast
-            or ip_obj.is_reserved
-            or ip_obj.is_unspecified
-        ):
-            return None
-        if resolved_ip is None:
-            resolved_ip = ip_text
-
-    if not resolved_ip:
-        return None
-
-    path = parsed.path or "/"
-    if parsed.query:
-        path = f"{path}?{parsed.query}"
-    return parsed.scheme, hostname, port, resolved_ip + path
+    return target.scheme, target.original_host, target.fetch_url
 
 
 def _is_public_http_url(raw_url: str) -> bool:
@@ -444,8 +388,7 @@ async def link_url(
             detail="URL inválida ou não permitida",
         )
 
-    scheme, original_host, port, ip_with_path = safe_target
-    fetch_url = f"{scheme}://{ip_with_path}"
+    _, original_host, fetch_url = safe_target
     headers = {"Host": original_host}
 
     try:

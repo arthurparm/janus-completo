@@ -368,14 +368,61 @@ async def local_login(
     if user is None and username:
         user = repo.get_by_username(username)
     if user is None:
+        try:
+            from app.repositories.observability_repository import record_audit_event_direct
+
+            record_audit_event_direct(
+                endpoint="auth",
+                action="auth_login_failed",
+                tool="auth.local_login",
+                status="blocked",
+                details_json={
+                    "identifier_hash": hashlib.sha256(limiter_id.encode("utf-8")).hexdigest(),
+                },
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not user.password_hash:
+        try:
+            from app.repositories.observability_repository import record_audit_event_direct
+
+            record_audit_event_direct(
+                endpoint="auth",
+                action="auth_login_failed",
+                tool="auth.local_login",
+                status="blocked",
+                details_json={
+                    "identifier_hash": hashlib.sha256(limiter_id.encode("utf-8")).hexdigest(),
+                },
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not verify_password(payload.password, user.password_hash):
+        try:
+            from app.repositories.observability_repository import record_audit_event_direct
+
+            record_audit_event_direct(
+                endpoint="auth",
+                action="auth_login_failed",
+                tool="auth.local_login",
+                status="blocked",
+                user_id=int(user.id),
+                details_json={"reason": "invalid_password"},
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if _should_promote_user_to_admin_by_cpf(int(user.id)):
         _ensure_admin_role_for_user(repo, int(user.id))
+
+    system_role = (getattr(settings, "SYSTEM_USER_ROLE", "SYSTEM") or "").strip()
+    if system_role and repo.has_role(int(user.id), system_role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="System actor cannot authenticate via local login"
+        )
 
     tok = create_token(int(user.id), 3600)
     refresh = create_refresh_token(int(user.id))
@@ -396,6 +443,12 @@ async def local_refresh(
     user = repo.get_user(uid)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    system_role = (getattr(settings, "SYSTEM_USER_ROLE", "SYSTEM") or "").strip()
+    if system_role and repo.has_role(int(user.id), system_role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="System actor cannot authenticate via refresh"
+        )
 
     tok = create_token(uid, 3600)
     refresh = create_refresh_token(uid)

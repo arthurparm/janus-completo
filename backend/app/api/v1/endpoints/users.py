@@ -5,6 +5,7 @@ from app.core.security.request_guard import (
     require_admin_actor,
     require_same_user_or_admin,
 )
+from app.config import settings
 from app.models.consent_scopes import is_valid_scope
 from app.repositories.user_repository import ConsentRepository, UserRepository
 
@@ -53,6 +54,8 @@ async def assign_role(
     repo: UserRepository = Depends(get_user_repo),
 ):
     require_admin_actor(request)
+    if payload.role_name.strip().upper() == str(getattr(settings, "SYSTEM_USER_ROLE", "SYSTEM")).upper():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="SYSTEM role is reserved")
     ok = repo.assign_role(user_id, payload.role_name)
     if not ok:
         raise HTTPException(

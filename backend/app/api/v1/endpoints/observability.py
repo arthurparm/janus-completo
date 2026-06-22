@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from app.api.exception_handlers import get_error_taxonomy_catalog
+from app.core.security.request_guard import require_admin_actor
 from app.services.observability_service import (
     ObservabilityService,
     get_observability_service,
@@ -319,7 +320,7 @@ async def audit_events(
         limit=limit,
         offset=offset,
     )
-    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
+    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit=limit, offset=offset)
     total = service.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
     logger.info(
         "observability_endpoint_audit_events_completed",
@@ -328,6 +329,251 @@ async def audit_events(
         row_count=len(events),
     )
     return {"total": total, "events": events}
+
+
+@router.get("/audit/ledger/integrity", summary="Verifica integridade do audit ledger (hash-chain + assinatura)")
+async def audit_ledger_integrity(
+    request: Request,
+    max_errors: int = 25,
+):
+    require_admin_actor(request)
+    from app.repositories.audit_ledger_repository import audit_ledger_repository
+
+    return audit_ledger_repository.verify_integrity(max_errors=max(1, int(max_errors)))
+
+
+class IncidentOpenRequest(BaseModel):
+    severity: str
+    category: str
+    summary: str
+    details: dict[str, Any] | None = None
+
+
+class IncidentEvidenceRequest(BaseModel):
+    incident_id: str
+    evidence_type: str
+    evidence_text: str | None = None
+    evidence_uri: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class IncidentCloseRequest(BaseModel):
+    incident_id: str
+    resolution_summary: str
+    root_cause: str | None = None
+    corrective_actions: list[str] | None = None
+    validation_evidence: dict[str, Any] | None = None
+
+
+def _sha256_hex(value: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _generate_incident_id() -> str:
+    import secrets
+    from datetime import datetime, timezone
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return f"INC-{stamp}-{secrets.token_hex(4).upper()}"
+
+
+@router.post("/incidents/open", summary="Abre um incidente e ancora o registro no audit ledger")
+async def incident_open(
+    payload: IncidentOpenRequest,
+    request: Request,
+):
+    actor = require_admin_actor(request)
+    incident_id = _generate_incident_id()
+
+    from app.repositories.observability_repository import record_audit_event_direct
+
+    record_audit_event_direct(
+        user_id=int(actor),
+        endpoint="incident_response",
+        action="incident_opened",
+        tool="incident_runbook",
+        status="open",
+        details_json={
+            "incident_id": incident_id,
+            "severity": payload.severity,
+            "category": payload.category,
+            "summary": payload.summary,
+            "details": payload.details or {},
+        },
+    )
+
+    return {"incident_id": incident_id}
+
+
+@router.post("/incidents/evidence", summary="Anexa evidência imutável ao incidente via audit ledger")
+async def incident_add_evidence(
+    payload: IncidentEvidenceRequest,
+    request: Request,
+):
+    actor = require_admin_actor(request)
+    canonical = json.dumps(
+        {
+            "incident_id": payload.incident_id,
+            "evidence_type": payload.evidence_type,
+            "evidence_text": payload.evidence_text,
+            "evidence_uri": payload.evidence_uri,
+            "metadata": payload.metadata or {},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    evidence_hash = _sha256_hex(canonical)
+
+    from app.repositories.observability_repository import record_audit_event_direct
+
+    record_audit_event_direct(
+        user_id=int(actor),
+        endpoint="incident_response",
+        action="incident_evidence_added",
+        tool="incident_runbook",
+        status="evidence",
+        details_json={
+            "incident_id": payload.incident_id,
+            "evidence_type": payload.evidence_type,
+            "evidence_hash": evidence_hash,
+            "evidence_uri": payload.evidence_uri,
+            "evidence_text": payload.evidence_text,
+            "metadata": payload.metadata or {},
+        },
+    )
+
+    return {"incident_id": payload.incident_id, "evidence_hash": evidence_hash}
+
+
+@router.post("/incidents/close", summary="Encerra o incidente registrando resolução e validações no audit ledger")
+async def incident_close(
+    payload: IncidentCloseRequest,
+    request: Request,
+):
+    actor = require_admin_actor(request)
+    from app.repositories.observability_repository import record_audit_event_direct
+
+    record_audit_event_direct(
+        user_id=int(actor),
+        endpoint="incident_response",
+        action="incident_closed",
+        tool="incident_runbook",
+        status="resolved",
+        details_json={
+            "incident_id": payload.incident_id,
+            "resolution_summary": payload.resolution_summary,
+            "root_cause": payload.root_cause,
+            "corrective_actions": payload.corrective_actions or [],
+            "validation_evidence": payload.validation_evidence or {},
+        },
+    )
+
+    return {"incident_id": payload.incident_id, "status": "resolved"}
+
+
+@router.get("/incidents", summary="Lista incidentes ancorados no audit ledger")
+async def list_incidents(
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+):
+    require_admin_actor(request)
+    from app.repositories.audit_ledger_repository import audit_ledger_repository
+
+    events = audit_ledger_repository.list_events(
+        user_id=None,
+        tool="incident_runbook",
+        status=None,
+        endpoint="incident_response",
+        start_ts=None,
+        end_ts=None,
+        limit=5000,
+        offset=0,
+    )
+
+    incidents: dict[str, dict[str, Any]] = {}
+    for ev in events:
+        payload = ev.payload_json or {}
+        incident_id = str(payload.get("incident_id") or "")
+        if not incident_id:
+            continue
+        inc = incidents.get(incident_id) or {
+            "incident_id": incident_id,
+            "severity": None,
+            "category": None,
+            "summary": None,
+            "opened_at": None,
+            "closed_at": None,
+            "status": None,
+            "evidence_count": 0,
+        }
+        if ev.action == "incident_opened":
+            inc["severity"] = payload.get("severity")
+            inc["category"] = payload.get("category")
+            inc["summary"] = payload.get("summary")
+            inc["opened_at"] = (
+                ev.created_at.timestamp() if getattr(ev, "created_at", None) else None
+            )
+            inc["status"] = "open"
+        elif ev.action == "incident_evidence_added":
+            inc["evidence_count"] = int(inc.get("evidence_count") or 0) + 1
+        elif ev.action == "incident_closed":
+            inc["closed_at"] = (
+                ev.created_at.timestamp() if getattr(ev, "created_at", None) else None
+            )
+            inc["status"] = "resolved"
+        incidents[incident_id] = inc
+
+    ordered = sorted(
+        incidents.values(),
+        key=lambda x: x.get("opened_at") or 0,
+        reverse=True,
+    )
+    sliced = ordered[int(offset) : int(offset) + int(limit)]
+    return {"total": len(ordered), "incidents": sliced}
+
+
+@router.get("/incidents/{incident_id}/events", summary="Lista eventos (evidências) do incidente no audit ledger")
+async def incident_events(
+    incident_id: str,
+    request: Request,
+    limit: int = 2000,
+    offset: int = 0,
+):
+    require_admin_actor(request)
+    from app.repositories.audit_ledger_repository import audit_ledger_repository
+
+    rows = audit_ledger_repository.list_events(
+        user_id=None,
+        tool="incident_runbook",
+        status=None,
+        endpoint="incident_response",
+        start_ts=None,
+        end_ts=None,
+        limit=5000,
+        offset=0,
+    )
+    filtered = [
+        {
+            "id": int(r.id),
+            "action": r.action,
+            "status": r.status,
+            "trace_id": r.trace_id,
+            "created_at": r.created_at.timestamp() if getattr(r, "created_at", None) else None,
+            "details_json": r.payload_json,
+            "prev_hash": r.prev_hash,
+            "entry_hash": r.entry_hash,
+            "signature": r.signature,
+        }
+        for r in rows
+        if str((r.payload_json or {}).get("incident_id") or "") == incident_id
+    ]
+    filtered.sort(key=lambda x: x.get("created_at") or 0)
+    sliced = filtered[int(offset) : int(offset) + int(limit)]
+    return {"total": len(filtered), "events": sliced}
 
 
 @router.get("/errors/taxonomy", summary="Catalogo padronizado de erros")
@@ -390,7 +636,7 @@ async def export_audit_events(
         limit=limit,
         offset=offset,
     )
-    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit, offset)
+    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit=limit, offset=offset)
     field_list = [f.strip() for f in fields.split(",")] if fields else []
     field_list = [f for f in field_list if f]
     if not field_list:

@@ -19,6 +19,7 @@ from .endpoints import (
     documents,
     evaluation,
     feedback,
+    governance,
     knowledge,
     learning,
     llm,
@@ -88,6 +89,7 @@ else:
     api_router.include_router(
         observability.router, prefix="/observability"
     )  # Sprint 12: Resilience & observability
+    api_router.include_router(governance.router, prefix="/governance")
     api_router.include_router(
         meta_agent.router, prefix="/meta-agent"
     )  # Sprint 13: Meta-Agent proactive consciousness
