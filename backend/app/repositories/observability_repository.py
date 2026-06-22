@@ -15,10 +15,33 @@ from app.core.monitoring.poison_pill_handler import (
 from app.db.graph import get_graph_db
 from app.db import db
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
-from app.models.user_models import AuditEvent, Message
+from app.models.audit_ledger_models import AuditLedgerEvent
+from app.models.user_models import Message
 from app.models.user_models import Session as ChatSession
 
 logger = structlog.get_logger(__name__)
+
+
+def _coerce_user_id(raw_user_id: Any) -> int | None:
+    if raw_user_id is None:
+        return None
+    if str(raw_user_id) in ("-", "", "None"):
+        return None
+    try:
+        return int(raw_user_id)
+    except (ValueError, TypeError):
+        return None
+
+
+def _normalize_ledger_payload(event: dict[str, Any]) -> dict[str, Any] | None:
+    details = event.get("details_json")
+    if details is None and event.get("detail") is not None:
+        details = event.get("detail")
+    if details is None:
+        return None
+    if isinstance(details, dict):
+        return details
+    return {"details": details}
 
 
 class ObservabilityRepositoryError(Exception):
@@ -339,42 +362,21 @@ class ObservabilityRepository:
             raise ObservabilityRepositoryError("Falha ao promover item de quarentena.") from e
 
     def record_audit_event(self, event: dict[str, Any]) -> None:
-        s = db.get_session_direct()
         try:
-            # Converte user_id para int apenas se for um valor numérico válido
-            raw_user_id = event.get("user_id")
-            user_id_int = None
-            if raw_user_id is not None and str(raw_user_id) not in ("-", "", "None"):
-                try:
-                    user_id_int = int(raw_user_id)
-                except (ValueError, TypeError):
-                    user_id_int = None
-            ae = AuditEvent(
-                user_id=user_id_int,
+            from app.repositories.audit_ledger_repository import audit_ledger_repository
+
+            audit_ledger_repository.append(
+                actor_user_id=_coerce_user_id(event.get("user_id")),
                 endpoint=str(event.get("endpoint")),
                 action=str(event.get("action")),
                 tool=event.get("tool"),
                 status=str(event.get("status")),
-                latency_ms=int(event.get("latency_ms"))
-                if event.get("latency_ms") is not None
-                else None,
                 trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
-                details_json=(
-                    event.get("details_json")
-                    if event.get("details_json") is not None
-                    else (
-                        json.dumps(event.get("detail")) if event.get("detail") is not None else None
-                    )
-                ),
+                payload_json=_normalize_ledger_payload(event),
             )
-            s.add(ae)
-            s.commit()
         except Exception as e:
-            s.rollback()
             logger.exception("observability_repo_audit_event_record_failed", error=str(e))
             raise ObservabilityRepositoryError("Falha ao registrar evento de auditoria.") from e
-        finally:
-            s.close()
 
     def export_audit_events_json(self, sanitize: bool = True, **kwargs) -> str:
         import json
@@ -383,12 +385,13 @@ class ObservabilityRepository:
             from app.core.security.redaction import redact_sensitive_payload
             events = [redact_sensitive_payload(ev) for ev in events]
             for ev in events:
-                if isinstance(ev.get("details_json"), str):
+                details_value = ev.get("details_json")
+                if isinstance(details_value, str):
                     try:
-                        parsed = json.loads(ev["details_json"])
-                        ev["details_json"] = json.dumps(redact_sensitive_payload(parsed))
+                        parsed = json.loads(details_value)
+                        ev["details_json"] = redact_sensitive_payload(parsed)
                     except Exception:
-                        pass
+                        ev["details_json"] = redact_sensitive_payload(details_value)
         return json.dumps({"events": events}, default=str)
 
     def get_audit_events(
@@ -404,44 +407,45 @@ class ObservabilityRepository:
     ) -> list[dict[str, Any]]:
         s = db.get_session_direct()
         try:
-            q = s.query(AuditEvent)
+            q = s.query(AuditLedgerEvent)
             if user_id is not None:
                 try:
-                    q = q.filter(AuditEvent.user_id == int(user_id))
+                    q = q.filter(AuditLedgerEvent.actor_user_id == int(user_id))
                 except Exception:
-                    q = q.filter(AuditEvent.user_id == -1)
+                    q = q.filter(AuditLedgerEvent.actor_user_id == -1)
             if tool is not None:
-                q = q.filter(AuditEvent.tool == str(tool))
+                q = q.filter(AuditLedgerEvent.tool == str(tool))
             if status is not None:
-                q = q.filter(AuditEvent.status == str(status))
+                q = q.filter(AuditLedgerEvent.status == str(status))
             if endpoint is not None:
-                q = q.filter(AuditEvent.endpoint == str(endpoint))
+                q = q.filter(AuditLedgerEvent.endpoint == str(endpoint))
             if start_ts is not None:
                 from datetime import datetime
 
-                q = q.filter(AuditEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
+                q = q.filter(AuditLedgerEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
             if end_ts is not None:
                 from datetime import datetime
 
-                q = q.filter(AuditEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
-            q = q.order_by(AuditEvent.created_at.desc())
+                q = q.filter(AuditLedgerEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
+            q = q.order_by(AuditLedgerEvent.created_at.desc())
             q = q.offset(int(offset)).limit(int(limit))
             rows = q.all()
             return [
                 {
                     "id": r.id,
-                    "user_id": r.user_id,
+                    "user_id": r.actor_user_id,
                     "endpoint": r.endpoint,
                     "action": r.action,
                     "tool": r.tool,
                     "status": r.status,
-                    "latency_ms": r.latency_ms,
                     "trace_id": r.trace_id,
-                    "justification": r.justification,
                     "created_at": r.created_at.timestamp()
                     if getattr(r, "created_at", None)
                     else None,
-                    "details_json": r.details_json,
+                    "details_json": r.payload_json,
+                    "prev_hash": r.prev_hash,
+                    "entry_hash": r.entry_hash,
+                    "signature": r.signature,
                 }
                 for r in rows
             ]
@@ -466,9 +470,9 @@ class ObservabilityRepository:
         s = db.get_session_direct()
         try:
             q = (
-                s.query(AuditEvent)
-                .filter(AuditEvent.trace_id == str(trace_id))
-                .order_by(AuditEvent.created_at.asc())
+                s.query(AuditLedgerEvent)
+                .filter(AuditLedgerEvent.trace_id == str(trace_id))
+                .order_by(AuditLedgerEvent.created_at.asc())
                 .offset(int(offset))
                 .limit(int(limit))
             )
@@ -476,18 +480,19 @@ class ObservabilityRepository:
             return [
                 {
                     "id": r.id,
-                    "user_id": r.user_id,
+                    "user_id": r.actor_user_id,
                     "endpoint": r.endpoint,
                     "action": r.action,
                     "tool": r.tool,
                     "status": r.status,
-                    "latency_ms": r.latency_ms,
                     "trace_id": r.trace_id,
-                    "justification": r.justification,
                     "created_at": r.created_at.timestamp()
                     if getattr(r, "created_at", None)
                     else None,
-                    "details_json": r.details_json,
+                    "details_json": r.payload_json,
+                    "prev_hash": r.prev_hash,
+                    "entry_hash": r.entry_hash,
+                    "signature": r.signature,
                 }
                 for r in rows
             ]
@@ -515,24 +520,24 @@ class ObservabilityRepository:
     ) -> int:
         s = db.get_session_direct()
         try:
-            q = s.query(AuditEvent)
+            q = s.query(AuditLedgerEvent)
             if user_id is not None:
                 try:
-                    q = q.filter(AuditEvent.user_id == int(user_id))
+                    q = q.filter(AuditLedgerEvent.actor_user_id == int(user_id))
                 except Exception:
-                    q = q.filter(AuditEvent.user_id == -1)
+                    q = q.filter(AuditLedgerEvent.actor_user_id == -1)
             if tool is not None:
-                q = q.filter(AuditEvent.tool == str(tool))
+                q = q.filter(AuditLedgerEvent.tool == str(tool))
             if status is not None:
-                q = q.filter(AuditEvent.status == str(status))
+                q = q.filter(AuditLedgerEvent.status == str(status))
             if start_ts is not None:
                 from datetime import datetime
 
-                q = q.filter(AuditEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
+                q = q.filter(AuditLedgerEvent.created_at >= datetime.fromtimestamp(float(start_ts)))
             if end_ts is not None:
                 from datetime import datetime
 
-                q = q.filter(AuditEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
+                q = q.filter(AuditLedgerEvent.created_at <= datetime.fromtimestamp(float(end_ts)))
             return int(q.count())
         except Exception as e:
             logger.exception(
@@ -547,29 +552,8 @@ class ObservabilityRepository:
             s.close()
 
     def purge_old_audit_events(self, retention_days: int) -> int:
-        if retention_days <= 0:
-            raise ObservabilityRepositoryError("retention_days deve ser maior que zero.")
-
-        s = db.get_session_direct()
-        try:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-            removed = (
-                s.query(AuditEvent)
-                .filter(AuditEvent.created_at < cutoff)
-                .delete(synchronize_session=False)
-            )
-            s.commit()
-            return int(removed or 0)
-        except Exception as e:
-            s.rollback()
-            logger.exception(
-                "observability_repo_audit_purge_failed",
-                retention_days=retention_days,
-                error=str(e),
-            )
-            raise ObservabilityRepositoryError("Falha ao expurgar eventos de auditoria.") from e
-        finally:
-            s.close()
+        _ = retention_days
+        raise ObservabilityRepositoryError("Audit ledger is immutable and cannot be purged.")
 
 
 # --- Gerenciamento da Instância Singleton para Injeção de Dependência ---
@@ -583,40 +567,24 @@ async def get_observability_repository(
 
 
 # Helper direto para registrar eventos de auditoria
-def record_audit_event_direct(event: dict[str, Any]) -> None:
-    s = db.get_session_direct()
+def record_audit_event_direct(event: dict[str, Any] | None = None, **kwargs: Any) -> None:
+    if event is None:
+        event = dict(kwargs)
+    else:
+        event = dict(event)
+        if kwargs:
+            event.update(kwargs)
     try:
-        # Converte user_id para int apenas se for um valor numérico válido
-        raw_user_id = event.get("user_id")
-        user_id_int = None
-        if raw_user_id is not None and str(raw_user_id) not in ("-", "", "None"):
-            try:
-                user_id_int = int(raw_user_id)
-            except (ValueError, TypeError):
-                user_id_int = None
-        ae = AuditEvent(
-            user_id=user_id_int,
+        from app.repositories.audit_ledger_repository import audit_ledger_repository
+
+        audit_ledger_repository.append(
+            actor_user_id=_coerce_user_id(event.get("user_id")),
             endpoint=str(event.get("endpoint")),
             action=str(event.get("action")),
             tool=event.get("tool"),
             status=str(event.get("status")),
-            latency_ms=int(event.get("latency_ms"))
-            if event.get("latency_ms") is not None
-            else None,
             trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
-            details_json=(
-                event.get("details_json")
-                if event.get("details_json") is not None
-                else (json.dumps(event.get("detail")) if event.get("detail") is not None else None)
-            ),
+            payload_json=_normalize_ledger_payload(event),
         )
-        s.add(ae)
-        s.commit()
     except Exception as e:
-        try:
-            s.rollback()
-        except Exception:
-            pass
         logger.exception("observability_repo_audit_event_record_direct_failed", error=str(e))
-    finally:
-        s.close()

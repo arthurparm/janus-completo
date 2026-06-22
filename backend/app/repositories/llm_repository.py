@@ -173,6 +173,34 @@ class LLMRepository:
                     objective_id=objective_id,
                     config=llm_config,
                 )
+            try:
+                from app.core.governance.enforcement import enforce_external_processing
+                from app.repositories.observability_repository import record_audit_event_direct
+
+                decision = enforce_external_processing(prompt, provider=getattr(client, "provider", "unknown"))
+                if decision.allow is False:
+                    record_audit_event_direct(
+                        {
+                            "user_id": int(user_id) if user_id is not None else None,
+                            "endpoint": "llm",
+                            "action": "data_classification_blocked",
+                            "tool": getattr(client, "provider", "unknown"),
+                            "status": "blocked",
+                            "trace_id": TRACE_ID.get(),
+                            "details_json": {
+                                "classification": decision.classification,
+                                "reason": decision.reason,
+                                "model": getattr(client, "model", None),
+                            },
+                        }
+                    )
+                    raise LLMRepositoryError(
+                        f"Blocked LLM invocation due to classification={decision.classification}"
+                    )
+            except LLMRepositoryError:
+                raise
+            except Exception:
+                pass
             if _OTEL and span is not None:
                 try:
                     span.set_attribute("llm.cache_hit", False)

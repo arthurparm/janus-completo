@@ -4,13 +4,14 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import desc
-from sqlalchemy.orm import Session
-
+from app.core.governance.data_classification import classify_text, default_retention_decision
 from app.db import db
 from app.models.user_models import Message
 from app.models.user_models import Session as ChatSession
+from app.repositories.data_governance_repository import DataGovernanceRepository
 from app.repositories.user_repository import UserRepository
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
 logger = structlog.get_logger(__name__)
 
@@ -123,17 +124,18 @@ class ChatRepositorySQL:
     def start_conversation(
         self,
         persona: str | None,
-        user_id: str | None,
-        project_id: str | None,
+        user_id: str | None = None,
+        project_id: str | None = None,
         title: str | None = None,
     ) -> str:
         if self._use_fallback:
             sid = self._fallback_next_id
             self._fallback_next_id += 1
             now = datetime.utcnow()
+            resolved_user_id = self._resolve_user_id(user_id) if user_id else None
             self._fallback_sessions[sid] = {
                 "persona": persona,
-                "user_id": str(self._resolve_user_id(user_id)) if user_id else None,
+                "user_id": str(resolved_user_id) if resolved_user_id is not None else user_id,
                 "project_id": project_id,
                 "title": title or "Nova Conversa",
                 "created_at": now,
@@ -154,6 +156,26 @@ class ChatRepositorySQL:
             s.add(cs)
             s.commit()
             s.refresh(cs)
+            try:
+                decision = default_retention_decision(classify_text(title))
+                retention_until = None
+                if decision.retention_policy == "days" and decision.retention_days is not None:
+                    from datetime import timedelta, timezone
+
+                    retention_until = datetime.now(timezone.utc) + timedelta(days=decision.retention_days)
+                DataGovernanceRepository().upsert_record(
+                    user_id=resolved_user_id,
+                    resource_type="chat_session",
+                    resource_id=str(cs.id),
+                    classification=decision.classification,
+                    classification_source="auto",
+                    retention_policy=decision.retention_policy,
+                    retention_days=decision.retention_days,
+                    retention_until=retention_until,
+                    metadata_json={"project_id": project_id, "persona": persona},
+                )
+            except Exception:
+                pass
             return str(cs.id)
         finally:
             if not self._session:
@@ -210,6 +232,26 @@ class ChatRepositorySQL:
                 cs.updated_at = datetime.utcnow()
             s.commit()
             s.refresh(m)
+            try:
+                decision = default_retention_decision(classify_text(text))
+                retention_until = None
+                if decision.retention_policy == "days" and decision.retention_days is not None:
+                    from datetime import timedelta, timezone
+
+                    retention_until = datetime.now(timezone.utc) + timedelta(days=decision.retention_days)
+                DataGovernanceRepository().upsert_record(
+                    user_id=getattr(cs, "user_id", None) if cs else None,
+                    resource_type="chat_message",
+                    resource_id=str(m.id),
+                    classification=decision.classification,
+                    classification_source="auto",
+                    retention_policy=decision.retention_policy,
+                    retention_days=decision.retention_days,
+                    retention_until=retention_until,
+                    metadata_json={"session_id": str(sid), "role": role},
+                )
+            except Exception:
+                pass
             return self._message_to_dict(m)
         finally:
             if not self._session:
@@ -355,9 +397,12 @@ class ChatRepositorySQL:
     ) -> list[dict[str, Any]]:
         if self._use_fallback:
             items = list(self._fallback_sessions.items())
-            items = items[-limit:]
             result: list[dict[str, Any]] = []
             for sid, cs in items:
+                if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                    continue
+                if project_id and cs.get("project_id") and str(cs.get("project_id")) != str(project_id):
+                    continue
                 msgs = self._fallback_messages.get(sid, [])
                 last = msgs[-1] if msgs else None
                 last_dict = None
@@ -372,7 +417,7 @@ class ChatRepositorySQL:
                         "last_message": last_dict,
                     }
                 )
-            return result
+            return result[-limit:]
         s = self._get_session()
         try:
             q = s.query(ChatSession)
@@ -426,6 +471,10 @@ class ChatRepositorySQL:
             cs = self._fallback_sessions.get(sid)
             if cs is None:
                 raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
+            if project_id and cs.get("project_id") and str(cs.get("project_id")) != str(project_id):
+                raise ChatRepositoryError("Access denied: project_id mismatch")
             cs["title"] = new_title
             cs["updated_at"] = datetime.utcnow()
             return
@@ -454,8 +503,13 @@ class ChatRepositorySQL:
     ) -> None:
         if self._use_fallback:
             sid = int(conversation_id)
-            if sid not in self._fallback_sessions:
+            cs = self._fallback_sessions.get(sid)
+            if cs is None:
                 raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
+            if project_id and cs.get("project_id") and str(cs.get("project_id")) != str(project_id):
+                raise ChatRepositoryError("Access denied: project_id mismatch")
             self._fallback_sessions.pop(sid, None)
             self._fallback_messages.pop(sid, None)
             return
@@ -483,6 +537,11 @@ class ChatRepositorySQL:
     ) -> None:
         if self._use_fallback:
             sid = int(conversation_id)
+            cs = self._fallback_sessions.get(sid)
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
             msgs = self._fallback_messages.get(sid, [])
             msg = next((m for m in msgs if int(m.get("id")) == int(message_id)), None)
             if msg is None:
@@ -520,8 +579,11 @@ class ChatRepositorySQL:
     ) -> None:
         if self._use_fallback:
             sid = int(conversation_id)
-            if sid not in self._fallback_sessions:
+            cs = self._fallback_sessions.get(sid)
+            if cs is None:
                 raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
             msgs = self._fallback_messages.get(sid, [])
             for msg in reversed(msgs):
                 if str(msg.get("role")) == "assistant":
@@ -561,8 +623,11 @@ class ChatRepositorySQL:
     ) -> dict[str, Any]:
         if self._use_fallback:
             sid = int(conversation_id)
-            if sid not in self._fallback_sessions:
+            cs = self._fallback_sessions.get(sid)
+            if cs is None:
                 raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
             for msg in reversed(self._fallback_messages.get(sid, [])):
                 if str(msg.get("role")) == "assistant":
                     return self._message_to_dict(msg)
@@ -600,6 +665,11 @@ class ChatRepositorySQL:
     ) -> dict[str, Any]:
         if self._use_fallback:
             sid = int(conversation_id)
+            cs = self._fallback_sessions.get(sid)
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
             msgs = self._fallback_messages.get(sid, [])
             msg = next((m for m in msgs if int(m.get("id") or 0) == int(message_id)), None)
             if msg is None:
@@ -664,6 +734,11 @@ class ChatRepositorySQL:
     ) -> None:
         if self._use_fallback:
             sid = int(conversation_id)
+            cs = self._fallback_sessions.get(sid)
+            if cs is None:
+                raise ChatRepositoryError("Conversation not found")
+            if user_id and cs.get("user_id") and str(cs.get("user_id")) != str(user_id):
+                raise ChatRepositoryError("Access denied: user_id mismatch")
             msgs = self._fallback_messages.get(sid, [])
             idx = next(
                 (i for i, m in enumerate(msgs) if int(m.get("id")) == int(message_id)),
