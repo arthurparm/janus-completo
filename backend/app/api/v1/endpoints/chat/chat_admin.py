@@ -12,7 +12,6 @@ from app.services.chat_service import (
 
 from .deps import (
     actor_project_id,
-    is_chat_auth_enforced,
     resolve_authenticated_user_context,
 )
 from .models import ChatRenameRequest
@@ -32,11 +31,11 @@ async def rename_conversation(
         identity_ctx = resolve_authenticated_user_context(
             http,
             None,
-            allow_anonymous_fallback=False,
+            allow_anonymous_fallback=True,
             endpoint_label="/api/v1/chat/rename",
         )
         user_id = identity_ctx.user_id
-        if user_id is None and is_chat_auth_enforced():
+        if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
@@ -87,11 +86,11 @@ async def delete_conversation(
         identity_ctx = resolve_authenticated_user_context(
             http,
             None,
-            allow_anonymous_fallback=False,
+            allow_anonymous_fallback=True,
             endpoint_label="/api/v1/chat/delete",
         )
         resolved_user_id = identity_ctx.user_id
-        if resolved_user_id is None and is_chat_auth_enforced():
+        if resolved_user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},

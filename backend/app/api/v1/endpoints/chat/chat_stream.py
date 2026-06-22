@@ -16,7 +16,6 @@ from .deps import (
     acquire_sse_slot,
     actor_project_id,
     ensure_origin_allowed,
-    is_chat_auth_enforced,
     release_sse_slot,
     resolve_authenticated_user_context,
 )
@@ -90,11 +89,11 @@ async def stream_message(
         identity_ctx = resolve_authenticated_user_context(
             http,
             user_id,
-            allow_anonymous_fallback=False,
+            allow_anonymous_fallback=True,
             endpoint_label="/api/v1/chat/stream",
         )
         user_id = identity_ctx.user_id
-        if user_id is None and is_chat_auth_enforced():
+        if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=chat_http_error_detail(
@@ -208,11 +207,11 @@ async def get_conversation_trace(
     identity_ctx = resolve_authenticated_user_context(
         http,
         None,
-        allow_anonymous_fallback=False,
+        allow_anonymous_fallback=True,
         endpoint_label="/api/v1/chat/trace",
     )
     user_id = identity_ctx.user_id
-    if user_id is None and is_chat_auth_enforced():
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=chat_http_error_detail(
@@ -268,11 +267,11 @@ async def stream_agent_events(
         identity_ctx = resolve_authenticated_user_context(
             http,
             user_id,
-            allow_anonymous_fallback=False,
+            allow_anonymous_fallback=True,
             endpoint_label="/api/v1/chat/events",
         )
         user_id = identity_ctx.user_id
-        if user_id is None and is_chat_auth_enforced():
+        if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=chat_http_error_detail(
