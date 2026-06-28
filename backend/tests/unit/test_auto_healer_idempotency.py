@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 from app.core.monitoring import auto_healer
+from prometheus_client import REGISTRY
 
 
 class FakeCounter:
@@ -14,6 +15,14 @@ class FakeCounter:
 
     def inc(self):
         self.increments.append("inc")
+
+
+def test_auto_healer_prometheus_metrics_are_registered():
+    registered = set(REGISTRY._names_to_collectors)
+
+    assert "auto_healer_step_attempts_total" in registered
+    assert "auto_healer_step_successes_total" in registered
+    assert "auto_healer_step_failures_total" in registered
 
 
 @pytest.mark.asyncio

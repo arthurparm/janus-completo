@@ -438,3 +438,49 @@ Acredito que comparar o numero de falhas registradas por etapa antes e depois da
 ### Decisao
 
 Recomendacao: manter a correcao. Confianca: alta para o loop sequencial atual; media para cenarios futuros com execucao concorrente por etapa.
+
+## Ciclo 10 - Metricas do Auto-Healer passaram a ter contrato de registro Prometheus
+
+### Problema
+
+- Categoria: observabilidade, contrato operacional e validacao de metricas.
+- Fato observado: os ciclos anteriores adicionaram contadores Prometheus para tentativas, sucessos e falhas por etapa.
+- Fato observado: havia testes com contadores dublados, mas nenhum teste confirmava que os nomes reais estavam registrados no `prometheus_client.REGISTRY`.
+- Inferencia: uma regressao em nome, import ou inicializacao poderia quebrar dashboards e alertas sem falhar os testes unitarios de comportamento.
+- Impacto antes: a equipe podia confiar em metricas que nao estariam necessariamente expostas pelo registry usado por `/metrics`.
+
+### Hipotese
+
+Acredito que um teste de contrato no registry Prometheus reduz risco de regressao em dashboards/alertas sem exigir servidor ativo nem scrape HTTP.
+
+### Implementacao
+
+- `backend/tests/unit/test_auto_healer_idempotency.py`: adicionado `test_auto_healer_prometheus_metrics_are_registered()`.
+- O teste valida a presenca dos nomes reais:
+  - `auto_healer_step_attempts_total`;
+  - `auto_healer_step_successes_total`;
+  - `auto_healer_step_failures_total`.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - comportamento das metricas era validado por dublês;
+  - registro real no `REGISTRY` nao era validado.
+- Depois da correcao:
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q backend/tests/unit/test_auto_healer_idempotency.py`: 6 passed.
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q backend/tests/unit/test_health_monitor_critical_classification.py qa/test_health_endpoint_contract.py backend/tests/unit/test_auto_healer_idempotency.py qa/test_system_endpoints_contract.py qa/test_workers_status_contract.py qa/test_dx007_quick_diagnostics_cli.py`: 26 passed.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/tests/unit/test_auto_healer_idempotency.py backend/app/core/monitoring/auto_healer.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/tests/unit/test_auto_healer_idempotency.py backend/app/core/monitoring/auto_healer.py`: passou.
+- Criterio de aceitacao atendido:
+  - os tres contadores de Auto-Healer existem no registry Prometheus global;
+  - os testes de comportamento das metricas continuam passando;
+  - a matriz consolidada de Health permanece verde.
+
+### Riscos e limitacoes
+
+- O teste valida registro no `REGISTRY`, nao um scrape HTTP real de `/metrics`.
+- Se o ambiente de producao usar registry customizado ou instrumentacao diferente, ainda sera necessario validar o processo em execucao.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para registro local no Prometheus client; media para exposicao HTTP ate validar com app ativa.
