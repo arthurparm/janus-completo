@@ -21,7 +21,6 @@ class _FakeSession:
     def close(self):
         return None
 
-
 def _force_all_missing(monkeypatch, svc: DBMigrationService) -> None:
     monkeypatch.setattr(svc, "_index_exists", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(svc, "_constraint_exists", lambda *_args, **_kwargs: False)
@@ -79,6 +78,8 @@ def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
     monkeypatch.setattr(svc, "_constraint_exists", _constraint)
     monkeypatch.setattr(svc, "_index_exists", _index)
     monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_column_nullable", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(svc, "_count_null_pending_action_user_ids", lambda *_args, **_kwargs: 0)
     monkeypatch.setattr(svc, "_table_exists", lambda *_args, **_kwargs: True)
 
     result = svc.validate_schema()
@@ -86,3 +87,51 @@ def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
     assert result["status"] == "ok"
     assert ("user_privacy_consents", "unique_user_privacy_scope_consent") in constraint_calls
     assert ("user_privacy_consents", "idx_privacy_consent_user_scope") in index_calls
+
+
+def test_migrate_schema_promotes_pending_actions_user_id_not_null_when_residue_zero(monkeypatch):
+    svc = DBMigrationService()
+    fake = _FakeSession("postgresql")
+    monkeypatch.setattr(svc, "_get_session", lambda: fake)
+    monkeypatch.setattr(svc, "_index_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_constraint_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_backfill_pending_action_user_ids", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(svc, "_count_null_pending_action_user_ids", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(svc, "_column_nullable", lambda *_args, **_kwargs: True)
+
+    result = svc.migrate_schema()
+
+    assert result["status"] == "applied"
+    assert result["pending_actions_user_id_null_rows"] == 0
+    assert result["pending_actions_user_id_not_null_enforced"] is True
+    assert result["pending_actions_user_id_not_null_blocked"] is False
+    assert any(
+        "ALTER TABLE pending_actions ALTER COLUMN user_id SET NOT NULL" in q
+        for q in fake.executed_sql
+    )
+
+
+def test_migrate_schema_reports_blocker_when_ownerless_rows_remain(monkeypatch):
+    svc = DBMigrationService()
+    fake = _FakeSession("postgresql")
+    monkeypatch.setattr(svc, "_get_session", lambda: fake)
+    monkeypatch.setattr(svc, "_index_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_constraint_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_backfill_pending_action_user_ids", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(svc, "_count_null_pending_action_user_ids", lambda *_args, **_kwargs: 3)
+    monkeypatch.setattr(svc, "_column_nullable", lambda *_args, **_kwargs: True)
+
+    result = svc.migrate_schema()
+
+    assert result["status"] == "applied"
+    assert result["pending_actions_user_id_null_rows"] == 3
+    assert result["pending_actions_user_id_not_null_enforced"] is False
+    assert result["pending_actions_user_id_not_null_blocked"] is True
+    assert all(
+        "ALTER TABLE pending_actions ALTER COLUMN user_id SET NOT NULL" not in q
+        for q in fake.executed_sql
+    )

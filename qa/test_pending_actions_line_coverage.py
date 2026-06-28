@@ -1,5 +1,6 @@
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
@@ -58,4 +59,23 @@ def test_waiting_for_human_approval_variants():
     assert _is_waiting_for_human_approval("human_approval") is True
     assert _is_waiting_for_human_approval(["human_approval"]) is True
     assert _is_waiting_for_human_approval(True) is True
+
+
+def test_extract_request_and_trace_headers_variants():
+    from app.api.v1.endpoints.pending_actions import (
+        _detail_to_text,
+        _extract_request_id,
+        _extract_traceparent_trace_id,
+    )
+
+    http = SimpleNamespace(
+        headers={
+            "X-Request-ID": "req-123",
+            "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+        }
+    )
+    assert _extract_request_id(http) == "req-123"
+    assert _extract_traceparent_trace_id(http) == "11111111111111111111111111111111"
+    assert _detail_to_text({"message": "blocked"}) == "blocked"
+    assert _detail_to_text("blocked") == "blocked"
 

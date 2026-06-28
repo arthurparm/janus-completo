@@ -1,11 +1,10 @@
 import pytest
-
+from app.repositories.observability_repository import ObservabilityRepositoryError
 from app.services.observability_service import (
     ObservabilityService,
     ObservabilityServiceError,
     observe_ux_metric_record,
 )
-from app.repositories.observability_repository import ObservabilityRepositoryError
 
 
 class _FakeMetricChild:
@@ -184,6 +183,51 @@ def test_request_pipeline_dashboard_records_timeline_metric(fake_metrics):
     )
     assert any(
         call[0] == "observe" and call[1].get("operation") == "request_pipeline_dashboard"
+        for call in duration.calls
+    )
+
+
+def test_pending_actions_legacy_residue_summary_records_metrics(fake_metrics, monkeypatch):
+    _obs_module, ops_total, duration, result_items, *_ = fake_metrics
+
+    class _Repo:
+        def get_legacy_residue_summary(self, limit: int = 20):
+            assert limit == 7
+            return {
+                "total_without_owner": 2,
+                "pending_without_owner": 1,
+                "sample_limit": 7,
+                "legacy_runtime_fallback_enabled": False,
+                "message": "blocked",
+                "items": [
+                    {"action_id": 10, "conversation_id": "conv-1"},
+                    {"action_id": 11, "conversation_id": "conv-2"},
+                ],
+            }
+
+    import app.repositories.pending_action_repository as pending_repo_module
+
+    monkeypatch.setattr(pending_repo_module, "PendingActionRepository", lambda: _Repo())
+    service = ObservabilityService(repo=object())
+    summary = service.get_pending_actions_legacy_residue_summary(limit=7)
+
+    assert summary["total_without_owner"] == 2
+    assert any(
+        call[0] == "inc"
+        and call[1].get("operation") == "pending_actions_legacy_residue_summary"
+        and call[1].get("outcome") == "success"
+        for call in ops_total.calls
+    )
+    assert any(
+        call[0] == "observe"
+        and call[1].get("operation") == "pending_actions_legacy_residue_summary"
+        and call[1].get("kind") == "rows"
+        and call[2] == 2
+        for call in result_items.calls
+    )
+    assert any(
+        call[0] == "observe"
+        and call[1].get("operation") == "pending_actions_legacy_residue_summary"
         for call in duration.calls
     )
 

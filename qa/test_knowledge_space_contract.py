@@ -100,7 +100,7 @@ class _DummyKnowledgeSpaceService:
             "consolidation_quality_score": 0.0,
         }
 
-    def get_space_status(self, *, knowledge_space_id: str):
+    def get_space_status(self, *, knowledge_space_id: str, user_id: str | None = None):
         return {
             "knowledge_space_id": knowledge_space_id,
             "name": "Livro Base",
@@ -128,10 +128,11 @@ class _DummyKnowledgeSpaceService:
             "consolidation_quality_score": 0.82,
         }
 
-    def mark_consolidation_requested(self, *, knowledge_space_id: str):
+    def mark_consolidation_requested(self, *, knowledge_space_id: str, user_id: str | None = None):
         self.consolidated = {
             "knowledge_space_id": knowledge_space_id,
             "status": "processing",
+            "user_id": user_id,
         }
         return {
             "knowledge_space_id": knowledge_space_id,
@@ -198,6 +199,7 @@ def test_attach_and_consolidate_knowledge_space():
     attach = client.post(
         "/api/v1/knowledge/spaces/ks:1/documents/doc-9/attach",
         json={"source_id": "vol-1"},
+        headers={"X-Actor-User-Id": "77"},
     )
     assert attach.status_code == 200
     assert service.attached["knowledge_space_id"] == "ks:1"
@@ -206,6 +208,7 @@ def test_attach_and_consolidate_knowledge_space():
     consolidate = client.post(
         "/api/v1/knowledge/spaces/ks:1/consolidate",
         json={"limit_docs": 12},
+        headers={"X-Actor-User-Id": "77"},
     )
     assert consolidate.status_code == 200
     data = consolidate.json()
@@ -214,7 +217,10 @@ def test_attach_and_consolidate_knowledge_space():
     assert data["stats"]["task_id"]
     assert "status_url" in data["stats"]
 
-    status = client.get("/api/v1/knowledge/spaces/ks:1")
+    status = client.get(
+        "/api/v1/knowledge/spaces/ks:1",
+        headers={"X-Actor-User-Id": "77"},
+    )
     assert status.status_code == 200
     assert status.json()["documents_processing"] == 1
     assert status.json()["progress"] == 0.4
@@ -227,6 +233,7 @@ def test_query_knowledge_space_returns_canonical_shape():
     resp = client.post(
         "/api/v1/knowledge/spaces/ks:1/query",
         json={"question": "qual a sequência", "mode": "canonical_answer"},
+        headers={"X-Actor-User-Id": "77"},
     )
 
     assert resp.status_code == 200

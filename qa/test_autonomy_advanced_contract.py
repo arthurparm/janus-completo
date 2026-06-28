@@ -4,6 +4,7 @@ from httpx import ASGITransport, AsyncClient
 AUTONOMY_GOAL_GET_REF = "/api/v1/autonomy/goals/{goal_id}"
 AUTONOMY_GOAL_STATUS_REF = "/api/v1/autonomy/goals/{goal_id}/status"
 AUTONOMY_GOAL_DELETE_REF = "/api/v1/autonomy/goals/{goal_id}"
+AUTONOMY_GOAL_METRICS_REF = "/api/v1/autonomy/goals/{goal_id}/metrics"
 AUTONOMY_GOALS_LIST_REF = "/api/v1/autonomy/goals"
 AUTONOMY_GOALS_CREATE_REF = "/api/v1/autonomy/goals"
 AUTONOMY_START_REF = "/api/v1/autonomy/start"
@@ -12,16 +13,57 @@ AUTONOMY_STATUS_REF = "/api/v1/autonomy/status"
 AUTONOMY_PLAN_GET_REF = "/api/v1/autonomy/plan"
 AUTONOMY_PLAN_PUT_REF = "/api/v1/autonomy/plan"
 AUTONOMY_POLICY_PUT_REF = "/api/v1/autonomy/policy"
+AUTONOMY_HEALTH_REF = "/api/v1/autonomy/health"
+AUTONOMY_MATURITY_REF = "/api/v1/autonomy/maturity"
 AUTONOMY_HISTORY_RUN_REF = "/api/v1/autonomy/history/runs/{run_id}"
 AUTONOMY_HISTORY_STEPS_REF = "/api/v1/autonomy/history/runs/{run_id}/steps"
 AUTONOMY_HISTORY_ENQUEUES_REF = "/api/v1/autonomy/history/runs/{run_id}/enqueues"
+AUTONOMY_ADMIN_BACKLOG_SYNC_REF = "/api/v1/autonomy/admin/backlog/sync"
+AUTONOMY_ADMIN_BOARD_REF = "/api/v1/autonomy/admin/board"
+AUTONOMY_ADMIN_SELF_STUDY_RUN_REF = "/api/v1/autonomy/admin/self-study/run"
+AUTONOMY_ADMIN_SELF_STUDY_STATUS_REF = "/api/v1/autonomy/admin/self-study/status"
+AUTONOMY_ADMIN_SELF_STUDY_RUNS_REF = "/api/v1/autonomy/admin/self-study/runs"
 
 
 @pytest.fixture
-def async_client():
-    from app.main import app
+def async_client(monkeypatch):
+    import sys
+    import types
+
+    sys.modules.pop("app.core.infrastructure.message_broker", None)
+    message_broker_stub = types.ModuleType("app.core.infrastructure.message_broker")
+
+    def get_broker(*_args, **_kwargs):
+        return None
+
+    message_broker_stub.get_broker = get_broker
+    monkeypatch.setitem(sys.modules, "app.core.infrastructure.message_broker", message_broker_stub)
+
+    from fastapi import FastAPI, Request
+
+    from app.api.v1.endpoints import autonomy as autonomy_endpoint
+    from app.api.v1.endpoints import autonomy_admin as autonomy_admin_endpoint
+    from app.api.v1.endpoints import autonomy_history as autonomy_history_endpoint
+    from app.config import settings
+    from app.core.infrastructure.auth import create_token, get_actor_user_id
+
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def actor_binding(request: Request, call_next):
+        actor = get_actor_user_id(request)
+        request.state.actor_user_id = str(actor) if actor is not None else None
+        request.state.actor_project_id = (request.headers.get("X-Project-Id") or "").strip() or None
+        return await call_next(request)
+
+    app.include_router(autonomy_endpoint.router, prefix="/api/v1/autonomy")
+    app.include_router(autonomy_history_endpoint.router, prefix="/api/v1/autonomy/history")
+    app.include_router(autonomy_admin_endpoint.router, prefix="/api/v1/autonomy/admin")
+
     from app.core.autonomy.goal_manager import GoalStatus, get_goal_manager
     from app.api.v1.endpoints.autonomy_history import get_autonomy_repo
+    from app.repositories import user_repository
+    from app.services.autonomy_admin_service import get_autonomy_admin_service
     from app.services.autonomy_service import get_autonomy_service
 
     class GoalObj:
@@ -160,6 +202,31 @@ def async_client():
                 )
             ][:limit]
 
+    class DummyAutonomyAdminService:
+        async def sync_backlog(self):
+            return {
+                "created": 0,
+                "deduped": 0,
+                "capped": 0,
+                "closed": 0,
+                "fallback_used_count": 0,
+                "findings_total": 0,
+            }
+
+        def get_board(self, status=None, limit=200):
+            return [
+                {"id": "b1", "status": status or "open", "title": "T", "priority": 5}
+            ][:limit]
+
+        async def run_self_study(self, mode: str, reason: str | None, trigger_type: str):
+            return {"status": "ok", "mode": mode, "reason": reason, "trigger_type": trigger_type}
+
+        def get_self_study_status(self):
+            return {"active": False, "last_run_at": None}
+
+        def list_self_study_runs(self, limit: int = 20):
+            return [{"id": "r1", "mode": "incremental"}][:limit]
+
     app.dependency_overrides[get_goal_manager] = lambda: DummyGoalManager()
     app.dependency_overrides[get_autonomy_repo] = lambda: DummyAutonomyRepo()
     class DummyAutonomyService:
@@ -195,8 +262,17 @@ def async_client():
             return True
 
     app.dependency_overrides[get_autonomy_service] = lambda: DummyAutonomyService()
+    app.dependency_overrides[get_autonomy_admin_service] = lambda: DummyAutonomyAdminService()
 
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    monkeypatch.setattr(user_repository.UserRepository, "is_admin", lambda _self, _user_id: True)
+    monkeypatch.setattr(user_repository.UserRepository, "has_role", lambda _self, _user_id, _role_name: False)
+    monkeypatch.setattr(autonomy_endpoint, "record_audit_event_direct", lambda **_kwargs: None)
+
+    headers = {"Authorization": f"Bearer {create_token(1, expires_in=3600)}"}
+    if getattr(settings, "PUBLIC_API_KEY", None):
+        headers["X-API-Key"] = str(settings.PUBLIC_API_KEY)
+
+    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=headers)
     yield client
 
     app.dependency_overrides.clear()
@@ -252,6 +328,12 @@ class TestAutonomyGoalsContract:
         resp = await async_client.delete("/api/v1/autonomy/goals/missing")
         assert resp.status_code == 404
 
+    async def test_goal_metrics_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/goals/g1/metrics")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload.get("goal_id") == "g1"
+
 
 @pytest.mark.asyncio
 class TestAutonomyLoopContract:
@@ -279,6 +361,18 @@ class TestAutonomyLoopContract:
         resp = await async_client.post("/api/v1/autonomy/stop")
         assert resp.status_code == 200
 
+    async def test_autonomy_health_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/health")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert "overall_status" in payload
+
+    async def test_autonomy_maturity_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/maturity")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert "maturity_score" in payload
+
 
 @pytest.mark.asyncio
 class TestAutonomyHistoryContract:
@@ -300,4 +394,30 @@ class TestAutonomyHistoryContract:
 
     async def test_history_enqueues_ok(self, async_client):
         resp = await async_client.get("/api/v1/autonomy/history/runs/1/enqueues")
+        assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+class TestAutonomyAdminContract:
+    async def test_admin_backlog_sync_ok(self, async_client):
+        resp = await async_client.post("/api/v1/autonomy/admin/backlog/sync")
+        assert resp.status_code == 200
+
+    async def test_admin_board_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/admin/board")
+        assert resp.status_code == 200
+
+    async def test_admin_self_study_run_ok(self, async_client):
+        resp = await async_client.post(
+            "/api/v1/autonomy/admin/self-study/run",
+            json={"mode": "incremental", "reason": "contract-test"},
+        )
+        assert resp.status_code == 200
+
+    async def test_admin_self_study_status_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/admin/self-study/status")
+        assert resp.status_code == 200
+
+    async def test_admin_self_study_runs_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/admin/self-study/runs")
         assert resp.status_code == 200
