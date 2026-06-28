@@ -409,6 +409,7 @@ class AppSettings(BaseSettings):
     AUTH_RESET_RETURN_TOKEN: bool = False
     AUTH_TRUST_X_USER_ID_HEADER: bool = False
     AUTH_ADMIN_CPF_ALLOWLIST: list[str] = []
+    SUPABASE_JWT_SECRET: str = ""
     CHAT_UNLIMITED_USERS: list[str] = []
     AUTH_RATE_LIMIT_ENABLED: bool = True
     AUTH_RATE_LIMITS: dict[str, dict[str, int]] = {

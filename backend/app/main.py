@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from typing import Any
 
 import msgpack
 import structlog
@@ -37,8 +38,9 @@ from app.core.infrastructure import (
     setup_tracing,
 )
 from app.core.infrastructure.auth import get_actor_user_id
-from app.core.kernel import Kernel
+from app.core.kernel import Kernel, KernelState
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
+from app.core.monitoring import get_health_monitor
 from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
 
 # Determine log path
@@ -259,20 +261,90 @@ def read_root():
     return {"message": f"Welcome to {settings.APP_NAME}. Docs available at /docs"}
 
 
+def _get_dependency_health() -> dict[str, Any]:
+    try:
+        kernel = Kernel.get_instance()
+        monitor = get_health_monitor()
+        kernel_state = kernel.state
+        degraded_dependencies = kernel.degraded_dependencies
+
+        checks = {}
+        if monitor and monitor.last_results:
+            for component, result in monitor.last_results.items():
+                checks[component] = {
+                    "status": result.status.value if hasattr(result.status, 'value') else str(result.status),
+                    "duration_seconds": result.duration_seconds,
+                    "checked_at": result.checked_at.isoformat() if hasattr(result.checked_at, 'isoformat') else str(result.checked_at),
+                    "error": result.error,
+                }
+
+        return {
+            "kernel_state": kernel_state,
+            "degraded_dependencies": degraded_dependencies,
+            "checks": checks,
+        }
+    except Exception:
+        return {
+            "kernel_state": "unknown",
+            "degraded_dependencies": {},
+            "checks": {},
+        }
+
+
 @app.get("/healthz", tags=["System"], summary="Health (basic)")
 def healthz():
-    return {"status": "ok"}
+    deps = _get_dependency_health()
+    return {
+        "status": "ok",
+        "dependencies": deps,
+    }
 
 
 @app.get("/health", tags=["System"], summary="Health (detailed)")
 def health():
-    """Health check detalhado com informações do sistema"""
     build_ref = str(os.getenv("JANUS_BUILD_REF") or "").strip() or None
+    deps = _get_dependency_health()
+    kernel_state = deps["kernel_state"]
+    has_checks = bool(deps["checks"])
+
+    if not has_checks:
+        top_status = kernel_state
+    else:
+        critical_failure = False
+        non_critical_failure = False
+
+        try:
+            monitor = get_health_monitor()
+            for component, check in deps["checks"].items():
+                is_critical = False
+                try:
+                    is_critical = monitor.health_checks.get(component, {}).get("is_critical", False)
+                except Exception:
+                    pass
+
+                if check["status"] != "healthy":
+                    if is_critical:
+                        critical_failure = True
+                    else:
+                        non_critical_failure = True
+        except Exception:
+            pass
+
+        if kernel_state == KernelState.CRITICAL or critical_failure:
+            top_status = "critical"
+        elif kernel_state == KernelState.DEGRADED or non_critical_failure:
+            top_status = "degraded"
+        else:
+            top_status = "healthy"
+
     health_info = {
-        "status": "ok",
+        "status": top_status,
         "service": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
+        "kernel_state": kernel_state,
+        "degraded_dependencies": deps["degraded_dependencies"],
+        "dependencies": deps["checks"],
         "tailscale": {
             "enabled": settings.TAILSCALE_SERVE_ENABLED,
             "host": settings.TAILSCALE_HOST,
