@@ -75,6 +75,38 @@ async def test_run_healing_step_records_success(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_healing_step_does_not_mark_success_after_internal_failure(monkeypatch):
+    attempts = FakeCounter()
+    successes = FakeCounter()
+    failures = FakeCounter()
+    errors = []
+
+    async def partially_failing_step():
+        auto_healer._record_healing_failure(
+            "message_broker",
+            RuntimeError("internal reconnect failed"),
+            "internal failure",
+        )
+
+    def capture_error(event, **kwargs):
+        errors.append((event, kwargs))
+
+    monkeypatch.setattr(auto_healer, "AUTO_HEALER_STEP_ATTEMPTS", attempts)
+    monkeypatch.setattr(auto_healer, "AUTO_HEALER_STEP_SUCCESSES", successes)
+    monkeypatch.setattr(auto_healer, "AUTO_HEALER_STEP_FAILURES", failures)
+    monkeypatch.setattr(auto_healer.logger, "error", capture_error)
+    auto_healer._healing_failure_counts.clear()
+
+    await auto_healer._run_healing_step("message_broker", partially_failing_step)
+
+    assert attempts.increments == [{"step": "message_broker"}, "inc"]
+    assert failures.increments == [{"step": "message_broker"}, "inc"]
+    assert successes.increments == []
+    assert auto_healer._healing_failure_counts["message_broker"] == 1
+    assert errors[0][0] == "auto_healer_step_failed"
+
+
+@pytest.mark.asyncio
 async def test_internal_healing_failure_increments_metric(monkeypatch):
     errors = []
     counter = FakeCounter()

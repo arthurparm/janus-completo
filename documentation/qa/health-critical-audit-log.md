@@ -391,3 +391,50 @@ Acredito que adicionar contadores de tentativas e sucessos por etapa permite cal
 ### Decisao
 
 Recomendacao: manter a correcao. Confianca: alta para denominador por etapa no wrapper; media para interpretacao operacional ate criar semantica separada para sucesso efetivo versus sucesso de execucao.
+
+## Ciclo 9 - Sucesso de etapa nao e mais contado quando ha falha interna parcial
+
+### Problema
+
+- Categoria: validade de metrica, automedicacao e confiabilidade operacional.
+- Fato observado: `_run_healing_step()` incrementava `auto_healer_step_successes_total` quando a acao retornava sem excecao propagada.
+- Fato observado: algumas funcoes de cura capturam falhas internas, chamam `_record_healing_failure()` e retornam normalmente para manter o loop vivo.
+- Inferencia: uma etapa podia registrar falha interna e ainda assim ser contada como sucesso pelo wrapper.
+- Impacto antes: taxa de sucesso por etapa podia ser inflada em cenarios de falha parcial.
+
+### Hipotese
+
+Acredito que comparar o numero de falhas registradas por etapa antes e depois da execucao permite contar sucesso apenas quando a etapa termina sem excecao propagada e sem falha interna registrada.
+
+### Implementacao
+
+- `backend/app/core/monitoring/auto_healer.py`: adicionado `_healing_failure_counts` em memoria para rastrear falhas registradas por etapa.
+- `backend/app/core/monitoring/auto_healer.py`: `_record_healing_failure()` agora incrementa `_healing_failure_counts`.
+- `backend/app/core/monitoring/auto_healer.py`: `_run_healing_step()` salva o total de falhas antes da acao e so incrementa `auto_healer_step_successes_total` se o total nao mudar.
+- `backend/tests/unit/test_auto_healer_idempotency.py`: adicionada regressao para etapa que registra falha interna e retorna normalmente.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - tentativa incrementava corretamente;
+  - falha interna incrementava falha;
+  - sucesso tambem podia ser incrementado se a funcao retornasse sem excecao propagada.
+- Depois da correcao:
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q backend/tests/unit/test_auto_healer_idempotency.py`: 5 passed.
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q backend/tests/unit/test_health_monitor_critical_classification.py qa/test_health_endpoint_contract.py backend/tests/unit/test_auto_healer_idempotency.py qa/test_system_endpoints_contract.py qa/test_workers_status_contract.py qa/test_dx007_quick_diagnostics_cli.py`: 25 passed.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/core/monitoring/auto_healer.py backend/tests/unit/test_auto_healer_idempotency.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/core/monitoring/auto_healer.py backend/tests/unit/test_auto_healer_idempotency.py`: passou.
+- Criterio de aceitacao atendido:
+  - etapa com falha interna registra tentativa e falha;
+  - etapa com falha interna nao registra sucesso;
+  - etapa totalmente bem-sucedida continua registrando tentativa e sucesso.
+
+### Riscos e limitacoes
+
+- `_healing_failure_counts` e estado em memoria do processo; ele serve para decisao local do wrapper, nao como fonte historica persistente.
+- Em execucoes concorrentes da mesma etapa, a comparacao por contador pode ser conservadora e evitar sucesso se outra execucao registrar falha no mesmo intervalo. O Auto-Healer atual executa etapas sequencialmente no loop principal.
+- Ainda falta validar as metricas em `/metrics` com servidor ativo.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para o loop sequencial atual; media para cenarios futuros com execucao concorrente por etapa.

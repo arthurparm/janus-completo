@@ -47,6 +47,7 @@ AUTO_HEALER_STEP_SUCCESSES = Counter(
 # Flags/estado interno
 _healer_task: asyncio.Task | None = None
 _last_actions: dict[str, float] = {}
+_healing_failure_counts: dict[str, int] = {}
 
 # Configuração via settings (com defaults seguros)
 try:
@@ -66,6 +67,7 @@ except Exception:
 
 
 def _record_healing_failure(step_name: str, error: Exception, message: str | None = None) -> None:
+    _healing_failure_counts[step_name] = _healing_failure_counts.get(step_name, 0) + 1
     AUTO_HEALER_STEP_FAILURES.labels(step=step_name).inc()
     logger.error(
         "auto_healer_step_failed",
@@ -209,12 +211,15 @@ async def _heal_with_codex(system_status: dict[str, Any]) -> None:
 async def _run_healing_step(step_name: str, action: Callable[[], Awaitable[None]]) -> None:
     """Executa uma etapa de cura sem deixar falhas invisiveis para operacao."""
     AUTO_HEALER_STEP_ATTEMPTS.labels(step=step_name).inc()
+    failures_before = _healing_failure_counts.get(step_name, 0)
     try:
         await action()
     except Exception as e:
         _record_healing_failure(step_name, e)
     else:
-        AUTO_HEALER_STEP_SUCCESSES.labels(step=step_name).inc()
+        failures_after = _healing_failure_counts.get(step_name, 0)
+        if failures_after == failures_before:
+            AUTO_HEALER_STEP_SUCCESSES.labels(step=step_name).inc()
 
 
 async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task:
