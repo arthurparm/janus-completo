@@ -3,11 +3,18 @@ from typing import Generator
 
 import pytest
 import requests
+from app.core.infrastructure.auth import create_token
 
 # Helper to allow running tests both locally (against container) and inside container
-# Default to "janus-api" service name (for inside container), fallback to localhost
-BASE_URL = os.getenv("BASE_URL", "http://janus-api:8000/api/v1")
-HEALTH_URL = os.getenv("HEALTH_URL", "http://janus-api:8000/health")
+# Default to localhost for direct local runs. Docker jobs can still set BASE_URL/HEALTH_URL.
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000/api/v1")
+HEALTH_URL = os.getenv("HEALTH_URL", "http://localhost:8000/health")
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("E2E_REQUEST_TIMEOUT_SECONDS", "10"))
+
+
+def _auth_headers() -> dict[str, str]:
+    token = create_token(1, expires_in=3600)
+    return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
@@ -19,19 +26,22 @@ def health_url() -> str:
 
 @pytest.fixture(scope="session")
 def api_client():
-    """Simple wrapper around requests to handle base URL"""
+    """Simple wrapper around requests to handle base URL and chat auth."""
     class Client:
         def get(self, path, **kwargs):
             url = f"{BASE_URL}{path}"
-            return requests.get(url, **kwargs)
+            headers = {**_auth_headers(), **(kwargs.pop("headers", {}) or {})}
+            return requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
 
         def post(self, path, **kwargs):
             url = f"{BASE_URL}{path}"
-            return requests.post(url, **kwargs)
+            headers = {**_auth_headers(), **(kwargs.pop("headers", {}) or {})}
+            return requests.post(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
 
         def delete(self, path, **kwargs):
             url = f"{BASE_URL}{path}"
-            return requests.delete(url, **kwargs)
+            headers = {**_auth_headers(), **(kwargs.pop("headers", {}) or {})}
+            return requests.delete(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs)
 
     return Client()
 

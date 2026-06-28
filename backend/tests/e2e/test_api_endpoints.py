@@ -49,9 +49,9 @@ def test_browse_url_tool_trigger(api_client, active_conversation):
     # Check for success (content) or standard refusal (capability)
     assert "Example Domain" in text or has_allowed_example_host(text) or "capacidade" in lowered_text or "sorry" in lowered_text or "cannot" in lowered_text
 
-def test_anonymous_memory_support(api_client):
-    """Verify that operations without user_id still function (using default_user)."""
-    # Start chat without user_id (already default in other tests, but explicit here)
+def test_authenticated_memory_support(api_client):
+    """Verify that authenticated chat operations persist and expose history."""
+    # Start chat without client-supplied user_id; auth comes from the bearer fixture.
     resp = api_client.post("/chat/start", json={"persona": "helpful"})
     assert resp.status_code == 200
     cid = resp.json()["conversation_id"]
@@ -61,7 +61,7 @@ def test_anonymous_memory_support(api_client):
         "conversation_id": cid,
         "message": "My name is Anonymous.",
         "role": "orchestrator"
-        # No user_id provided
+        # No user_id provided by the client.
     }
     resp = api_client.post("/chat/message", json=msg_payload)
     assert resp.status_code == 200
