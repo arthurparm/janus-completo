@@ -1,12 +1,12 @@
-import os
-import time
 import json
+import os
+import re
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-
 from app.core.tools.action_module import PermissionLevel, ToolMetadata, action_registry
 
 logger = structlog.get_logger(__name__)
@@ -117,6 +117,18 @@ class SimulationResult:
 class PolicyEngine:
     """Basic pre-execution validations for tools."""
 
+    PERMANENT_VETO_TOOLS: frozenset[str] = frozenset({
+        "write_system_file",
+        "execute_system_command",
+        "codex_exec",
+        "codex_login",
+        "jules_new",
+    })
+
+    PERMANENT_VETO_PATTERNS: list[str] = [
+        "^/(etc|boot|sys|proc|dev|var/log|var/lib|root)(/.*)?$"
+    ]
+
     def __init__(self, config: PolicyConfig | None = None):
         self.config = config or PolicyConfig()
         self._cycle_started_at: float = time.time()
@@ -172,7 +184,7 @@ class PolicyEngine:
         elapsed = time.time() - self._cycle_started_at
         if self.config.max_seconds_per_cycle and elapsed > self.config.max_seconds_per_cycle:
             return False
-            
+
         return True
 
     def _check_permission_vs_risk(self, meta: ToolMetadata) -> PolicyDecision:
@@ -333,6 +345,26 @@ class PolicyEngine:
 
         return PolicyDecision(allowed=True)
 
+    def is_permanently_vetoed(self, tool_name: str, args: dict[str, Any] | None = None) -> bool:
+        if str(tool_name).lower() in self.PERMANENT_VETO_TOOLS:
+            return True
+        if args:
+            for value in args.values():
+                if not isinstance(value, str):
+                    continue
+                for pattern in self.PERMANENT_VETO_PATTERNS:
+                    if re.match(pattern, value):
+                        return True
+        return False
+
+    def validate_tool_call_args(self, tool_name: str, args: dict) -> tuple[bool, str]:
+        try:
+            if self.is_permanently_vetoed(tool_name, args):
+                return False, f"Tool '{tool_name}' is permanently vetoed"
+        except Exception:
+            pass
+        return True, ""
+
     def validate_tool_call(
         self,
         tool_name: str,
@@ -349,6 +381,10 @@ class PolicyEngine:
 
         if not action_registry.check_rate_limit(tool_name, user_id=user_id):
             return PolicyDecision(allowed=False, reason="Rate limit reached")
+
+        if self.is_permanently_vetoed(tool_name, input_args):
+            logger.warning("autonomy_veto", tool_name=tool_name)
+            return PolicyDecision(allowed=False, reason="Permanent veto")
 
         decision = self._check_permission_vs_risk(meta)
         if not decision.allowed:
