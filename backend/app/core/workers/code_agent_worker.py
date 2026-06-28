@@ -4,9 +4,11 @@ Code Agent Worker
 Consome a fila JANUS.tasks.agent.coder, gera código com LLM e decide
 próximo agente (Professor ou Sandbox) com base em heurísticas de complexidade.
 """
-import structlog
+import asyncio
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
@@ -151,7 +153,7 @@ async def process_code_task(task: TaskMessage) -> None:
 def _validate_code_syntax(code: str) -> dict[str, Any]:
     """
     Validate Python code syntax using compile().
-    
+
     Returns:
         Dict with 'valid' bool and 'error' string if invalid.
     """
@@ -167,13 +169,44 @@ def _validate_code_syntax(code: str) -> dict[str, Any]:
         return {"valid": False, "error": str(e)}
 
 
+class CodeAgentWorker:
+    name = "code_agent"
+
+    def __init__(self, prefetch_count: int = 5):
+        self._prefetch_count = prefetch_count
+        self._consumer_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_AGENT_CODER.value,
+            callback=process_code_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("CodeAgentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("CodeAgentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_code_agent_worker():
     logger.info("Iniciando Code Agent Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_AGENT_CODER.value,
-        callback=process_code_task,
-        prefetch_count=5,
-    )
-    logger.info("✓ Code Agent Worker iniciado.")
-    return consumer_task
+    worker = CodeAgentWorker()
+    await worker.start()
+    return worker

@@ -1,7 +1,9 @@
-import structlog
+import asyncio
 import json
 import re
 from typing import Any
+
+import structlog
 
 from app.core.infrastructure.message_broker import get_broker
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
@@ -240,13 +242,44 @@ async def process_red_team_task(task: TaskMessage) -> None:
         raise
 
 
+class RedTeamAgentWorker:
+    name = "red_team_agent"
+
+    def __init__(self, prefetch_count: int = 5):
+        self._prefetch_count = prefetch_count
+        self._consumer_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_AGENT_RED_TEAM.value,
+            callback=process_red_team_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("RedTeamAgentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("RedTeamAgentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_red_team_agent_worker():
     logger.info("Iniciando Red Team Agent Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_AGENT_RED_TEAM.value,
-        callback=process_red_team_task,
-        prefetch_count=5,
-    )
-    logger.info("Red Team Agent Worker iniciado.")
-    return consumer_task
+    worker = RedTeamAgentWorker()
+    await worker.start()
+    return worker

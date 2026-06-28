@@ -5,15 +5,16 @@ Consome a fila JANUS.tasks.agent.professor, revisa código com LLM e decide
 se retorna ao CodeAgent para correções ou segue para Sandbox.
 """
 
+import asyncio
 import json
-import structlog
-import re
 from datetime import datetime
 from typing import Any
 
+import structlog
+
+from app.core.agents.utils import parse_json_strict
 from app.core.infrastructure.message_broker import get_broker
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
-from app.core.agents.utils import parse_json_strict
 from app.core.llm import ModelPriority, ModelRole
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
 from app.models.schemas import QueueName, TaskMessage, TaskState
@@ -124,13 +125,43 @@ async def process_professor_task(task: TaskMessage) -> None:
         raise
 
 
+class ProfessorAgentWorker:
+    name = "professor_agent"
+
+    def __init__(self, prefetch_count: int = 5):
+        self._prefetch_count = prefetch_count
+        self._consumer_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_AGENT_PROFESSOR.value,
+            callback=process_professor_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("ProfessorAgentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("ProfessorAgentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_professor_agent_worker():
-    logger.info("Iniciando Professor Agent Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_AGENT_PROFESSOR.value,
-        callback=process_professor_task,
-        prefetch_count=5,
-    )
-    logger.info("✓ Professor Agent Worker iniciado.")
-    return consumer_task
+    worker = ProfessorAgentWorker()
+    await worker.start()
+    return worker

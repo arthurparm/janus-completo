@@ -1,3 +1,4 @@
+import asyncio
 import structlog
 from datetime import datetime
 from typing import Any
@@ -77,13 +78,43 @@ async def process_proponent_task(task: TaskMessage) -> None:
         logger.error("log_error", message=f"Debate Proponent failed: {e}", exc_info=True)
         raise
 
+class DebateProponentWorker:
+    name = "debate_proponent"
+
+    def __init__(self, prefetch_count: int = 5):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_AGENT_DEBATE_PROPONENT.value,
+            callback=process_proponent_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("DebateProponentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("DebateProponentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_debate_proponent_worker():
-    logger.info("Starting Debate Proponent Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_AGENT_DEBATE_PROPONENT.value,
-        callback=process_proponent_task,
-        prefetch_count=5,
-    )
-    logger.info("✓ Debate Proponent Worker started.")
-    return consumer_task
+    instance = DebateProponentWorker()
+    await instance.start()
+    return instance

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
@@ -121,13 +122,44 @@ async def publish_document_ingestion_task(payload: dict[str, Any]) -> dict[str, 
     return {"status": "ok", "task_id": task_message.task_id}
 
 
-async def start_document_ingestion_worker():
+class DocumentIngestionWorker:
+    name = "document_ingestion"
+
+    def __init__(self, prefetch_count: int = 1):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.DOCUMENT_INGESTION.value,
+            callback=process_document_ingestion_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("DocumentIngestionWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("DocumentIngestionWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
+async def start_document_ingestion_worker() -> "DocumentIngestionWorker":
     logger.info("Starting document ingestion worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.DOCUMENT_INGESTION.value,
-        callback=process_document_ingestion_task,
-        prefetch_count=1,
-    )
-    logger.info("Document ingestion worker started.")
-    return consumer_task
+    worker = DocumentIngestionWorker()
+    await worker.start()
+    return worker

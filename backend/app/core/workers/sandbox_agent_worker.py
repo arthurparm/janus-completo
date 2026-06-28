@@ -6,6 +6,7 @@ em um contentor Docker extremamente restrito ("jaula"), capturando stdout/stderr
 sem rede, sem volumes e com limites de CPU/memória.
 """
 
+import asyncio
 import base64
 import structlog
 from datetime import datetime
@@ -165,13 +166,43 @@ async def process_sandbox_task(task: TaskMessage) -> None:
         raise
 
 
+class SandboxAgentWorker:
+    name = "sandbox_agent"
+
+    def __init__(self, prefetch_count: int = 3):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_AGENT_SANDBOX.value,
+            callback=process_sandbox_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("SandboxAgentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("SandboxAgentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_sandbox_agent_worker():
-    logger.info("Iniciando Sandbox Agent Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_AGENT_SANDBOX.value,
-        callback=process_sandbox_task,
-        prefetch_count=3,
-    )
-    logger.info("✓ Sandbox Agent Worker iniciado.")
-    return consumer_task
+    instance = SandboxAgentWorker()
+    await instance.start()
+    return instance

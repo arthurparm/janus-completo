@@ -6,9 +6,10 @@ por fila (scale up/down), usando o MessageBroker start_consumer.
 """
 
 import asyncio
-import structlog
 from collections.abc import Awaitable, Callable
 from typing import Any
+
+import structlog
 
 from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
@@ -84,9 +85,6 @@ _DEF_RULES: dict[str, _QueueRule] = {
 }
 
 
-_active_consumers: dict[str, list[asyncio.Task]] = {}
-
-
 def _apply_settings_overrides() -> None:
     cfg = getattr(settings, "QUEUE_AUTOSCALER_CONFIG", {}) or {}
     try:
@@ -117,84 +115,109 @@ def _apply_settings_overrides() -> None:
         pass
 
 
-async def _ensure_consumers(queue_name: str, target_ours: int, rule: _QueueRule) -> None:
-    broker = await get_broker()
-    lst = _active_consumers.setdefault(queue_name, [])
+class AutoScaler:
+    name: str = "auto_scaler"
 
-    # Limpa tasks concluídas
-    lst = [t for t in lst if not t.done()]
-    _active_consumers[queue_name] = lst
-
-    if len(lst) < target_ours:
-        to_start = target_ours - len(lst)
-        for _ in range(to_start):
-            t = broker.start_consumer(
-                queue_name=queue_name,
-                callback=rule.callback,
-                prefetch_count=rule.prefetch_per_consumer,
-            )
-            lst.append(t)
-        logger.info("log_info", message=f"Auto-Scaler: adicionados {to_start} consumidores em '{queue_name}' (prefetch={rule.prefetch_per_consumer})."
+    def __init__(self, poll_interval_seconds: int | None = None) -> None:
+        self._interval = int(
+            poll_interval_seconds or getattr(settings, "QUEUE_AUTOSCALER_POLL_INTERVAL", 10) or 10
         )
-    elif len(lst) > target_ours:
-        to_stop = len(lst) - target_ours
-        for _ in range(to_stop):
-            t = lst.pop()
-            t.cancel()
-        logger.info("log_info", message=f"Auto-Scaler: removidos {to_stop} consumidores próprios em '{queue_name}'.")
+        self._running = False
+        self._task: asyncio.Task | None = None
+        self._active_consumers: dict[str, list[asyncio.Task]] = {}
 
+    async def start(self) -> None:
+        self._running = True
+        self._task = asyncio.create_task(self._loop())
+        logger.info("log_info", message=f"AutoScaler iniciado (intervalo={self._interval}s).")
 
-async def _scale_once() -> None:
-    broker = await get_broker()
-    _apply_settings_overrides()
+    async def stop(self) -> None:
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        self._active_consumers.clear()
+        logger.info("AutoScaler parado.")
 
-    for qname, rule in _DEF_RULES.items():
-        if not rule.enabled:
-            continue
+    def is_healthy(self) -> bool:
+        return self._running and self._task is not None and not self._task.done()
+
+    def get_status(self) -> dict:
+        return {
+            "running": self._running,
+            "poll_interval_seconds": self._interval,
+            "managed_queues": list(self._active_consumers.keys()),
+        }
+
+    async def _loop(self) -> None:
         try:
-            info = await broker.get_queue_info(qname)
-            if not info:
-                continue
-            messages = int(info.get("messages", 0) or 0)
-            total_consumers = int(info.get("consumers", 0) or 0)
-            ours = len(_active_consumers.get(qname, []))
-            others = max(0, total_consumers - ours)
-
-            # Calcula desejado por heurística simples (backlog por consumidor)
-            current = max(1, total_consumers) if total_consumers > 0 else rule.min_consumers
-            backlog_per_cons = messages / max(1, current)
-            desired_total = current
-            if messages == 0 and current > rule.min_consumers:
-                desired_total = rule.min_consumers
-            elif backlog_per_cons > rule.scale_up_backlog and current < rule.max_consumers:
-                desired_total = min(rule.max_consumers, current + 1)
-            elif backlog_per_cons < rule.scale_down_backlog and current > rule.min_consumers:
-                desired_total = max(rule.min_consumers, current - 1)
-
-            target_ours = max(0, desired_total - others)
-            await _ensure_consumers(qname, target_ours, rule)
-        except Exception as e:
-            logger.error("log_error", message=f"Auto-Scaler: erro ao escalar fila '{qname}': {e}", exc_info=True)
-
-
-async def start_auto_scaler(poll_interval_seconds: int | None = None) -> asyncio.Task:
-    """Inicia o auto-escalador em background."""
-    interval = int(
-        poll_interval_seconds or getattr(settings, "QUEUE_AUTOSCALER_POLL_INTERVAL", 10) or 10
-    )
-
-    async def _loop():
-        logger.info("log_info", message=f"Iniciando Auto-Scaler de filas (intervalo={interval}s)...")
-        try:
-            while True:
-                await _scale_once()
-                await asyncio.sleep(interval)
+            while self._running:
+                await self._scale_once()
+                await asyncio.sleep(self._interval)
         except asyncio.CancelledError:
             logger.info("Auto-Scaler cancelado.")
-            # Cancela consumidores próprios
-            for qname, tasks in _active_consumers.items():
-                for t in tasks:
-                    t.cancel()
-            _active_consumers.clear()
 
-    return asyncio.create_task(_loop())
+    async def _ensure_consumers(self, queue_name: str, target_ours: int, rule: _QueueRule) -> None:
+        broker = await get_broker()
+        lst = self._active_consumers.setdefault(queue_name, [])
+
+        lst = [t for t in lst if not t.done()]
+        self._active_consumers[queue_name] = lst
+
+        if len(lst) < target_ours:
+            to_start = target_ours - len(lst)
+            for _ in range(to_start):
+                t = broker.start_consumer(
+                    queue_name=queue_name,
+                    callback=rule.callback,
+                    prefetch_count=rule.prefetch_per_consumer,
+                )
+                lst.append(t)
+            logger.info("log_info", message=f"Auto-Scaler: adicionados {to_start} consumidores em '{queue_name}' (prefetch={rule.prefetch_per_consumer})."
+            )
+        elif len(lst) > target_ours:
+            to_stop = len(lst) - target_ours
+            for _ in range(to_stop):
+                t = lst.pop()
+                t.cancel()
+            logger.info("log_info", message=f"Auto-Scaler: removidos {to_stop} consumidores próprios em '{queue_name}'.")
+
+    async def _scale_once(self) -> None:
+        broker = await get_broker()
+        _apply_settings_overrides()
+
+        for qname, rule in _DEF_RULES.items():
+            if not rule.enabled:
+                continue
+            try:
+                info = await broker.get_queue_info(qname)
+                if not info:
+                    continue
+                messages = int(info.get("messages", 0) or 0)
+                total_consumers = int(info.get("consumers", 0) or 0)
+                ours = len(self._active_consumers.get(qname, []))
+                others = max(0, total_consumers - ours)
+
+                current = max(1, total_consumers) if total_consumers > 0 else rule.min_consumers
+                backlog_per_cons = messages / max(1, current)
+                desired_total = current
+                if messages == 0 and current > rule.min_consumers:
+                    desired_total = rule.min_consumers
+                elif backlog_per_cons > rule.scale_up_backlog and current < rule.max_consumers:
+                    desired_total = min(rule.max_consumers, current + 1)
+                elif backlog_per_cons < rule.scale_down_backlog and current > rule.min_consumers:
+                    desired_total = max(rule.min_consumers, current - 1)
+
+                target_ours = max(0, desired_total - others)
+                await self._ensure_consumers(qname, target_ours, rule)
+            except Exception as e:
+                logger.error("log_error", message=f"Auto-Scaler: erro ao escalar fila '{qname}': {e}", exc_info=True)
+
+
+async def start_auto_scaler(poll_interval_seconds: int | None = None):
+    instance = AutoScaler(poll_interval_seconds=poll_interval_seconds)
+    await instance.start()
+    return instance

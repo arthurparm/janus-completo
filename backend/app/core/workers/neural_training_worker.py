@@ -3,10 +3,12 @@ Async Neural Training Worker
 
 Consumes training tasks from RabbitMQ and triggers LearningRepository training process.
 """
-import structlog
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from app.core.infrastructure.message_broker import get_broker
 from app.core.monitoring.poison_pill_handler import protect_against_poison_pills
@@ -72,14 +74,45 @@ async def publish_neural_training_task(
     return task_id
 
 
+class NeuralTrainingWorker:
+    name = "neural_training"
+
+    def __init__(self, prefetch_count: int = 2):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.NEURAL_TRAINING.value,
+            callback=process_neural_training_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("NeuralTrainingWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("NeuralTrainingWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_neural_training_worker():
     """Start the neural training consumer worker."""
     logger.info("Starting neural training worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.NEURAL_TRAINING.value,
-        callback=process_neural_training_task,
-        prefetch_count=2,
-    )
-    logger.info("✓ Neural training worker started.")
-    return consumer_task
+    worker = NeuralTrainingWorker()
+    await worker.start()
+    return worker

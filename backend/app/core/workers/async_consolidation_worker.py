@@ -4,10 +4,12 @@ Async Knowledge Consolidation Worker - Sprint 1 + Sprint 8
 Worker assíncrono que consome mensagens de consolidação de conhecimento do RabbitMQ.
 Integra o Message Broker (Sprint 1) com o Knowledge Consolidator (Sprint 8).
 """
-import structlog
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+
+import structlog
 
 try:
     import msgpack
@@ -206,27 +208,48 @@ async def publish_consolidation_task(
     return {"status": "ok", "task_id": task_message.task_id}
 
 
-async def start_consolidation_worker():
+class ConsolidationWorker:
+    name = "knowledge_consolidation"
+
+    def __init__(self, prefetch_count: int = 5):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        await knowledge_consolidator._initialize()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
+            callback=process_consolidation_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("ConsolidationWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("ConsolidationWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
+async def start_consolidation_worker() -> "ConsolidationWorker":
     """
     Inicia o worker de consolidação de conhecimento.
     Consome mensagens da fila de consolidação e processa em background.
     """
-    logger.info("Iniciando worker de consolidação de conhecimento...")
-
-    broker = await get_broker()
-
-    # Inicia o consolidator com await (método assíncrono)
-    await knowledge_consolidator._initialize()
-
-    # Inicia consumidor da fila
-    # Reduzido prefetch_count para 2 para mitigar latência no LLM (evitar starvation de requisições interativas)
-    # Originalmente 5, mas com backlog alto, isso pode saturar o Ollama.
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.KNOWLEDGE_CONSOLIDATION.value,
-        callback=process_consolidation_task,
-        prefetch_count=2,
-    )
-
-    logger.info("✓ Worker de consolidação de conhecimento iniciado.")
-
-    return consumer_task
+    worker = ConsolidationWorker()
+    await worker.start()
+    return worker

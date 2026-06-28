@@ -5,12 +5,12 @@ Consumes agent task messages from RabbitMQ and runs the agent asynchronously.
 """
 
 import asyncio
-import structlog
 import uuid
 from datetime import datetime
 from typing import Any
 
 import msgpack
+import structlog
 from starlette.requests import Request
 
 from app.config import settings
@@ -142,14 +142,45 @@ async def publish_agent_task(question: str, agent_type: AgentType | str) -> str:
     return task_id
 
 
+class AgentTasksWorker:
+    name = "agent_tasks"
+
+    def __init__(self, prefetch_count: int = 10):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.AGENT_TASKS.value,
+            callback=process_agent_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("AgentTasksWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("AgentTasksWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict[str, Any]:
+        return {"running": self._running}
+
+
 async def start_agent_tasks_worker():
     """Start the agent tasks consumer worker."""
     logger.info("Starting agent tasks worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.AGENT_TASKS.value,
-        callback=process_agent_task,
-        prefetch_count=10,
-    )
-    logger.info("\u2713 Agent tasks worker started.")
-    return consumer_task
+    worker = AgentTasksWorker()
+    await worker.start()
+    return worker

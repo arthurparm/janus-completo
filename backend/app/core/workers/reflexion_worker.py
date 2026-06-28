@@ -4,10 +4,12 @@ Reflexion Worker - Consome tarefas de reflexão e publica sinais de falha.
 Liga a fila interna "janus.tasks.reflexion" ao serviço de Reflexion.
 Quando detectar falha ou baixa eficiência, publica "janus.failure.detected".
 """
-import structlog
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
@@ -140,15 +142,45 @@ async def process_reflexion_task(task: TaskMessage) -> None:
         raise
 
 
+class ReflexionWorker:
+    name = "reflexion"
+
+    def __init__(self, prefetch_count: int = 3):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        await _ensure_services_initialized()
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.REFLEXION_TASKS.value,
+            callback=process_reflexion_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("ReflexionWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("ReflexionWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_reflexion_worker():
     """Inicia o consumidor da fila de Reflexion."""
-    await _ensure_services_initialized()
-    broker = await get_broker()
-    logger.info("Iniciando worker de Reflexion (janus.tasks.reflexion)...")
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.REFLEXION_TASKS.value,
-        callback=process_reflexion_task,
-        prefetch_count=3,
-    )
-    logger.info("✓ Worker de Reflexion iniciado.")
-    return consumer_task
+    worker = ReflexionWorker()
+    await worker.start()
+    return worker

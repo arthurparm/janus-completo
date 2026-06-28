@@ -1,3 +1,4 @@
+import asyncio
 import base64
 from datetime import datetime, timedelta
 from typing import Any
@@ -149,170 +150,330 @@ async def publish_google_mail_send(user_id: int, message: dict[str, Any], index:
     return task_id
 
 
-async def start_google_productivity_consumer():
-    async def _handle(task: TaskMessage):
-        try:
-            payload = task.payload or {}
-            user_id = int(payload.get("user_id")) if payload.get("user_id") is not None else None
-            ev = payload.get("event") or {}
-            msg = payload.get("message") or {}
-            do_index = bool(payload.get("index"))
-            if task.task_type == "google_calendar_add_event" and user_id is not None:
-                try:
-                    repo = OAuthTokenRepository()
-                    tok = repo.get(user_id=int(user_id), provider="google")
-                    access = tok.access_token if tok else None
-                    if (
-                        tok
-                        and tok.expires_at
-                        and tok.expires_at <= datetime.utcnow()
-                        and tok.refresh_token
-                    ):
-                        from app.config import settings
+async def _handle_google_productivity_task(task: TaskMessage) -> None:
+    try:
+        payload = task.payload or {}
+        user_id = int(payload.get("user_id")) if payload.get("user_id") is not None else None
+        ev = payload.get("event") or {}
+        msg = payload.get("message") or {}
+        do_index = bool(payload.get("index"))
+        if task.task_type == "google_calendar_add_event" and user_id is not None:
+            try:
+                repo = OAuthTokenRepository()
+                tok = repo.get(user_id=int(user_id), provider="google")
+                access = tok.access_token if tok else None
+                if (
+                    tok
+                    and tok.expires_at
+                    and tok.expires_at <= datetime.utcnow()
+                    and tok.refresh_token
+                ):
+                    from app.config import settings
 
-                        cid = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None)
-                        cs = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None)
-                        if cid and cs:
-                            token_url = "https://oauth2.googleapis.com/token"
-                            allowed_token_url = enforce_worker_http_egress(
-                                token_url, tool="google_productivity_worker"
-                            )
-                            if not allowed_token_url:
-                                raise RuntimeError("Egress blocked for google oauth token refresh")
-                            async with httpx.AsyncClient(timeout=30) as client:
-                                r = await client.post(
-                                    allowed_token_url,
-                                    data={
-                                        "client_id": str(cid),
-                                        "client_secret": str(cs),
-                                        "refresh_token": tok.refresh_token,
-                                        "grant_type": "refresh_token",
-                                    },
-                                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                                )
-                                r.raise_for_status()
-                                data = r.json()
-                                access = data.get("access_token") or access
-                                exp_in = data.get("expires_in")
-                                exp_at = (
-                                    datetime.utcnow() + timedelta(seconds=int(exp_in or 0))
-                                    if exp_in
-                                    else None
-                                )
-                                repo.upsert(
-                                    user_id=int(user_id),
-                                    provider="google",
-                                    access_token=str(access or tok.access_token),
-                                    refresh_token=tok.refresh_token,
-                                    expires_at=exp_at,
-                                )
-                    if access:
-                        _t0 = __import__("time").perf_counter()
-                        calendar_url = (
-                            "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+                    cid = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None)
+                    cs = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None)
+                    if cid and cs:
+                        token_url = "https://oauth2.googleapis.com/token"
+                        allowed_token_url = enforce_worker_http_egress(
+                            token_url, tool="google_productivity_worker"
                         )
-                        allowed_calendar_url = enforce_worker_http_egress(
-                            calendar_url, tool="google_productivity_worker"
-                        )
-                        if not allowed_calendar_url:
-                            raise RuntimeError("Egress blocked for google calendar")
+                        if not allowed_token_url:
+                            raise RuntimeError("Egress blocked for google oauth token refresh")
                         async with httpx.AsyncClient(timeout=30) as client:
-                            req = {
-                                "summary": ev.get("title"),
-                                "start": {
-                                    "dateTime": datetime.utcfromtimestamp(
-                                        float(ev.get("start_ts"))
-                                    ).isoformat()
-                                    + "Z"
+                            r = await client.post(
+                                allowed_token_url,
+                                data={
+                                    "client_id": str(cid),
+                                    "client_secret": str(cs),
+                                    "refresh_token": tok.refresh_token,
+                                    "grant_type": "refresh_token",
                                 },
-                                "end": {
-                                    "dateTime": datetime.utcfromtimestamp(
-                                        float(ev.get("end_ts"))
-                                    ).isoformat()
-                                    + "Z"
-                                },
-                                "location": ev.get("location") or None,
-                                "description": ev.get("notes") or None,
-                            }
-                            resp = await client.post(
-                                allowed_calendar_url,
-                                json=req,
-                                headers={
-                                    "Authorization": f"Bearer {access}",
-                                    "Content-Type": "application/json",
-                                },
+                                headers={"Content-Type": "application/x-www-form-urlencoded"},
                             )
-                            resp.raise_for_status()
-                        try:
-                            _PROD_WORKER_USER_EVENTS.labels(
-                                str(user_id), "calendar_send", "ok"
-                            ).inc()
-                            _PROD_WORKER_LATENCY.labels("calendar_send").observe(
-                                __import__("time").perf_counter() - _t0
+                            r.raise_for_status()
+                            data = r.json()
+                            access = data.get("access_token") or access
+                            exp_in = data.get("expires_in")
+                            exp_at = (
+                                datetime.utcnow() + timedelta(seconds=int(exp_in or 0))
+                                if exp_in
+                                else None
                             )
-                            _PROD_WORKER_USER_LATENCY.labels(str(user_id), "calendar_send").observe(
-                                __import__("time").perf_counter() - _t0
+                            repo.upsert(
+                                user_id=int(user_id),
+                                provider="google",
+                                access_token=str(access or tok.access_token),
+                                refresh_token=tok.refresh_token,
+                                expires_at=exp_at,
                             )
-                        except Exception:
-                            pass
-                        try:
-                            record_audit_event_direct(
-                                {
-                                    "user_id": int(user_id),
-                                    "endpoint": "productivity:google_calendar",
-                                    "action": "calendar_add_event",
-                                    "tool": "google_calendar",
-                                    "status": "ok",
-                                    "latency_ms": None,
-                                    "trace_id": TRACE_ID.get(),
-                                }
-                            )
-                        except Exception:
-                            pass
-                except Exception as e:
+                if access:
+                    _t0 = __import__("time").perf_counter()
+                    calendar_url = (
+                        "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+                    )
+                    allowed_calendar_url = enforce_worker_http_egress(
+                        calendar_url, tool="google_productivity_worker"
+                    )
+                    if not allowed_calendar_url:
+                        raise RuntimeError("Egress blocked for google calendar")
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        req = {
+                            "summary": ev.get("title"),
+                            "start": {
+                                "dateTime": datetime.utcfromtimestamp(
+                                    float(ev.get("start_ts"))
+                                ).isoformat()
+                                + "Z"
+                            },
+                            "end": {
+                                "dateTime": datetime.utcfromtimestamp(
+                                    float(ev.get("end_ts"))
+                                ).isoformat()
+                                + "Z"
+                            },
+                            "location": ev.get("location") or None,
+                            "description": ev.get("notes") or None,
+                        }
+                        resp = await client.post(
+                            allowed_calendar_url,
+                            json=req,
+                            headers={
+                                "Authorization": f"Bearer {access}",
+                                "Content-Type": "application/json",
+                            },
+                        )
+                        resp.raise_for_status()
                     try:
-                        _PROD_WORKER_ERRORS.labels("calendar_send", e.__class__.__name__).inc()
+                        _PROD_WORKER_USER_EVENTS.labels(
+                            str(user_id), "calendar_send", "ok"
+                        ).inc()
+                        _PROD_WORKER_LATENCY.labels("calendar_send").observe(
+                            __import__("time").perf_counter() - _t0
+                        )
+                        _PROD_WORKER_USER_LATENCY.labels(str(user_id), "calendar_send").observe(
+                            __import__("time").perf_counter() - _t0
+                        )
                     except Exception:
                         pass
                     try:
                         record_audit_event_direct(
                             {
-                                "user_id": int(user_id) if user_id is not None else None,
+                                "user_id": int(user_id),
                                 "endpoint": "productivity:google_calendar",
                                 "action": "calendar_add_event",
                                 "tool": "google_calendar",
-                                "status": "error",
+                                "status": "ok",
                                 "latency_ms": None,
                                 "trace_id": TRACE_ID.get(),
                             }
                         )
                     except Exception:
                         pass
+            except Exception as e:
+                try:
+                    _PROD_WORKER_ERRORS.labels("calendar_send", e.__class__.__name__).inc()
+                except Exception:
+                    pass
+                try:
+                    record_audit_event_direct(
+                        {
+                            "user_id": int(user_id) if user_id is not None else None,
+                            "endpoint": "productivity:google_calendar",
+                            "action": "calendar_add_event",
+                            "tool": "google_calendar",
+                            "status": "error",
+                            "latency_ms": None,
+                            "trace_id": TRACE_ID.get(),
+                        }
+                    )
+                except Exception:
+                    pass
+                try:
+                    _PROD_WORKER_USER_EVENTS.labels(
+                        str(user_id or ""), "calendar_send", "error"
+                    ).inc()
+                except Exception:
+                    pass
+            if do_index and user_id is not None:
+                try:
+                    _t0 = __import__("time").perf_counter()
+                    title = str(ev.get("title", ""))
+                    loc = str(ev.get("location", ""))
+                    content = f"{title} @ {loc}"
+                    pid = f"calendar:{user_id}:{int(ev.get('start_ts', 0))}:{int(ev.get('end_ts', 0))}"
+                    payload_q = {
+                        "content": content,
+                        "type": "calendar_event",
+                        "ts_ms": int(ev.get("start_ts") or 0),
+                        "composite_id": pid,
+                        "metadata": {
+                            "type": "calendar_event",
+                            "origin": "google",
+                            "scope": "calendar.write",
+                            "user_id": str(user_id),
+                            "timestamp": int(ev.get("start_ts") or 0),
+                            "ts_ms": int(ev.get("start_ts") or 0),
+                        },
+                    }
+                    await get_knowledge_facade().index_memory_event(
+                        user_id=str(user_id),
+                        content=content,
+                        point_id=pid,
+                        payload=payload_q,
+                    )
                     try:
+                        _GOOGLE_CALENDAR_EVENTS_INDEXED.inc()
                         _PROD_WORKER_USER_EVENTS.labels(
-                            str(user_id or ""), "calendar_send", "error"
+                            str(user_id), "calendar_index", "ok"
                         ).inc()
+                        _PROD_WORKER_LATENCY.labels("calendar_index").observe(
+                            __import__("time").perf_counter() - _t0
+                        )
+                        _PROD_WORKER_USER_LATENCY.labels(
+                            str(user_id), "calendar_index"
+                        ).observe(__import__("time").perf_counter() - _t0)
+                    except Exception:
+                        pass
+                    try:
+                        record_audit_event_direct(
+                            {
+                                "user_id": int(user_id),
+                                "endpoint": "productivity:google_calendar",
+                                "action": "index_add_event",
+                                "tool": "google_calendar",
+                                "status": "indexed",
+                                "latency_ms": None,
+                                "trace_id": TRACE_ID.get(),
+                            }
+                        )
+                    except Exception:
+                        pass
+                except Exception as e:
+                    try:
+                        _PROD_WORKER_ERRORS.labels("calendar_index", e.__class__.__name__).inc()
+                    except Exception:
+                        pass
+                    pass
+        if task.task_type == "google_mail_send" and user_id is not None:
+            try:
+                repo = OAuthTokenRepository()
+                tok = repo.get(user_id=int(user_id), provider="google")
+                access = tok.access_token if tok else None
+                if (
+                    tok
+                    and tok.expires_at
+                    and tok.expires_at <= datetime.utcnow()
+                    and tok.refresh_token
+                ):
+                    from app.config import settings
+
+                    cid = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None)
+                    cs = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None)
+                    if cid and cs:
+                        token_url = "https://oauth2.googleapis.com/token"
+                        allowed_token_url = enforce_worker_http_egress(
+                            token_url, tool="google_productivity_worker"
+                        )
+                        if not allowed_token_url:
+                            raise RuntimeError("Egress blocked for google oauth token refresh")
+                        async with httpx.AsyncClient(timeout=30) as client:
+                            r = await client.post(
+                                allowed_token_url,
+                                data={
+                                    "client_id": str(cid),
+                                    "client_secret": str(cs),
+                                    "refresh_token": tok.refresh_token,
+                                    "grant_type": "refresh_token",
+                                },
+                                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                            )
+                            r.raise_for_status()
+                            data = r.json()
+                            access = data.get("access_token") or access
+                            exp_in = data.get("expires_in")
+                            exp_at = (
+                                datetime.utcnow() + timedelta(seconds=int(exp_in or 0))
+                                if exp_in
+                                else None
+                            )
+                            repo.upsert(
+                                user_id=int(user_id),
+                                provider="google",
+                                access_token=str(access or tok.access_token),
+                                refresh_token=tok.refresh_token,
+                                expires_at=exp_at,
+                            )
+                if access:
+                    _t0 = __import__("time").perf_counter()
+                    to = str(msg.get("to", ""))
+                    subject = str(msg.get("subject", ""))
+                    body = str(msg.get("body", ""))
+                    raw = f"To: {to}\r\nSubject: {subject}\r\n\r\n{body}".encode()
+                    b64 = base64.urlsafe_b64encode(raw).decode("ascii")
+                    gmail_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+                    allowed_gmail_url = enforce_worker_http_egress(
+                        gmail_url, tool="google_productivity_worker"
+                    )
+                    if not allowed_gmail_url:
+                        raise RuntimeError("Egress blocked for gmail send")
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        resp = await client.post(
+                            allowed_gmail_url,
+                            json={"raw": b64},
+                            headers={
+                                "Authorization": f"Bearer {access}",
+                                "Content-Type": "application/json",
+                            },
+                        )
+                        resp.raise_for_status()
+                    try:
+                        _GOOGLE_MAIL_SENT_TOTAL.inc()
+                        _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_send", "ok").inc()
+                        _PROD_WORKER_LATENCY.labels("mail_send").observe(
+                            __import__("time").perf_counter() - _t0
+                        )
+                        _PROD_WORKER_USER_LATENCY.labels(str(user_id), "mail_send").observe(
+                            __import__("time").perf_counter() - _t0
+                        )
+                    except Exception:
+                        pass
+                try:
+                    record_audit_event_direct(
+                        {
+                            "user_id": int(user_id),
+                            "endpoint": "productivity:google_mail",
+                            "action": "mail_send",
+                            "tool": "google_mail",
+                            "status": "ok",
+                            "latency_ms": None,
+                            "trace_id": TRACE_ID.get(),
+                        }
+                    )
+                except Exception as e:
+                    try:
+                        _PROD_WORKER_ERRORS.labels("mail_send", e.__class__.__name__).inc()
                     except Exception:
                         pass
                 if do_index and user_id is not None:
                     try:
                         _t0 = __import__("time").perf_counter()
-                        title = str(ev.get("title", ""))
-                        loc = str(ev.get("location", ""))
-                        content = f"{title} @ {loc}"
-                        pid = f"calendar:{user_id}:{int(ev.get('start_ts', 0))}:{int(ev.get('end_ts', 0))}"
+                        content = f"To: {msg.get('to', '')!s}\nSubject: {msg.get('subject', '')!s}\n{msg.get('body', '')!s}"
+                        composite_id = (
+                            f"mail:{user_id}:{msg.get('to', '')!s}:{msg.get('subject', '')!s}:{content}"
+                        )
+                        pid = str(uuid5(NAMESPACE_URL, composite_id))
                         payload_q = {
                             "content": content,
-                            "type": "calendar_event",
-                            "ts_ms": int(ev.get("start_ts") or 0),
-                            "composite_id": pid,
+                            "type": "email_message",
+                            "ts_ms": int(__import__("time").time() * 1000),
+                            "composite_id": composite_id,
                             "metadata": {
-                                "type": "calendar_event",
+                                "type": "email_message",
                                 "origin": "google",
-                                "scope": "calendar.write",
+                                "scope": "mail.send",
                                 "user_id": str(user_id),
-                                "timestamp": int(ev.get("start_ts") or 0),
-                                "ts_ms": int(ev.get("start_ts") or 0),
+                                "timestamp": int(__import__("time").time() * 1000),
+                                "ts_ms": int(__import__("time").time() * 1000),
                             },
                         }
                         await get_knowledge_facade().index_memory_event(
@@ -322,202 +483,89 @@ async def start_google_productivity_consumer():
                             payload=payload_q,
                         )
                         try:
-                            _GOOGLE_CALENDAR_EVENTS_INDEXED.inc()
                             _PROD_WORKER_USER_EVENTS.labels(
-                                str(user_id), "calendar_index", "ok"
+                                str(user_id), "mail_index", "ok"
                             ).inc()
-                            _PROD_WORKER_LATENCY.labels("calendar_index").observe(
+                            _PROD_WORKER_LATENCY.labels("mail_index").observe(
                                 __import__("time").perf_counter() - _t0
                             )
                             _PROD_WORKER_USER_LATENCY.labels(
-                                str(user_id), "calendar_index"
+                                str(user_id), "mail_index"
                             ).observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
-                        try:
-                            record_audit_event_direct(
-                                {
-                                    "user_id": int(user_id),
-                                    "endpoint": "productivity:google_calendar",
-                                    "action": "index_add_event",
-                                    "tool": "google_calendar",
-                                    "status": "indexed",
-                                    "latency_ms": None,
-                                    "trace_id": TRACE_ID.get(),
-                                }
-                            )
-                        except Exception:
-                            pass
                     except Exception as e:
                         try:
-                            _PROD_WORKER_ERRORS.labels("calendar_index", e.__class__.__name__).inc()
+                            _PROD_WORKER_ERRORS.labels("mail_index", e.__class__.__name__).inc()
                         except Exception:
                             pass
-                        pass
-            if task.task_type == "google_mail_send" and user_id is not None:
+            except Exception as e:
                 try:
-                    repo = OAuthTokenRepository()
-                    tok = repo.get(user_id=int(user_id), provider="google")
-                    access = tok.access_token if tok else None
-                    if (
-                        tok
-                        and tok.expires_at
-                        and tok.expires_at <= datetime.utcnow()
-                        and tok.refresh_token
-                    ):
-                        from app.config import settings
-
-                        cid = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None)
-                        cs = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None)
-                        if cid and cs:
-                            token_url = "https://oauth2.googleapis.com/token"
-                            allowed_token_url = enforce_worker_http_egress(
-                                token_url, tool="google_productivity_worker"
-                            )
-                            if not allowed_token_url:
-                                raise RuntimeError("Egress blocked for google oauth token refresh")
-                            async with httpx.AsyncClient(timeout=30) as client:
-                                r = await client.post(
-                                    allowed_token_url,
-                                    data={
-                                        "client_id": str(cid),
-                                        "client_secret": str(cs),
-                                        "refresh_token": tok.refresh_token,
-                                        "grant_type": "refresh_token",
-                                    },
-                                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                                )
-                                r.raise_for_status()
-                                data = r.json()
-                                access = data.get("access_token") or access
-                                exp_in = data.get("expires_in")
-                                exp_at = (
-                                    datetime.utcnow() + timedelta(seconds=int(exp_in or 0))
-                                    if exp_in
-                                    else None
-                                )
-                                repo.upsert(
-                                    user_id=int(user_id),
-                                    provider="google",
-                                    access_token=str(access or tok.access_token),
-                                    refresh_token=tok.refresh_token,
-                                    expires_at=exp_at,
-                                )
-                    if access:
-                        _t0 = __import__("time").perf_counter()
-                        to = str(msg.get("to", ""))
-                        subject = str(msg.get("subject", ""))
-                        body = str(msg.get("body", ""))
-                        raw = f"To: {to}\r\nSubject: {subject}\r\n\r\n{body}".encode()
-                        b64 = base64.urlsafe_b64encode(raw).decode("ascii")
-                        gmail_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
-                        allowed_gmail_url = enforce_worker_http_egress(
-                            gmail_url, tool="google_productivity_worker"
-                        )
-                        if not allowed_gmail_url:
-                            raise RuntimeError("Egress blocked for gmail send")
-                        async with httpx.AsyncClient(timeout=30) as client:
-                            resp = await client.post(
-                                allowed_gmail_url,
-                                json={"raw": b64},
-                                headers={
-                                    "Authorization": f"Bearer {access}",
-                                    "Content-Type": "application/json",
-                                },
-                            )
-                            resp.raise_for_status()
-                        try:
-                            _GOOGLE_MAIL_SENT_TOTAL.inc()
-                            _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_send", "ok").inc()
-                            _PROD_WORKER_LATENCY.labels("mail_send").observe(
-                                __import__("time").perf_counter() - _t0
-                            )
-                            _PROD_WORKER_USER_LATENCY.labels(str(user_id), "mail_send").observe(
-                                __import__("time").perf_counter() - _t0
-                            )
-                        except Exception:
-                            pass
-                    try:
-                        record_audit_event_direct(
-                            {
-                                "user_id": int(user_id),
-                                "endpoint": "productivity:google_mail",
-                                "action": "mail_send",
-                                "tool": "google_mail",
-                                "status": "ok",
-                                "latency_ms": None,
-                                "trace_id": TRACE_ID.get(),
-                            }
-                        )
-                    except Exception as e:
-                        try:
-                            _PROD_WORKER_ERRORS.labels("mail_send", e.__class__.__name__).inc()
-                        except Exception:
-                            pass
-                    if do_index and user_id is not None:
-                        try:
-                            _t0 = __import__("time").perf_counter()
-                            content = f"To: {msg.get('to', '')!s}\nSubject: {msg.get('subject', '')!s}\n{msg.get('body', '')!s}"
-                            composite_id = (
-                                f"mail:{user_id}:{msg.get('to', '')!s}:{msg.get('subject', '')!s}:{content}"
-                            )
-                            pid = str(uuid5(NAMESPACE_URL, composite_id))
-                            payload_q = {
-                                "content": content,
-                                "type": "email_message",
-                                "ts_ms": int(__import__("time").time() * 1000),
-                                "composite_id": composite_id,
-                                "metadata": {
-                                    "type": "email_message",
-                                    "origin": "google",
-                                    "scope": "mail.send",
-                                    "user_id": str(user_id),
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                    "ts_ms": int(__import__("time").time() * 1000),
-                                },
-                            }
-                            await get_knowledge_facade().index_memory_event(
-                                user_id=str(user_id),
-                                content=content,
-                                point_id=pid,
-                                payload=payload_q,
-                            )
-                            try:
-                                _PROD_WORKER_USER_EVENTS.labels(
-                                    str(user_id), "mail_index", "ok"
-                                ).inc()
-                                _PROD_WORKER_LATENCY.labels("mail_index").observe(
-                                    __import__("time").perf_counter() - _t0
-                                )
-                                _PROD_WORKER_USER_LATENCY.labels(
-                                    str(user_id), "mail_index"
-                                ).observe(__import__("time").perf_counter() - _t0)
-                            except Exception:
-                                pass
-                        except Exception as e:
-                            try:
-                                _PROD_WORKER_ERRORS.labels("mail_index", e.__class__.__name__).inc()
-                            except Exception:
-                                pass
-                except Exception as e:
-                    try:
-                        _PROD_WORKER_ERRORS.labels("mail_send", e.__class__.__name__).inc()
-                    except Exception:
-                        pass
-                    try:
-                        _PROD_WORKER_USER_EVENTS.labels(
-                            str(user_id or ""), "mail_send", "error"
-                        ).inc()
-                    except Exception:
-                        pass
-            try:
-                getattr(__import__("builtins"), "app", None)
-            except Exception:
-                pass
+                    _PROD_WORKER_ERRORS.labels("mail_send", e.__class__.__name__).inc()
+                except Exception:
+                    pass
+                try:
+                    _PROD_WORKER_USER_EVENTS.labels(
+                        str(user_id or ""), "mail_send", "error"
+                    ).inc()
+                except Exception:
+                    pass
+        try:
+            getattr(__import__("builtins"), "app", None)
         except Exception:
-            return
+            pass
+    except Exception:
+        return
 
-    broker = await get_broker()
-    t1 = broker.start_consumer(QUEUE_GOOGLE_CALENDAR, _handle, prefetch_count=10)
-    t2 = broker.start_consumer(QUEUE_GOOGLE_MAIL, _handle, prefetch_count=10)
-    return t1, t2
+
+class GoogleProductivityWorker:
+    name = "google_productivity"
+
+    def __init__(self, prefetch_count: int = 10):
+        self._prefetch_count = prefetch_count
+        self._consumer_tasks = []
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        t1 = broker.start_consumer(
+            QUEUE_GOOGLE_CALENDAR,
+            _handle_google_productivity_task,
+            prefetch_count=self._prefetch_count,
+        )
+        t2 = broker.start_consumer(
+            QUEUE_GOOGLE_MAIL,
+            _handle_google_productivity_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._consumer_tasks = [t1, t2]
+        self._running = True
+        logger.info("GoogleProductivityWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        for task in self._consumer_tasks:
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._consumer_tasks = []
+        logger.info("GoogleProductivityWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return (
+            self._running
+            and bool(self._consumer_tasks)
+            and all(t is not None and not t.done() for t in self._consumer_tasks)
+        )
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
+async def start_google_productivity_consumer():
+    instance = GoogleProductivityWorker()
+    await instance.start()
+    return instance

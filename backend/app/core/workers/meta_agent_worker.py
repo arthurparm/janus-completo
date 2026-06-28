@@ -6,12 +6,12 @@ Consumes messages from janus.meta_agent.cycle and triggers async Meta-Agent cycl
 
 import asyncio
 import inspect
-import structlog
 import time
 import uuid
 from datetime import datetime
 from typing import Any
 
+import structlog
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.config import settings
@@ -231,17 +231,47 @@ async def publish_meta_agent_cycle(
     return task_id
 
 
+class MetaAgentWorker:
+    name = "meta_agent"
+
+    def __init__(self, prefetch_count: int = 2):
+        self._prefetch_count = prefetch_count
+        self._consumer_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.META_AGENT_CYCLE.value,
+            callback=process_meta_agent_cycle,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("MetaAgentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("MetaAgentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_meta_agent_worker():
     """Start janus.meta_agent.cycle consumer."""
-    logger.info("Starting Meta-Agent worker (cycle queue)...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.META_AGENT_CYCLE.value,
-        callback=process_meta_agent_cycle,
-        prefetch_count=2,
-    )
-    logger.info("Meta-Agent worker started.")
-    return consumer_task
+    worker = MetaAgentWorker()
+    await worker.start()
+    return worker
 
 
 @protect_against_poison_pills(
@@ -322,14 +352,44 @@ async def process_failure_event(task: TaskMessage) -> None:
         raise
 
 
+class FailureEventConsumer:
+    name = "failure_consumer"
+
+    def __init__(self, prefetch_count: int = 5):
+        self._prefetch_count = prefetch_count
+        self._consumer_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.FAILURE_DETECTED.value,
+            callback=process_failure_event,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("FailureEventConsumer started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("FailureEventConsumer stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_failure_event_consumer():
     """Start janus.failure.detected consumer."""
-    logger.info("Starting Meta-Agent failure consumer (janus.failure.detected)...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.FAILURE_DETECTED.value,
-        callback=process_failure_event,
-        prefetch_count=5,
-    )
-    logger.info("Meta-Agent failure consumer started.")
-    return consumer_task
+    worker = FailureEventConsumer()
+    await worker.start()
+    return worker

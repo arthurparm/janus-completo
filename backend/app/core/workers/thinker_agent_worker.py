@@ -5,6 +5,7 @@ Consome a fila JANUS.tasks.agent.thinker.
 Este agente atua antes do CodeAgent, usando modelos de raciocínio (como DeepSeek R1)
 para planejar a arquitetura e a lógica antes de qualquer código ser escrito.
 """
+import asyncio
 import structlog
 from datetime import datetime
 
@@ -83,13 +84,43 @@ async def process_thinker_task(task: TaskMessage) -> None:
         raise
 
 
+class ThinkerAgentWorker:
+    name = "thinker_agent"
+
+    def __init__(self, prefetch_count: int = 3):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_AGENT_THINKER.value,
+            callback=process_thinker_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("ThinkerAgentWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("ThinkerAgentWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_thinker_agent_worker():
-    logger.info("Iniciando Thinker Agent Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_AGENT_THINKER.value,
-        callback=process_thinker_task,
-        prefetch_count=3, # Menor prefetch pois tasks demoram mais
-    )
-    logger.info("✓ Thinker Agent Worker iniciado.")
-    return consumer_task
+    instance = ThinkerAgentWorker()
+    await instance.start()
+    return instance

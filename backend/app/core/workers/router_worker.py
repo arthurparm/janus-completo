@@ -4,10 +4,11 @@ Router Worker (Rececionista)
 Consome a fila central JANUS.tasks.router e decide o próximo agente
 para o TaskState usando o Planner na decomposição inicial.
 """
-import structlog
+import asyncio
 from datetime import datetime
 
 import msgpack
+import structlog
 
 from app.core.autonomy.taskstate_status import (
     is_success_terminal_status,
@@ -307,14 +308,44 @@ async def process_router_task(task: TaskMessage) -> None:
         raise
 
 
+class RouterWorker:
+    name = "router"
+
+    def __init__(self, prefetch_count: int = 10):
+        self._prefetch_count = prefetch_count
+        self._consumer_task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_ROUTER.value,
+            callback=process_router_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("RouterWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("RouterWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_router_worker():
     """Inicia o consumidor da fila central do Router."""
-    logger.info("Iniciando Router Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_ROUTER.value,
-        callback=process_router_task,
-        prefetch_count=10,
-    )
-    logger.info("✓ Router Worker iniciado.")
-    return consumer_task
+    worker = RouterWorker()
+    await worker.start()
+    return worker

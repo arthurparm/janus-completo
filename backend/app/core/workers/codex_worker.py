@@ -4,6 +4,7 @@ Codex Worker
 Worker dedicado a executar tarefas do Codex CLI (execução e revisão)
 de forma assíncrona, garantindo isolamento e controle de fluxo.
 """
+import asyncio
 import structlog
 from datetime import datetime
 
@@ -133,13 +134,43 @@ async def process_codex_task(task: TaskMessage) -> None:
         logger.error("log_error", message=f"Codex Worker falhou na task {task.task_id}: {e}", exc_info=True)
 
 
+class CodexWorker:
+    name = "codex_worker"
+
+    def __init__(self, prefetch_count: int = 2):
+        self._prefetch_count = prefetch_count
+        self._consumer_task = None
+        self._running = False
+
+    async def start(self) -> None:
+        broker = await get_broker()
+        self._consumer_task = broker.start_consumer(
+            queue_name=QueueName.TASKS_CODEX_WORKER.value,
+            callback=process_codex_task,
+            prefetch_count=self._prefetch_count,
+        )
+        self._running = True
+        logger.info("CodexWorker started")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._consumer_task:
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+            self._consumer_task = None
+        logger.info("CodexWorker stopped")
+
+    def is_healthy(self) -> bool:
+        return self._running and self._consumer_task is not None and not self._consumer_task.done()
+
+    def get_status(self) -> dict:
+        return {"running": self._running}
+
+
 async def start_codex_worker():
-    logger.info("Iniciando Codex Worker...")
-    broker = await get_broker()
-    consumer_task = broker.start_consumer(
-        queue_name=QueueName.TASKS_CODEX_WORKER.value,
-        callback=process_codex_task,
-        prefetch_count=2,
-    )
-    logger.info("✓ Codex Worker iniciado.")
-    return consumer_task
+    instance = CodexWorker()
+    await instance.start()
+    return instance
