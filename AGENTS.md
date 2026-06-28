@@ -322,12 +322,12 @@ The project has persistent knowledge files that summarize architecture, runtime 
 
 | Memory | When to consult |
 |---|---|
-| `janus_memorias_indice.md` | Start of any broad Janus task. |
-| `janus_codigo_mapa_geral.md` | General codebase navigation and architecture map. |
-| `janus_backend_runtime.md` | Backend, API, LLM, RAG, memory, workers or runtime tasks. |
-| `janus_frontend_angular.md` | Frontend Angular, UI, chat screen and API integration tasks. |
-| `janus_operacao_qa.md` | Setup, QA, diagnostics, deployment and validation tasks. |
-| `janus_autonomia_memoria_riscos.md` | Autonomy, self-study, cleanup, observability and risk assessment. |
+| [PROJECT_MEMORY_INDEX.md](file:///h:/repos/janus-completo/PROJECT_MEMORY_INDEX.md) | Start of any broad Janus task. |
+| [CODEBASE_MAP.md](file:///h:/repos/janus-completo/CODEBASE_MAP.md) | General codebase navigation and architecture map. |
+| [BACKEND_RUNTIME.md](file:///h:/repos/janus-completo/BACKEND_RUNTIME.md) | Backend, API, LLM, RAG, memory, workers or runtime tasks. |
+| [FRONTEND_ANGULAR.md](file:///h:/repos/janus-completo/FRONTEND_ANGULAR.md) | Frontend Angular, UI, chat screen and API integration tasks. |
+| [OPS_QA.md](file:///h:/repos/janus-completo/OPS_QA.md) | Setup, QA, diagnostics, deployment and validation tasks. |
+| [AUTONOMY_RISK.md](file:///h:/repos/janus-completo/AUTONOMY_RISK.md) | Autonomy, self-study, cleanup, observability and risk assessment. |
 
 ## 15. Trusted Sources
 
