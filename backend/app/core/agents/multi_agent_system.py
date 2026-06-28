@@ -6,16 +6,16 @@ trabalham em conjunto, coordenados por um Agente Gestor de Projetos.
 """
 
 import asyncio
-import structlog
-from typing import Any
 from pathlib import Path
+from typing import Any
+
+import structlog
 
 from app.config import settings
-from app.core.tools.os_tools import register_os_tools
-
-from app.core.agents.structures import AgentRole, Task, TaskStatus, TaskPriority
-from app.core.agents.workspace import SharedWorkspace
 from app.core.agents.specialized_agent import SpecializedAgent
+from app.core.agents.structures import AgentRole, Task, TaskPriority, TaskStatus
+from app.core.agents.workspace import SharedWorkspace
+from app.core.tools.os_tools import register_os_tools
 
 logger = structlog.get_logger(__name__)
 
@@ -145,6 +145,20 @@ class MultiAgentSystem:
         decomposition_prompt = await get_formatted_prompt(
             "multi_agent_decomposition", project_description=project_description
         )
+
+        # --- MAS Security: validate project description before decomposition ---
+        from app.core.agents.mas_validator import mas_validator
+        proj_ok, proj_violations = mas_validator.validate_decomposed_plan(
+            [{"description": project_description, "agent": "project_manager"}]
+        )
+        if not proj_ok:
+            logger.warning("mas_project_rejected", violations=proj_violations)
+            return {
+                "project_status": "rejected",
+                "error": "Project description contains unsafe operations",
+                "violations": proj_violations,
+            }
+        # --- End MAS Security ---
 
         pm_task = Task(
             description=decomposition_prompt,
