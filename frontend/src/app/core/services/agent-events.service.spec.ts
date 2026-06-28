@@ -84,6 +84,42 @@ describe('AgentEventsService', () => {
     expect(received).toEqual([{ content: 'thinking', conversation_id: 'conv-1' }])
   })
 
+  it('codifica conversationId na URL sem alterar o contexto do evento', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(11))
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
+      const chunk = encoder.encode(
+        'event: agent_event\ndata: {"task_id":"task-1","agent_role":"dev","event_type":"agent_event","content":"thinking","timestamp":123}\n\n'
+      )
+      return {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: vi.fn()
+              .mockResolvedValueOnce({ value: chunk, done: false })
+              .mockResolvedValueOnce({ value: undefined, done: true }),
+          }),
+        },
+      } as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const service = TestBed.inject(AgentEventsService)
+    const received: Array<{ content: string; conversation_id: string }> = []
+    service.events$.subscribe((event) => {
+      received.push({ content: event.content, conversation_id: event.conversation_id })
+    })
+
+    service.connect('conv/1?debug=true#frag')
+    await waitFor(() => received.length === 1)
+
+    const url = String(fetchMock.mock.calls[0][0])
+    expect(url).toContain('/v1/chat/conv%2F1%3Fdebug%3Dtrue%23frag/events')
+    expect(url).not.toContain('/v1/chat/conv/1?debug=true#frag/events')
+    expect(received).toEqual([
+      { content: 'thinking', conversation_id: 'conv/1?debug=true#frag' },
+    ])
+  })
+
   it('aborta a conexao atual ao desconectar', async () => {
     localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(9))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {

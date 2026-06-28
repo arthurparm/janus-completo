@@ -204,6 +204,30 @@ def test_chat_message_requires_bearer_auth_without_actor_or_payload_user():
     assert resp.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
 
 
+def test_chat_message_auth_precedes_body_validation():
+    svc = _DummyChatService()
+    client = _build_client(svc)
+
+    missing_body_fields = client.post("/api/v1/chat/message", json={})
+    assert missing_body_fields.status_code == 401
+    assert missing_body_fields.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
+
+    invalid_json = client.post(
+        "/api/v1/chat/message",
+        content="{",
+        headers={"Content-Type": "application/json"},
+    )
+    assert invalid_json.status_code == 401
+    assert invalid_json.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
+
+    authenticated_missing_fields = client.post(
+        "/api/v1/chat/message",
+        json={},
+        headers=_auth_headers(1),
+    )
+    assert authenticated_missing_fields.status_code == 422
+
+
 def test_chat_message_requires_citations_for_code_or_docs_queries():
     svc = _DummyChatService()
     client = _build_client(svc)
@@ -454,6 +478,7 @@ def test_chat_stream_rejects_invalid_role_or_priority():
     resp = client.post(
         "/api/v1/chat/stream/conv-1",
         json={"message": "hello", "role": "invalid", "priority": "fast_and_cheap"},
+        headers=_auth_headers(1),
     )
     assert resp.status_code == 422
     assert resp.json()["detail"]["code"] == "CHAT_INVALID_ROLE_OR_PRIORITY"
@@ -462,10 +487,53 @@ def test_chat_stream_rejects_invalid_role_or_priority():
     resp2 = client.post(
         "/api/v1/chat/stream/conv-1",
         json={"message": "hello", "role": "orchestrator", "priority": "invalid"},
+        headers=_auth_headers(1),
     )
     assert resp2.status_code == 422
     assert resp2.json()["detail"]["code"] == "CHAT_INVALID_ROLE_OR_PRIORITY"
     assert resp2.json()["detail"]["message"] == "Invalid role or priority"
+
+
+def test_chat_stream_auth_precedes_payload_validation():
+    svc = _DummyChatService()
+    client = _build_client(svc)
+
+    missing_body_fields = client.post("/api/v1/chat/stream/conv-1", json={})
+    assert missing_body_fields.status_code == 401
+    assert missing_body_fields.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
+
+    invalid_json = client.post(
+        "/api/v1/chat/stream/conv-1",
+        content="{",
+        headers={"Content-Type": "application/json"},
+    )
+    assert invalid_json.status_code == 401
+    assert invalid_json.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
+
+    invalid_role = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "hello", "role": "invalid", "priority": "fast_and_cheap"},
+    )
+    assert invalid_role.status_code == 401
+    assert invalid_role.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
+
+    oversized = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={
+            "message": "x" * (10 * 1024 + 1),
+            "role": "orchestrator",
+            "priority": "fast_and_cheap",
+        },
+    )
+    assert oversized.status_code == 401
+    assert oversized.json()["detail"]["code"] == "CHAT_AUTH_REQUIRED"
+
+    authenticated_missing_fields = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={},
+        headers=_auth_headers(1),
+    )
+    assert authenticated_missing_fields.status_code == 422
 
 
 def test_chat_stream_reject_disallowed_origin(monkeypatch):

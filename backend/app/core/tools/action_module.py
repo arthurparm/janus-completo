@@ -11,13 +11,13 @@ Funcionalidades:
 - Controle de permissões e rate limiting
 - Telemetria de uso de ferramentas
 """
-import structlog
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Literal  # noqa: F401
 
+import structlog
 from langchain.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
 
@@ -95,6 +95,12 @@ class ToolMetadata:
     rate_limit_per_minute: int | None = None
     requires_confirmation: bool = False
     tags: list[str] = field(default_factory=list)
+    namespace: str | None = None
+    code_signature: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    llm_model: str | None = None
+    evolution_attempt_id: str | None = None
 
 
 @dataclass
@@ -370,6 +376,8 @@ class ActionRegistry:
     def __init__(self):
         self._tools: dict[str, BaseTool] = {}
         self._metadata: dict[str, ToolMetadata] = {}
+        self._namespaces: dict[str, str] = {}
+        self._previous_versions: dict[str, BaseTool] = {}
         self._call_history: list[ToolCall] = []
         self._rate_limits: dict[tuple[str, str], list[float]] = {}  # (user_id, tool_name) -> timestamps
 
@@ -378,9 +386,12 @@ class ActionRegistry:
         tool: BaseTool,
         category: ToolCategory = ToolCategory.CUSTOM,
         permission_level: PermissionLevel = PermissionLevel.SAFE,
+        namespace: str = "core",
+        code_signature: str | None = None,
         rate_limit_per_minute: int | None = None,
         requires_confirmation: bool = False,
         tags: list[str] | None = None,
+        **kwargs,
     ) -> None:
         """
         Registra uma ferramenta no sistema.
@@ -389,6 +400,8 @@ class ActionRegistry:
             tool: Ferramenta LangChain
             category: Categoria da ferramenta
             permission_level: Nível de permissão
+            namespace: Namespace de isolamento (core, evolution, user)
+            code_signature: Assinatura SHA-256 do código (para verificação futura)
             rate_limit_per_minute: Limite de chamadas por minuto (None = sem limite)
             requires_confirmation: Se requer confirmação do usuário antes de executar
             tags: Tags para busca e organização
@@ -403,23 +416,38 @@ class ActionRegistry:
                 "action_module_tool_reregistered",
                 tool_name=name,
                 same_instance=same_instance,
+                namespace=namespace,
                 category=category.value,
             )
 
+        if namespace == "evolution" and code_signature is not None and name in self._tools:
+            self._previous_versions[name] = self._tools[name]
+
         self._tools[name] = tool
+        self._namespaces[name] = namespace
         self._metadata[name] = ToolMetadata(
             name=name,
             category=category,
             description=tool.description or "",
             permission_level=permission_level,
+            namespace=namespace,
+            code_signature=code_signature,
             rate_limit_per_minute=rate_limit_per_minute,
             requires_confirmation=requires_confirmation,
             tags=tags or [],
         )
 
+        if namespace == "evolution":
+            meta = self._metadata[name]
+            meta.created_by = "evolution_manager"
+            meta.created_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            meta.llm_model = getattr(kwargs.get('tool_spec', {}), 'get', lambda *a: None)('model', None)
+            meta.evolution_attempt_id = getattr(kwargs, 'get', lambda *a: None)('attempt_id', None)
+
         logger.info(
             "action_module_tool_registered",
             tool_name=name,
+            namespace=namespace,
             category=category.value,
         )
 
@@ -428,6 +456,7 @@ class ActionRegistry:
         if tool_name in self._tools:
             del self._tools[tool_name]
             del self._metadata[tool_name]
+            self._namespaces.pop(tool_name, None)
             logger.info("action_module_tool_unregistered", tool_name=tool_name)
 
     def get_tool(self, name: str) -> BaseTool | None:
@@ -437,6 +466,20 @@ class ActionRegistry:
     def get_metadata(self, name: str) -> ToolMetadata | None:
         """Obtém metadados de uma ferramenta."""
         return self._metadata.get(name)
+
+    def get_tool_provenance(self, name: str) -> dict[str, Any] | None:
+        meta = self._metadata.get(name)
+        if meta is None:
+            return None
+        return {
+            "name": name,
+            "namespace": getattr(meta, "namespace", "core"),
+            "code_signature": getattr(meta, "code_signature", None),
+            "created_by": getattr(meta, "created_by", None),
+            "created_at": getattr(meta, "created_at", None),
+            "llm_model": getattr(meta, "llm_model", None),
+            "evolution_attempt_id": getattr(meta, "evolution_attempt_id", None),
+        }
 
     def list_tools(
         self,
@@ -608,6 +651,150 @@ class ActionRegistry:
             "tool_usage": tool_usage,
         }
 
+    def register_tool(
+        self,
+        tool: BaseTool,
+        namespace: str = "core",
+        category: ToolCategory = ToolCategory.CUSTOM,
+        permission_level: PermissionLevel = PermissionLevel.SAFE,
+        rate_limit_per_minute: int | None = None,
+        requires_confirmation: bool = False,
+        tags: list[str] | None = None,
+        code_signature: str | None = None,
+    ) -> None:
+        """
+        Registra uma ferramenta com isolamento de namespace.
+
+        Valida que o namespace 'evolution' não pode sobrescrever ferramentas do namespace 'core'.
+
+        Args:
+            tool: Ferramenta LangChain
+            namespace: Namespace de isolamento (core, evolution, user)
+            category: Categoria da ferramenta
+            permission_level: Nível de permissão
+            rate_limit_per_minute: Limite de chamadas por minuto
+            requires_confirmation: Se requer confirmação do usuário
+            tags: Tags para busca e organização
+            code_signature: Assinatura SHA-256 do código (para verificação futura)
+
+        Raises:
+            ValueError: Se tentar registrar em 'evolution' uma ferramenta já existente em 'core'
+        """
+        name = tool.name
+
+        if namespace == "evolution" and name in self._namespaces and self._namespaces[name] == "core":
+            raise ValueError(
+                f"Cannot register tool '{name}' in 'evolution' namespace: "
+                f"it already exists in 'core' namespace. Evolution cannot overwrite core tools."
+            )
+
+        self.register(
+            tool=tool,
+            category=category,
+            permission_level=permission_level,
+            namespace=namespace,
+            code_signature=code_signature,
+            rate_limit_per_minute=rate_limit_per_minute,
+            requires_confirmation=requires_confirmation,
+            tags=tags,
+        )
+
+    def resolve_tool(self, name: str, namespace_hint: str | None = None) -> BaseTool | None:
+        """
+        Busca hierárquica de ferramenta: evolution → core → user.
+
+        Se namespace_hint for fornecido, prioriza o namespace indicado
+        antes de seguir a ordem hierárquica padrão.
+
+        Args:
+            name: Nome da ferramenta
+            namespace_hint: Namespace sugerido para busca prioritária
+
+        Returns:
+            A ferramenta encontrada ou None
+        """
+        priority_order = ["evolution", "core", "user"]
+
+        if namespace_hint and namespace_hint in priority_order:
+            priority_order.remove(namespace_hint)
+            priority_order.insert(0, namespace_hint)
+
+        for ns in priority_order:
+            if name in self._namespaces and self._namespaces[name] == ns:
+                return self._tools.get(name)
+
+        return self._tools.get(name)
+
+    def list_by_namespace(self, namespace: str) -> list[BaseTool]:
+        """
+        Lista todas as ferramentas em um namespace específico.
+
+        Args:
+            namespace: Namespace a ser consultado
+
+        Returns:
+            Lista de ferramentas no namespace
+        """
+        tools: list[BaseTool] = []
+        for name, ns in self._namespaces.items():
+            if ns == namespace:
+                tool = self._tools.get(name)
+                if tool is not None:
+                    tools.append(tool)
+        return tools
+
+    def get_namespace(self, name: str) -> str | None:
+        """
+        Retorna o namespace de uma ferramenta.
+
+        Args:
+            name: Nome da ferramenta
+
+        Returns:
+            Namespace da ferramenta ou None se não encontrada
+        """
+        return self._namespaces.get(name)
+
+    def verify_tool_signature(self, name: str) -> bool:
+        """
+        Verifica a assinatura SHA-256 da ferramenta.
+
+        (Placeholder - implementação futura)
+
+        Args:
+            name: Nome da ferramenta
+
+        Returns:
+            True se a assinatura for válida
+        """
+        return True
+
+    def rollback_tool(self, name: str) -> bool:
+        """
+        Reverte uma ferramenta para a versão anterior.
+
+        Args:
+            name: Nome da ferramenta
+
+        Returns:
+            True se o rollback foi bem-sucedido
+        """
+        if name not in self._tools or name not in self._previous_versions:
+            return False
+
+        previous_tool = self._previous_versions.pop(name)
+        self._tools[name] = previous_tool
+
+        if name in self._metadata:
+            self._metadata[name].code_signature = None
+
+        logger.info(
+            "tool_rolled_back",
+            tool_name=name,
+            namespace=self._namespaces.get(name),
+        )
+        return True
+
 
 # ==================== INSTÂNCIA GLOBAL ====================
 
@@ -618,9 +805,9 @@ action_registry = ActionRegistry()
 # ==================== FUNÇÕES DE CONVENIÊNCIA ====================
 
 
-def register_tool(tool: BaseTool, category: ToolCategory = ToolCategory.CUSTOM, **kwargs) -> None:
+def register_tool(tool: BaseTool, category: ToolCategory = ToolCategory.CUSTOM, namespace: str = "core", **kwargs) -> None:
     """Atalho para registrar ferramenta no registro global."""
-    action_registry.register(tool, category=category, **kwargs)
+    action_registry.register(tool, category=category, namespace=namespace, **kwargs)
 
 
 def create_tool_from_function(

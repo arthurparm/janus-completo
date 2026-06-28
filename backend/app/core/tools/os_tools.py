@@ -4,6 +4,7 @@ from pathlib import Path
 from langchain.tools import tool
 
 from app.config import settings
+from app.core.infrastructure.filesystem_manager import write_file as fs_write_file
 from app.core.tools.command_sandbox import run_restricted_command
 from app.core.tools.action_module import PermissionLevel, ToolCategory, register_tool
 
@@ -50,9 +51,21 @@ def write_system_file(path: str, content: str) -> str:
     try:
         p = Path(path).resolve()
         logger.warning("log_warning", message=f"⚠️ ESCREVENDO ARQUIVO SISTEMA: {p}")
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
-        return f"Arquivo escrito com sucesso em: {p}"
+
+        workspace_root = Path(settings.WORKSPACE_ROOT).resolve()
+        if not str(p).startswith(str(workspace_root)):
+            return f"Erro: Acesso negado. O caminho '{p}' está fora do workspace."
+
+        blocked_extensions = {".sh", ".py", ".exe", ".bat", ".ps1", ".env"}
+        if p.suffix.lower() in blocked_extensions:
+            return f"Erro: Extensão '{p.suffix}' bloqueada por segurança."
+
+        if len(content.encode("utf-8")) > 1_000_000:
+            return "Erro: Conteúdo excede o limite de 1MB."
+
+        relative = p.relative_to(workspace_root)
+        result = fs_write_file(file_path=str(relative), content=content, overwrite=True)
+        return result
     except Exception as e:
         return f"Erro ao escrever arquivo: {e}"
 
@@ -65,6 +78,15 @@ def read_system_file(path: str) -> str:
     try:
         p = Path(path).resolve()
         logger.info("log_info", message=f"Lendo arquivo sistema: {p}")
+
+        blocked_dirs = ["/etc", "/boot", "/sys", "/proc", "/dev", "/var/log", "/var/lib", "/root"]
+        for blocked in blocked_dirs:
+            if str(p).startswith(blocked):
+                return f"Erro: Acesso negado. O diretório '{blocked}' é bloqueado."
+
+        if ".git" in p.parts or ".env" in p.parts or p.name == ".env":
+            return "Erro: Acesso negado. Arquivo .git ou .env bloqueado."
+
         if not p.exists():
             return "Erro: Arquivo não existe."
         if p.stat().st_size > 10 * 1024 * 1024:  # 10MB limit
@@ -91,6 +113,12 @@ def list_directory(path: str | None = None, directory: str | None = None) -> str
     try:
         p = Path(target_path).resolve()
         logger.info("log_info", message=f"Listando diretório: {p}")
+
+        blocked_dirs = ["/etc", "/boot", "/sys", "/proc", "/dev", "/var/log", "/var/lib", "/root"]
+        for blocked in blocked_dirs:
+            if str(p).startswith(blocked):
+                return f"Erro: Acesso negado. O diretório '{blocked}' é bloqueado."
+
         if not p.exists():
             return "Erro: Diretório não existe."
         if not p.is_dir():

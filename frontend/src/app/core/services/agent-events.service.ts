@@ -34,7 +34,7 @@ export class AgentEventsService {
     public connect(conversationId: string): void {
         this.disconnect();
         this.currentConversationId = conversationId;
-        const url = `${API_BASE_URL}/v1/chat/${conversationId}/events`;
+        const url = `${API_BASE_URL}/v1/chat/${encodeURIComponent(conversationId)}/events`;
         const controller = new AbortController();
         const seq = ++this.connectSeq;
         this.abortController = controller;

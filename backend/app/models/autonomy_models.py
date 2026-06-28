@@ -44,6 +44,8 @@ class AutonomyGoal(Base):
     success_criteria = Column(Text, nullable=True)
     deadline_ts = Column(Numeric(18, 6), nullable=True)
     source = Column(String(50), default="api")
+    parent_id = Column(String(100), ForeignKey("autonomy_goals.id", ondelete="SET NULL"), nullable=True)
+    depth = Column(Integer, default=0)
     sprint_id = Column(String(100), ForeignKey("autonomy_sprints.id", ondelete="SET NULL"), nullable=True)
     source_kind = Column(String(100), nullable=True)
     source_fingerprint = Column(String(128), nullable=True)
@@ -67,6 +69,7 @@ class AutonomyGoal(Base):
         back_populates="goal",
         cascade="all, delete-orphan",
     )
+    parent = relationship("AutonomyGoal", remote_side="AutonomyGoal.id", backref="children")
     sprint = relationship("AutonomySprint", back_populates="tasks")
     __table_args__ = (
         Index("idx_autonomy_goal_status_priority", "status", "priority", "created_at"),

@@ -9,6 +9,7 @@ import structlog
 from fastapi import Request
 
 from app.config import settings
+from app.repositories.observability_repository import record_audit_event_direct
 
 logger = structlog.get_logger(__name__)
 _DEV_FALLBACK_SECRET = secrets.token_urlsafe(32)
@@ -126,6 +127,14 @@ def get_actor_user_id(request: Request) -> int | None:
     xuid = request.headers.get("X-User-Id")
     try:
         if xuid:
+            logger.warning("X-User-Id accepted for authentication", x_user_id=xuid)
+            record_audit_event_direct(
+                endpoint="auth",
+                action="x_user_id_used_for_auth",
+                tool="auth.get_actor_user_id",
+                status="allowed",
+                details_json={"x_user_id": xuid},
+            )
             return int(xuid)
     except Exception:
         return None

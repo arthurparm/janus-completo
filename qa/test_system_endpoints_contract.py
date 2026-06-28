@@ -1,15 +1,15 @@
 import pytest
-from httpx import AsyncClient, ASGITransport
-from datetime import datetime, timezone
+from httpx import ASGITransport, AsyncClient
+
 
 @pytest.fixture
 def async_client():
     from app.main import app
-    from app.services.observability_service import get_observability_service
     from app.services.knowledge_service import get_knowledge_service
     from app.services.llm_service import get_llm_service
+    from app.services.observability_service import get_observability_service
     from app.services.optimization_service import get_optimization_service
-    
+
     class DummyObservabilityService:
         async def get_multi_agent_system_health(self):
             return {"status": "healthy", "details": {"active_agents": 5}}
@@ -45,7 +45,7 @@ def async_client():
     from app.repositories.user_repository import UserRepository
     original_is_admin = UserRepository.is_admin
     UserRepository.is_admin = lambda self, uid: str(uid) == "99"
-    
+
     # We also need to set orchestrator_workers for overview
     app.state.orchestrator_workers = [
         {"name": "worker_1", "task": None, "tasks_processed": 10}
@@ -76,6 +76,35 @@ class TestSystemEndpointsContract:
         assert "services" in data
         assert len(data["services"]) == 4
 
+    async def test_get_services_health_reports_unknown_memory_when_telemetry_fails(
+        self, async_client
+    ):
+        from app.main import app
+        from app.services.optimization_service import get_optimization_service
+
+        class FailingOptimizationService:
+            async def analyze_system(self, analysis_type="performance", detailed=False):
+                raise RuntimeError("metrics unavailable")
+
+            async def get_metrics_history(self, limit=1):
+                raise RuntimeError("history unavailable")
+
+        original_override = app.dependency_overrides.get(get_optimization_service)
+        app.dependency_overrides[get_optimization_service] = lambda: FailingOptimizationService()
+        try:
+            resp = await async_client.get("/api/v1/system/health/services")
+        finally:
+            if original_override is None:
+                app.dependency_overrides.pop(get_optimization_service, None)
+            else:
+                app.dependency_overrides[get_optimization_service] = original_override
+
+        assert resp.status_code == 200
+        data = resp.json()
+        memory_service = next(item for item in data["services"] if item["key"] == "memory")
+        assert memory_service["status"] == "unknown"
+        assert memory_service["metric_text"] == "Uso: indisponivel"
+
     async def test_get_user_status_unauthorized(self, async_client):
         # Default header X-Actor-User-Id is missing or middleware defaults to "system"
         # Since I'm using the int() override or the actor middleware, we need to pass it.
@@ -97,22 +126,22 @@ class TestSystemEndpointsContract:
         from app.services.db_migration_service import db_migration_service
         orig = db_migration_service.validate_schema
         db_migration_service.validate_schema = lambda: {"status": "valid"}
-        
+
         resp = await async_client.get("/api/v1/system/db/validate")
         assert resp.status_code == 200
         assert resp.json() == {"status": "valid"}
-        
+
         db_migration_service.validate_schema = orig
 
     async def test_migrate_db_schema(self, async_client):
         from app.services.db_migration_service import db_migration_service
         orig = db_migration_service.migrate_schema
         db_migration_service.migrate_schema = lambda: {"status": "migrated"}
-        
+
         resp = await async_client.post("/api/v1/system/db/migrate")
         assert resp.status_code == 200
         assert resp.json() == {"status": "migrated"}
-        
+
         db_migration_service.migrate_schema = orig
 
     async def test_get_system_overview(self, async_client):

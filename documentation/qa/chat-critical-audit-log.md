@@ -940,3 +940,241 @@ Recomendação: manter as correções. Confiança: alta para extinção do legad
 - `D+1` | Owner: `QA` | Reproduzir no browser a tela `tools` com um caso controlado de pending action valida e um caso bloqueado por owner ausente, coletando evidencias de UX e trilha critica.
 - `D+3` | Owner: `Security` | Revisar o resultado da promocao estrutural para confirmar que nenhum caminho de criacao/approve/reject reintroduz owner inferido em runtime.
 - `Pré-release` | Owner: `Backend + Frontend + QA + Security + Ops/Platform` | Encerrar o effort apenas quando houver evidencia operacional real do ambiente integrado ou aceitacao formal do risco remanescente.
+
+## Ciclo 19 - Contrato frontend de chat passou a validar autenticacao Bearer no pipeline HttpClient
+
+### Problema
+
+- Categoria: qualidade de validacao, seguranca de contrato frontend/backend e experiencia central do usuario no chat.
+- Fato observado: os specs frontend focados em chat passavam, mas `frontend/src/app/services/domain/chat-api-service.contract.spec.ts` usava `HttpClientTestingModule` sem o pipeline real de interceptors.
+- Fato observado: o backend de chat agora exige autenticacao Bearer estrita; identidade legada por `X-User-Id` nao e aceita como fonte de autenticacao.
+- Inferencia: uma regressao removendo `Authorization: Bearer ...` do fluxo HttpClient do chat poderia nao ser detectada pelos testes de contrato do `ChatApiService`, mesmo quebrando `start`, `message` e `history` em producao.
+- Impacto antes: a suite validava URL/body, mas nao protegia de forma direta o requisito de autenticacao que sustenta o fluxo principal do chat.
+
+### Hipotese
+
+Acredito que executar o contrato do `ChatApiService` com `provideHttpClient(withInterceptors([authInterceptor]))` melhorara a capacidade de deteccao de regressao porque o teste passara a observar o mesmo ponto de integracao responsavel por anexar Bearer nas chamadas reais.
+
+### Implementacao
+
+- `frontend/src/app/services/domain/chat-api-service.contract.spec.ts`: substituido o setup baseado apenas em `HttpClientTestingModule` por `provideHttpClient(withInterceptors([authInterceptor]))` e `provideHttpClientTesting()`.
+- `frontend/src/app/services/domain/chat-api-service.contract.spec.ts`: adicionada geracao local de token JWT falso compativel com o armazenamento usado pelo frontend.
+- `frontend/src/app/services/domain/chat-api-service.contract.spec.ts`: adicionado teste de regressao para os endpoints criticos:
+  - `POST /api/v1/chat/start`;
+  - `POST /api/v1/chat/message`;
+  - `GET /api/v1/chat/{conversation_id}/history/paginated`.
+- O novo teste exige `Authorization: Bearer <token>` e verifica ausencia de `X-User-Id` nesses requests.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - `npm run test -- src/app/services/domain/chat-api-service.contract.spec.ts src/app/services/chat-stream.service.spec.ts src/app/services/chat-auth-headers.util.spec.ts`: 3 arquivos passados, 8 testes passados.
+  - Limitacao do baseline: nenhum teste do contrato HttpClient de chat validava Bearer via interceptor.
+- Depois da correcao:
+  - `npm run test -- src/app/services/domain/chat-api-service.contract.spec.ts src/app/services/chat-stream.service.spec.ts src/app/services/chat-auth-headers.util.spec.ts`: 3 arquivos passados, 9 testes passados.
+  - `npm run lint`: passou.
+- Criterio de aceitacao atendido:
+  - a suite agora falha se o fluxo HttpClient do chat deixar de anexar Bearer quando ha token armazenado;
+  - a suite agora falha se o contrato voltar a emitir `X-User-Id` nos endpoints principais de chat.
+
+### Riscos e limitacoes
+
+- Esta iteracao endurece a validacao automatizada; ela nao prova, sozinha, disponibilidade do backend real nem fluxo browser full-stack.
+- O teste usa token falso suficiente para validar comportamento do frontend, mas nao valida assinatura JWT contra o backend.
+- A suite completa de frontend nao foi executada nesta iteracao; foram executados os specs focados e o lint global do frontend.
+- Ainda permanece recomendada uma rodada browser/e2e com backend real para confirmar experiencia de usuario sob sessao expirada, refresh token e erro 401.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para deteccao de regressao no contrato frontend de autenticacao do chat; limitada para comportamento full-stack por ausencia de backend real nesta iteracao.
+
+## Ciclo 20 - Falhas de approve/reject de pending action no chat passaram a ter regressao frontend
+
+### Problema
+
+- Categoria: qualidade de validacao, seguranca operacional e experiencia central do usuario no chat.
+- Fato observado: `ConversationsComponent` ja mantinha a acao pendente nao resolvida quando `approvePendingAction` ou `rejectPendingAction` falhava, adicionando erro visual na mensagem.
+- Fato observado: `frontend/src/app/features/conversations/conversations.spec.ts` nao exercitava esses caminhos de falha.
+- Inferencia: uma regressao futura poderia marcar uma acao de alto risco como aprovada/rejeitada na UI apesar de rejeicao do backend, sem falha nos testes focados existentes.
+- Impacto antes: o comportamento seguro existia, mas nao estava protegido por teste de componente; isso era uma lacuna critica porque approve/reject afeta execucao de acoes de alto risco no fluxo de chat.
+
+### Hipotese
+
+Acredito que adicionar testes de falha para approve/reject melhorara a confianca operacional do chat porque a suite passara a provar que a UI nao transforma erro do backend em confirmacao visual falsa.
+
+### Implementacao
+
+- `frontend/src/app/features/conversations/conversations.spec.ts`: adicionado stub de `apiStub.observability.approvePendingAction` e `rejectPendingAction`.
+- `frontend/src/app/features/conversations/conversations.spec.ts`: adicionado teste para falha de aprovacao, validando que:
+  - a chamada usa `{ status: 'pending', source: 'sql', action_id }`;
+  - o estado busy e limpo apos erro;
+  - a mensagem recebe flag de erro;
+  - `confirmation.required` permanece `true`;
+  - `confirmation.status` nao e definido como `approved`;
+  - `agent_state.state` permanece `waiting_confirmation`.
+- `frontend/src/app/features/conversations/conversations.spec.ts`: adicionado teste equivalente para falha de rejeicao, impedindo status falso `rejected`.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - `npm run test -- src/app/features/conversations/conversations.spec.ts src/app/features/conversations/conversations-flows.spec.ts src/app/services/domain/chat-api-service.contract.spec.ts src/app/services/chat-stream.service.spec.ts src/app/core/services/agent-events.service.spec.ts`: 5 arquivos passados, 17 testes passados.
+  - Limitacao do baseline: nenhum teste cobria erro de approve/reject na UI de conversa.
+- Depois da correcao:
+  - `npm run test -- src/app/features/conversations/conversations.spec.ts`: 1 arquivo passado, 6 testes passados.
+  - `npm run test -- src/app/features/conversations/conversations.spec.ts src/app/features/conversations/conversations-flows.spec.ts src/app/services/domain/chat-api-service.contract.spec.ts src/app/services/chat-stream.service.spec.ts src/app/core/services/agent-events.service.spec.ts src/app/services/domain/observability-api-service.contract.spec.ts`: 6 arquivos passados, 25 testes passados.
+  - `npm run lint`: passou.
+- Criterio de aceitacao atendido:
+  - a suite agora falha se a UI marcar pending action como resolvida apos erro de approve/reject;
+  - a suite agora falha se o estado busy permanecer preso apos erro.
+
+### Riscos e limitacoes
+
+- Esta iteracao protege comportamento frontend; nao executa backend real nem confirma autorizacao/persistencia no banco.
+- O warning de Browserslist desatualizado apareceu durante Vitest, mas nao impediu execucao nem alterou o resultado dos testes.
+- Ainda falta validacao browser/e2e com sessao autenticada real e pending action criada pelo backend.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para regressao frontend do estado visual de pending action; limitada para integracao full-stack por ausencia de backend real nesta iteracao.
+
+## Ciclo 21 - Stream de chat passou a autenticar antes de validar payload
+
+### Problema
+
+- Categoria: seguranca de endpoint, contrato backend e disponibilidade controlada do stream SSE.
+- Fato observado: `backend/app/api/v1/endpoints/chat/chat_stream.py` validava `role`, `priority` e tamanho da mensagem antes de resolver a identidade autenticada.
+- Fato observado: `qa/test_chat_error_matrix.py` esperava `413` para mensagem grande mesmo sem Bearer, codificando o comportamento antigo.
+- Inferencia: um cliente anonimo podia diferenciar erros de validacao do stream (`422`/`413`) sem apresentar credencial, contrariando o contrato atual de chat bearer-only.
+- Impacto antes: o endpoint de stream vazava comportamento de validacao para chamadas nao autenticadas e mantinha ordem inconsistente com a regra central de autenticacao estrita do chat.
+
+### Hipotese
+
+Acredito que mover a resolucao de identidade para antes da validacao semantica do payload reduz a superficie anonima do endpoint porque qualquer chamada sem Bearer passara a receber `401 CHAT_AUTH_REQUIRED` antes de `role`, `priority` ou tamanho da mensagem serem avaliados.
+
+### Implementacao
+
+- `backend/app/api/v1/endpoints/chat/chat_stream.py`: `ensure_origin_allowed()` permanece no inicio, mas `resolve_authenticated_user_context()` agora executa antes de `resolve_role()`, `ModelPriority(...)` e limite de tamanho.
+- `backend/app/api/v1/endpoints/chat/chat_stream.py`: o bloco que inicia stream e consulta historico reutiliza a identidade ja resolvida, sem segunda resolucao redundante.
+- `qa/test_chat_endpoint_contract.py`: `test_chat_stream_rejects_invalid_role_or_priority` passou a autenticar o request para validar corretamente o contrato `422` autenticado.
+- `qa/test_chat_endpoint_contract.py`: adicionado `test_chat_stream_auth_precedes_payload_validation`, provando que `role` invalido e mensagem grande sem Bearer retornam `401 CHAT_AUTH_REQUIRED`.
+- `qa/test_chat_error_matrix.py`: o caso `413 CHAT_MESSAGE_TOO_LARGE` passou a enviar Bearer, mantendo a cobertura do erro canonico para cliente autenticado.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - `qa/test_chat_endpoint_contract.py::test_chat_stream_rejects_invalid_role_or_priority` esperava `422` sem autenticar.
+  - `qa/test_chat_error_matrix.py::test_chat_stream_413_returns_canonical_error_detail` esperava `413` sem autenticar.
+- Evidencia intermediaria:
+  - apos a mudanca de runtime, a primeira rodada `pytest -q qa/test_chat_endpoint_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py` falhou porque `test_chat_stream_413_returns_canonical_error_detail` ainda esperava `413` anonimo; a resposta real passou a ser `401`.
+- Depois da correcao:
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q qa/test_chat_endpoint_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py`: 18 passed, 2 warnings.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/api/v1/endpoints/chat/chat_stream.py qa/test_chat_endpoint_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/api/v1/endpoints/chat/chat_stream.py qa/test_chat_endpoint_contract.py qa/test_chat_error_matrix.py`: passou.
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q qa/test_chat_endpoint_contract.py qa/test_chat_history_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py backend/tests/unit/test_chat_deps_identity.py backend/tests/unit/test_chat_project_scope.py`: 33 passed, 2 warnings.
+- Criterio de aceitacao atendido:
+  - payload invalido sem Bearer retorna `401 CHAT_AUTH_REQUIRED`;
+  - payload invalido com Bearer continua retornando erro canonico de validacao;
+  - stream autenticado continua preservando contrato SSE principal.
+
+### Riscos e limitacoes
+
+- A validacao `ensure_origin_allowed()` ainda acontece antes da autenticacao; isso foi mantido porque bloqueio por origem e controle de superficie de browser devem continuar baratos e antecipados.
+- A suite reporta warning de deprecacao do FastAPI para `HTTP_413_REQUEST_ENTITY_TOO_LARGE`; nao foi alterado neste ciclo para manter escopo minimo.
+- Nao houve validacao com servidor real/browser; a confianca vem de TestClient, contratos e lint/compile.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para ordem de autenticacao no endpoint SSE; limitada para comportamento operacional de proxy/browser por ausencia de teste full-stack nesta iteracao.
+
+## Ciclo 22 - Stream frontend de eventos de agente passou a codificar conversationId na URL
+
+### Problema
+
+- Categoria: disponibilidade do chat em tempo real, contrato frontend/backend e seguranca de construcao de URL.
+- Fato observado: `frontend/src/app/core/services/agent-events.service.ts` montava a URL de eventos com `conversationId` bruto.
+- Fato observado: `frontend/src/app/services/chat-stream.service.ts` ja usava `encodeURIComponent` para o stream principal de resposta.
+- Inferencia: IDs de conversa contendo `/`, `?`, `#` ou caracteres reservados poderiam quebrar a rota de eventos, alterar query/fragment ou produzir URL diferente da conversa selecionada.
+- Impacto antes: o stream secundario de observabilidade do chat tinha contrato de URL mais fraco que o stream principal, podendo degradar a experiencia de acompanhamento em tempo real.
+
+### Hipotese
+
+Acredito que codificar `conversationId` na URL do `AgentEventsService` elimina ambiguidade de rota e alinha o contrato frontend ao stream principal sem alterar o contexto usado para normalizar eventos recebidos.
+
+### Implementacao
+
+- `frontend/src/app/core/services/agent-events.service.ts`: `connect()` passou a usar `encodeURIComponent(conversationId)` ao construir `/v1/chat/{conversationId}/events`.
+- `frontend/src/app/core/services/agent-events.service.spec.ts`: adicionado teste para `conversationId` com `/`, `?` e `#`, validando:
+  - URL codificada;
+  - ausencia do ID bruto na URL final;
+  - preservacao do `conversation_id` original no evento normalizado quando o backend nao envia esse campo.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - `AgentEventsService.connect()` interpolava `conversationId` diretamente na URL.
+  - `agent-events.service.spec.ts` tinha 2 testes e nao cobria caracteres reservados em IDs.
+- Depois da correcao:
+  - `npm run test -- src/app/core/services/agent-events.service.spec.ts src/app/services/chat-stream.service.spec.ts src/app/features/conversations/conversations.spec.ts src/app/services/domain/chat-api-service.contract.spec.ts`: 4 arquivos passados, 15 testes passados.
+  - `npm run lint`: passou.
+- Criterio de aceitacao atendido:
+  - a suite agora falha se `conversationId` voltar a ser interpolado cru na URL de eventos;
+  - a normalizacao de evento continua preservando o identificador original da conversa no estado frontend.
+
+### Riscos e limitacoes
+
+- A correcao assume que o backend/FastAPI decodifica path parameters percent-encoded, comportamento padrao do roteamento HTTP; nao houve validacao com servidor real.
+- A maioria dos IDs reais tende a ser UUID simples, entao o impacto em producao pode ser baixo; a correcao reduz risco de edge case e alinha contratos.
+- O warning de Browserslist desatualizado apareceu durante Vitest e permanece como item operacional separado.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para robustez da URL frontend; limitada para validacao full-stack por ausencia de teste browser/backend real nesta iteracao.
+
+## Ciclo 23 - Endpoints `message` e `stream` passaram a autenticar antes da validacao Pydantic do body
+
+### Problema
+
+- Categoria: seguranca de endpoint, consistencia de contrato e superficie anonima do chat.
+- Fato observado: apos o Ciclo 21, a autenticacao acontecia cedo dentro do handler, mas o FastAPI ainda validava `ChatMessageRequest` e `ChatStreamRequest` antes de entrar na funcao.
+- Fato observado em teste exploratorio: `POST /api/v1/chat/stream/conv-1` sem Bearer e body `{}` retornava `422`; `POST /api/v1/chat/message` sem Bearer e body `{}` tambem retornava `422`.
+- Inferencia: clientes anonimos ainda conseguiam observar detalhes de schema Pydantic antes de autenticar.
+- Impacto antes: a regra bearer-only do chat estava incompleta para payloads ausentes, invalidos ou JSON malformado; isso criava comportamento inconsistente entre erro de autenticacao e erro de validacao.
+
+### Hipotese
+
+Acredito que remover os modelos Pydantic da assinatura dos handlers criticos e validar o body manualmente apos `resolve_authenticated_user_context()` fara qualquer chamada anonima receber `401 CHAT_AUTH_REQUIRED` antes de expor detalhes de schema, preservando `422` para clientes autenticados com payload invalido.
+
+### Implementacao
+
+- `backend/app/api/v1/endpoints/chat/chat_message.py`: `send_message()` deixou de receber `ChatMessageRequest` como parametro validado automaticamente; agora autentica primeiro e depois executa `ChatMessageRequest.model_validate(await http.json())`.
+- `backend/app/api/v1/endpoints/chat/chat_stream.py`: `stream_message()` passou pelo mesmo endurecimento com `ChatStreamRequest.model_validate(await http.json())`.
+- Ambos os endpoints retornam `422` estruturado para body invalido quando o cliente esta autenticado.
+- `qa/test_chat_endpoint_contract.py`: adicionado `test_chat_message_auth_precedes_body_validation`.
+- `qa/test_chat_endpoint_contract.py`: `test_chat_stream_auth_precedes_payload_validation` passou a cobrir body ausente, JSON invalido, role invalido e mensagem grande sem Bearer, alem de preservar `422` autenticado para body ausente.
+
+### Metricas
+
+- Baseline antes da correcao:
+  - `POST /api/v1/chat/stream/conv-1` com `{}` sem Bearer retornava `422`.
+  - `POST /api/v1/chat/message` com `{}` sem Bearer retornava `422`.
+  - JSON malformado sem Bearer tambem era validado antes da politica de autenticacao do handler.
+- Depois da correcao:
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q qa/test_chat_endpoint_contract.py qa/test_chat_error_matrix.py qa/test_chat_stream_sse_contract.py`: 19 passed, 2 warnings.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/api/v1/endpoints/chat/chat_message.py backend/app/api/v1/endpoints/chat/chat_stream.py qa/test_chat_endpoint_contract.py qa/test_chat_error_matrix.py qa/test_chat_stream_sse_contract.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/api/v1/endpoints/chat/chat_message.py backend/app/api/v1/endpoints/chat/chat_stream.py qa/test_chat_endpoint_contract.py`: passou.
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q qa/test_chat_endpoint_contract.py qa/test_chat_history_contract.py qa/test_chat_stream_sse_contract.py qa/test_chat_error_matrix.py backend/tests/unit/test_chat_deps_identity.py backend/tests/unit/test_chat_project_scope.py`: 34 passed, 2 warnings.
+- Criterio de aceitacao atendido:
+  - body ausente sem Bearer retorna `401 CHAT_AUTH_REQUIRED`;
+  - JSON malformado sem Bearer retorna `401 CHAT_AUTH_REQUIRED`;
+  - payload invalido autenticado continua retornando `422`;
+  - contratos existentes de mensagem, stream, historico e escopo continuam verdes.
+
+### Riscos e limitacoes
+
+- Esta mudanca troca validacao automatica de body por validacao manual em dois endpoints criticos; os testes cobrem os cenarios principais, mas a suite full-stack/browser ainda nao foi executada.
+- O formato exato do `422` manual pode nao ser byte-a-byte identico ao handler padrao do FastAPI, embora preserve status e lista de erros Pydantic.
+- O warning de deprecacao de `HTTP_413_REQUEST_ENTITY_TOO_LARGE` permanece como risco tecnico menor separado.
+
+### Decisao
+
+Recomendacao: manter a correcao. Confianca: alta para ordem de autenticacao em `message` e `stream`; limitada para compatibilidade full-stack fina do formato `422` por ausencia de teste com clientes reais nesta iteracao.

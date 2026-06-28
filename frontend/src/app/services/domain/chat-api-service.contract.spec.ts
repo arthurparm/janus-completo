@@ -1,17 +1,31 @@
 import { TestBed } from '@angular/core/testing'
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
+import { provideHttpClient, withInterceptors } from '@angular/common/http'
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing'
 
 import { ChatApiService } from './chat-api-service'
 import { AppLoggerService } from '../../core/services/app-logger.service'
+import { AUTH_TOKEN_KEY } from '../api.config'
+import { authInterceptor } from '../../core/interceptors/auth.interceptor'
+
+function makeFakeToken(userId: number): string {
+  const payload = btoa(JSON.stringify({ user_id: userId }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+  return `${payload}.ignored.signature`
+}
 
 describe('ChatApiService (contract)', () => {
   let http: HttpTestingController
   let svc: ChatApiService
 
   beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
       providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
         {
           provide: AppLoggerService,
           useValue: {
@@ -29,6 +43,8 @@ describe('ChatApiService (contract)', () => {
 
   afterEach(() => {
     http.verify()
+    localStorage.clear()
+    sessionStorage.clear()
   })
 
   it('startChat deve chamar POST /api/v1/chat/start com body coerente', () => {
@@ -56,6 +72,36 @@ describe('ChatApiService (contract)', () => {
       project_id: 'proj-1',
     })
     req.flush({ response: 'ok' })
+  })
+
+  it('deve anexar Bearer e nao enviar identidade legada nos endpoints criticos de chat', () => {
+    const fakeToken = makeFakeToken(7)
+    localStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
+
+    svc.startChat('Nova conversa').subscribe()
+    const startReq = http.expectOne('/api/v1/chat/start')
+    expect(startReq.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
+    expect(startReq.request.headers.has('X-User-Id')).toBe(false)
+    startReq.flush({ conversation_id: 'c1' })
+
+    svc.sendChatMessage('c1', 'oi').subscribe()
+    const messageReq = http.expectOne('/api/v1/chat/message')
+    expect(messageReq.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
+    expect(messageReq.request.headers.has('X-User-Id')).toBe(false)
+    messageReq.flush({ response: 'ok' })
+
+    svc.getChatHistoryPaginated('c1', { limit: 80, offset: 0 }).subscribe()
+    const historyReq = http.expectOne('/api/v1/chat/c1/history/paginated?limit=80')
+    expect(historyReq.request.headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
+    expect(historyReq.request.headers.has('X-User-Id')).toBe(false)
+    historyReq.flush({
+      conversation_id: 'c1',
+      messages: [],
+      total_count: 0,
+      has_more: false,
+      limit: 80,
+      offset: 0,
+    })
   })
 
   it('getChatHistoryPaginated deve chamar /history/paginated e preservar metadados de paginação', () => {

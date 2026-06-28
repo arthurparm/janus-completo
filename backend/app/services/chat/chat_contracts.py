@@ -145,9 +145,10 @@ def maybe_create_fallback_pending_action(
         from app.repositories.pending_action_repository import PendingActionRepository
 
         repo = PendingActionRepository()
-        create_kwargs = {
-            "tool_name": "chat_high_risk_request",
-            "args_json": json.dumps(
+        pending = repo.create(
+            user_id=str(user_id) if user_id is not None else None,
+            tool_name="chat_high_risk_request",
+            args_json=json.dumps(
                 {
                     "source": "chat_confirmation_fallback",
                     "conversation_id": conversation_id,
@@ -157,16 +158,9 @@ def maybe_create_fallback_pending_action(
                 },
                 ensure_ascii=False,
             ),
-            "run_id": None,
-            "cycle": None,
-        }
-        if user_id is not None:
-            create_kwargs["user_id"] = str(user_id)
-        try:
-            pending = repo.create(**create_kwargs)
-        except TypeError:
-            create_kwargs.pop("user_id", None)
-            pending = repo.create(**create_kwargs)
+            run_id=None,
+            cycle=None,
+        )
         pending_id = getattr(pending, "id", None)
         if pending_id is None:
             return None, reason

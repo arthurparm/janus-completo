@@ -365,17 +365,8 @@ class PythonSandbox:
         context: dict[str, Any] | None = None,
         call_function: str | None = None,
         call_args: dict[str, Any] | None = None,
+        _force_process: bool = False,
     ) -> ExecutionResult:
-        """
-        Executa um bloco de código Python no sandbox.
-
-        Args:
-            code: O código a ser executado.
-            context: Variáveis adicionais disponíveis no contexto de execução.
-
-        Returns:
-            ExecutionResult com o resultado da execução.
-        """
         start_time = time.time()
 
         if not code or not code.strip():
@@ -387,6 +378,16 @@ class PythonSandbox:
             logger.info("log_info", message=f"[SANDBOX] Executando código - {len(code)} caracteres")
 
             timeout_seconds = float(getattr(settings, "SANDBOX_TIMEOUT_SECONDS", 15))
+
+            if self._mode != "docker" and not _force_process:
+                return ExecutionResult(
+                    success=False,
+                    output="",
+                    error="Sandbox requires Docker for code execution. Set SANDBOX_MODE=docker.",
+                    exit_code=1,
+                    execution_time=time.time() - start_time,
+                )
+
             use_docker = self._mode in ("docker", "auto")
             if use_docker:
                 wrapper = self._build_docker_wrapper(
@@ -508,12 +509,8 @@ class PythonSandbox:
             )
 
     def execute_expression(self, expression: str) -> ExecutionResult:
-        """
-        Avalia uma única expressão Python e retorna o resultado.
-        """
-        # Envolve a expressão em um print para capturar o resultado no stdout
         code = f"print({expression})"
-        return self.execute(code)
+        return self.execute(code, _force_process=True)
 
 
 # Instância global do sandbox

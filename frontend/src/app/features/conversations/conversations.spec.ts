@@ -2,7 +2,7 @@ import { CUSTOM_ELEMENTS_SCHEMA, provideZonelessChangeDetection, signal } from '
 import { TestBed } from '@angular/core/testing'
 import { provideHttpClient } from '@angular/common/http'
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router'
-import { BehaviorSubject, of } from 'rxjs'
+import { BehaviorSubject, of, throwError } from 'rxjs'
 import { vi } from 'vitest'
 
 import { AuthService } from '../../core/auth/auth.service'
@@ -39,6 +39,10 @@ describe('ConversationsComponent', () => {
       },
       tools: {
         getTools: vi.fn(() => of({ tools: [] }))
+      },
+      observability: {
+        approvePendingAction: vi.fn(() => of({ action_id: 42, status: 'approved' })),
+        rejectPendingAction: vi.fn(() => of({ action_id: 42, status: 'rejected' }))
       }
     }
 
@@ -216,5 +220,95 @@ describe('ConversationsComponent', () => {
     })
 
     expect(confirmation).toBeNull()
+  })
+
+  it('keeps pending action unresolved when approval fails', () => {
+    apiStub.observability.approvePendingAction.mockReturnValue(
+      throwError(() => new Error('approval rejected by backend'))
+    )
+    const fixture = TestBed.createComponent(ConversationsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    component.messages.set([
+      {
+        id: 'assistant-pending',
+        role: 'assistant',
+        text: 'Acao aguardando aprovacao',
+        timestamp: Date.now(),
+        confirmation: {
+          required: true,
+          reason: 'high_risk',
+          pending_action_id: 42,
+          approve_endpoint: '/api/v1/pending_actions/action/42/approve',
+          reject_endpoint: '/api/v1/pending_actions/action/42/reject'
+        },
+        agent_state: {
+          state: 'waiting_confirmation',
+          requires_confirmation: true,
+          reason: 'high_risk'
+        }
+      }
+    ])
+
+    component.approvePendingActionForMessage(component.messages()[0]!)
+
+    const assistant = component.messages()[0]!
+    expect(apiStub.observability.approvePendingAction).toHaveBeenCalledWith({
+      status: 'pending',
+      source: 'sql',
+      action_id: 42
+    })
+    expect(component.isPendingActionBusy(42)).toBe(false)
+    expect(assistant.error).toBe(true)
+    expect(assistant.text).toContain('[Falha ao aprovar')
+    expect(assistant.confirmation?.required).toBe(true)
+    expect(assistant.confirmation?.status).toBeUndefined()
+    expect(assistant.agent_state?.state).toBe('waiting_confirmation')
+  })
+
+  it('keeps pending action unresolved when rejection fails', () => {
+    apiStub.observability.rejectPendingAction.mockReturnValue(
+      throwError(() => new Error('rejection rejected by backend'))
+    )
+    const fixture = TestBed.createComponent(ConversationsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    component.messages.set([
+      {
+        id: 'assistant-pending',
+        role: 'assistant',
+        text: 'Acao aguardando rejeicao',
+        timestamp: Date.now(),
+        confirmation: {
+          required: true,
+          reason: 'high_risk',
+          pending_action_id: 42,
+          approve_endpoint: '/api/v1/pending_actions/action/42/approve',
+          reject_endpoint: '/api/v1/pending_actions/action/42/reject'
+        },
+        agent_state: {
+          state: 'waiting_confirmation',
+          requires_confirmation: true,
+          reason: 'high_risk'
+        }
+      }
+    ])
+
+    component.rejectPendingActionForMessage(component.messages()[0]!)
+
+    const assistant = component.messages()[0]!
+    expect(apiStub.observability.rejectPendingAction).toHaveBeenCalledWith({
+      status: 'pending',
+      source: 'sql',
+      action_id: 42
+    })
+    expect(component.isPendingActionBusy(42)).toBe(false)
+    expect(assistant.error).toBe(true)
+    expect(assistant.text).toContain('[Falha ao rejeitar')
+    expect(assistant.confirmation?.required).toBe(true)
+    expect(assistant.confirmation?.status).toBeUndefined()
+    expect(assistant.agent_state?.state).toBe('waiting_confirmation')
   })
 })

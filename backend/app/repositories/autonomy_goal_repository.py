@@ -3,11 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy.orm import Session
-
 from app.db import db
 from app.models.autonomy_models import AutonomyGoal, AutonomyGoalTransition
-
+from sqlalchemy.orm import Session
 
 TERMINAL_GOAL_STATUSES = {"completed", "failed"}
 
@@ -31,6 +29,8 @@ class AutonomyGoalRepository:
         success_criteria: str | None = None,
         deadline_ts: float | None = None,
         source: str = "api",
+        parent_id: str | None = None,
+        depth: int = 0,
     ) -> AutonomyGoal:
         s = self._get_session()
         try:
@@ -43,6 +43,8 @@ class AutonomyGoalRepository:
                 success_criteria=success_criteria,
                 deadline_ts=deadline_ts,
                 source=source,
+                parent_id=parent_id,
+                depth=depth,
             )
             s.add(row)
             s.flush()
@@ -162,6 +164,19 @@ class AutonomyGoalRepository:
             s.delete(row)
             s.commit()
             return True
+        finally:
+            if not self._session:
+                s.close()
+
+    def list_children(self, goal_id: str) -> list[AutonomyGoal]:
+        s = self._get_session()
+        try:
+            return (
+                s.query(AutonomyGoal)
+                .filter(AutonomyGoal.parent_id == goal_id)
+                .order_by(AutonomyGoal.priority.asc(), AutonomyGoal.created_at.asc())
+                .all()
+            )
         finally:
             if not self._session:
                 s.close()
