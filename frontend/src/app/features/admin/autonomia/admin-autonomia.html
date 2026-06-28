@@ -25,6 +25,14 @@
       <div class="inline-success" role="status">{{ notice() }}</div>
     }
 
+    <nav class="tabs-bar">
+      <button class="tab-btn" [class.active]="activeTab === 'backlog'" (click)="activeTab = 'backlog'">Backlog</button>
+      <button class="tab-btn" [class.active]="activeTab === 'selfstudy'" (click)="activeTab = 'selfstudy'">Autoestudo</button>
+      <button class="tab-btn" [class.active]="activeTab === 'codeqa'" (click)="activeTab = 'codeqa'">Code QA</button>
+      <button class="tab-btn" [class.active]="activeTab === 'monitoring'" (click)="activeTab = 'monitoring'; loadMonitoringData()">Monitoramento</button>
+    </nav>
+
+    @if (activeTab === 'backlog') {
     <section class="card">
       <div class="card-head">
         <h2>Backlog</h2>
@@ -83,7 +91,9 @@
         </div>
       }
     </section>
+    }
 
+    @if (activeTab === 'selfstudy') {
     <section class="card">
       <div class="card-head">
         <h2>Autoestudo</h2>
@@ -132,7 +142,9 @@
         </div>
       }
     </section>
+    }
 
+    @if (activeTab === 'codeqa') {
     <section class="card">
       <div class="card-head">
         <h2>Pergunte ao Codigo</h2>
@@ -185,5 +197,66 @@
         </div>
       }
     </section>
+    }
+
+    @if (activeTab === 'monitoring') {
+      <div class="monitoring-dashboard">
+        <div class="section-header">
+          <div class="section-title">Monitoramento de Autonomia</div>
+          @if (monitoringData) {
+            <div class="overall-status" [class]="monitoringData.overall_status">
+              {{ monitoringData.overall_status === 'healthy' ? 'Saudável' : monitoringData.overall_status === 'degraded' ? 'Degradado' : 'Crítico' }}
+            </div>
+          }
+          <button class="refresh-btn" (click)="loadMonitoringData()" [disabled]="monitoringLoading">
+            @if (monitoringLoading) { Atualizando... } @else { Atualizar }
+          </button>
+        </div>
+
+        <div class="cards-grid">
+          @for (domain of ['code', 'knowledge', 'tools', 'deployment']; track domain) {
+            <div class="domain-card" [class.domain-open]="domainHealth[domain]?.is_open">
+              <div class="domain-name">{{ domain }}</div>
+              <div class="domain-status">{{ domainHealth[domain]?.is_open ? 'ABERTO' : 'OK' }}</div>
+              <div class="domain-failures">Falhas: {{ domainHealth[domain]?.failure_count || 0 }}</div>
+            </div>
+          }
+        </div>
+
+        <div class="section-header">Metas Ativas</div>
+        @if (activeGoals.length === 0) {
+          <p>Nenhuma meta ativa no momento.</p>
+        } @else {
+          <div class="goals-grid">
+            @for (goal of activeGoals; track goal.id) {
+              <div class="goal-card">
+                <div class="goal-title">{{ goal.title }}</div>
+                <div class="goal-status">{{ goal.status }}</div>
+              </div>
+            }
+          </div>
+        }
+
+        <div class="section-header">Ferramentas Evolutivas</div>
+        @if (evolutionTools.length === 0) {
+          <p>Nenhuma ferramenta evolutiva registrada.</p>
+        } @else {
+          <table class="tools-table">
+            <thead>
+              <tr><th>Nome</th><th>Status</th><th>Namespace</th></tr>
+            </thead>
+            <tbody>
+              @for (tool of evolutionTools; track tool.task_id) {
+                <tr>
+                  <td>{{ tool.task_id }}</td>
+                  <td>{{ tool.status }}</td>
+                  <td>{{ tool.namespace || 'evolution' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
   </div>
 </section>

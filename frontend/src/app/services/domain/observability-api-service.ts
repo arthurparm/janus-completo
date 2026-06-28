@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
-import { PostSprintSummaryResponse, MetricsSummary, QuarantinedMessagesResponse, GraphQuarantineListResponse, AuditEventsResponse, ReviewerMetricsResponse, PeriodReportResponse, ConsentsListResponse, PendingAction, PoisonPillStats, ObservabilitySystemHealth } from '../../models';
+import { PostSprintSummaryResponse, MetricsSummary, QuarantinedMessagesResponse, GraphQuarantineListResponse, AuditEventsResponse, ReviewerMetricsResponse, PeriodReportResponse, ConsentsListResponse, PendingAction, PendingActionLegacyResidueSummary, PoisonPillStats, ObservabilitySystemHealth } from '../../models';
 
 @Injectable({ providedIn: 'root' })
 export class ObservabilityApiService {
@@ -74,18 +74,24 @@ listAuditEvents(params: { user_id?: string; tool?: string; status?: string; star
 listPendingActions(params: {
     include_graph?: boolean;
     include_sql?: boolean;
-    user_id?: string;
     pending_status?: string;
     limit?: number;
   } = {}): Observable<PendingAction[]> {
     const qs = new URLSearchParams()
     if (typeof params.include_graph !== 'undefined') qs.set('include_graph', String(params.include_graph))
     if (typeof params.include_sql !== 'undefined') qs.set('include_sql', String(params.include_sql))
-    if (params.user_id) qs.set('user_id', params.user_id)
     if (params.pending_status) qs.set('pending_status', params.pending_status)
     if (typeof params.limit !== 'undefined') qs.set('limit', String(params.limit))
     const suffix = qs.toString() ? `?${qs.toString()}` : ''
     return this.http.get<PendingAction[]>(this.apiContext.buildUrl(`/api/v1/pending_actions/${suffix}`))
+  }
+
+  getPendingActionsLegacyResidue(limit: number = 20): Observable<PendingActionLegacyResidueSummary> {
+    const qs = new URLSearchParams()
+    qs.set('limit', String(limit))
+    return this.http.get<PendingActionLegacyResidueSummary>(
+      this.apiContext.buildUrl(`/api/v1/observability/pending-actions/legacy-residue?${qs.toString()}`)
+    )
   }
 
 approvePendingAction(action: PendingAction): Observable<PendingAction> {

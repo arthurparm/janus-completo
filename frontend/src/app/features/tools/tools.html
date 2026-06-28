@@ -166,36 +166,75 @@
         }
       </section>
 
+      @if (isAdmin() && legacyResidueSummary()) {
+        <section class="tools-card col-12" id="legacy-residue">
+          <div class="card-head">
+            <h3>Passivo historico bloqueado</h3>
+            <ui-badge [variant]="hasLegacyPendingResidue() ? 'warning' : 'success'">
+              {{ legacyResidueSummary()!.total_without_owner }}
+            </ui-badge>
+          </div>
+          <p class="muted">
+            {{ legacyResidueSummary()!.message }}
+          </p>
+          <p class="muted">
+            Backlog administrativo sem owner: {{ legacyResidueSummary()!.pending_without_owner }} ·
+            Fallback de runtime: {{ legacyResidueSummary()!.legacy_runtime_fallback_enabled ? 'ativo' : 'extinto' }}
+          </p>
+          <p class="muted">
+            Novos registros sem owner persistido sao rejeitados na origem e nao voltam para a superficie operacional.
+          </p>
+          @if (legacyResidueSummary()!.items.length) {
+            <ul class="list">
+              @for (item of legacyResidueSummary()!.items.slice(0, 5); track ($index + '-' + (item.action_id || 'n/d'))) {
+                <li class="list-item">
+                  <div>
+                    <span class="item-title">{{ legacyResidueItemLabel($index) }}</span>
+                    <span class="muted">
+                      Status: {{ item.status || 'n/d' }} · Criado em: {{ item.created_at || 'n/d' }}
+                    </span>
+                  </div>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="muted">Nenhum passivo historico bloqueado sem owner persistido.</p>
+          }
+        </section>
+      }
+
       <section class="tools-card col-12" id="audit-events">
         <div class="card-head">
-          <h3>Eventos Codex (auditoria)</h3>
-          <ui-badge variant="neutral">{{ codexEvents().length }}</ui-badge>
+          <h3>Trilha critica do chat</h3>
+          <ui-badge variant="neutral">{{ criticalAuditEvents().length }}</ui-badge>
         </div>
         @if (loading()) {
           <app-skeleton variant="text" [count]="4"></app-skeleton>
-        } @else if (codexEvents().length) {
+        } @else if (criticalAuditEvents().length) {
           <ui-table [striped]="true">
             <thead>
               <tr>
-                <th>Tool</th>
+                <th>Acao</th>
                 <th>Status</th>
-                <th>Latencia</th>
+                <th>Trace</th>
+                <th>Endpoint</th>
                 <th>Quando</th>
               </tr>
             </thead>
             <tbody>
-              @for (event of codexEvents(); track event.id) {
+              @for (event of criticalAuditEvents(); track event.id) {
                 <tr>
-                  <td>{{ event.tool }}</td>
+                  <td>{{ auditActionLabel(event) }}</td>
                   <td>{{ event.status || 'ok' }}</td>
-                  <td>{{ event.latency_ms || 0 }}ms</td>
+                  <td>{{ auditTraceLabel(event) }}</td>
+                  <td>{{ auditEndpointLabel(event) }}</td>
                   <td>{{ formatAuditTimestamp(event.created_at) }}</td>
                 </tr>
               }
             </tbody>
           </ui-table>
         } @else {
-          <p class="muted">Nenhum evento codex registrado.</p>
+          <p class="muted">Nenhum evento critico de chat/auditoria registrado.</p>
         }
       </section>
 

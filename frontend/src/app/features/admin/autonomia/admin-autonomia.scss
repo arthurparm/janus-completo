@@ -214,3 +214,139 @@
     grid-template-columns: 1fr;
   }
 }
+
+.tabs-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  color: $color-text-muted;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+
+  &:hover {
+    color: $color-text-primary;
+  }
+
+  &.active {
+    color: $color-text-primary;
+    border-bottom-color: $color-text-primary;
+  }
+}
+
+.monitoring-dashboard {
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 16px 0 8px;
+  }
+
+  .overall-status {
+    padding: 4px 12px;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 600;
+
+    &.healthy {
+      background: #22c55e;
+    }
+
+    &.degraded {
+      background: #eab308;
+      color: #000;
+    }
+
+    &.critical {
+      background: #ef4444;
+    }
+  }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .domain-card {
+    padding: 12px;
+    border-radius: 8px;
+    background: #1e293b;
+    border: 1px solid #334155;
+
+    &.domain-open {
+      border-color: #ef4444;
+      background: #2d1a1a;
+    }
+
+    .domain-name {
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .domain-status {
+      font-size: 0.85em;
+      margin-top: 4px;
+    }
+
+    .domain-failures {
+      font-size: 0.8em;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+  }
+
+  .goals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .goal-card {
+    padding: 12px;
+    border-radius: 8px;
+    background: #1e293b;
+    border: 1px solid #334155;
+
+    .goal-title {
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+
+    .goal-status {
+      font-size: 0.85em;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+  }
+
+  .tools-table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th,
+    td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+
+    th {
+      font-weight: 600;
+      color: #94a3b8;
+      font-size: 0.85em;
+    }
+
+    td {
+      color: #e2e8f0;
+    }
+  }
+}

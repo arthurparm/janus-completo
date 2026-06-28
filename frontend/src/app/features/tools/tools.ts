@@ -6,7 +6,13 @@ import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
 import { BackendApiService } from '../../services/backend-api.service'
-import { AuditEvent, PendingAction, Tool, ToolStats } from '../../models'
+import {
+  AuditEvent,
+  PendingAction,
+  PendingActionLegacyResidueSummary,
+  Tool,
+  ToolStats
+} from '../../models'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiTableComponent } from '../../shared/components/ui/ui-table/ui-table.component'
@@ -19,6 +25,7 @@ interface ToolsData {
   toolStats: ToolStats | null
   auditEvents: AuditEvent[]
   pendingActions: PendingAction[]
+  legacyResidue: PendingActionLegacyResidueSummary | null
 }
 
 @Component({
@@ -54,13 +61,28 @@ export class ToolsComponent {
     tools: [],
     toolStats: null,
     auditEvents: [],
-    pendingActions: []
+    pendingActions: [],
+    legacyResidue: null
   })
 
   readonly codexTools = computed(() => this.data().tools.filter((tool) => tool.name?.startsWith('codex_')))
   readonly codexEvents = computed(() => {
     const events = this.data().auditEvents || []
     return events.filter((ev) => String(ev.tool || '').startsWith('codex_')).slice(0, 12)
+  })
+  readonly criticalAuditEvents = computed(() => {
+    const events = this.data().auditEvents || []
+    return events
+      .filter((event) => {
+        const endpoint = String(event.endpoint || '').toLowerCase()
+        const tool = String(event.tool || '').toLowerCase()
+        return (
+          tool === 'pending_actions' ||
+          endpoint.startsWith('chat_event:') ||
+          endpoint.startsWith('/api/v1/pending_actions')
+        )
+      })
+      .slice(0, 12)
   })
   readonly codexUsage = computed(() => {
     const usage = this.data().toolStats?.tool_usage || {}
@@ -74,6 +96,10 @@ export class ToolsComponent {
     return { total, success, successRate, avgDuration }
   })
   readonly pendingCount = computed(() => this.data().pendingActions.length)
+  readonly legacyResidueSummary = computed(() => this.data().legacyResidue)
+  readonly hasLegacyPendingResidue = computed(
+    () => (this.legacyResidueSummary()?.total_without_owner || 0) > 0
+  )
   readonly pendingRiskSummary = computed(() => {
     const actions = this.data().pendingActions || []
     let high = 0
@@ -158,12 +184,16 @@ export class ToolsComponent {
       )
     const pendingActions$ = this.api.observability.listPendingActions({ include_sql: true, include_graph: false })
       .pipe(catchError(() => of([])))
+    const legacyResidue$ = this.isAdmin()
+      ? this.api.observability.getPendingActionsLegacyResidue(10).pipe(catchError(() => of(null)))
+      : of(null)
 
     forkJoin({
       tools: tools$,
       toolStats: toolStats$,
       auditEvents: auditEvents$,
-      pendingActions: pendingActions$
+      pendingActions: pendingActions$,
+      legacyResidue: legacyResidue$
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -248,6 +278,25 @@ export class ToolsComponent {
     return tags.join(', ')
   }
 
+  auditActionLabel(event: AuditEvent): string {
+    const action = String(event.action || '').trim()
+    if (action) return action
+    const endpoint = String(event.endpoint || '').trim()
+    return endpoint || 'n/d'
+  }
+
+  auditEndpointLabel(event: AuditEvent): string {
+    const endpoint = String(event.endpoint || '').trim()
+    return endpoint || 'n/d'
+  }
+
+  auditTraceLabel(event: AuditEvent): string {
+    const traceId = String(event.trace_id || '').trim()
+    if (!traceId) return 'n/d'
+    if (traceId.length <= 16) return traceId
+    return `${traceId.slice(0, 8)}...${traceId.slice(-8)}`
+  }
+
   riskVariant(action: PendingAction): 'error' | 'warning' | 'success' | 'neutral' {
     const level = String(action.risk_level || '').toLowerCase()
     if (level === 'high') return 'error'
@@ -271,6 +320,15 @@ export class ToolsComponent {
     return `${raw.slice(0, 177)}...`
   }
 
+  legacyResidueItemLabel(index: number): string {
+    const item = this.legacyResidueSummary()?.items?.[index]
+    if (!item) return 'n/d'
+    const actionId = typeof item.action_id === 'number' ? `#${item.action_id}` : '#n/d'
+    const toolName = String(item.tool_name || 'tool n/d').trim()
+    const conversationId = String(item.conversation_id || 'sem conversation_id').trim()
+    return `${actionId} · ${toolName} · ${conversationId}`
+  }
+
   sourceLabel(action: PendingAction): string {
     const source = String(action.source || '').toLowerCase()
     if (source === 'sql') return 'SQL'
@@ -280,8 +338,17 @@ export class ToolsComponent {
 
   private extractApiErrorMessage(err: unknown, fallback: string): string {
     const body = (err as any)?.error
-    const detail = body?.detail ? String(body.detail) : ''
-    const code = body?.error_code ? String(body.error_code) : ''
+    const detailValue = body?.detail
+    const detail = typeof detailValue === 'string'
+      ? detailValue
+      : typeof detailValue?.message === 'string'
+        ? detailValue.message
+        : ''
+    const code = typeof detailValue?.code === 'string'
+      ? detailValue.code
+      : body?.error_code
+        ? String(body.error_code)
+        : ''
     if (code && detail) return `${fallback} [${code}] ${detail}`
     if (code) return `${fallback} [${code}]`
     if (detail) return `${fallback} ${detail}`

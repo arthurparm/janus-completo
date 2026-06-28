@@ -12,13 +12,13 @@ export const environment = {
   // Default API URL - Tailscale Funnel para desenvolvimento
   apiUrl: '/api',
   firebase: {
-    apiKey: "AIzaSyBbxotMnYYpYsczUteKkx0yWiNFXf8_Y70",
-    authDomain: "orbisfracta.firebaseapp.com",
-    projectId: "orbisfracta",
-    storageBucket: "orbisfracta.firebasestorage.app",
-    messagingSenderId: "454482935240",
-    appId: "1:454482935240:web:3b5c2e5d13f4c5c7c054fd",
-    measurementId: "G-RHL0EHHGFV",
-    databaseURL: "https://orbisfracta-default-rtdb.firebaseio.com/"
+    apiKey: process.env['JANUS_FIREBASE_API_KEY'] || '',
+    authDomain: process.env['JANUS_FIREBASE_AUTH_DOMAIN'] || '',
+    projectId: process.env['JANUS_FIREBASE_PROJECT_ID'] || '',
+    storageBucket: process.env['JANUS_FIREBASE_STORAGE_BUCKET'] || '',
+    messagingSenderId: process.env['JANUS_FIREBASE_MESSAGING_SENDER_ID'] || '',
+    appId: process.env['JANUS_FIREBASE_APP_ID'] || '',
+    measurementId: process.env['JANUS_FIREBASE_MEASUREMENT_ID'] || '',
+    databaseURL: process.env['JANUS_FIREBASE_DATABASE_URL'] || '',
   }
 };

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common'
+import { HttpClient } from '@angular/common/http'
 import { catchError, finalize, of } from 'rxjs'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
@@ -19,6 +20,7 @@ import { UiButtonComponent } from '../../../shared/components/ui/button/button.c
 })
 export class AdminAutonomiaComponent {
   private readonly api = inject(BackendApiService)
+  private readonly http = inject(HttpClient)
   private readonly destroyRef = inject(DestroyRef)
   private selfStudyPollTimer: ReturnType<typeof setInterval> | null = null
   private readonly selfStudyPollIntervalMs = 1500
@@ -38,6 +40,15 @@ export class AdminAutonomiaComponent {
   readonly answer = signal('')
   readonly citations = signal<Citation[]>([])
   readonly selfMemory = signal<Array<{ file_path?: string; summary?: string; updated_at?: string | number }>>([])
+
+  activeTab: 'backlog' | 'selfstudy' | 'codeqa' | 'monitoring' = 'backlog';
+  monitoringData: any = null;
+  monitoringLoading = false;
+  activeGoals: any[] = [];
+  evolutionTools: any[] = [];
+  cycleTimeline: any[] = [];
+  domainHealth: any = {};
+  goalMetricsSummary: any = {};
 
   readonly totalTasks = computed(() =>
     this.board().reduce(
@@ -208,6 +219,31 @@ export class AdminAutonomiaComponent {
         this.citations.set(resp.citations || [])
         this.selfMemory.set(resp.self_memory || [])
       })
+  }
+
+  async loadMonitoringData() {
+    this.monitoringLoading = true;
+    try {
+      const [healthResp, boardResp] = await Promise.all([
+        this.http.get('/api/v1/autonomy/health').toPromise(),
+        this.http.get('/api/v1/autonomy/admin/board?limit=100').toPromise(),
+      ]);
+      this.monitoringData = healthResp;
+      if (healthResp) {
+        this.activeGoals = healthResp.active_goals || [];
+        this.domainHealth = healthResp.domain_health || {};
+      }
+      if (boardResp) {
+        this.evolutionTools = (boardResp.sprints || [])
+          .flatMap((s: any) => s.tasks || [])
+          .filter((t: any) => t.namespace === 'evolution')
+          .slice(0, 20);
+      }
+    } catch (err) {
+      console.error('Failed to load monitoring data', err);
+    } finally {
+      this.monitoringLoading = false;
+    }
   }
 
   private extractErrorMessage(err: unknown, fallback: string): string {

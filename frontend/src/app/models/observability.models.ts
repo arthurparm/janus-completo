@@ -38,6 +38,23 @@ export interface PendingAction {
   simulation?: Record<string, unknown> | null;
 }
 
+export interface PendingActionLegacyResidueItem {
+  action_id?: number | null;
+  status?: string | null;
+  tool_name?: string | null;
+  created_at?: string | null;
+  conversation_id?: string | null;
+}
+
+export interface PendingActionLegacyResidueSummary {
+  total_without_owner: number;
+  pending_without_owner: number;
+  sample_limit: number;
+  legacy_runtime_fallback_enabled: boolean;
+  message: string;
+  items: PendingActionLegacyResidueItem[];
+}
+
 // Poison pill stats
 export interface PoisonPillStats {
   total: number;
