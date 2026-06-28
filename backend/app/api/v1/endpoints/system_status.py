@@ -96,28 +96,33 @@ async def get_services_health(
     cached_llms = llm_details.get("cached_llms", 0)
 
     # Memory (System RAM usage via optimization metrics)
-    mem_mb: float = 0.0
+    mem_mb: float | None = None
     try:
         analysis = await optimization.analyze_system(analysis_type="performance", detailed=False)
-        mem_mb = float(analysis.get("metrics_snapshot", {}).get("memory_usage_mb", 0.0))
+        raw_mem_mb = analysis.get("metrics_snapshot", {}).get("memory_usage_mb")
+        if raw_mem_mb is not None:
+            mem_mb = float(raw_mem_mb)
     except Exception:
         try:
             history = await optimization.get_metrics_history(limit=1)
             if history:
                 last = history[-1]
-                mem_mb = float(getattr(last, "memory_usage_mb", 0.0))
+                raw_mem_mb = getattr(last, "memory_usage_mb", None)
+                if raw_mem_mb is not None:
+                    mem_mb = float(raw_mem_mb)
         except Exception:
-            mem_mb = 0.0
+            mem_mb = None
 
-    # Simple heuristic for memory status
-    memory_status = "ok"
-    try:
+    # Simple heuristic for memory status. Unknown telemetry must not look healthy.
+    memory_status = "unknown"
+    memory_metric_text = "Uso: indisponivel"
+    if mem_mb is not None:
+        memory_status = "ok"
         if mem_mb >= 8192:
             memory_status = "degraded"
         if mem_mb >= 16384:
             memory_status = "error"
-    except Exception:
-        memory_status = "ok"
+        memory_metric_text = f"Uso: {int(round(mem_mb))}MB"
 
     services = [
         ServiceHealthItem(
@@ -136,7 +141,7 @@ async def get_services_health(
             key="memory",
             name="Memory Service",
             status=memory_status,
-            metric_text=f"Uso: {int(round(mem_mb))}MB",
+            metric_text=memory_metric_text,
         ),
         ServiceHealthItem(
             key="llm",

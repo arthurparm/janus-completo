@@ -9,10 +9,11 @@ This agent analyzes past experiences from memory to identify:
 
 The output is a structured "Reflection Report" that feeds into the Evolution system.
 """
-import structlog
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -39,6 +40,15 @@ class ReflectionReport:
     slow_patterns: list[dict[str, Any]] = field(default_factory=list)
     improvement_suggestions: list[str] = field(default_factory=list)
     overall_health_score: float = 1.0  # 0-1, lower = needs improvement
+
+
+@dataclass
+class HealthScore:
+    stability: float
+    safety: float
+    efficacy: float
+    cost: float
+    overall: float
 
 
 class ReflectorAgent:
@@ -263,6 +273,8 @@ class ReflectorAgent:
 
     def _calculate_health_score(self, report: ReflectionReport) -> float:
         """Calculate overall health score (0-1)."""
+        # First try multidimensional if data available
+        # Legacy path preserved below
         if report.experiences_analyzed == 0:
             return 1.0
 
@@ -279,6 +291,79 @@ class ReflectorAgent:
         score -= slow_ratio * 0.3
 
         return max(0.0, min(1.0, score))
+
+    def compute_multidimensional_score(
+        self,
+        circuit_breaker_health: dict | None = None,
+        goal_metrics: dict | None = None,
+        audit_summary: dict | None = None,
+        cost_data: dict | None = None,
+        weights: dict | None = None,
+    ) -> HealthScore:
+        w = weights or {"stability": 0.30, "safety": 0.25, "efficacy": 0.25, "cost": 0.20}
+
+        stability = self._compute_stability(circuit_breaker_health or {})
+        safety = self._compute_safety(audit_summary or {})
+        efficacy = self._compute_efficacy(goal_metrics or {})
+        cost = self._compute_cost_score(cost_data or {})
+
+        overall = (
+            stability * w.get("stability", 0.30)
+            + safety * w.get("safety", 0.25)
+            + efficacy * w.get("efficacy", 0.25)
+            + cost * w.get("cost", 0.20)
+        )
+
+        return HealthScore(
+            stability=round(stability, 3),
+            safety=round(safety, 3),
+            efficacy=round(efficacy, 3),
+            cost=round(cost, 3),
+            overall=round(overall, 3),
+        )
+
+    def _compute_stability(self, cb_health: dict) -> float:
+        if not cb_health:
+            return 0.5
+        open_count = sum(1 for d in cb_health.values() if d.get("is_open"))
+        if open_count == 0:
+            return 1.0
+        if open_count == 1:
+            return 0.7
+        if open_count == 2:
+            return 0.4
+        return 0.1
+
+    def _compute_safety(self, audit_summary: dict) -> float:
+        if not audit_summary:
+            return 0.5
+        veto_count = audit_summary.get("veto_events", 0)
+        violation_count = audit_summary.get("safety_violations", 0)
+        total = veto_count + violation_count
+        if total == 0:
+            return 1.0
+        if total <= 2:
+            return 0.8
+        if total <= 5:
+            return 0.5
+        return 0.2
+
+    def _compute_efficacy(self, goal_metrics: dict) -> float:
+        if not goal_metrics:
+            return 0.5
+        return goal_metrics.get("success_rate", 0.5)
+
+    def _compute_cost_score(self, cost_data: dict) -> float:
+        if not cost_data:
+            return 0.5
+        budget_ratio = cost_data.get("budget_consumed_ratio", 0.0)
+        if budget_ratio < 0.3:
+            return 1.0
+        if budget_ratio < 0.6:
+            return 0.8
+        if budget_ratio < 0.8:
+            return 0.5
+        return 0.2
 
     def _get_content(self, experience: Any) -> str:
         """Extract content string from experience."""

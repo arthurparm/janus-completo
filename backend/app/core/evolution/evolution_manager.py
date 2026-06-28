@@ -1,9 +1,9 @@
 import ast
 import json
-import structlog
 import re
 from typing import Any
 
+import structlog
 
 from app.core.llm import ModelPriority, ModelRole
 from app.services.llm_service import LLMService
@@ -320,10 +320,11 @@ class EvolutionManager:
             "name": spec.get("tool_name"),
             "description": spec.get("description"),
             "code": code,
-            "function_name": spec.get("tool_name"),  # Assumindo que a função tem o mesmo nome
-            "category": "dynamic",  # Nova categoria para ferramentas evoluídas
+            "function_name": spec.get("tool_name"),
+            "category": "dynamic",
             "permission_level": mapped_permission,
             "tags": ["evolved", "auto-generated"],
+            "namespace": "evolution",
         }
 
         return self.tool_service.create_tool_from_function(request_data)

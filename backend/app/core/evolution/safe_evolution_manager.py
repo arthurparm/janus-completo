@@ -14,9 +14,10 @@ This is the complete "Dream Mode" where Janus safely improves itself.
 
 import asyncio
 import json
-import structlog
 from dataclasses import asdict, dataclass
 from datetime import datetime
+
+import structlog
 
 from app.core.evolution.evolution_manager import EvolutionManager
 from app.core.evolution.janus_lab import JanusLabManager
@@ -203,20 +204,28 @@ class SafeEvolutionManager:
             # Step 1: Generate the evolution (code for new tool)
             logger.info("log_info", message=f"[SafeEvolution] Generating improvement: {description[:50]}...")
 
-            # Queue and process to get the specification
-            self.evolution.queue_request(description)
-
-            # Get the pending spec
-            backlog = self.evolution._load_backlog()
-            pending = [i for i in backlog if i["status"] == "pending"]
-
-            if not pending:
-                logger.warning("[SafeEvolution] No pending evolution found")
-                attempt.error = "No pending evolution"
+            spec = await self.evolution._specify_tool(description)
+            if not spec:
+                attempt.error = "Failed to generate tool specification"
                 return attempt
 
-            item = pending[-1]  # Latest item
-            _request = item["request"]
+            code = await self.evolution._generate_code(spec)
+            if not code:
+                attempt.error = "Failed to generate code"
+                return attempt
+
+            tool_spec = spec
+            tool_spec["code"] = code
+
+            from app.core.evolution.evolution_sandbox import evolution_sandbox
+
+            ok, reason = evolution_sandbox.validate(tool_spec["code"])
+            if not ok:
+                logger.error("evolution_sandbox_validation_failed", reason=reason)
+                attempt.error = f"Sandbox validation failed: {reason}"
+                return attempt
+
+            code_signature = evolution_sandbox.sign(tool_spec["code"])
 
             # Step 2: Spawn Lab
             logger.info("[SafeEvolution] Spawning JanusLab for validation...")
@@ -266,15 +275,32 @@ sys.stdout.write("VALIDATION_PASSED=true\\n")
                 logger.info("[SafeEvolution] Applying evolution to Prime...")
 
                 try:
-                    evolution_result = await self.evolution.process_next_pending()
+                    from app.core.tools.action_module import DynamicToolGenerator, action_registry
 
-                    if evolution_result:
-                        attempt.applied_to_prime = True
-                        logger.info("log_info", message=f"[SafeEvolution] Evolution applied! "
-                            f"New tool: {evolution_result.get('name', 'unknown')}"
-                        )
-                    else:
-                        attempt.error = "Evolution returned no result"
+                    tool = DynamicToolGenerator.from_python_code(
+                        name=spec.get("tool_name"),
+                        description=spec.get("description"),
+                        code=code,
+                        function_name=spec.get("tool_name"),
+                    )
+
+                    previous_tool = action_registry.get_tool(spec.get("tool_name"))
+
+                    canary_meta = {
+                        "canary_weight": 0.1,
+                        "canary_start": time.time(),
+                        "canary_duration": 3600,
+                        "previous_version": getattr(previous_tool, 'code', None),
+                    }
+
+                    action_registry.register_tool(
+                        tool, namespace="evolution", code_signature=code_signature, canary_meta=canary_meta
+                    )
+
+                    attempt.applied_to_prime = True
+                    logger.info("log_info", message=f"[SafeEvolution] Evolution applied! "
+                        f"New tool: {spec.get('tool_name', 'unknown')}"
+                    )
 
                 except Exception as e:
                     attempt.error = f"Apply failed: {e!s}"
@@ -299,6 +325,30 @@ sys.stdout.write("VALIDATION_PASSED=true\\n")
             attempt.duration_seconds = time.time() - start_time
 
         return attempt
+
+    def _canary_promote(self, tool_name):
+        import time as _time
+
+        from app.core.tools.action_module import action_registry as _registry
+
+        tool = _registry.get_tool(tool_name)
+        if not tool:
+            return
+
+        canary_meta = getattr(tool, "canary_meta", None)
+        if not canary_meta:
+            return
+
+        elapsed = _time.time() - canary_meta.get("canary_start", 0)
+        if elapsed < canary_meta.get("canary_duration", 3600):
+            return
+
+        error_rate = getattr(tool, "error_rate", 0.0)
+        if error_rate >= 0.05:
+            return
+
+        canary_meta["canary_weight"] = 1.0
+        logger.info("canary_promoted", tool_name=tool_name)
 
     def _save_session(self, session: SafeEvolutionSession):
         """Persist session to log."""

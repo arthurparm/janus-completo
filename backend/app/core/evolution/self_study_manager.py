@@ -12,10 +12,11 @@ The loop runs during idle time (low system load) to avoid impacting user request
 
 import asyncio
 import json
-import structlog
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar, Literal
+
+import structlog
 
 from app.core.evolution.evolution_manager import EvolutionManager
 from app.core.evolution.reflector_agent import ReflectorAgent
@@ -35,6 +36,58 @@ class StudySession:
     evolutions_succeeded: int = 0
     evolutions_failed: int = 0
     status: str = "running"  # running, completed, failed
+
+
+@dataclass
+class AutonomousSelfStudyConfig:
+    health_threshold: float = 0.8
+    stability_weight: float = 0.30
+    safety_weight: float = 0.25
+    efficacy_weight: float = 0.25
+    cost_weight: float = 0.20
+    min_dimension_threshold: float = 0.30
+    daily_token_budget: int = 500_000
+    preset: Literal["conservative", "balanced", "aggressive"] = "balanced"
+
+    PRESETS: ClassVar[dict[str, dict]] = {
+        "conservative": {
+            "health_threshold": 0.9,
+            "max_actions_per_minute": 5,
+            "max_actions_per_hour": 50,
+            "daily_token_budget": 100_000,
+            "canary_weight": 0.05,
+            "canary_hours": 4,
+        },
+        "balanced": {
+            "health_threshold": 0.8,
+            "max_actions_per_minute": 20,
+            "max_actions_per_hour": 200,
+            "daily_token_budget": 500_000,
+            "canary_weight": 0.10,
+            "canary_hours": 1,
+        },
+        "aggressive": {
+            "health_threshold": 0.6,
+            "max_actions_per_minute": 50,
+            "max_actions_per_hour": 500,
+            "daily_token_budget": 2_000_000,
+            "canary_weight": 0.25,
+            "canary_hours": 0.5,
+        },
+    }
+
+    def apply_preset(self, name: str) -> None:
+        preset_values = self.PRESETS.get(name)
+        if preset_values is None:
+            raise ValueError(f"Unknown preset: {name}. Available: {list(self.PRESETS.keys())}")
+        for key, value in preset_values.items():
+            if hasattr(self, key):
+                setattr(self.__class__, key, value)
+        self.preset = name  # type: ignore
+
+    def __post_init__(self):
+        if self.preset != "custom":
+            self.apply_preset(self.preset)
 
 
 class SelfStudyManager:
