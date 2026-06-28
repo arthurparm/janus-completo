@@ -81,6 +81,14 @@ class KernelError(Exception):
     pass
 
 
+class KernelState:
+    """Estado de saúde do Kernel durante a inicialização."""
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    CRITICAL = "critical"
+
+
 class Kernel:
     """
     The Core System Kernel.
@@ -96,6 +104,8 @@ class Kernel:
         self.memory_db = None
         self.broker = None
         self.agent_manager = None
+        self.degraded_dependencies: dict[str, str] = {}
+        self._state: str = KernelState.HEALTHY
 
         # Repositories
         self.knowledge_repo = None
@@ -161,6 +171,11 @@ class Kernel:
     @classmethod
     def reset_instance(cls):
         cls._instance = None
+
+    @property
+    def state(self) -> str:
+        """Retorna o estado de saúde atual do Kernel."""
+        return self._state
 
     async def startup(
         self,
@@ -243,27 +258,70 @@ class Kernel:
             except Exception as e:
                 logger.warning("log_warning", message=f"DB migration skipped or failed: {e}")
 
-            # Initialize Core Infra
+            # Initialize Core Infra with graceful degradation
             from app.core.infrastructure.redis_manager import RedisManager
 
-            await asyncio.gather(
-                initialize_graph_db(),
-                initialize_memory_db(),
-                initialize_broker(),
-                RedisManager.get_instance().initialize(),
+            infra_results = await asyncio.gather(
+                self._safe_init("graph_db", initialize_graph_db),
+                self._safe_init("memory_db", initialize_memory_db),
+                self._safe_init("broker", initialize_broker),
+                self._safe_init("redis", RedisManager.get_instance().initialize),
+                return_exceptions=True,
             )
+
+            infra_failures = [r for r in infra_results if isinstance(r, Exception)]
+            if infra_failures:
+                logger.warning(
+                    "infra_init_degraded",
+                    failures={k: str(v) for k, v in self.degraded_dependencies.items()},
+                )
+                self._state = KernelState.DEGRADED
+
+            self.graph_db = (
+                await get_graph_db()
+                if "graph_db" not in self.degraded_dependencies
+                else None
+            )
+            self.memory_db = (
+                await get_memory_db()
+                if "memory_db" not in self.degraded_dependencies
+                else None
+            )
+            self.broker = (
+                await get_broker()
+                if "broker" not in self.degraded_dependencies
+                else None
+            )
+            self.agent_manager = get_agent_manager()
 
             # Initialize Firebase if enabled
             await self._init_firebase()
 
-            self.graph_db = await get_graph_db()
-            self.memory_db = await get_memory_db()
-            self.broker = await get_broker()
-            self.agent_manager = get_agent_manager()
-
-            logger.info("Infrastructure initialized successfully.")
+            logger.info(
+                "Infrastructure initialized.",
+                state=self._state,
+                degraded=list(self.degraded_dependencies.keys()),
+            )
         except Exception as e:
+            self._state = KernelState.CRITICAL
             raise KernelError(f"Infrastructure init failed: {e}") from e
+
+    async def _safe_init(self, name: str, init_fn, *args, **kwargs):
+        """Wraps a single dependency initialization with graceful degradation."""
+        try:
+            if asyncio.iscoroutinefunction(init_fn):
+                result = await init_fn(*args, **kwargs)
+            else:
+                result = init_fn(*args, **kwargs)
+            return result
+        except Exception as e:
+            logger.warning(
+                "dependency_init_failed",
+                dependency=name,
+                error=str(e),
+            )
+            self.degraded_dependencies[name] = str(e)
+            return e
 
     async def _init_firebase(self):
         if getattr(settings, "FIREBASE_ENABLED", False) and getattr(
@@ -294,7 +352,11 @@ class Kernel:
 
     async def shutdown(self):
         """Gracefully shuts down the system."""
-        logger.info("Kernel shutdown: Closing resources...")
+        logger.info(
+            "Kernel shutdown: Closing resources...",
+            state=self._state,
+            degraded=list(self.degraded_dependencies.keys()),
+        )
 
         # Stop workers
         for worker in self.workers:
@@ -303,13 +365,14 @@ class Kernel:
             except Exception as e:
                 logger.error("log_error", message=f"Error stopping worker {worker}: {e}")
 
-        # Cancel training task
-        if self._neural_training_task:
-            self._neural_training_task.cancel()
-        if self._consolidation_consumer_task:
-            self._consolidation_consumer_task.cancel()
-        if self._document_ingestion_consumer_task:
-            self._document_ingestion_consumer_task.cancel()
+        # Cancel async tasks
+        for task_name in ("_neural_training_task", "_consolidation_consumer_task", "_document_ingestion_consumer_task"):
+            task = getattr(self, task_name, None)
+            if task:
+                try:
+                    task.cancel()
+                except Exception:
+                    pass
 
         # Stop monitoring
         if self.monitor:
@@ -331,10 +394,17 @@ class Kernel:
         except Exception as e:
             logger.warning("Error closing database engines during shutdown", exc_info=e)
 
-        # Close Infra
-        await asyncio.gather(
-            close_graph_db(), close_memory_db(), close_broker(), return_exceptions=True
-        )
+        # Close Infra (only if started successfully)
+        close_tasks = []
+        if "graph_db" not in self.degraded_dependencies:
+            close_tasks.append(close_graph_db())
+        if "memory_db" not in self.degraded_dependencies:
+            close_tasks.append(close_memory_db())
+        if "broker" not in self.degraded_dependencies:
+            close_tasks.append(close_broker())
+        if close_tasks:
+            await asyncio.gather(*close_tasks, return_exceptions=True)
+
         logger.info("Kernel shutdown complete.")
 
     async def _init_mas_actors(self):
