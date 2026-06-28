@@ -6,7 +6,6 @@ diagnósticos detalhados para operação contínua.
 """
 
 import asyncio
-import structlog
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -14,9 +13,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+import structlog
 from prometheus_client import Gauge, Histogram, Info
 
 from app.config import settings
+from app.core.kernel_health import check_neo4j, check_postgres, check_redis
 
 logger = structlog.get_logger(__name__)
 
@@ -347,9 +348,26 @@ class HealthMonitor:
             == HealthStatus.UNHEALTHY
             for comp in critical_components
         )
+        critical_degraded = any(
+            self.last_results.get(
+                comp,
+                HealthCheckResult(
+                    component=comp,
+                    status=HealthStatus.UNKNOWN,
+                    message="",
+                    details={},
+                    checked_at=datetime.now(),
+                    duration_seconds=0.0,
+                ),
+            ).status
+            == HealthStatus.DEGRADED
+            for comp in critical_components
+        )
 
         if critical_unhealthy:
             status = "unhealthy"
+        elif critical_degraded:
+            status = "degraded"
         elif score >= 80:
             status = "healthy"
         elif score >= 50:
@@ -600,5 +618,8 @@ def get_health_monitor() -> HealthMonitor:
             check_consolidation_queue_policy_health,
             is_critical=False,
         )
+        _health_monitor.register_health_check("neo4j", check_neo4j, is_critical=True)
+        _health_monitor.register_health_check("postgres", check_postgres, is_critical=True)
+        _health_monitor.register_health_check("redis", check_redis, is_critical=False)
 
     return _health_monitor
