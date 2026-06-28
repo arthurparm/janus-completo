@@ -8,12 +8,12 @@ Auditoria focada na funcionalidade de chat backend: endpoints REST/SSE, facade `
 
 ## Status atual
 
-- Estado geral: 11 ciclos críticos concluídos com foco em authz, isolamento por `user_id`, compatibilidade de transição, contratos de confirmação, segurança operacional de tools e ownership de `pending_actions` SQL.
-- Backend já endurecido em caminhos centrais: envio de mensagem, histórico, trace, stream, CRUD de conversa, study jobs e validação de escopo por projeto/usuário.
-- Frontend já alinhado em áreas críticas: render de confirmação heurística de baixa confiança e contrato de `pending_actions` sem `user_id` cliente-controlado.
-- Qualidade já demonstrada por evidências do documento: suites unitárias/QA verdes nos fluxos focados, `ruff check` e `py_compile` passando nos ciclos documentados.
-- Risco residual consolidado: ainda faltam validações full-stack/browser em ambiente semelhante ao real, revisão da trilha `thread_id`/LangGraph e fechamento explícito de evidências/compliance para signoff final.
-- Nível atual de confiança: alto para contratos e correções localizadas em backend/frontend; médio para comportamento ponta a ponta sob infraestrutura PC1/PC2 e fluxos operacionais reais.
+- Estado geral: 17 ciclos críticos concluídos com foco em authz, isolamento por `user_id`, remoção de legado operacional, contratos de confirmação, segurança operacional de tools e extinção progressiva do legado estrutural em `pending_actions` SQL/LangGraph.
+- Backend já endurecido em caminhos centrais: envio de mensagem, histórico, trace, stream, CRUD de conversa, study jobs, validação de escopo por projeto/usuário e promoção defensiva de `pending_actions.user_id` para contrato estrutural `NOT NULL` quando o saneamento permitir.
+- Frontend já alinhado em áreas críticas: render de confirmação heurística de baixa confiança, contrato de `pending_actions` sem `user_id` cliente-controlado, roteamento seguro de approve/reject entre SQL e LangGraph, trilha crítica de auditoria visível na tela `tools` e distinção explícita entre passivo histórico bloqueado e fluxo operacional ativo.
+- Qualidade já demonstrada por evidências do documento: suites unitárias/QA verdes nos fluxos focados, `ruff check`, `py_compile`, Vitest completo, lint e build Angular passando nos ciclos documentados.
+- Risco residual consolidado: ainda faltam validações full-stack/browser com backend real e medição do resíduo histórico real de `pending_actions` em uma infraestrutura PC1/PC2 disponível.
+- Nível atual de confiança: alto para contratos, endurecimento estrutural localizado e integração backend/frontend validada por testes; médio para comportamento ponta a ponta sob infraestrutura PC1/PC2 e fluxos operacionais reais.
 
 ## Ciclo 1 - Contrato de `user_id` quebrado no fluxo central de chat
 
@@ -374,6 +374,41 @@ Acredito que persistir `user_id` em `pending_actions` SQL e exigir identidade re
 - Registros SQL legados sem `user_id` dependem de `conversation_id` em `args_json` para autorizacao de fallback; se esse vinculo nao existir, o endpoint passa a negar acesso.
 - A validacao frontend foi por contrato de servico e suite Vitest focada/ampla; nao houve e2e real em browser para approve/reject.
 
+## Ciclo 18 - Testes e2e/integracao de chat estavam desalinhados com autenticacao Bearer obrigatoria
+
+### Problema
+
+- Categoria: qualidade de entrega, regressao de CI e disponibilidade da validacao de chat.
+- Fato observado: o contrato atual de chat exige ator autenticado derivado de Bearer; `resolve_authenticated_user_context(...)` ignora `explicit_user_id`, ignora `allow_anonymous_fallback` e retorna `unknown` sem `Authorization`.
+- Fato observado: `backend/tests/integration/test_chat_sse.py` chamava `/api/v1/chat/start` e `/api/v1/chat/stream/{id}` sem Bearer.
+- Fato observado: `backend/tests/e2e/conftest.py` usava `http://janus-api:8000` como default, host valido em container mas nao em execucao local direta.
+- Baseline medido: `backend/tests/e2e/test_api_endpoints.py --maxfail=1` falhou localmente antes da correcao com `NameResolutionError` para `janus-api`.
+- Impacto antes: os testes de validacao de chat podiam falhar por ambiente local ou por contrato antigo de auth, reduzindo a capacidade de detectar regressao real no fluxo central.
+
+### Hipotese
+
+Acredito que autenticar as fixtures e2e/integracao com Bearer valido e usar `localhost` como default local melhora a confiabilidade da validacao, porque os testes passam a exercitar o contrato de seguranca atual em vez de uma compatibilidade anonima removida.
+
+### Implementacao
+
+- `backend/tests/e2e/conftest.py`: default local alterado para `http://localhost:8000`; jobs Docker ainda podem sobrescrever `BASE_URL` e `HEALTH_URL`.
+- `backend/tests/e2e/conftest.py`: wrapper `api_client` passou a anexar `Authorization: Bearer <token>` por default e timeout configuravel por `E2E_REQUEST_TIMEOUT_SECONDS`.
+- `backend/tests/e2e/test_api_endpoints.py`: teste de memoria anonima foi renomeado para fluxo autenticado, sem `user_id` cliente-controlado.
+- `backend/tests/integration/test_chat_sse.py`: chamadas de start e stream passaram a enviar Bearer valido.
+
+### Metricas
+
+- Baseline antes da correcao: e2e local falhou em `test_health_check` por `janus-api` nao resolvido.
+- Depois: `ruff check` dos testes tocados passou.
+- Depois: `py_compile` dos testes tocados passou.
+- Validacao contratual de auth/chat: `backend/tests/unit/test_chat_deps_identity.py` e dois contratos HTTP de auth em chat resultaram em 5 passed.
+
+### Riscos e limitacoes
+
+- O e2e externo completo nao foi executado apos a mudanca porque depende de API local/servico PC1 ativo.
+- O teste de integracao SSE com `app.main` nao foi usado como gate final neste ciclo por custo/timeout observado; a mudanca foi validada estaticamente e por contratos de auth mais focados.
+- Os tokens gerados pela fixture usam a configuracao local do teste; ambientes que sobrescrevem segredo/auth devem manter `create_token(...)` alinhado ao servidor.
+
 ## Validação executada
 
 ```powershell
@@ -690,26 +725,122 @@ Acredito que alinhar `getChatHistoryPaginated(...)` ao endpoint correto e reforc
 - O comando padrao `npm run build -- --configuration development` continua sensivel ao encaminhamento de argumentos nesta workspace; a validacao real do ciclo foi feita com `npx ng build --configuration development`.
 - Permanecem fora do escopo desta iteracao os itens residuais de full-stack PC1/PC2, validacao browser real do stream e fechamento da trilha `thread_id`/LangGraph em `pending_actions`.
 
+## Ciclo 15 - Trilha `thread_id`/LangGraph de `pending_actions` foi endurecida com bearer e ownership verificavel
+
+### Problema
+
+- Categoria: seguranca operacional, integracao backend/frontend e consistencia contratual.
+- Fato observado: o proprio documento mantinha a trilha `thread_id`/LangGraph de `pending_actions` como risco residual prioritario apos o ciclo 14.
+- Fato observado: o backend ja havia endurecido a trilha SQL, mas a trilha LangGraph ainda precisava fechar authz equivalente em listagem e em `approve/reject` por `thread_id`.
+- Fato observado: a UI `tools` ja estava em modo seguro com `include_graph=false`, mas o frontend ainda precisava manter contrato coerente para aprovar/rejeitar itens vindos por `thread_id` sem reabrir a superficie insegura na tela.
+- Impacto antes: sem o fechamento completo do ciclo, o codigo ficava parcialmente endurecido, a suite QA ainda tinha inconsistencias de identidade bearer-only e o audit log seguia desatualizado em relacao ao estado real da integracao.
+
+### Hipotese
+
+Acredito que exigir bearer em toda a trilha LangGraph de `pending_actions`, aplicar ownership verificavel com fallback controlado por `conversation_id` e negar por padrao quando esse contexto nao existir elimina a lacuna residual de authz sem regressao na UI, porque o frontend pode continuar em modo SQL-only enquanto backend e contratos mantem a compatibilidade segura para itens `thread_id`.
+
+### Implementacao
+
+- `backend/app/api/v1/endpoints/pending_actions.py`: consolidado o endurecimento bearer-only na trilha LangGraph, mantendo `allow_anonymous_fallback=False` para listagem e `approve/reject`.
+- `backend/app/api/v1/endpoints/pending_actions.py`: mantido o modelo de autorizacao com owner explicito em state/config/metadata, fallback por `conversation_id` validado via `chat_service.get_history(...)` e `deny-by-default` quando nao ha contexto verificavel.
+- `backend/app/api/v1/endpoints/pending_actions.py`: ajustada a ordem de verificacao em `approve/reject` para retornar `404` de forma consistente quando a thread realmente nao existe em `checkpoints`, antes da leitura do estado.
+- `qa/test_pending_actions_contract.py`: normalizados ids bearer-only da fixture, removida a inconsistência residual `owner-1` versus `"1"`, e corrigida a semantica do caso legado SQL sem owner para refletir o fallback real por `conversation_id`.
+- `qa/test_pending_actions_contract.py`: adicionados casos cobrindo `404` para `thread-missing` em `approve` e `reject`.
+- `frontend/src/app/services/domain/observability-api-service.contract.spec.ts`: mantida a cobertura de contrato para roteamento seguro entre endpoints SQL e LangGraph.
+- `frontend/src/app/features/tools/tools.ts`: preservado o comportamento seguro da tela `tools`, consultando `pending_actions` apenas com `include_sql=true` e `include_graph=false`.
+
+### Metricas
+
+- Baseline confirmado nesta iteracao:
+  - havia uma inconsistência factual na suite QA bearer-only (`owner-1` versus `"1"`);
+  - o caso legado SQL sem owner estava com nome e expectativa divergentes do comportamento real de fallback por `conversation_id`;
+  - a semantica de `404` para `thread-missing` na trilha LangGraph nao estava explicitamente coberta por contrato.
+- Depois da consolidacao:
+  - `backend\.venv\Scripts\python.exe -m pytest -q qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py`: 22 passed.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/api/v1/endpoints/pending_actions.py qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/api/v1/endpoints/pending_actions.py qa/test_pending_actions_contract.py`: passou.
+  - `npm run test -- --watch=false --include src/app/services/domain/observability-api-service.contract.spec.ts`: o `npm` nao encaminhou os filtros como esperado e executou a suite Vitest completa; resultado efetivo: 29 arquivos passados, 129 testes passados, incluindo `observability-api-service.contract.spec.ts`.
+  - `npm run lint`: passou.
+  - `npx ng build --configuration development`: passou.
+
+### Riscos e limitacoes
+
+- Nao houve validacao browser real nem ciclo full-stack PC1/PC2 nesta iteracao; a confianca do ciclo 15 vem de contratos QA/backend, Vitest, lint e build.
+- A tela `tools` permanece deliberadamente SQL-only; isso reduz superficie de risco, mas ainda falta uma validacao guiada em browser para mensagens de erro e feedback visual de approve/reject.
+- O comando `npm run test -- --watch=false --include ...` continua sensivel ao encaminhamento de argumentos nesta workspace; a evidência valida desta iteracao e o resultado efetivo da suite Vitest completa, nao o filtro solicitado.
+- O ciclo reduz o risco residual principal de ownership/authz em `pending_actions` LangGraph, mas o fechamento do esforco de audit log ainda depende de evidência operacional em ambiente real e revisao final de readiness.
+
+## Ciclo 16 - Legado operacional de `pending_actions` foi extinto e a trilha crítica ficou visível no frontend
+
+### Problema
+
+- Categoria: seguranca operacional, consistencia backend/frontend e auditabilidade do modulo de chat.
+- Fato observado: mesmo apos o ciclo 15, `backend/app/api/v1/endpoints/pending_actions.py` ainda permitia fallback de ownership por `conversation_id` para registros SQL sem `user_id` persistido.
+- Fato observado: o proprio backlog do documento ainda tratava como aberta a definicao final para `pending_actions` legadas sem owner persistido.
+- Fato observado: a tela `frontend/src/app/features/tools/tools.ts` continuava priorizando uma visao de eventos `codex_*`, o que nao refletia a trilha critica de approve/reject e bloqueios do modulo de chat.
+- Fato observado: quando o backend passasse a responder erros estruturados para owner ausente, a UI ainda precisava interpretar `detail.code/detail.message` corretamente.
+- Impacto antes: o modulo seguia com uma excecao legada em authz, a trilha de auditoria critica nao ficava clara na UI e a integracao entre decisao backend e feedback frontend permanecia incompleta para signoff de seguranca.
+
+### Hipotese
+
+Acredito que extinguir o fallback legado de runtime para `pending_actions` sem owner persistido, fazer backfill deterministico onde houver dono recuperavel e expor no frontend a trilha critica com `trace_id`, endpoint e status elimina a ultima ambiguidade operacional do modulo e melhora a auditabilidade real sem reabrir a superficie insegura da UI.
+
+### Implementacao
+
+- `backend/app/repositories/pending_action_repository.py`: `create(...)` passou a exigir `user_id` persistido; adicionados utilitarios para listar registros sem owner e atribuir owner em saneamento.
+- `backend/app/services/db_migration_service.py`: adicionada rotina idempotente de backfill de `pending_actions.user_id` a partir de `conversation_id` persistido em `args_json` e do owner da conversa em `sessions`.
+- `backend/app/api/v1/endpoints/pending_actions.py`: removido o fallback operacional por `conversation_id` para approve/reject SQL; registros sem owner persistido agora retornam `403` com `code="PENDING_ACTION_OWNER_REQUIRED"` e deixam trilha auditavel de bloqueio.
+- `backend/app/api/v1/endpoints/pending_actions.py`: approve/reject SQL e LangGraph passaram a registrar eventos diretos de auditoria com `endpoint`, `status`, `trace_id`, `request_id`, source e identificadores do fluxo.
+- `backend/app/services/chat_event_publisher.py`: os eventos publicados pelo chat passaram a carregar `trace_id`/`request_id` quando a correlacao estiver presente no contexto corrente.
+- `frontend/src/app/features/tools/tools.ts` e `tools.html`: a UI deixou de mostrar apenas eventos `codex_*` e passou a destacar a trilha critica de chat/pending actions com `acao`, `status`, `trace` e `endpoint`, alem de interpretar erros estruturados do backend.
+- `frontend/src/app/features/tools/tools.spec.ts`: adicionada cobertura para a trilha critica e para o parsing de erro estruturado.
+- `qa/test_pending_actions_contract.py` e `qa/test_pending_actions_line_coverage.py`: atualizados para refletir a extincao do legado operacional e a nova resposta estruturada de bloqueio.
+
+### Metricas
+
+- Baseline confirmado nesta iteracao:
+  - ainda existia 1 caminho funcional de approve/reject SQL dependente de owner inferido em runtime por `conversation_id`;
+  - a tela `tools` ainda priorizava eventos `codex_*` em vez da trilha critica do modulo de chat;
+  - o frontend ainda nao cobria o parsing de erro estruturado para bloqueio de legado extinto.
+- Depois da correcao:
+  - `backend\.venv\Scripts\python.exe -m pytest -q qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py`: 23 passed.
+  - `backend\.venv\Scripts\python.exe -m pytest -q backend/tests/unit/test_chat_service_event_publisher_wiring.py`: 2 passed.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/api/v1/endpoints/pending_actions.py backend/app/repositories/pending_action_repository.py backend/app/services/db_migration_service.py backend/app/services/chat_event_publisher.py qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/api/v1/endpoints/pending_actions.py backend/app/repositories/pending_action_repository.py backend/app/services/db_migration_service.py backend/app/services/chat_event_publisher.py qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py`: passou.
+  - `npm run test -- --watch=false`: 30 arquivos passados, 131 testes passados.
+  - `npm run lint`: passou.
+  - `npx ng build --configuration development`: passou.
+- Resultado operacional do ciclo:
+  - 0 caminhos SQL de approve/reject permanecem autorizando `pending_actions` sem owner persistido via fallback de conversa.
+  - 100% das `pending_actions` novas cobertas por este fluxo exigem `user_id` persistido em criacao.
+  - a tela `tools` agora exibe a trilha critica do modulo em vez de uma visao centrada apenas em eventos `codex_*`.
+
+### Riscos e limitacoes
+
+- A rotina de backfill saneia apenas registros cujo owner pode ser recuperado de forma deterministica; residuos sem owner recuperavel passam a ficar bloqueados operacionalmente, nao removidos.
+- Nao houve ciclo browser com backend real nem subida PC1/PC2 nesta iteracao; a confianca vem de contratos, testes unitarios, Vitest completo, lint e build.
+- O comando `npm run test -- --watch=false` continua emitindo warning do `npm` sobre encaminhamento de `--watch`, mas a suite Vitest executada e o resultado final permanecem validos.
+- O fechamento do esforco ainda depende de evidência operacional integrada em ambiente mais proximo do real, nao de nova definicao para legado de `pending_actions`, que deixa de ser item aberto.
+
 ## Decisão
 
-Recomendação: manter as correções. Confiança: média-alta para os contratos corrigidos, limitada por ausência de validação full-stack com infraestrutura PC2 ativa.
+Recomendação: manter as correções. Confiança: alta para contratos, integração local guiada e extinção do legado operacional; limitada por ausência de validação full-stack com infraestrutura PC2 ativa.
 
 ## Próximos passos
 
-- `D+1` | Owner: `Backend` | Revisar a trilha `thread_id`/LangGraph em `pending_actions.py` e documentar se haverá owner persistido, negação explícita por ausência de owner ou escopo limitado por design.
 - `D+1` | Owner: `QA` | Consolidar uma matriz curta de fluxos críticos ainda não validados ponta a ponta: `chat/start`, `chat/message`, `stream`, `trace`, `study-jobs`, `pending_actions approve/reject`.
-- `D+3` | Owner: `Backend` | Definir estratégia para registros legados de `pending_actions` sem `user_id`: backfill, expiração controlada ou manutenção do fallback por `conversation_id` com critérios explícitos.
-- `D+3` | Owner: `Frontend` | Executar validação guiada dos fluxos visíveis ao usuário para confirmação `low_confidence`, aprovação e rejeição de `pending_actions`, com evidência de comportamento esperado e mensagens de erro.
-- `D+3` | Owner: `Security` | Revisar os ciclos 9, 10 e 11 como bloco de authz para confirmar que os caminhos em modo de transição não deixam endpoints de conversa existente, study jobs ou pending actions operarem sem identidade comparável.
+- `D+1` | Owner: `Frontend` | Executar validação guiada dos fluxos visíveis ao usuário para confirmação `low_confidence`, aprovação e rejeição de `pending_actions`, com evidência de comportamento esperado, estados de loading e mensagens de erro.
+- `D+3` | Owner: `Backend` | Medir e zerar o backlog residual de registros bloqueados sem owner recuperável, via saneamento administrativo controlado e sem reintroduzir fallback de runtime.
+- `D+3` | Owner: `Security` | Revisar os ciclos 9, 10, 11 e 15 como bloco consolidado de authz para confirmar que study jobs, conversas existentes e pending actions não operam sem identidade comparável.
 - `D+7` | Owner: `Ops/Platform` | Executar um ciclo de validação em stack PC1/PC2 com coleta de evidências operacionais: health, logs, request IDs/trace IDs e resultado dos fluxos críticos.
 - `Próxima sprint` | Owner: `QA` | Promover pelo menos um fluxo crítico de chat para cobertura browser/e2e reproduzível, priorizando aprovação/rejeição de pending action e polling de study job.
 - `Pré-release` | Owner: `Backend + Frontend + QA + Security + Ops/Platform` | Fazer revisão final de readiness com checklist de evidências, critérios de validação e limitações remanescentes antes de declarar o esforço de audit log como concluído.
 
 ## Requisitos técnicos restantes
 
-- Todos os caminhos de resolução de ação pendente devem operar com owner explícito ou justificativa documentada de por que o fluxo não admite owner persistido.
-- A trilha `thread_id`/LangGraph precisa de decisão de engenharia registrada: persistir owner, validar por contexto externo de forma confiável ou limitar o endpoint por política.
-- Registros legados sem `user_id` em `pending_actions` precisam de regra final de tratamento: backfill, expiração, bloqueio por padrão ou fallback controlado por `conversation_id`.
+- Todos os caminhos de resolução de ação pendente devem operar com owner explícito persistido; residuos sem owner recuperável nao podem voltar a operar por fallback de runtime.
+- A trilha `thread_id`/LangGraph precisa manter a decisão de engenharia já registrada neste documento: owner explícito quando disponível e `deny-by-default` quando não houver contexto verificável.
+- Registros históricos sem `user_id` em `pending_actions` precisam permanecer fora da superfície operacional até saneamento administrativo definitivo, sem reintrodução de compatibilidade legada.
 - Endpoints que operam sobre conversa existente devem continuar exigindo identidade comparável mesmo em modo de transição; qualquer exceção deve ser explicitamente documentada e testada.
 - Fluxos sensíveis de chat precisam manter rastreabilidade mínima entre request, decisão e evidência operacional por `request_id`, `trace_id` ou identificador equivalente.
 - O frontend deve continuar tratando corretamente confirmações heurísticas versus confirmações acionáveis, sem exibir botões de aprovação falsos para fluxos que exigem `pending_action_id`.
@@ -735,5 +866,77 @@ Recomendação: manter as correções. Confiança: média-alta para os contratos
 
 - O esforço de chat critical audit log pode ser considerado concluído quando os riscos residuais principais estiverem reduzidos a itens explicitamente aceitos, e não a gaps implícitos de validação.
 - Para isso, o documento precisa mostrar três coisas com clareza: o que já foi endurecido, o que ainda falta e quais evidências sustentam a confiança operacional atual.
-- No estado atual, a maior parte do backend e dos contratos críticos já está estabilizada, mas a conclusão ainda depende de validação full-stack/browser, fechamento da trilha `thread_id`/LangGraph e definição final para legado de `pending_actions` sem owner.
+- No estado atual, a maior parte do backend, da UI crítica e dos contratos já está estabilizada, mas a conclusão ainda depende de validação full-stack/browser e de saneamento administrativo do resíduo histórico já bloqueado.
 - Até esse fechamento, este documento deve ser tratado como fonte viva de progresso, critérios de aceite e backlog crítico do sistema de chat.
+
+## Ciclo 17 - Legado estrutural de `pending_actions` foi endurecido sem reabrir a superfície operacional
+
+### Problema
+
+- Categoria: seguranca operacional, consistencia backend/frontend, schema hardening e readiness final do modulo de chat.
+- Fato observado: apos o ciclo 16, o runtime ja bloqueava `pending_actions` SQL sem owner persistido, mas `backend/app/models/pending_action_models.py` ainda declarava `user_id` como `nullable=True`.
+- Fato observado: `backend/app/services/db_migration_service.py` ja fazia backfill deterministico, porem nao promovia explicitamente o schema para `NOT NULL` nem reportava de forma estruturada quando o resíduo historico ainda bloqueasse esse endurecimento.
+- Fato observado: a UI `frontend/src/app/features/tools/tools.html` e os testes frontend ainda descreviam o estado residual sobretudo como "legado bloqueado", sem deixar claro que o legado operacional ja estava extinto e que o restante era backlog administrativo fora da superficie de approve/reject.
+- Fato observado: a rodada anterior havia deixado pendente a reexecucao da suite frontend apos o ultimo teste de contrato de `observability-api-service`.
+- Impacto antes: o contrato de dominio e o schema continuavam parcialmente desalinhados, a comunicacao visual do frontend ainda permitia ambiguidade semantica sobre o passivo historico e faltava uma rodada final de validacao consolidada para a iteracao.
+
+### Hipotese
+
+Acredito que alinhar o modelo ao contrato endurecido, fazer a migracao reportar explicitamente quando `pending_actions.user_id` pode ou nao ser promovido para `NOT NULL`, e reposicionar o resumo do frontend como backlog administrativo bloqueado elimina a ultima ambiguidade estrutural do legado sem reabrir nenhum fallback inseguro de runtime.
+
+### Implementacao
+
+- `backend/app/models/pending_action_models.py`: `PendingAction.user_id` passou a refletir o contrato de dominio endurecido como obrigatorio no modelo.
+- `backend/app/services/db_migration_service.py`: adicionados helpers para inspecionar nulabilidade da coluna, contar residuos `user_id IS NULL` e gerar SQL de promocao `NOT NULL` conforme o dialeto suportado.
+- `backend/app/services/db_migration_service.py`: `validate_schema()` passou a verificar explicitamente `pending_actions.user_id_not_null` e a eliminacao de linhas ownerless como checks separados de schema/dados.
+- `backend/app/services/db_migration_service.py`: `migrate_schema()` passou a:
+  - executar o backfill deterministico ja existente;
+  - medir quantos registros ownerless restam;
+  - promover `pending_actions.user_id` para `NOT NULL` quando nao houver resíduo impeditivo e o dialeto suportar a operacao;
+  - retornar sinais estruturados de bloqueio (`pending_actions_user_id_not_null_blocked`) quando o schema nao puder ser endurecido por causa de historico irrecuperavel.
+- `backend/app/repositories/pending_action_repository.py`: a mensagem do resumo administrativo passou a afirmar explicitamente que o legado operacional esta extinto, que o passivo restante e backlog administrativo e que novos registros ownerless sao rejeitados.
+- `frontend/src/app/features/tools/tools.html`: o card administrativo passou a usar a linguagem "passivo historico bloqueado", reforcando que o backlog nao pertence mais a superficie operacional.
+- `frontend/src/app/features/tools/tools.spec.ts`: adicionada cobertura de render para a mensagem de backlog administrativo e para a ausencia de qualquer botao dentro da secao de passivo historico.
+- `frontend/src/app/services/domain/observability-api-service.contract.spec.ts` e `qa/test_observability_pending_actions_legacy_residue_contract.py`: payloads de contrato ajustados para a nova semantica da mensagem administrativa.
+- `qa/test_db_migration_service_contract.py`: adicionados testes focados que provam:
+  - promocao automatica de `pending_actions.user_id` para `NOT NULL` quando o resíduo ownerless for zero;
+  - bloqueio explicito da promocao quando ainda restarem registros sem owner persistido.
+- `tooling/async_ops_validation.py`: revisado nesta iteracao; o arquivo ja estava alinhado ao contrato bearer-only e sem `user_id` cliente-controlado, portanto nao exigiu novo patch funcional.
+
+### Metricas
+
+- Baseline confirmado nesta iteracao:
+  - o runtime seguia seguro, mas o modelo SQLAlchemy ainda aceitava `user_id` nulo em `PendingAction`;
+  - a migracao ainda nao reportava formalmente o bloqueio da promocao `NOT NULL`;
+  - o frontend ainda comunicava o resíduo como "legado bloqueado" de forma menos precisa do que o objetivo atual de extincao do legado operacional.
+- Depois da consolidacao:
+  - `$env:PYTHONPATH='backend'; backend\.venv\Scripts\python.exe -m pytest -q qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py qa/test_observability_pending_actions_legacy_residue_contract.py qa/test_db_migration_service_contract.py backend/tests/unit/test_observability_service_instrumentation.py::test_pending_actions_legacy_residue_summary_records_metrics`: 32 passed.
+  - `backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/app/models/pending_action_models.py backend/app/services/db_migration_service.py backend/app/repositories/pending_action_repository.py backend/app/api/v1/endpoints/pending_actions.py backend/app/api/v1/endpoints/observability.py backend/app/services/observability_service.py qa/test_pending_actions_contract.py qa/test_pending_actions_line_coverage.py qa/test_db_migration_service_contract.py qa/test_observability_pending_actions_legacy_residue_contract.py`: passou.
+  - `backend\.venv\Scripts\python.exe -m py_compile backend/app/models/pending_action_models.py backend/app/services/db_migration_service.py backend/app/repositories/pending_action_repository.py backend/app/api/v1/endpoints/pending_actions.py backend/app/api/v1/endpoints/observability.py backend/app/services/observability_service.py qa/test_db_migration_service_contract.py qa/test_observability_pending_actions_legacy_residue_contract.py`: passou.
+  - `npm run test -- --watch=false`: 30 arquivos passados, 133 testes passados, incluindo `tools.spec.ts` e `observability-api-service.contract.spec.ts`.
+  - `npm run lint`: passou.
+  - `npx ng build --configuration development`: passou.
+- Resultado tecnico do ciclo:
+  - o contrato de aplicacao e o modelo agora convergem para `pending_actions` com owner persistido obrigatorio;
+  - a migracao passa a declarar explicitamente se o endurecimento estrutural do schema foi aplicado ou bloqueado por resíduo historico;
+  - a UI admin deixa mais claro que o que resta nao e fluxo operacional, e sim backlog administrativo bloqueado.
+
+### Riscos e limitacoes
+
+- Nao houve promocao real de `pending_actions.user_id` para `NOT NULL` em banco ativo nesta iteracao, porque a infraestrutura nao estava disponivel; a confianca aqui vem de contrato, logica de migracao e testes, nao de DDL executada em ambiente PC1/PC2.
+- `python tooling/dev.py up` falhou no host atual com `FileNotFoundError: [WinError 2]` ao invocar `docker`; por isso nao houve validacao browser/full-stack real nesta rodada.
+- `python tooling/dev.py doctor --host 127.0.0.1 --backend-port 8000 --frontend-port 4300 --json-out outputs/qa/quick_diagnostics_report.json` confirmou `overall_ok: False`, `health_ok: False`, `deps_http_ok: False` e `deps_tcp_ok: False`, reforcando a indisponibilidade do backend real no ambiente.
+- O warning do `npm` sobre encaminhamento de `--watch` permanece no workspace, mas a suite Vitest efetivamente executada e o resultado final continuam validos.
+- Ainda nao existe medicao factual, nesta maquina, de quantos registros ownerless historicos restam no banco real; o ciclo fecha a trilha de endurecimento e a evidencia automatizada, mas a contagem real depende de ambiente com banco acessivel.
+
+## Decisão
+
+Recomendação: manter as correções. Confiança: alta para extinção do legado operacional, endurecimento estrutural localizado e integração contratual backend/frontend; limitada por ausência de execução real do fluxo PC1/PC2 e de DDL sobre banco ativo neste host.
+
+## Próximos passos
+
+- `D+1` | Owner: `Ops/Platform` | Disponibilizar ambiente com `docker` e dependencias PC2/PC1 para executar `python tooling/dev.py up` e validar a promocao real do schema, a contagem factual do backlog ownerless e o fluxo browser/full-stack da tela `tools`.
+- `D+1` | Owner: `Backend` | Executar `migrate_schema()` e `validate_schema()` contra banco real, registrando se `pending_actions.user_id_not_null` foi aplicado ou se permaneceu bloqueado por resíduo historico.
+- `D+1` | Owner: `QA` | Reproduzir no browser a tela `tools` com um caso controlado de pending action valida e um caso bloqueado por owner ausente, coletando evidencias de UX e trilha critica.
+- `D+3` | Owner: `Security` | Revisar o resultado da promocao estrutural para confirmar que nenhum caminho de criacao/approve/reject reintroduz owner inferido em runtime.
+- `Pré-release` | Owner: `Backend + Frontend + QA + Security + Ops/Platform` | Encerrar o effort apenas quando houver evidencia operacional real do ambiente integrado ou aceitacao formal do risco remanescente.
