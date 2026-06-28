@@ -6,9 +6,9 @@ from typing import Any
 
 import structlog
 from fastapi import Request
+from prometheus_client import REGISTRY
 from prometheus_client import Counter as PromCounter
 from prometheus_client import Histogram as PromHistogram
-from prometheus_client import REGISTRY
 
 try:
     from opentelemetry import trace as otel_trace
@@ -315,6 +315,53 @@ class ObservabilityService:
             )
             raise ObservabilityServiceError("Falha ao gerar o resumo de métricas.") from e
 
+    def get_pending_actions_legacy_residue_summary(self, limit: int = 20) -> dict[str, Any]:
+        op = "pending_actions_legacy_residue_summary"
+        op_start = self._observe_operation_start(op)
+        safe_limit = max(1, int(limit))
+        logger.info(
+            "observability_pending_actions_legacy_residue_requested",
+            operation=op,
+            limit=safe_limit,
+        )
+        with self._span_context("observability.service.pending_actions_legacy_residue_summary") as span:
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.operation": op,
+                    "observability.limit": safe_limit,
+                },
+            )
+            try:
+                from app.repositories.pending_action_repository import PendingActionRepository
+
+                summary = PendingActionRepository().get_legacy_residue_summary(limit=safe_limit)
+            except Exception as e:
+                self._observe_operation_failure(op, op_start, e)
+                logger.exception(
+                    "observability_pending_actions_legacy_residue_failed",
+                    operation=op,
+                    limit=safe_limit,
+                    error=str(e),
+                )
+                raise ObservabilityServiceError(
+                    "Falha ao resumir pending_actions legadas bloqueadas."
+                ) from e
+
+            item_count = len(summary.get("items") or [])
+            self._set_span_attrs(
+                span,
+                **{
+                    "observability.event_count": item_count,
+                    "observability.pending_without_owner": int(
+                        summary.get("pending_without_owner") or 0
+                    ),
+                },
+            )
+            self._observe_result_size(op, "rows", item_count)
+            self._observe_operation_success(op, op_start)
+            return summary
+
     @staticmethod
     def _safe_float(value: Any) -> float | None:
         if value is None:
@@ -396,6 +443,14 @@ class ObservabilityService:
                 ),
                 "max_p95_latency_ms": float(
                     getattr(settings, "OQ_SLO_WORKERS_MAX_P95_LATENCY_MS", 4000.0)
+                ),
+            },
+            "autonomy": {
+                "max_error_rate_pct": float(
+                    getattr(settings, "OQ_SLO_AUTONOMY_MAX_ERROR_RATE_PCT", 5.0)
+                ),
+                "max_p95_latency_ms": float(
+                    getattr(settings, "OQ_SLO_AUTONOMY_MAX_P95_LATENCY_MS", 5000.0)
                 ),
             },
         }
@@ -704,7 +759,7 @@ class ObservabilityService:
         logger.info(
             "observability_user_metrics_requested",
             operation="user_metrics",
-            
+
         )
         try:
             return await self._repo.get_user_metrics()
@@ -712,7 +767,7 @@ class ObservabilityService:
             logger.exception(
                 "observability_user_metrics_failed",
                 operation="user_metrics",
-                
+
                 error=str(e),
             )
             raise ObservabilityServiceError("Falha ao gerar métricas por usuário.") from e
@@ -721,7 +776,7 @@ class ObservabilityService:
         logger.info(
             "observability_user_activity_requested",
             operation="user_activity",
-            
+
         )
         try:
             return self._repo.get_user_activity()
@@ -729,7 +784,7 @@ class ObservabilityService:
             logger.exception(
                 "observability_user_activity_failed",
                 operation="user_activity",
-                
+
                 error=str(e),
             )
             raise ObservabilityServiceError("Falha ao gerar atividade por usuário.") from e

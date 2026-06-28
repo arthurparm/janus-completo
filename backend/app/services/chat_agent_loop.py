@@ -11,6 +11,7 @@ from app.config import settings
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine, RiskProfile
 from app.core.infrastructure.fallback_chain import FallbackChain
 from app.core.llm import ModelPriority, ModelRole
+from app.repositories.observability_repository import record_audit_event_direct
 
 logger = structlog.get_logger(__name__)
 _PENDING_ACTION_ID_RE = re.compile(r"Pending action id:\s*(\d+)", re.IGNORECASE)
@@ -245,6 +246,48 @@ class ChatAgentLoop:
 
             # Add agent reasoning to prompt
             current_prompt += f"\nAssistant: {response_text}"
+
+            # --- MAS Security Antessala: validate tool calls before execution ---
+
+            from app.core.agents.mas_rate_limiter import mas_rate_limiter
+            from app.core.agents.mas_validator import mas_validator
+
+            validated_tool_calls = []
+            for tc in tool_calls:
+                tname = tc.get("name", "")
+
+                tc_args = tc.get("arguments") or tc.get("args") or {}
+
+                ok, reason = mas_validator.validate_tool_call(tname, tc_args, policy)
+                record_audit_event_direct(
+                    endpoint="mas",
+                    action="tool_call_validated",
+                    status="blocked" if not ok else "approved",
+                    details_json={
+                        "tool_name": tname,
+                        "conversation_id": conversation_id,
+                        "user_id": user_id,
+                        "was_vetoed": not ok,
+                        "reason": reason if not ok else None,
+                    },
+                )
+                if not ok:
+                    validated_tool_calls.append({
+                        "name": tname,
+                        "result": f"Action blocked by security policy: {reason}",
+                    })
+                else:
+                    validated_tool_calls.append(tc)
+
+            rate_ok, rate_reason = mas_rate_limiter.check(conversation_id, len(validated_tool_calls))
+            if not rate_ok:
+                validated_tool_calls = [
+                    {"name": tc.get("name", "unknown"), "result": f"Rate limit exceeded: {rate_reason}"}
+                    for tc in validated_tool_calls
+                ]
+
+            tool_calls = validated_tool_calls
+            # --- End MAS Security Antessala ---
 
             # Execute tools
             tool_outputs = await self._execute_tools_with_fallback(

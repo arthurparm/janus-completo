@@ -1,5 +1,10 @@
 from typing import Any
 
+from app.core.exceptions.chat_exceptions import (
+    ChatServiceError,
+    ConversationNotFoundError,
+    MessageTooLargeError,
+)
 from app.core.llm import ModelPriority, ModelRole
 from app.repositories.chat_repository import ChatRepository
 from app.services.chat import ConversationService, MessageOrchestrationService, StreamingService
@@ -22,6 +27,14 @@ from app.services.rag_service import RAGService
 from app.services.tool_executor_service import ToolExecutorService
 from app.services.tool_service import ToolService
 from fastapi import Request
+
+__all__ = [
+    "ChatService",
+    "ChatServiceError",
+    "ConversationNotFoundError",
+    "MessageTooLargeError",
+    "get_chat_service",
+]
 
 
 class ChatService:

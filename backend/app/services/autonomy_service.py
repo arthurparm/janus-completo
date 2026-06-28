@@ -2,24 +2,29 @@ import asyncio
 import importlib
 import json
 import time
-from datetime import datetime
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 import structlog
-from fastapi import Request
-from prometheus_client import Counter, Gauge, Histogram
-
+from app.core.autonomy.autonomy_cost_tracker import autonomy_cost_tracker
+from app.core.autonomy.decision_quality_tracker import decision_quality_tracker
+from app.core.autonomy.domain_circuit_breaker import DomainCircuitBreaker
+from app.core.autonomy.goal_conflict_detector import ConflictReport, goal_conflict_detector
 from app.core.autonomy.goal_manager import Goal, GoalManager, GoalStatus
 from app.core.autonomy.planner import build_plan_for_goal
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine
+from app.core.evolution.reflector_agent import HealthScore  # noqa: F401
 from app.core.tools.action_module import action_registry
 from app.models.schemas import TaskState, TaskStateEvent
 from app.repositories.autonomy_repository import AutonomyRepository
+from app.repositories.observability_repository import record_audit_event_direct
 from app.services.autonomy_lock_service import AutonomyLockService
 from app.services.collaboration_service import CollaborationService
 from app.services.llm_service import LLMService
 from app.services.optimization_service import OptimizationService
+from fastapi import Request
+from prometheus_client import Counter, Gauge, Histogram
 
 logger = structlog.get_logger(__name__)
 
@@ -35,11 +40,24 @@ AUTONOMY_LATENCY = Histogram(
 
 AUTONOMY_ACTIVE = Gauge("autonomy_loop_active", "Indicador se o loop de autonomia está ativo")
 
+AUTONOMY_SLO_SUCCESS_RATE = Gauge(
+    "autonomy_slo_success_rate", "Autonomy goal success rate over last 24h window"
+)
+AUTONOMY_SLO_P95_LATENCY = Gauge(
+    "autonomy_slo_p95_latency_ms", "Autonomy cycle P95 latency in milliseconds"
+)
+
 
 class AutonomyServiceError(Exception):
     """Erro base para o serviço de autonomia."""
 
     pass
+
+
+class AutonomyConflictError(AutonomyServiceError):
+    def __init__(self, conflicts: list[ConflictReport]):
+        self.conflicts = conflicts
+        super().__init__(f"Goal conflicts detected: {len(conflicts)} conflict(s)")
 
 
 @dataclass
@@ -60,6 +78,9 @@ class AutonomyConfig:
 class AutonomyService:
     """Serviço AutonomyLoop básico: Perceber → Planejar → Executar → Refletir → Otimizar."""
 
+    MAX_ACTIONS_PER_MINUTE = 20
+    MAX_ACTIONS_PER_HOUR = 200
+
     def __init__(
         self,
         optimization_service: OptimizationService,
@@ -75,6 +96,7 @@ class AutonomyService:
         self._config = AutonomyConfig()
         # Safe-by-default: require explicit approval before action execution.
         self._policy = PolicyEngine(PolicyConfig(auto_confirm=False))
+        self._domain_cb = DomainCircuitBreaker()
         self._autonomy_task: asyncio.Task | None = None
         self._running = False
         self._cycle_count = 0
@@ -93,6 +115,14 @@ class AutonomyService:
             "expires_at": None,
             "lease_held": False,
         }
+        self._action_count_minute = 0
+        self._action_count_hour = 0
+        self._action_window_minute_start = 0.0
+        self._action_window_hour_start = 0.0
+        self._recent_cycle_outcomes: list[tuple[float, bool]] = []
+        self._recent_cycle_latencies: list[float] = []
+        self._cost_tracker = autonomy_cost_tracker
+        self._decision_tracker = decision_quality_tracker
 
     def _ensure_core_tools_registered(self) -> None:
         """Carrega agent_tools uma vez para disparar o registro no action_registry."""
@@ -109,6 +139,30 @@ class AutonomyService:
 
     def _is_active(self) -> bool:
         return self._autonomy_task is not None and not self._autonomy_task.done()
+
+    def _check_throttle(self) -> bool:
+        now = time.time()
+        if now - self._action_window_minute_start >= 60:
+            self._action_count_minute = 0
+            self._action_window_minute_start = now
+        if now - self._action_window_hour_start >= 3600:
+            self._action_count_hour = 0
+            self._action_window_hour_start = now
+        if self._action_count_minute >= self.MAX_ACTIONS_PER_MINUTE:
+            return True
+        if self._action_count_hour >= self.MAX_ACTIONS_PER_HOUR:
+            return True
+        self._action_count_minute += 1
+        self._action_count_hour += 1
+        return False
+
+    def reset_throttle(self) -> dict[str, Any]:
+        now = time.time()
+        self._action_count_minute = 0
+        self._action_count_hour = 0
+        self._action_window_minute_start = now
+        self._action_window_hour_start = now
+        return {"throttle_reset": True, "timestamp": now, "action_counts": {"minute": 0, "hour": 0}}
 
     def _refresh_runtime_lock_status(
         self,
@@ -174,6 +228,18 @@ class AutonomyService:
         AUTONOMY_ACTIVE.set(1)
         self._ensure_core_tools_registered()
 
+        if self._goal_manager:
+            active_goals = self._goal_manager.list_active_goals()
+            pending_goals = self._goal_manager.list_goals(status=GoalStatus.PENDING)
+            all_conflicts: list[ConflictReport] = []
+            for pending in pending_goals:
+                conflicts = goal_conflict_detector.detect_conflicts(pending, active_goals)
+                all_conflicts.extend(conflicts)
+            if all_conflicts:
+                self._running = False
+                AUTONOMY_ACTIVE.set(0)
+                raise AutonomyConflictError(all_conflicts)
+
         try:
             existing_run = self._repo.get_active_run(
                 user_id=self._config.user_id, project_id=self._config.project_id
@@ -205,6 +271,15 @@ class AutonomyService:
             self._current_run_id = None
 
         self._autonomy_task = asyncio.create_task(self._run_loop())
+        record_audit_event_direct(
+            endpoint="autonomy",
+            action="autonomy_started",
+            status="started",
+            details_json={
+                "config_keys": list(self._config.__dict__.keys()),
+                "run_id": self._current_run_id,
+            },
+        )
         logger.info(
             "AutonomyLoop iniciado",
             interval_seconds=config.interval_seconds,
@@ -258,6 +333,29 @@ class AutonomyService:
 
         logger.info("AutonomyLoop parado")
         return True
+
+    async def restart(self) -> dict:
+        old_config = self._config
+        try:
+            stop_result = await self.stop()
+        except Exception:
+            stop_result = {}
+        await asyncio.sleep(2)
+        start_result = await self.start(config=old_config)
+        record_audit_event_direct(
+            endpoint="autonomy",
+            action="autonomy_restarted",
+            status="success",
+            details_json={
+                "previous_config": str(old_config.__dict__) if old_config else "none",
+            },
+        )
+        return {
+            "restarted": True,
+            "config": str(old_config.__dict__) if old_config else None,
+            "stop_result": str(stop_result) if stop_result else "ok",
+            "start_result": str(start_result) if start_result else "ok",
+        }
 
     def get_status(self) -> dict[str, Any]:
         return {
@@ -331,14 +429,23 @@ class AutonomyService:
         current_goal: Goal | None = None
         try:
             if self._goal_manager:
-                current_goal = self._goal_manager.get_next_goal()
-                if current_goal and current_goal.status == GoalStatus.PENDING:
+                pending_goals = self._goal_manager.list_goals(status=GoalStatus.PENDING)
+                for goal in pending_goals:
+                    if goal.is_blocked:
+                        logger.info(
+                            "autonomy_goal_blocked_skipped",
+                            goal_id=goal.id,
+                            title=goal.title,
+                        )
+                        continue
+                    current_goal = goal
                     self._goal_manager.update_goal_status(
                         current_goal.id,
                         GoalStatus.IN_PROGRESS,
                         reason="autonomy_loop_selected",
                         actor="autonomy_loop",
                     )
+                    break
         except Exception as e:
             logger.error("Erro ao buscar/atualizar meta no GoalManager", exc_info=e)
             current_goal = None
@@ -493,12 +600,23 @@ class AutonomyService:
                 except Exception as e:
                     outcome = "failure"
                     logger.error("Falha no ciclo do AutonomyLoop", exc_info=e)
+                    record_audit_event_direct(
+                        endpoint="autonomy",
+                        action="cycle_execution_failed",
+                        status="failure",
+                        details_json={
+                            "cycle_count": self._cycle_count,
+                            "run_id": self._current_run_id,
+                            "error": str(e)[:500],
+                        },
+                    )
                 finally:
                     duration = time.perf_counter() - start_t
                     AUTONOMY_CYCLES.labels(outcome).inc()
                     AUTONOMY_LATENCY.observe(duration)
                     self._cycle_count += 1
                     self._last_cycle_at = time.time()
+                    self._record_cycle_slo(outcome, duration)
 
                 try:
                     if self._current_run_id:
@@ -542,10 +660,35 @@ class AutonomyService:
         await self._run_cycle_enqueue()
 
     async def _run_cycle_enqueue(self):
+        if self._cost_tracker.budget_exhausted():
+            logger.warning("autonomy_budget_exhausted", remaining=0)
+            record_audit_event_direct(
+                endpoint="autonomy",
+                action="budget_exhausted",
+                status="blocked",
+                details_json={"reason": "daily_token_budget_exceeded"},
+            )
+            return
+        if self._cost_tracker.budget_warning():
+            logger.warning("autonomy_budget_warning", consumed_pct=80)
+        if self._check_throttle():
+            logger.warning("autonomy_throttled", action_count_minute=self._action_count_minute)
+            return {"status": "throttled", "reason": "rate_limit_exceeded"}
         cycle = self._cycle_count + 1
+        record_audit_event_direct(
+            endpoint="autonomy",
+            action="cycle_start",
+            status="running",
+            details_json={"cycle": cycle, "run_id": self._current_run_id},
+        )
         current_goal: Goal | None = None
         step_name = ""
         step_t0 = time.perf_counter()
+
+        if self._domain_cb.is_open("tools"):
+            logger.warning("autonomy_cycle_skipped_circuit_open", domain="tools", cycle=cycle)
+            return
+
         try:
             metrics = await self._perceive_metrics()
             current_goal = self._select_goal()
@@ -562,7 +705,55 @@ class AutonomyService:
                 )
                 return
 
+            try:
+                cb_health = self._domain_cb.get_domain_health() if self._domain_cb else {}
+                goal_metrics = self._get_recent_goal_metrics() if hasattr(self, '_get_recent_goal_metrics') else {}
+                audit_summary = {"veto_events": 0, "safety_violations": 0}
+                cost_data = {"budget_consumed_ratio": 0.0}
+                if hasattr(self, '_cost_tracker'):
+                    daily = self._cost_tracker.get_daily_total()
+                    cost_data["budget_consumed_ratio"] = daily.get("tokens_used", 0) / max(daily.get("daily_budget", 1), 1)
+
+                health = reflector.compute_multidimensional_score(  # noqa: F821
+                    circuit_breaker_health=cb_health,
+                    goal_metrics=goal_metrics,
+                    audit_summary=audit_summary,
+                    cost_data=cost_data,
+                ) if hasattr(reflector, 'compute_multidimensional_score') else None  # noqa: F821
+            except Exception:
+                health = None
+
+            if health is not None:
+                if health.overall >= 0.8 and health.safety < 0.5:
+                    logger.warning("autonomy_health_safety_low", safety=health.safety, overall=health.overall)
+                    record_audit_event_direct(
+                        endpoint="autonomy", action="evolution_blocked_safety",
+                        status="blocked", details_json={"reason": "safety_below_05", "overall": health.overall}
+                    )
+                    return
+                any_dimension_critical = any(
+                    v < 0.3 for k, v in health.__dict__.items() if k != "overall" and isinstance(v, (int, float))
+                )
+                if any_dimension_critical:
+                    logger.warning("autonomy_health_critical", health_score=health.__dict__)
+                    record_audit_event_direct(
+                        endpoint="autonomy", action="autonomy_paused_health_critical",
+                        status="paused", details_json={"health": health.__dict__}
+                    )
+                    self.update_state(active=False)
+                    return
+
             plan = await self._build_plan(current_goal, metrics)
+            try:
+                self._cost_tracker.record_usage(
+                    goal_id=getattr(current_goal, 'id', 'unknown'),
+                    action_type="plan_generation",
+                    model="unknown",
+                    tokens_in=0,
+                    tokens_out=0,
+                )
+            except Exception:
+                pass
             step = self._select_step_for_enqueue(plan)
             if not step:
                 logger.info("[AutonomyLoop] Plano vazio no modo enqueue_router")
@@ -576,6 +767,13 @@ class AutonomyService:
                     duration_seconds=time.perf_counter() - step_t0,
                 )
                 return
+
+            decision_id = self._decision_tracker.record_decision(
+                goal_id=getattr(current_goal, 'id', 'unknown'),
+                decision_type="evolve_tool",
+                predicted_outcome="Tool will improve system capability",
+                context={"health_score": health.__dict__ if health else None},
+            )
 
             step_name = str(step.get("tool", "")).strip()
             idempotency_key = (
@@ -636,7 +834,21 @@ class AutonomyService:
                 error=None,
                 duration_seconds=time.perf_counter() - step_t0,
             )
+            self._domain_cb.record_success("tools")
+            record_audit_event_direct(
+                endpoint="autonomy",
+                action="cycle_end",
+                status="success",
+                details_json={
+                    "cycle": cycle,
+                    "run_id": self._current_run_id,
+                    "goal_id": getattr(current_goal, "id", None),
+                    "task_id": task_id,
+                    "selected_tool": step_name,
+                },
+            )
         except Exception as e:
+            self._domain_cb.record_failure("tools")
             if current_goal:
                 try:
                     self._goal_manager.update_goal_status(
@@ -663,7 +875,69 @@ class AutonomyService:
                 error=str(e),
                 duration_seconds=time.perf_counter() - step_t0,
             )
+            record_audit_event_direct(
+                endpoint="autonomy",
+                action="cycle_failed",
+                status="failure",
+                details_json={
+                    "cycle": cycle,
+                    "run_id": self._current_run_id,
+                    "goal_id": getattr(current_goal, "id", None),
+                    "selected_tool": step_name,
+                    "error": str(e)[:500],
+                },
+            )
             raise
+
+    def _update_slo_metrics(self) -> None:
+        now = time.time()
+        cutoff = now - 86400
+
+        self._recent_cycle_outcomes = [
+            (ts, ok) for ts, ok in self._recent_cycle_outcomes if ts >= cutoff
+        ]
+        self._recent_cycle_latencies = [
+            lat for lat in self._recent_cycle_latencies if lat >= 0
+        ]
+
+        outcomes_in_window = self._recent_cycle_outcomes
+        if outcomes_in_window:
+            success_count = sum(1 for _, ok in outcomes_in_window if ok)
+            success_rate = success_count / len(outcomes_in_window)
+            AUTONOMY_SLO_SUCCESS_RATE.set(success_rate)
+
+        latencies_in_window = self._recent_cycle_latencies
+        if latencies_in_window:
+            sorted_lat = sorted(latencies_in_window)
+            p95_idx = max(0, int(len(sorted_lat) * 0.95) - 1)
+            p95_s = sorted_lat[min(p95_idx, len(sorted_lat) - 1)]
+            AUTONOMY_SLO_P95_LATENCY.set(p95_s * 1000.0)
+
+    def _record_cycle_slo(self, outcome: str, duration_seconds: float) -> None:
+        self._recent_cycle_outcomes.append((time.time(), outcome == "success"))
+        self._recent_cycle_latencies.append(duration_seconds)
+        cutoff = time.time() - 86400
+        self._recent_cycle_outcomes = [
+            (ts, ok) for ts, ok in self._recent_cycle_outcomes if ts >= cutoff
+        ]
+        self._update_slo_metrics()
+
+    def _get_recent_goal_metrics(self) -> dict:
+        try:
+            from app.core.autonomy.goal_metrics import goal_metrics_calculator
+            active = self._goal_manager.list_active_goals() if hasattr(self, '_goal_manager') and self._goal_manager else []
+            if not active:
+                return {"success_rate": 0.5}
+            rates = []
+            for g in active:
+                steps = getattr(g, 'plan', []) or []
+                metrics = goal_metrics_calculator.compute(g.id, steps)
+                rates.append(metrics.success_rate)
+            avg = sum(rates) / max(len(rates), 1)
+            return {"success_rate": avg}
+        except Exception:
+            return {"success_rate": 0.5}
+
 
 # --- Dependency Injection Helper ---
 def get_autonomy_service(request: Request) -> "AutonomyService":

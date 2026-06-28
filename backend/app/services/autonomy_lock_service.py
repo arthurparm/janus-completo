@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
+from app.core.infrastructure.redis_manager import get_redis_manager
 from app.repositories.autonomy_lock_repository import AutonomyLockRepository
 
 
@@ -21,6 +24,7 @@ class AutonomyLeaseState:
 class AutonomyLockService:
     def __init__(self, repo: AutonomyLockRepository | None = None):
         self._repo = repo or AutonomyLockRepository()
+        self._leases: dict[str, dict[str, Any]] = {}
 
     @staticmethod
     def make_owner_id() -> str:
@@ -35,6 +39,23 @@ class AutonomyLockService:
         if user_id:
             return f"user:{user_id}"
         return "global"
+
+    async def acquire(self, scope: str, owner_id: str, ttl: int) -> bool:
+        redis = get_redis_manager()
+        try:
+            await redis.initialize()
+            if await redis.ping():
+                key = f"janus:autonomy:lease:{scope}"
+                acquired = await redis.client.set(key, owner_id, nx=True, px=ttl * 1000)
+                if acquired:
+                    self._leases[scope] = {"owner": owner_id, "expires": time.time() + ttl}
+                    return True
+        except Exception:
+            pass
+        if scope not in self._leases or time.time() > self._leases[scope]["expires"]:
+            self._leases[scope] = {"owner": owner_id, "expires": time.time() + ttl}
+            return True
+        return False
 
     def try_acquire(
         self,
@@ -57,7 +78,9 @@ class AutonomyLockService:
         return ok, self._to_state(scope_key, owner_id, ok, row)
 
     def release(self, *, scope_key: str, owner_id: str) -> bool:
-        return self._repo.release(scope_key=scope_key, owner_id=owner_id)
+        released = self._repo.release(scope_key=scope_key, owner_id=owner_id)
+        self._leases.pop(scope_key, None)
+        return released
 
     def get(self, *, scope_key: str) -> AutonomyLeaseState:
         row = self._repo.get(scope_key)

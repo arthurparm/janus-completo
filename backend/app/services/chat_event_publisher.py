@@ -4,10 +4,12 @@ Publishes agent events to RabbitMQ with fallback strategies.
 """
 
 import time
-import structlog
 from typing import Any
-from app.core.infrastructure.message_broker import get_broker
+
+import structlog
 from app.core.infrastructure.fallback_chain import FallbackChain
+from app.core.infrastructure.logging_config import TRACE_ID
+from app.core.infrastructure.message_broker import get_broker
 
 logger = structlog.get_logger(__name__)
 
@@ -59,6 +61,10 @@ class ChatEventPublisher:
             "task_id": task_id or conversation_id,
             "user_id": user_id,
         }
+        trace_id = str(TRACE_ID.get() or "").strip()
+        if trace_id and trace_id != "-":
+            payload["trace_id"] = trace_id
+            payload["request_id"] = trace_id
 
         # Create fallback chain
         chain = FallbackChain(

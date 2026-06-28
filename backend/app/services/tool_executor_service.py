@@ -644,6 +644,9 @@ class ToolExecutorService:
                     error=error_msg,
                     exc_info=True,
                 )
+                ns = action_registry.get_namespace(name)
+                if ns == "evolution":
+                    action_registry.rollback_tool(name)
                 # Retorna erro formatado para o LLM tentar corrigir
                 if strict:
                     outputs.append(

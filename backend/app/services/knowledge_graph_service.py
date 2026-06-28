@@ -281,6 +281,12 @@ class KnowledgeGraphService:
                         except Exception:
                             pass
                     created_entities_count += 1
+                    try:
+                        await self._quarantine_entity_if_no_code_evidence(
+                            target, ent["canonical_name"]
+                        )
+                    except Exception:
+                        pass
 
                 except CircuitOpenError as e:
                     remaining = max(0, len(prepared_entities) - idx)
@@ -581,6 +587,32 @@ class KnowledgeGraphService:
         await graph_guardian.quarantine_item(
             item_type="relationship", content=rel, source_id=context_id, reason=reason
         )
+
+    async def _quarantine_entity_if_no_code_evidence(
+        self, target: Any, canonical_name: str
+    ) -> None:
+        code_rows = await self._run_rows(
+            target,
+            """
+            MATCH (f)
+            WHERE (f:File OR f:CodeFile OR f:CodeFunction OR f:CodeClass)
+              AND (f.name = $name OR f.canonical_name = $name OR f.file_path CONTAINS $name)
+            RETURN count(f) AS code_count
+            LIMIT 1
+            """,
+            {"name": canonical_name},
+        )
+        code_count = int((code_rows or [{}])[0].get("code_count", 0) or 0)
+        if code_count == 0:
+            await self._run_rows(
+                target,
+                """
+                MATCH (e:Entity {canonical_name: $canonical_name})
+                SET e:Quarantine, e.quarantine_reason = $reason
+                RETURN e.canonical_name AS name
+                """,
+                {"canonical_name": canonical_name, "reason": "no_code_evidence"},
+            )
 
     async def get_subgraph_from_context(self, node_names: list[str], hops: int = 1) -> dict[str, Any]:
         """

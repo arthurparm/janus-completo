@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import structlog
@@ -43,6 +44,20 @@ class DBMigrationService:
             return any(col.get("name") == column for col in cols)
         except Exception:
             return False
+
+    def _column_nullable(self, s: Session, table: str, column: str) -> bool | None:
+        try:
+            insp = inspect(s.get_bind())
+            cols = insp.get_columns(table) or []
+            for col in cols:
+                if col.get("name") == column:
+                    nullable = col.get("nullable")
+                    if nullable is None:
+                        return None
+                    return bool(nullable)
+        except Exception:
+            return None
+        return None
 
     def _table_exists(self, s: Session, table: str) -> bool:
         try:
@@ -92,6 +107,94 @@ class DBMigrationService:
                         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                     """
+
+    def _count_null_pending_action_user_ids(self, s: Session) -> int | None:
+        if not self._table_exists(s, "pending_actions"):
+            return None
+        if not self._column_exists(s, "pending_actions", "user_id"):
+            return None
+        try:
+            row = s.execute(
+                text("SELECT COUNT(*) FROM pending_actions WHERE user_id IS NULL")
+            ).first()
+            if not row:
+                return 0
+            return int(row[0] or 0)
+        except Exception:
+            return None
+
+    def _pending_action_user_id_not_null_sql(self, *, dialect: str) -> str | None:
+        if dialect in ("postgresql", "postgres"):
+            return "ALTER TABLE pending_actions ALTER COLUMN user_id SET NOT NULL"
+        if dialect in ("mysql", "mariadb"):
+            return "ALTER TABLE pending_actions MODIFY COLUMN user_id VARCHAR(128) NOT NULL"
+        return None
+
+    def _backfill_pending_action_user_ids(self, s: Session, applied: list[str]) -> None:
+        if not self._table_exists(s, "pending_actions") or not self._table_exists(s, "sessions"):
+            return
+        if not self._column_exists(s, "pending_actions", "user_id"):
+            return
+        if not self._column_exists(s, "pending_actions", "args_json"):
+            return
+        rows = s.execute(
+            text("SELECT id, args_json FROM pending_actions WHERE user_id IS NULL")
+        ).fetchall()
+        if not rows:
+            return
+
+        updated = 0
+        blocked = 0
+        for row in rows:
+            action_id = row[0]
+            args_json = row[1]
+            try:
+                payload = json.loads(args_json) if args_json else {}
+            except Exception:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+
+            conversation_id = payload.get("conversation_id")
+            conversation_id_text = str(conversation_id or "").strip()
+            if not conversation_id_text:
+                blocked += 1
+                continue
+            try:
+                session_id = int(conversation_id_text)
+            except Exception:
+                blocked += 1
+                continue
+
+            owner_row = s.execute(
+                text("SELECT user_id FROM sessions WHERE id = :session_id"),
+                {"session_id": session_id},
+            ).first()
+            owner_user_id = owner_row[0] if owner_row else None
+            if owner_user_id is None:
+                blocked += 1
+                continue
+
+            result = s.execute(
+                text(
+                    "UPDATE pending_actions SET user_id = :user_id "
+                    "WHERE id = :action_id AND user_id IS NULL"
+                ),
+                {"user_id": str(owner_user_id), "action_id": int(action_id)},
+            )
+            updated += int(getattr(result, "rowcount", 0) or 0)
+
+        if updated:
+            commit = getattr(s, "commit", None)
+            if callable(commit):
+                commit()
+        if updated or blocked:
+            applied.append("pending_actions.user_id_backfill")
+        logger.info(
+            "pending_actions_user_id_backfill_completed",
+            updated=updated,
+            blocked=blocked,
+        )
 
     def validate_schema(self) -> dict[str, Any]:
         s = self._get_session()
@@ -206,9 +309,33 @@ class DBMigrationService:
             )
             add(
                 "pending_actions",
+                "user_id",
+                "column",
+                self._column_exists(s, "pending_actions", "user_id"),
+            )
+            add(
+                "pending_actions",
+                "user_id_not_null",
+                "constraint",
+                self._column_nullable(s, "pending_actions", "user_id") is False,
+            )
+            add(
+                "pending_actions",
+                "ownerless_rows_eliminated",
+                "data",
+                (self._count_null_pending_action_user_ids(s) or 0) == 0,
+            )
+            add(
+                "pending_actions",
                 "simulation_summary_json",
                 "column",
                 self._column_exists(s, "pending_actions", "simulation_summary_json"),
+            )
+            add(
+                "pending_actions",
+                "idx_pending_actions_status_user",
+                "index",
+                self._index_exists(s, "pending_actions", "idx_pending_actions_status_user"),
             )
             add(
                 "pending_actions",
@@ -287,6 +414,9 @@ class DBMigrationService:
     def migrate_schema(self) -> dict[str, Any]:
         s = self._get_session()
         applied: list[str] = []
+        pending_actions_null_rows: int | None = None
+        pending_actions_user_id_not_null_enforced = False
+        pending_actions_user_id_not_null_blocked = False
         try:
             dialect = self._dialect_name(s)
             consent_table = Consent.__tablename__
@@ -387,6 +517,13 @@ class DBMigrationService:
                     "pending_actions.simulation_summary_json",
                     applied,
                 )
+            if not self._column_exists(s, "pending_actions", "user_id"):
+                self._execute_ddl(
+                    s,
+                    "ALTER TABLE pending_actions ADD COLUMN user_id VARCHAR(128) NULL",
+                    "pending_actions.user_id",
+                    applied,
+                )
             if not self._column_exists(s, "pending_actions", "simulation_generated_at"):
                 self._execute_ddl(
                     s,
@@ -400,6 +537,39 @@ class DBMigrationService:
                     "ALTER TABLE pending_actions ADD COLUMN simulation_version VARCHAR(20) NULL",
                     "pending_actions.simulation_version",
                     applied,
+                )
+            if not self._index_exists(s, "pending_actions", "idx_pending_actions_status_user"):
+                self._execute_ddl(
+                    s,
+                    "CREATE INDEX idx_pending_actions_status_user ON pending_actions (status, user_id)",
+                    "pending_actions.idx_pending_actions_status_user",
+                    applied,
+                )
+            self._backfill_pending_action_user_ids(s, applied)
+            pending_actions_null_rows = self._count_null_pending_action_user_ids(s)
+            pending_actions_user_id_nullable = self._column_nullable(s, "pending_actions", "user_id")
+            if pending_actions_user_id_nullable is False:
+                pending_actions_user_id_not_null_enforced = True
+            elif pending_actions_null_rows == 0:
+                not_null_sql = self._pending_action_user_id_not_null_sql(dialect=dialect)
+                if not_null_sql:
+                    self._execute_ddl(
+                        s,
+                        not_null_sql,
+                        "pending_actions.user_id_not_null",
+                        applied,
+                    )
+                    pending_actions_user_id_not_null_enforced = True
+                else:
+                    logger.warning(
+                        "pending_actions_user_id_not_null_sql_unsupported",
+                        dialect=dialect,
+                    )
+            elif pending_actions_null_rows and pending_actions_null_rows > 0:
+                pending_actions_user_id_not_null_blocked = True
+                logger.warning(
+                    "pending_actions_user_id_not_null_blocked",
+                    remaining_without_owner=pending_actions_null_rows,
                 )
             if not self._index_exists(s, "profiles", "idx_profile_user"):
                 self._execute_ddl(
@@ -723,13 +893,22 @@ class DBMigrationService:
                 s.commit()
             except Exception:
                 pass
-            return {"status": "applied", "changes": applied}
+            return {
+                "status": "applied",
+                "changes": applied,
+                "pending_actions_user_id_null_rows": pending_actions_null_rows,
+                "pending_actions_user_id_not_null_enforced": pending_actions_user_id_not_null_enforced,
+                "pending_actions_user_id_not_null_blocked": pending_actions_user_id_not_null_blocked,
+            }
         except Exception as e:
             logger.error("DB migration failed", exc_info=e)
             return {
                 "status": "error",
                 "detail": "Internal error during migration",
                 "changes": applied,
+                "pending_actions_user_id_null_rows": pending_actions_null_rows,
+                "pending_actions_user_id_not_null_enforced": pending_actions_user_id_not_null_enforced,
+                "pending_actions_user_id_not_null_blocked": pending_actions_user_id_not_null_blocked,
             }
         finally:
             s.close()

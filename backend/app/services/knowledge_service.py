@@ -9,8 +9,6 @@ from fastapi import Request
 
 from app.db.graph import get_graph_db
 from app.core.memory.rag_telemetry import emit_step_telemetry
-from app.core.memory.graph_rag_core import query_knowledge_graph
-from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
 from app.repositories.knowledge_repository import KnowledgeRepository
 from app.services.code_analysis_service import code_analysis_service
 
@@ -20,9 +18,6 @@ CODEBASE_DIR = "/app"
 
 
 # --- Custom Service-Layer Exceptions ---
-from app.core.memory.graph_embeddings import GraphEmbeddingsManager
-
-
 class KnowledgeServiceError(Exception):
     """Base exception for knowledge service errors."""
 
@@ -97,6 +92,8 @@ class KnowledgeService:
 
     async def trigger_consolidation(self, limit: int, min_score: float = 0.0) -> dict[str, Any]:
         # Utiliza consolidação em lote para alinhar com Sprint 8
+        from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+
         stats = await knowledge_consolidator.consolidate_batch(limit=limit, min_score=min_score)
         return stats
 
@@ -497,6 +494,8 @@ class KnowledgeService:
     # --- Sprint 8 Operations ---
 
     async def semantic_query(self, question: str, limit: int = 10) -> str:
+        from app.core.memory.graph_rag_core import query_knowledge_graph
+
         started_at = time.perf_counter()
         try:
             answer = await query_knowledge_graph(question, limit=limit)
@@ -619,8 +618,10 @@ class KnowledgeService:
             raise
 
     async def consolidate_document(
-        self, doc_id: str, limit: int = 50
+        self, doc_id: str, limit: int = 50, user_id: str | None = None
     ) -> dict[str, Any]:
+        from app.core.workers.knowledge_consolidator_worker import knowledge_consolidator
+
         return await knowledge_consolidator.consolidate_document(
             doc_id=doc_id, limit=limit
         )
@@ -677,6 +678,8 @@ class KnowledgeService:
             }
 
     async def reindex_graph(self, batch_size: int = 50, labels: list[str] = None) -> int:
+        from app.core.memory.graph_embeddings import GraphEmbeddingsManager
+
         manager = GraphEmbeddingsManager()
         return await manager.reindex_graph(batch_size=batch_size, labels=labels)
 
