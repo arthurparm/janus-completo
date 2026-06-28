@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.security.request_guard import require_admin_actor
@@ -132,3 +132,86 @@ async def admin_manual_goal_completion_trigger(
         trigger_type="goal_completed",
     )
     return {"status": "queued"}
+
+
+@router.post("/tools/{name}/rollback")
+async def rollback_tool(name: str, request: Request):
+    require_admin_actor(request)
+    from app.core.tools.action_module import action_registry
+
+    ok = action_registry.rollback_tool(name)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Tool not found or no previous version")
+    return {"status": "ok", "tool": name, "rolled_back": True}
+
+
+class QuarantineReviewRequest(BaseModel):
+    entity_names: list[str] = Field(..., min_length=1)
+    action: str = Field("approve", pattern=r"^(approve|reject)$")
+
+
+@router.post("/knowledge/quarantine/review")
+async def review_quarantine(payload: QuarantineReviewRequest, request: Request):
+    require_admin_actor(request)
+    from app.db.graph import get_graph_db
+
+    graph = await get_graph_db()
+    if payload.action == "approve":
+        for name in payload.entity_names:
+            await graph.query(
+                "MATCH (e:Quarantine:Entity {canonical_name: $name}) REMOVE e:Quarantine, e.quarantine_reason RETURN count(e) AS removed",
+                {"name": name},
+                operation="quarantine_approve",
+            )
+    return {
+        "status": "ok",
+        "action": payload.action,
+        "entity_names": payload.entity_names,
+    }
+
+
+class ThrottleResetResponse(BaseModel):
+    throttle_reset: bool
+    timestamp: float
+    action_counts: dict[str, Any]
+
+
+@router.post("/throttle/reset", response_model=ThrottleResetResponse)
+async def reset_autonomy_throttle(request: Request):
+    require_admin_actor(request)
+    from app.services.autonomy_service import get_autonomy_service
+    service = get_autonomy_service(request)
+    result = service.reset_throttle()
+    return ThrottleResetResponse(**result)
+
+
+@router.get("/tools/{name}/provenance")
+async def get_tool_provenance(name: str, request: Request):
+    require_admin_actor(request)
+    from app.core.tools.action_module import action_registry
+    prov = action_registry.get_tool_provenance(name)
+    if prov is None:
+        from fastapi import HTTPException, status
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tool not found or no provenance data")
+    return prov
+
+
+class CostReportResponse(BaseModel):
+    period_days: int
+    total_tokens: int
+    total_cost_usd: float
+    by_action: dict
+    daily_budget: int
+    daily_total: dict
+
+
+@router.get("/cost-report", response_model=CostReportResponse)
+async def get_autonomy_cost_report(
+    request: Request,
+    days: int = 7,
+):
+    require_admin_actor(request)
+    from app.core.autonomy.autonomy_cost_tracker import autonomy_cost_tracker
+    report = autonomy_cost_tracker.get_cost_report(days=days)
+    daily = autonomy_cost_tracker.get_daily_total()
+    return CostReportResponse(**{**report, "daily_total": daily})

@@ -1,8 +1,9 @@
 
 import structlog
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 
+from app.core.security.request_guard import require_admin_actor
 from app.services.config_service import ConfigService, get_config_service
 
 router = APIRouter(tags=["Admin"])
@@ -29,19 +30,14 @@ class ConfigUpdateResponse(BaseModel):
     summary="Atualiza configurações do sistema em tempo de execução (Hot-Reload)"
 )
 async def update_config(
-    request: ConfigUpdateRequest,
+    config_request: ConfigUpdateRequest,
+    request: Request,
     service: ConfigService = Depends(get_config_service)
 ):
-    """
-    Recebe atualizações de configuração e as propaga via Redis Pub/Sub 
-    para todas as instâncias do serviço.
-    
-    Atenção: As mudanças são aplicadas em memória e perdidas no restart 
-    se não forem persistidas externamente (env vars ou secrets).
-    """
-    await service.update_config(request.updates)
+    require_admin_actor(request)
+    await service.update_config(config_request.updates)
     
     return ConfigUpdateResponse(
         message="Configuração atualizada e propagada com sucesso.",
-        updated_keys=list(request.updates.keys())
+        updated_keys=list(config_request.updates.keys())
     )

@@ -331,6 +331,34 @@ async def audit_events(
     return {"total": total, "events": events}
 
 
+@router.get(
+    "/pending-actions/legacy-residue",
+    summary="Resumo administrativo do resíduo legado bloqueado de pending_actions",
+)
+async def pending_actions_legacy_residue(
+    request: Request,
+    limit: int = 20,
+    service: ObservabilityService = Depends(get_observability_service),
+):
+    require_admin_actor(request)
+    safe_limit = max(1, int(limit))
+    logger.info(
+        "observability_endpoint_pending_actions_legacy_residue_requested",
+        operation="pending_actions_legacy_residue",
+        limit=safe_limit,
+    )
+    result = service.get_pending_actions_legacy_residue_summary(limit=safe_limit)
+    logger.info(
+        "observability_endpoint_pending_actions_legacy_residue_completed",
+        operation="pending_actions_legacy_residue",
+        limit=safe_limit,
+        total_without_owner=result.get("total_without_owner"),
+        pending_without_owner=result.get("pending_without_owner"),
+        item_count=len(result.get("items") or []),
+    )
+    return result
+
+
 @router.get("/audit/ledger/integrity", summary="Verifica integridade do audit ledger (hash-chain + assinatura)")
 async def audit_ledger_integrity(
     request: Request,

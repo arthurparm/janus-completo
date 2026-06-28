@@ -1,7 +1,8 @@
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.services.sandbox_service import SandboxService, get_sandbox_service
 
 router = APIRouter(tags=["Sandbox"])
@@ -24,11 +25,10 @@ class ExpressionRequest(BaseModel):
 
 @router.post("/execute", summary="Executa código Python no sandbox")
 async def execute_code(
-    request: CodeExecutionRequest, service: SandboxService = Depends(get_sandbox_service)
+    body: CodeExecutionRequest, request: Request, service: SandboxService = Depends(get_sandbox_service)
 ):
-    """Delega a execução de código de forma segura para o SandboxService."""
-    # InvalidInputError -> 400 e SandboxError -> 500 são tratados pelo exception handler.
-    result = service.execute_code(request.code, context=request.context)
+    require_authenticated_actor_id(request)
+    result = service.execute_code(body.code, context=body.context)
     return {
         "success": result.success,
         "output": result.output,
@@ -42,11 +42,10 @@ async def execute_code(
 
 @router.post("/evaluate", summary="Avalia uma expressão Python")
 async def evaluate_expression(
-    request: ExpressionRequest, service: SandboxService = Depends(get_sandbox_service)
+    body: ExpressionRequest, request: Request, service: SandboxService = Depends(get_sandbox_service)
 ):
-    """Delega a avaliação de uma expressão para o SandboxService."""
-    # InvalidInputError -> 400 e SandboxError -> 500 são tratados pelo exception handler.
-    result = service.evaluate_expression(request.expression)
+    require_authenticated_actor_id(request)
+    result = service.evaluate_expression(body.expression)
     return {
         "success": result.success,
         "result": result.output if result.success else None,

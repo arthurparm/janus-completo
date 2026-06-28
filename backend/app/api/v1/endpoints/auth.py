@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
+import hmac
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -52,13 +53,33 @@ async def supabase_exchange(
 ):
     try:
         parts = payload.token.split(".")
-        if len(parts) < 2:
+        if len(parts) < 3:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+
+        supabase_secret = str(getattr(settings, "SUPABASE_JWT_SECRET", "") or "").strip()
+        if not supabase_secret:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth not configured"
+            )
+
+        header_b64 = parts[0]
+        body_b64 = parts[1]
+        sig_b64 = parts[2]
+        sig_padded = sig_b64 + "=" * (-len(sig_b64) % 4)
         import base64
+
+        expected_sig = hmac.new(
+            supabase_secret.encode("utf-8"),
+            f"{header_b64}.{body_b64}".encode(),
+            hashlib.sha256,
+        ).digest()
+        actual_sig = base64.urlsafe_b64decode(sig_padded.encode("ascii"))
+        if not hmac.compare_digest(expected_sig, actual_sig):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+
         import json
 
-        body = parts[1]
-        body_padded = body + "=" * (-len(body) % 4)
+        body_padded = body_b64 + "=" * (-len(body_b64) % 4)
         data = json.loads(base64.urlsafe_b64decode(body_padded.encode("ascii")).decode("utf-8"))
         email = str(data.get("email") or "").strip()
         sub = str(data.get("sub") or "").strip()

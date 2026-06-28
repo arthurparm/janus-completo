@@ -212,14 +212,31 @@ add_exception_handlers(app)
 # --- Autenticação por API Key (global) ---
 # Se a variável de ambiente PUBLIC_API_KEY estiver definida, exige o header X-API-Key
 API_KEY = getattr(settings, "PUBLIC_API_KEY", None)
+PUBLIC_API_KEY_EXEMPT_EXACT_PATHS = frozenset(
+    {
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/health",
+        "/healthz",
+        "/metrics",
+    }
+)
+PUBLIC_API_KEY_EXEMPT_PREFIXES = ("/static/",)
+
+
+def is_public_api_key_exempt_path(path: str) -> bool:
+    normalized = str(path or "")
+    if normalized in PUBLIC_API_KEY_EXEMPT_EXACT_PATHS:
+        return True
+    return any(normalized.startswith(prefix) for prefix in PUBLIC_API_KEY_EXEMPT_PREFIXES)
 
 if API_KEY:
 
     @app.middleware("http")
     async def require_api_key(request: Request, call_next):
         path = request.url.path
-        skip_paths = ["/docs", "/openapi.json", "/redoc", "/healthz", "/metrics", "/static/"]
-        if request.method == "OPTIONS" or any(path.startswith(p) for p in skip_paths):
+        if request.method == "OPTIONS" or is_public_api_key_exempt_path(path):
             return await call_next(request)
         key = request.headers.get("X-API-Key")
         if key != API_KEY:

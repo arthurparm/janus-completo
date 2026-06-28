@@ -3,14 +3,17 @@ import json
 from typing import Any, List
 
 import structlog
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from langgraph.types import Command
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
 
+from app.api.v1.endpoints.chat.deps import resolve_authenticated_user_context
 from app.core.agents.graph_orchestrator import get_graph
 from app.core.security.redaction import redact_sensitive_payload
+from app.repositories.observability_repository import record_audit_event_direct
+from app.services.chat_service import ChatService, ChatServiceError, get_chat_service
 
 router = APIRouter(tags=["PendingActions"], prefix="/pending_actions")
 logger = structlog.get_logger(__name__)
@@ -21,6 +24,7 @@ class PendingActionDTO(BaseModel):
     action_id: int | None = None
     status: str
     message: str | None
+    user_id: str | None = None
     tool_name: str | None = None
     args_json: str | None = None
     created_at: str | None = None
@@ -194,6 +198,239 @@ def _load_pending_action_context(args_json: str | None) -> dict[str, Any]:
     except Exception:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _resolve_pending_actions_user_id(
+    http: Request | None,
+    explicit_user_id: str | None = None,
+    *,
+    endpoint_label: str,
+) -> str:
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        explicit_user_id,
+        allow_anonymous_fallback=False,
+        endpoint_label=endpoint_label,
+    )
+    if identity_ctx.user_id:
+        return identity_ctx.user_id
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"message": "Authentication required", "code": "CHAT_AUTH_REQUIRED"},
+    )
+
+
+def _extract_pending_action_owner(action: Any) -> str | None:
+    owner = getattr(action, "user_id", None)
+    if owner is None:
+        return None
+    owner_text = str(owner).strip()
+    return owner_text or None
+
+
+def _extract_pending_action_conversation_id(action: Any) -> str | None:
+    context = _load_pending_action_context(getattr(action, "args_json", None))
+    conversation_id = context.get("conversation_id")
+    if conversation_id is None:
+        return None
+    cid_text = str(conversation_id).strip()
+    return cid_text or None
+
+
+def _extract_request_id(http: Request | None) -> str | None:
+    if http is None:
+        return None
+    for header_name in ("x-request-id", "X-Request-ID", "correlation_id"):
+        value = http.headers.get(header_name)
+        if value:
+            text = str(value).strip()
+            if text:
+                return text
+    return None
+
+
+def _extract_traceparent_trace_id(http: Request | None) -> str | None:
+    if http is None:
+        return None
+    traceparent = str(http.headers.get("traceparent") or "").strip()
+    if not traceparent:
+        return None
+    parts = traceparent.split("-")
+    if len(parts) != 4:
+        return None
+    trace_id = parts[1].strip()
+    if len(trace_id) != 32:
+        return None
+    return trace_id
+
+
+def _pending_action_http_detail(code: str, message: str) -> dict[str, str]:
+    return {"message": message, "code": code}
+
+
+def _detail_to_text(detail: Any) -> str:
+    if isinstance(detail, dict):
+        message = detail.get("message")
+        if message is not None:
+            return str(message)
+    return str(detail)
+
+
+def _record_pending_action_audit_event(
+    *,
+    http: Request | None,
+    endpoint: str,
+    operation: str,
+    status_value: str,
+    user_id: str | None,
+    source: str,
+    action: Any | None = None,
+    thread_id: str | None = None,
+    reason: str | None = None,
+) -> None:
+    safe_reason = str(reason).strip() if reason else None
+    request_id = _extract_request_id(http)
+    traceparent_trace_id = _extract_traceparent_trace_id(http)
+    trace_id = request_id or traceparent_trace_id
+    payload = {
+        "user_id": user_id,
+        "endpoint": endpoint,
+        "action": operation,
+        "tool": "pending_actions",
+        "status": status_value,
+        "trace_id": trace_id,
+        "request_id": request_id,
+        "traceparent": str(http.headers.get("traceparent") or "").strip() if http else None,
+        "source": source,
+        "pending_action_id": getattr(action, "id", None),
+        "thread_id": thread_id,
+        "conversation_id": _extract_pending_action_conversation_id(action) if action is not None else None,
+        "pending_action_owner_user_id": _extract_pending_action_owner(action) if action is not None else None,
+        "reason": safe_reason,
+    }
+    record_audit_event_direct(payload)
+
+
+def _first_non_empty_str(mapping: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = mapping.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _append_langgraph_context_candidate(
+    candidates: list[dict[str, Any]],
+    seen: set[int],
+    candidate: Any,
+) -> None:
+    if not isinstance(candidate, dict):
+        return
+    marker = id(candidate)
+    if marker in seen:
+        return
+    seen.add(marker)
+    candidates.append(candidate)
+
+
+def _extract_langgraph_pending_context(state: Any) -> dict[str, str | None]:
+    candidates: list[dict[str, Any]] = []
+    seen: set[int] = set()
+
+    def _collect(candidate: Any) -> None:
+        _append_langgraph_context_candidate(candidates, seen, candidate)
+        if not isinstance(candidate, dict):
+            return
+        _append_langgraph_context_candidate(candidates, seen, candidate.get("metadata"))
+        _append_langgraph_context_candidate(candidates, seen, candidate.get("context"))
+        _append_langgraph_context_candidate(candidates, seen, candidate.get("config"))
+        configurable = candidate.get("configurable")
+        _append_langgraph_context_candidate(candidates, seen, configurable)
+        if isinstance(candidate.get("config"), dict):
+            _append_langgraph_context_candidate(
+                candidates,
+                seen,
+                candidate["config"].get("configurable"),
+            )
+
+    _collect(state)
+    for attr in ("values", "metadata", "config", "__dict__"):
+        _collect(getattr(state, attr, None))
+
+    owner_user_id: str | None = None
+    conversation_id: str | None = None
+    for mapping in candidates:
+        owner_user_id = owner_user_id or _first_non_empty_str(
+            mapping,
+            "owner_user_id",
+            "actor_user_id",
+            "user_id",
+        )
+        conversation_id = conversation_id or _first_non_empty_str(mapping, "conversation_id")
+        if owner_user_id and conversation_id:
+            break
+    return {
+        "owner_user_id": owner_user_id,
+        "conversation_id": conversation_id,
+    }
+
+
+def _assert_langgraph_pending_action_access(
+    *,
+    thread_id: str,
+    state: Any,
+    user_id: str,
+    chat_service: ChatService,
+) -> dict[str, str | None]:
+    context = _extract_langgraph_pending_context(state)
+    owner_user_id = context.get("owner_user_id")
+    if owner_user_id:
+        if owner_user_id != str(user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        return context
+
+    conversation_id = context.get("conversation_id")
+    if conversation_id:
+        try:
+            chat_service.get_history(conversation_id, user_id=user_id)
+        except ChatServiceError as exc:
+            if "Access denied" in str(exc):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied") from exc
+            raise
+        return context
+
+    logger.info(
+        "pending_action_langgraph_access_denied_missing_owner",
+        thread_id=thread_id,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
+def _assert_sql_pending_action_access(
+    *,
+    action: Any,
+    user_id: str,
+    chat_service: ChatService,
+) -> None:
+    owner_user_id = _extract_pending_action_owner(action)
+    if owner_user_id is not None:
+        if owner_user_id != str(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=_pending_action_http_detail("PENDING_ACTION_ACCESS_DENIED", "Access denied"),
+            )
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=_pending_action_http_detail(
+            "PENDING_ACTION_OWNER_REQUIRED",
+            "Pending action owner is not persisted; legacy actions are blocked.",
+        ),
+    )
 
 
 def _build_resolved_confirmation_payload(
@@ -428,6 +665,9 @@ async def list_pending(
     include_sql: bool = False,
     pending_status: str | None = "pending",
     limit: int = 50,
+    user_id: str | None = None,
+    http: Request = None,
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """
     List all threads that are currently interrupted and waiting for approval.
@@ -435,13 +675,20 @@ async def list_pending(
     the human_approval interruption point.
     """
     items: list[PendingActionDTO] = []
+    resolved_user_id: str | None = None
+    if include_sql or include_graph:
+        resolved_user_id = _resolve_pending_actions_user_id(
+            http,
+            user_id,
+            endpoint_label="/api/v1/pending_actions",
+        )
 
     if include_sql:
         try:
             from app.repositories.pending_action_repository import PendingActionRepository
 
             repo = PendingActionRepository()
-            sql_pending = repo.list(status=pending_status, limit=limit)
+            sql_pending = repo.list(status=pending_status, limit=limit, user_id=resolved_user_id)
             for item in sql_pending:
                 safe_args_json = _sanitize_pending_args_json(getattr(item, "args_json", None))
                 scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
@@ -491,27 +738,41 @@ async def list_pending(
             if not thread_ids:
                 return items
 
-            async def _is_waiting_for_approval(tid: str) -> tuple[str, bool]:
+            async def _is_waiting_for_approval(tid: str) -> tuple[str, bool, Any | None]:
                 try:
                     state = await _get_state(graph, {"configurable": {"thread_id": tid}})
-                    return tid, _is_waiting_for_human_approval(getattr(state, "next", None))
+                    return tid, _is_waiting_for_human_approval(getattr(state, "next", None)), state
                 except Exception as e:
                     logger.warning("log_warning", message=f"Failed to inspect graph state for thread {tid}: {e}")
-                    return tid, False
+                    return tid, False, None
 
             checks = await asyncio.gather(*(_is_waiting_for_approval(tid) for tid in thread_ids))
-            graph_items = [
-                PendingActionDTO(
-                    source="langgraph",
-                    thread_id=tid,
-                    status="pending",
-                    message="Waiting for approval",
-                    risk_level="medium",
-                    risk_summary="Risco moderado: acao aguardando aprovacao humana.",
+            graph_items: list[PendingActionDTO] = []
+            for tid, waiting, state in checks:
+                if not waiting or state is None:
+                    continue
+                try:
+                    access_context = _assert_langgraph_pending_action_access(
+                        thread_id=tid,
+                        state=state,
+                        user_id=resolved_user_id or "",
+                        chat_service=chat_service,
+                    )
+                except HTTPException as exc:
+                    if exc.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND):
+                        continue
+                    raise
+                graph_items.append(
+                    PendingActionDTO(
+                        source="langgraph",
+                        thread_id=tid,
+                        status="pending",
+                        message="Waiting for approval",
+                        user_id=access_context.get("owner_user_id"),
+                        risk_level="medium",
+                        risk_summary="Risco moderado: acao aguardando aprovacao humana.",
+                    )
                 )
-                for tid, waiting in checks
-                if waiting
-            ]
             return items + graph_items
     except Exception as e:
         logger.warning("log_warning", message=f"Failed to query checkpoints: {e}")
@@ -523,36 +784,63 @@ async def list_pending(
         return []
 
 @router.post("/{thread_id}/approve", response_model=PendingActionDTO, status_code=status.HTTP_202_ACCEPTED)
-async def approve(thread_id: str, background_tasks: BackgroundTasks):
+async def approve(
+    thread_id: str,
+    background_tasks: BackgroundTasks,
+    http: Request = None,
+    chat_service: ChatService = Depends(get_chat_service),
+):
     graph = get_graph()
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     try:
-        state = await _get_state(graph, config)
+        resolved_user_id = _resolve_pending_actions_user_id(
+            http,
+            None,
+            endpoint_label="/api/v1/pending_actions/thread/approve",
+        )
         thread_exists = await _thread_exists_in_checkpoints(thread_id)
+        if thread_exists is False:
+            raise HTTPException(status_code=404, detail="Thread not found or finished")
+        state = await _get_state(graph, config)
 
         # If state is available and waiting, allow approval even when checkpoint lookup is inconclusive.
         if state and _is_waiting_for_human_approval(getattr(state, "next", None)):
             pass
-        elif thread_exists is False:
-            raise HTTPException(status_code=404, detail="Thread not found or finished")
 
         if not state or not getattr(state, "next", None):
             raise HTTPException(status_code=404, detail="Thread not found or finished")
         if not _is_waiting_for_human_approval(getattr(state, "next", None)):
             raise HTTPException(status_code=409, detail="Thread is not waiting for approval")
-            
+        access_context = _assert_langgraph_pending_action_access(
+            thread_id=thread_id,
+            state=state,
+            user_id=resolved_user_id,
+            chat_service=chat_service,
+        )
+
         # Update state to approved (fast operation)
         await _update_state(graph, config, {"approval_status": "approved"})
-        
+        _record_pending_action_audit_event(
+            http=http,
+            endpoint="/api/v1/pending_actions/thread/approve",
+            operation="approve",
+            status_value="approved",
+            user_id=resolved_user_id,
+            source="langgraph",
+            thread_id=thread_id,
+            reason="thread approval accepted",
+        )
+
         # Schedule resume execution in background
         background_tasks.add_task(_resume_graph_execution, thread_id, "approved")
-        
+
         return PendingActionDTO(
             source="langgraph",
             thread_id=thread_id,
             status="approved",
             message="Action approved. Execution resuming in background.",
+            user_id=access_context.get("owner_user_id"),
             risk_level="medium",
             risk_summary="Acao aprovada e retomada em background.",
         )
@@ -573,21 +861,62 @@ async def approve(thread_id: str, background_tasks: BackgroundTasks):
     response_model=PendingActionDTO,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def approve_sql_action(action_id: int):
+async def approve_sql_action(
+    action_id: int,
+    http: Request = None,
+    chat_service: ChatService = Depends(get_chat_service),
+):
     try:
         from app.repositories.pending_action_repository import PendingActionRepository
 
+        resolved_user_id = _resolve_pending_actions_user_id(
+            http,
+            None,
+            endpoint_label="/api/v1/pending_actions/action/approve",
+        )
         repo = PendingActionRepository()
         current = repo.get(action_id)
         if not current:
             raise HTTPException(status_code=404, detail="Pending action not found")
         if getattr(current, "status", "pending") != "pending":
             raise HTTPException(status_code=409, detail="Pending action is not waiting for approval")
+        try:
+            _assert_sql_pending_action_access(
+                action=current,
+                user_id=resolved_user_id,
+                chat_service=chat_service,
+            )
+        except HTTPException as exc:
+            _record_pending_action_audit_event(
+                http=http,
+                endpoint="/api/v1/pending_actions/action/approve",
+                operation="approve",
+                status_value="blocked",
+                user_id=resolved_user_id,
+                source="sql",
+                action=current,
+                reason=_detail_to_text(exc.detail),
+            )
+            raise
 
-        updated = repo.set_status(action_id, "approved")
+        updated = repo.set_status(
+            action_id,
+            "approved",
+            user_id=resolved_user_id,
+        )
         if not updated:
-            raise HTTPException(status_code=404, detail="Pending action not found")
+            raise HTTPException(status_code=403, detail="Access denied")
         _sync_chat_confirmation_for_action(updated, status_value="approved")
+        _record_pending_action_audit_event(
+            http=http,
+            endpoint="/api/v1/pending_actions/action/approve",
+            operation="approve",
+            status_value="approved",
+            user_id=resolved_user_id,
+            source="sql",
+            action=updated,
+            reason="sql pending action approved",
+        )
 
         safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
         scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
@@ -630,21 +959,62 @@ async def approve_sql_action(action_id: int):
     response_model=PendingActionDTO,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def reject_sql_action(action_id: int):
+async def reject_sql_action(
+    action_id: int,
+    http: Request = None,
+    chat_service: ChatService = Depends(get_chat_service),
+):
     try:
         from app.repositories.pending_action_repository import PendingActionRepository
 
+        resolved_user_id = _resolve_pending_actions_user_id(
+            http,
+            None,
+            endpoint_label="/api/v1/pending_actions/action/reject",
+        )
         repo = PendingActionRepository()
         current = repo.get(action_id)
         if not current:
             raise HTTPException(status_code=404, detail="Pending action not found")
         if getattr(current, "status", "pending") != "pending":
             raise HTTPException(status_code=409, detail="Pending action is not waiting for approval")
+        try:
+            _assert_sql_pending_action_access(
+                action=current,
+                user_id=resolved_user_id,
+                chat_service=chat_service,
+            )
+        except HTTPException as exc:
+            _record_pending_action_audit_event(
+                http=http,
+                endpoint="/api/v1/pending_actions/action/reject",
+                operation="reject",
+                status_value="blocked",
+                user_id=resolved_user_id,
+                source="sql",
+                action=current,
+                reason=_detail_to_text(exc.detail),
+            )
+            raise
 
-        updated = repo.set_status(action_id, "rejected")
+        updated = repo.set_status(
+            action_id,
+            "rejected",
+            user_id=resolved_user_id,
+        )
         if not updated:
-            raise HTTPException(status_code=404, detail="Pending action not found")
+            raise HTTPException(status_code=403, detail="Access denied")
         _sync_chat_confirmation_for_action(updated, status_value="rejected")
+        _record_pending_action_audit_event(
+            http=http,
+            endpoint="/api/v1/pending_actions/action/reject",
+            operation="reject",
+            status_value="rejected",
+            user_id=resolved_user_id,
+            source="sql",
+            action=updated,
+            reason="sql pending action rejected",
+        )
 
         safe_args_json = _sanitize_pending_args_json(getattr(updated, "args_json", None))
         scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
@@ -683,35 +1053,62 @@ async def reject_sql_action(action_id: int):
 
 
 @router.post("/{thread_id}/reject", response_model=PendingActionDTO, status_code=status.HTTP_202_ACCEPTED)
-async def reject(thread_id: str, background_tasks: BackgroundTasks):
+async def reject(
+    thread_id: str,
+    background_tasks: BackgroundTasks,
+    http: Request = None,
+    chat_service: ChatService = Depends(get_chat_service),
+):
     graph = get_graph()
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     try:
-        state = await _get_state(graph, config)
+        resolved_user_id = _resolve_pending_actions_user_id(
+            http,
+            None,
+            endpoint_label="/api/v1/pending_actions/thread/reject",
+        )
         thread_exists = await _thread_exists_in_checkpoints(thread_id)
+        if thread_exists is False:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        state = await _get_state(graph, config)
 
         # If state is available and waiting, allow rejection even when checkpoint lookup is inconclusive.
         if state and _is_waiting_for_human_approval(getattr(state, "next", None)):
             pass
-        elif thread_exists is False:
-            raise HTTPException(status_code=404, detail="Thread not found")
 
         if not state or not getattr(state, "next", None):
             raise HTTPException(status_code=404, detail="Thread not found")
         if not _is_waiting_for_human_approval(getattr(state, "next", None)):
             raise HTTPException(status_code=409, detail="Thread is not waiting for approval")
-            
+        access_context = _assert_langgraph_pending_action_access(
+            thread_id=thread_id,
+            state=state,
+            user_id=resolved_user_id,
+            chat_service=chat_service,
+        )
+
         await _update_state(graph, config, {"approval_status": "rejected"})
-        
+        _record_pending_action_audit_event(
+            http=http,
+            endpoint="/api/v1/pending_actions/thread/reject",
+            operation="reject",
+            status_value="rejected",
+            user_id=resolved_user_id,
+            source="langgraph",
+            thread_id=thread_id,
+            reason="thread rejection accepted",
+        )
+
         # Schedule resume execution in background
         background_tasks.add_task(_resume_graph_execution, thread_id, "rejected")
-        
+
         return PendingActionDTO(
             source="langgraph",
             thread_id=thread_id,
             status="rejected",
             message="Action rejected. Cleanup running in background.",
+            user_id=access_context.get("owner_user_id"),
             risk_level="medium",
             risk_summary="Acao rejeitada e cleanup em background.",
         )
