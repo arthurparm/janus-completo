@@ -3,6 +3,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import ValidationError
 
 from app.core.llm import ModelPriority, ModelRole
 from app.services.chat.chat_citation_service import (
@@ -88,7 +89,6 @@ async def start_chat(
     summary="Envia uma mensagem e recebe a resposta do LLM",
 )
 async def send_message(
-    payload: ChatMessageRequest,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
     memory: MemoryService = Depends(get_memory_service),
@@ -108,6 +108,27 @@ async def send_message(
             ),
     )
     user_id = ctx.user_id
+
+    try:
+        payload = ChatMessageRequest.model_validate(await http.json())
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.errors(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=[
+                {
+                    "type": "json_invalid",
+                    "loc": ["body"],
+                    "msg": "Invalid JSON body",
+                    "input": None,
+                }
+            ],
+        )
+
     project_id = actor_project_id(http) or payload.project_id
     active_knowledge_space_id = service.resolve_active_knowledge_space_id(
         conversation_id=payload.conversation_id,

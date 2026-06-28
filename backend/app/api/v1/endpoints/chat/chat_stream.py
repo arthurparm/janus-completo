@@ -1,6 +1,7 @@
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 from app.core.llm import ModelPriority, ModelRole
 from app.services.chat.chat_contracts import chat_http_error_detail
@@ -28,10 +29,50 @@ logger = structlog.get_logger(__name__)
 @router.post("/stream/{conversation_id}", summary="Streaming de resposta via SSE")
 async def stream_message(
     conversation_id: str,
-    payload: ChatStreamRequest,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
 ):
+    ensure_origin_allowed(http)
+
+    identity_ctx = resolve_authenticated_user_context(
+        http,
+        None,
+        allow_anonymous_fallback=False,
+        endpoint_label="/api/v1/chat/stream",
+    )
+    user_id = identity_ctx.user_id
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=chat_http_error_detail(
+                code="CHAT_AUTH_REQUIRED",
+                message="Authentication required",
+                category="auth",
+                retryable=False,
+                http_status=status.HTTP_401_UNAUTHORIZED,
+            ),
+        )
+
+    try:
+        payload = ChatStreamRequest.model_validate(await http.json())
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.errors(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=[
+                {
+                    "type": "json_invalid",
+                    "loc": ["body"],
+                    "msg": "Invalid JSON body",
+                    "input": None,
+                }
+            ],
+        )
+
     message = payload.message
     role = payload.role
     priority = payload.priority
@@ -39,6 +80,7 @@ async def stream_message(
     project_id = payload.project_id
     knowledge_space_id = payload.knowledge_space_id
     routing_service = get_intent_routing_service()
+
     try:
         role_enum, routing_decision, route_applied = routing_service.resolve_role(role, message)
         priority_enum = ModelPriority(priority)
@@ -53,20 +95,6 @@ async def stream_message(
                 http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
             ),
         )
-
-    if routing_decision:
-        logger.info(
-            "chat.intent_routing.stream",
-            conversation_id=conversation_id,
-            requested_role=role,
-            selected_role=role_enum.value,
-            intent=routing_decision.intent,
-            risk_level=routing_decision.risk_level,
-            confidence=routing_decision.confidence,
-            route_applied=route_applied,
-        )
-
-    ensure_origin_allowed(http)
 
     if message:
         try:
@@ -87,23 +115,16 @@ async def stream_message(
 
     slot_user: str | None = None
     try:
-        identity_ctx = resolve_authenticated_user_context(
-            http,
-            None,
-            allow_anonymous_fallback=False,
-            endpoint_label="/api/v1/chat/stream",
-        )
-        user_id = identity_ctx.user_id
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=chat_http_error_detail(
-                    code="CHAT_AUTH_REQUIRED",
-                    message="Authentication required",
-                    category="auth",
-                    retryable=False,
-                    http_status=status.HTTP_401_UNAUTHORIZED,
-                ),
+        if routing_decision:
+            logger.info(
+                "chat.intent_routing.stream",
+                conversation_id=conversation_id,
+                requested_role=role,
+                selected_role=role_enum.value,
+                intent=routing_decision.intent,
+                risk_level=routing_decision.risk_level,
+                confidence=routing_decision.confidence,
+                route_applied=route_applied,
             )
         active_knowledge_space_id = service.resolve_active_knowledge_space_id(
             conversation_id=conversation_id,
