@@ -19,6 +19,7 @@ export class Header {
 
   isMenuOpen = false;
   isAuthenticated$ = this.auth.isAuthenticated$;
+  isVisitor$ = this.auth.isVisitor$;
 
   // metrics$ logic removed in favor of SystemHud component
 

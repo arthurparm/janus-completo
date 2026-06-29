@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing'
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing'
 import { HttpHeaders } from '@angular/common/http'
 import { AuthService } from './auth.service'
-import { API_BASE_URL, AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY } from '../../services/api.config'
+import { API_BASE_URL, AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
 
 describe('AuthService', () => {
   let http: HttpTestingController
@@ -167,6 +167,57 @@ describe('AuthService', () => {
     expect(svc.isAuthenticated()).toBe(false)
     expect(svc.currentUserValue).toBeNull()
     expect(svc.authReady()).toBe(true)
+  })
+
+  it('deve entrar como visitante sem criar token nem chamar backend', async () => {
+    const svc = TestBed.inject(AuthService)
+    await waitForAuthReady(svc)
+
+    const result = svc.enterVisitorMode()
+
+    http.expectNone(meEndpoint)
+    expect(result.ok).toBe(true)
+    expect(localStorage.getItem(VISITOR_MODE_KEY)).toBe('1')
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(svc.isAuthenticated()).toBe(true)
+    expect(svc.isVisitor()).toBe(true)
+    expect(svc.isVisitorSession()).toBe(true)
+    expect(svc.currentUserValue?.id).toBe('visitor')
+    expect(svc.currentUserValue?.roles).toEqual(['visitor'])
+  })
+
+  it('deve restaurar modo visitante sem chamar /me quando flag estiver persistida', async () => {
+    localStorage.setItem(VISITOR_MODE_KEY, '1')
+
+    const svc = TestBed.inject(AuthService)
+    http.expectNone(meEndpoint)
+    await waitForAuthReady(svc)
+
+    expect(svc.isAuthenticated()).toBe(true)
+    expect(svc.isVisitor()).toBe(true)
+    expect(svc.currentUserValue?.id).toBe('visitor')
+  })
+
+  it('deve limpar estado de visitante ao autenticar com credenciais reais', async () => {
+    const svc = TestBed.inject(AuthService)
+    await waitForAuthReady(svc)
+    svc.enterVisitorMode()
+
+    const promise = svc.loginWithPassword('a@b.com', '12345678', true)
+    const req = http.expectOne(`${API_BASE_URL}/v1/auth/local/login`)
+    req.flush({
+      token: 'janus.jwt',
+      refresh_token: 'janus.refresh',
+      user: { id: 'uid-123', email: 'a@b.com', roles: ['user'] }
+    })
+
+    const result = await promise
+    expect(result.ok).toBe(true)
+    expect(localStorage.getItem(VISITOR_MODE_KEY)).toBeNull()
+    expect(svc.isVisitor()).toBe(false)
+    expect(svc.isVisitorSession()).toBe(false)
+    expect(svc.currentUserValue?.id).toBe('uid-123')
   })
 
   it('deve limpar sessao persistida quando restauracao via /me falhar', async () => {

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -53,6 +54,38 @@ else:
 setup_logging(log_file=log_file)
 logger = structlog.get_logger(__name__)
 logger.debug("log_file_selected", log_file=log_file, cwd=os.getcwd())
+
+
+def _cancel_tracked_worker_task(task: Any) -> int:
+    if isinstance(task, (list, tuple)):
+        return sum(_cancel_tracked_worker_task(child) for child in task)
+    if isinstance(task, asyncio.Task) and not task.cancelled():
+        task.cancel()
+        return 1
+    return 0
+
+
+def cancel_tracked_orchestrator_workers(raw_workers: Any) -> int:
+    if not isinstance(raw_workers, list):
+        logger.warning(
+            "shutdown_invalid_workers_collection",
+            collection_type=type(raw_workers).__name__,
+        )
+        return 0
+
+    cancelled = 0
+    for index, worker in enumerate(raw_workers):
+        if not isinstance(worker, Mapping):
+            logger.warning(
+                "shutdown_invalid_worker_item",
+                index=index,
+                item_type=type(worker).__name__,
+            )
+            continue
+
+        task = worker.get("task")
+        cancelled += _cancel_tracked_worker_task(task)
+    return cancelled
 
 
 @asynccontextmanager
@@ -166,10 +199,7 @@ async def lifespan(app: FastAPI):
     # === SHUTDOWN ===
     try:
         current = getattr(app.state, "orchestrator_workers", []) or []
-        for worker in current:
-            task = worker.get("task")
-            if isinstance(task, asyncio.Task) and not task.cancelled():
-                task.cancel()
+        cancel_tracked_orchestrator_workers(current)
     except Exception as e:
         logger.warning("Failed to stop orchestrator workers on shutdown.", exc_info=e)
     await asyncio.shield(close_graph())
@@ -184,6 +214,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 setup_tracing(app)
+
+from app.core.monitoring import auto_healer_metrics as _auto_healer_metrics  # noqa: F401,E402
 
 # --- Configuração da Aplicação ---
 if PROMETHEUS_INSTRUMENTATOR_AVAILABLE:
@@ -286,8 +318,15 @@ def _get_dependency_health() -> dict[str, Any]:
         degraded_dependencies = kernel.degraded_dependencies
 
         checks = {}
-        if monitor and monitor.last_results:
-            for component, result in monitor.last_results.items():
+        if monitor:
+            for component in getattr(monitor, "health_checks", {}).keys():
+                checks[component] = {
+                    "status": "unknown",
+                    "duration_seconds": 0.0,
+                    "checked_at": None,
+                    "error": "Health check has not reported yet",
+                }
+            for component, result in getattr(monitor, "last_results", {}).items():
                 checks[component] = {
                     "status": result.status.value if hasattr(result.status, 'value') else str(result.status),
                     "duration_seconds": result.duration_seconds,
@@ -328,6 +367,7 @@ def health():
         top_status = kernel_state
     else:
         critical_failure = False
+        critical_degraded = False
         non_critical_failure = False
 
         try:
@@ -339,9 +379,13 @@ def health():
                 except Exception:
                     pass
 
-                if check["status"] != "healthy":
+                check_status = str(check.get("status", "unknown"))
+                if check_status != "healthy":
                     if is_critical:
-                        critical_failure = True
+                        if check_status == "unhealthy":
+                            critical_failure = True
+                        else:
+                            critical_degraded = True
                     else:
                         non_critical_failure = True
         except Exception:
@@ -349,7 +393,7 @@ def health():
 
         if kernel_state == KernelState.CRITICAL or critical_failure:
             top_status = "critical"
-        elif kernel_state == KernelState.DEGRADED or non_critical_failure:
+        elif kernel_state == KernelState.DEGRADED or critical_degraded or non_critical_failure:
             top_status = "degraded"
         else:
             top_status = "healthy"

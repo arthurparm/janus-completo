@@ -39,6 +39,10 @@ export const authSessionInterceptor: HttpInterceptorFn = (req, next) => {
         !req.context.get(SKIP_REFRESH) &&
         shouldAttemptRefresh(req.url)
       ) {
+        if (auth.isVisitorSession()) {
+          return throwError(() => err)
+        }
+
         return from(auth.refreshAccessToken()).pipe(
           switchMap((ok) => {
             if (!ok) {
@@ -86,4 +90,3 @@ function shouldAttemptRefresh(url: string): boolean {
   if (url.includes('/v1/auth/local/reset')) return false
   return true
 }
-

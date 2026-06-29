@@ -1,14 +1,34 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { HttpClient } from '@angular/common/http'
-import { catchError, finalize, of } from 'rxjs'
+import { catchError, finalize, firstValueFrom, of } from 'rxjs'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
 import { BackendApiService } from '../../../services/backend-api.service'
-import { AdminBacklogSprintType, AdminCodeQaResponse, Citation, SelfStudyRun, SelfStudyStatusResponse } from '../../../models'
+import { AdminBacklogSprintType, AdminBacklogTask, AdminCodeQaResponse, Citation, SelfStudyRun, SelfStudyStatusResponse } from '../../../models'
 import { Header } from '../../../core/layout/header/header'
 import { UiBadgeComponent } from '../../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
+
+interface AutonomyDomainHealth {
+  is_open?: boolean
+  failure_count?: number
+}
+
+interface AutonomyHealthResponse {
+  overall_status: 'healthy' | 'degraded' | 'critical' | string
+  active_goals_count: number
+  domain_health: Record<string, AutonomyDomainHealth>
+}
+
+interface AutonomyAdminBoardResponse {
+  items: AdminBacklogSprintType[]
+}
+
+type MonitoringTask = AdminBacklogTask & {
+  namespace?: string | null
+  task_id?: string | null
+}
 
 @Component({
   selector: 'app-admin-autonomia',
@@ -41,14 +61,12 @@ export class AdminAutonomiaComponent {
   readonly citations = signal<Citation[]>([])
   readonly selfMemory = signal<Array<{ file_path?: string; summary?: string; updated_at?: string | number }>>([])
 
-  activeTab: 'backlog' | 'selfstudy' | 'codeqa' | 'monitoring' = 'backlog';
-  monitoringData: any = null;
-  monitoringLoading = false;
-  activeGoals: any[] = [];
-  evolutionTools: any[] = [];
-  cycleTimeline: any[] = [];
-  domainHealth: any = {};
-  goalMetricsSummary: any = {};
+  activeTab: 'backlog' | 'selfstudy' | 'codeqa' | 'monitoring' = 'backlog'
+  monitoringData: AutonomyHealthResponse | null = null
+  monitoringLoading = false
+  activeGoalsCount = 0
+  evolutionTools: MonitoringTask[] = []
+  domainHealth: Record<string, AutonomyDomainHealth> = {}
 
   readonly totalTasks = computed(() =>
     this.board().reduce(
@@ -222,27 +240,27 @@ export class AdminAutonomiaComponent {
   }
 
   async loadMonitoringData() {
-    this.monitoringLoading = true;
+    this.monitoringLoading = true
     try {
       const [healthResp, boardResp] = await Promise.all([
-        this.http.get('/api/v1/autonomy/health').toPromise(),
-        this.http.get('/api/v1/autonomy/admin/board?limit=100').toPromise(),
-      ]);
-      this.monitoringData = healthResp;
-      if (healthResp) {
-        this.activeGoals = healthResp.active_goals || [];
-        this.domainHealth = healthResp.domain_health || {};
-      }
-      if (boardResp) {
-        this.evolutionTools = (boardResp.sprints || [])
-          .flatMap((s: any) => s.tasks || [])
-          .filter((t: any) => t.namespace === 'evolution')
-          .slice(0, 20);
-      }
+        firstValueFrom(this.http.get<AutonomyHealthResponse>('/api/v1/autonomy/health')),
+        firstValueFrom(this.http.get<AutonomyAdminBoardResponse>('/api/v1/autonomy/admin/board?limit=100')),
+      ])
+      this.monitoringData = healthResp
+      this.activeGoalsCount = healthResp.active_goals_count || 0
+      this.domainHealth = healthResp.domain_health || {}
+      this.evolutionTools = (boardResp.items || [])
+        .flatMap((type) => type.sprints || [])
+        .flatMap((sprint) => sprint.tasks || [])
+        .filter((task): task is MonitoringTask => {
+          const maybeMonitoringTask = task as MonitoringTask
+          return maybeMonitoringTask.namespace === 'evolution' || maybeMonitoringTask.source_kind === 'evolution'
+        })
+        .slice(0, 20)
     } catch (err) {
-      console.error('Failed to load monitoring data', err);
+      console.error('Failed to load monitoring data', err)
     } finally {
-      this.monitoringLoading = false;
+      this.monitoringLoading = false
     }
   }
 

@@ -110,6 +110,36 @@ class HealthStatus(Enum):
     UNKNOWN = "unknown"
 
 
+HEALTH_STATUS_ALIASES = {
+    "healthy": HealthStatus.HEALTHY,
+    "ok": HealthStatus.HEALTHY,
+    "operational": HealthStatus.HEALTHY,
+    "up": HealthStatus.HEALTHY,
+    "ready": HealthStatus.HEALTHY,
+    "degraded": HealthStatus.DEGRADED,
+    "warning": HealthStatus.DEGRADED,
+    "warn": HealthStatus.DEGRADED,
+    "partial": HealthStatus.DEGRADED,
+    "unhealthy": HealthStatus.UNHEALTHY,
+    "error": HealthStatus.UNHEALTHY,
+    "critical": HealthStatus.UNHEALTHY,
+    "down": HealthStatus.UNHEALTHY,
+    "failed": HealthStatus.UNHEALTHY,
+    "fail": HealthStatus.UNHEALTHY,
+    "unavailable": HealthStatus.UNHEALTHY,
+    "unknown": HealthStatus.UNKNOWN,
+}
+
+
+def normalize_health_status(raw_status: Any) -> HealthStatus:
+    if raw_status is None:
+        return HealthStatus.UNKNOWN
+    normalized = str(raw_status).strip().lower()
+    if not normalized:
+        return HealthStatus.UNKNOWN
+    return HEALTH_STATUS_ALIASES.get(normalized, HealthStatus.UNKNOWN)
+
+
 @dataclass
 class HealthCheckResult:
     """Resultado de um health check."""
@@ -163,6 +193,22 @@ class HealthMonitor:
         self.health_checks[component] = {"func": check_func, "is_critical": is_critical}
         logger.info("log_info", message=f"Health check registrado: {component} (critical={is_critical})")
 
+    def _unknown_result(self, component: str) -> HealthCheckResult:
+        return HealthCheckResult(
+            component=component,
+            status=HealthStatus.UNKNOWN,
+            message="Health check has not reported yet",
+            details={},
+            checked_at=datetime.now(),
+            duration_seconds=0.0,
+            error="No health check result available",
+        )
+
+    def _effective_results(self) -> dict[str, HealthCheckResult]:
+        results = {component: self._unknown_result(component) for component in self.health_checks}
+        results.update(self.last_results)
+        return results
+
     async def check_component(self, component: str) -> HealthCheckResult:
         """
         Executa health check de um componente específico.
@@ -196,7 +242,7 @@ class HealthMonitor:
             record_latency(component, duration)
 
             # Interpretar resultado
-            status = HealthStatus(result.get("status", "healthy"))
+            status = normalize_health_status(result.get("status"))
             message = result.get("message", "OK")
             details = result.get("details", {})
 
@@ -309,7 +355,8 @@ class HealthMonitor:
         """
         Retorna visão agregada da saúde do sistema.
         """
-        if not self.last_results:
+        results = self._effective_results()
+        if not results:
             return {
                 "status": "unknown",
                 "score": 0,
@@ -318,12 +365,12 @@ class HealthMonitor:
             }
 
         # Calcular score (0-100)
-        total_components = len(self.last_results)
+        total_components = len(results)
         healthy_count = sum(
-            1 for r in self.last_results.values() if r.status == HealthStatus.HEALTHY
+            1 for r in results.values() if r.status == HealthStatus.HEALTHY
         )
         degraded_count = sum(
-            1 for r in self.last_results.values() if r.status == HealthStatus.DEGRADED
+            1 for r in results.values() if r.status == HealthStatus.DEGRADED
         )
 
         score = int((healthy_count + degraded_count * 0.5) / total_components * 100)
@@ -334,39 +381,24 @@ class HealthMonitor:
         ]
 
         critical_unhealthy = any(
-            self.last_results.get(
-                comp,
-                HealthCheckResult(
-                    component=comp,
-                    status=HealthStatus.UNKNOWN,
-                    message="",
-                    details={},
-                    checked_at=datetime.now(),
-                    duration_seconds=0.0,
-                ),
-            ).status
+            results.get(comp, self._unknown_result(comp)).status
             == HealthStatus.UNHEALTHY
             for comp in critical_components
         )
         critical_degraded = any(
-            self.last_results.get(
-                comp,
-                HealthCheckResult(
-                    component=comp,
-                    status=HealthStatus.UNKNOWN,
-                    message="",
-                    details={},
-                    checked_at=datetime.now(),
-                    duration_seconds=0.0,
-                ),
-            ).status
+            results.get(comp, self._unknown_result(comp)).status
             == HealthStatus.DEGRADED
+            for comp in critical_components
+        )
+        critical_unknown = any(
+            results.get(comp, self._unknown_result(comp)).status
+            == HealthStatus.UNKNOWN
             for comp in critical_components
         )
 
         if critical_unhealthy:
             status = "unhealthy"
-        elif critical_degraded:
+        elif critical_degraded or critical_unknown:
             status = "degraded"
         elif score >= 80:
             status = "healthy"
@@ -382,9 +414,9 @@ class HealthMonitor:
             "status": status,
             "score": score,
             "message": f"{healthy_count}/{total_components} componentes saudáveis",
-            "components": {name: result.to_dict() for name, result in self.last_results.items()},
+            "components": {name: result.to_dict() for name, result in results.items()},
             "last_check": max(
-                (r.checked_at for r in self.last_results.values()), default=datetime.now()
+                (r.checked_at for r in results.values()), default=datetime.now()
             ).isoformat(),
             "suggested_timeouts": {
                 "llm": get_timeout_recommendation(
@@ -409,6 +441,10 @@ class HealthMonitor:
         Args:
             interval_seconds: Intervalo entre checks
         """
+        if self._monitoring_task and not self._monitoring_task.done():
+            logger.info("health_monitor_already_running")
+            return self._monitoring_task
+
         self.check_interval_seconds = interval_seconds
 
         async def monitoring_loop():
@@ -423,11 +459,13 @@ class HealthMonitor:
                     await asyncio.sleep(interval_seconds)
 
         self._monitoring_task = asyncio.create_task(monitoring_loop())
+        return self._monitoring_task
 
     def stop_monitoring(self):
         """Para o monitoramento contínuo."""
         if self._monitoring_task:
             self._monitoring_task.cancel()
+            self._monitoring_task = None
             logger.info("Monitoramento parado")
 
 

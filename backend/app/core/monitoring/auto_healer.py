@@ -19,30 +19,18 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
-from prometheus_client import Counter
 
 from app.core.infrastructure.message_broker import get_broker
+from app.core.monitoring.auto_healer_metrics import (
+    AUTO_HEALER_STEP_ATTEMPTS,
+    AUTO_HEALER_STEP_FAILURES,
+    AUTO_HEALER_STEP_SUCCESSES,
+)
 from app.core.monitoring.health_monitor import HealthStatus, get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 from app.models.schemas import QueueName
 
 logger = structlog.get_logger(__name__)
-
-AUTO_HEALER_STEP_FAILURES = Counter(
-    "auto_healer_step_failures_total",
-    "Total de falhas por etapa do Auto-Healer",
-    ["step"],
-)
-AUTO_HEALER_STEP_ATTEMPTS = Counter(
-    "auto_healer_step_attempts_total",
-    "Total de tentativas por etapa do Auto-Healer",
-    ["step"],
-)
-AUTO_HEALER_STEP_SUCCESSES = Counter(
-    "auto_healer_step_successes_total",
-    "Total de sucessos por etapa do Auto-Healer",
-    ["step"],
-)
 
 # Flags/estado interno
 _healer_task: asyncio.Task | None = None

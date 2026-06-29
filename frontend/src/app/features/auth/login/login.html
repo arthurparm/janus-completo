@@ -78,6 +78,13 @@
         </button>
       </div>
 
+      <div class="visitor-access">
+        <button type="button" class="glass-button visitor" (click)="enterVisitorMode()" [disabled]="loading">
+          Entrar como visitante
+        </button>
+        <p>Acesso limitado, sem credenciais e sem permissoes administrativas.</p>
+      </div>
+
       <!-- Sign Up -->
       <div class="signup">
         <span>Sem credenciais?</span>

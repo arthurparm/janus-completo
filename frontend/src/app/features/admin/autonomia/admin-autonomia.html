@@ -224,18 +224,7 @@
         </div>
 
         <div class="section-header">Metas Ativas</div>
-        @if (activeGoals.length === 0) {
-          <p>Nenhuma meta ativa no momento.</p>
-        } @else {
-          <div class="goals-grid">
-            @for (goal of activeGoals; track goal.id) {
-              <div class="goal-card">
-                <div class="goal-title">{{ goal.title }}</div>
-                <div class="goal-status">{{ goal.status }}</div>
-              </div>
-            }
-          </div>
-        }
+        <p>{{ activeGoalsCount }} meta(s) ativa(s) reportada(s) pelo backend.</p>
 
         <div class="section-header">Ferramentas Evolutivas</div>
         @if (evolutionTools.length === 0) {
@@ -246,9 +235,9 @@
               <tr><th>Nome</th><th>Status</th><th>Namespace</th></tr>
             </thead>
             <tbody>
-              @for (tool of evolutionTools; track tool.task_id) {
+              @for (tool of evolutionTools; track tool.task_id || tool.id) {
                 <tr>
-                  <td>{{ tool.task_id }}</td>
+                  <td>{{ tool.task_id || tool.id }}</td>
                   <td>{{ tool.status }}</td>
                   <td>{{ tool.namespace || 'evolution' }}</td>
                 </tr>

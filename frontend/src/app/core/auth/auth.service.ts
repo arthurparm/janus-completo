@@ -42,6 +42,7 @@ export interface LoginResult extends AuthActionResult {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly _isAuthenticated = signal<boolean>(false)
+  private readonly _isVisitor = signal<boolean>(false)
   private readonly _user = signal<User | null>(null)
   private readonly _firebaseAuthReady = signal<boolean>(false)
   private readonly _authReady = signal<boolean>(false)
@@ -49,12 +50,14 @@ export class AuthService {
   private refreshPromise: Promise<boolean> | null = null
 
   readonly isAuthenticated = this._isAuthenticated.asReadonly()
+  readonly isVisitor = this._isVisitor.asReadonly()
   readonly user = this._user.asReadonly()
   readonly firebaseAuthReady = this._firebaseAuthReady.asReadonly()
   readonly authReady = this._authReady.asReadonly()
   readonly authRateLimitUntilMs = this._authRateLimitUntilMs.asReadonly()
 
   readonly isAuthenticated$ = toObservable(this._isAuthenticated)
+  readonly isVisitor$ = toObservable(this._isVisitor)
   readonly user$ = toObservable(this._user)
   readonly firebaseAuthReady$ = toObservable(this._firebaseAuthReady)
   readonly authReady$ = toObservable(this._authReady)
@@ -78,6 +81,10 @@ export class AuthService {
     return this._user()
   }
 
+  isVisitorSession(): boolean {
+    return this._isVisitor()
+  }
+
   private http = inject(HttpClient)
   private logger = inject(AppLoggerService)
 
@@ -88,6 +95,12 @@ export class AuthService {
   private async initializeAuth(): Promise<void> {
     this._authReady.set(false)
     this._firebaseAuthReady.set(true)
+
+    if (localStorage.getItem(VISITOR_MODE_KEY) === '1') {
+      this.activateVisitorSession()
+      this._authReady.set(true)
+      return
+    }
 
     const token = getStoredAuthToken()
     if (token) {
@@ -127,6 +140,14 @@ export class AuthService {
     this._authReady.set(true)
   }
 
+  enterVisitorMode(): AuthActionResult {
+    clearStoredAuthToken()
+    clearStoredRefreshToken()
+    localStorage.setItem(VISITOR_MODE_KEY, '1')
+    this.activateVisitorSession()
+    return { ok: true }
+  }
+
   async loginWithPassword(email: string, password: string, remember: boolean): Promise<LoginResult> {
     if (this.isAuthRateLimited()) {
       return {
@@ -149,6 +170,7 @@ export class AuthService {
         storeAuthToken(token, remember)
         storeRefreshToken(refreshToken, remember)
         localStorage.removeItem(VISITOR_MODE_KEY)
+        this._isVisitor.set(false)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
         return { ok: true }
@@ -191,6 +213,7 @@ export class AuthService {
         storeAuthToken(token, true)
         storeRefreshToken(refreshToken, true)
         localStorage.removeItem(VISITOR_MODE_KEY)
+        this._isVisitor.set(false)
         this._isAuthenticated.set(true)
         this._user.set(out.user)
         return { ok: true }
@@ -243,8 +266,21 @@ export class AuthService {
     clearStoredAuthToken()
     clearStoredRefreshToken()
     localStorage.removeItem(VISITOR_MODE_KEY)
+    this._isVisitor.set(false)
     this._isAuthenticated.set(false)
     this._user.set(null)
+  }
+
+  private activateVisitorSession(): void {
+    this._isVisitor.set(true)
+    this._isAuthenticated.set(true)
+    this._user.set({
+      id: 'visitor',
+      username: 'visitante',
+      display_name: 'Visitante',
+      roles: ['visitor'],
+      permissions: ['read:public']
+    })
   }
 
   async logout(): Promise<void> {
@@ -344,6 +380,7 @@ export class AuthService {
       storeAuthToken(token, remember)
       storeRefreshToken(newRefreshToken, remember)
       localStorage.removeItem(VISITOR_MODE_KEY)
+      this._isVisitor.set(false)
       this._isAuthenticated.set(true)
       this._user.set(out.user)
       return true

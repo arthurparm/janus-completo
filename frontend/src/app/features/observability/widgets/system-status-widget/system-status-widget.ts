@@ -1,10 +1,12 @@
-import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { interval, Subscription } from 'rxjs';
-import { switchMap, catchError } from 'rxjs/operators';
-import { of } from 'rxjs';
-import { BackendApiService } from '../../../../services/backend-api.service';
-import { ServiceHealthItem, SystemStatus } from '../../../../models';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+
+import {
+    ServiceHealthItem,
+    SystemStatusResponse,
+    SystemStatusService,
+} from '../../../../core/services/system-status.service';
 
 @Component({
     selector: 'app-system-status-widget',
@@ -13,54 +15,41 @@ import { ServiceHealthItem, SystemStatus } from '../../../../models';
     templateUrl: './system-status-widget.html',
     styleUrls: ['./system-status-widget.scss']
 })
-export class SystemStatusWidgetComponent implements OnInit, OnDestroy {
-    private api = inject(BackendApiService);
-    private refreshSub?: Subscription;
+export class SystemStatusWidgetComponent implements OnInit {
+    private readonly statusService = inject(SystemStatusService);
+    private readonly destroyRef = inject(DestroyRef);
 
-    systemStatus = signal<SystemStatus | null>(null);
+    systemStatus = signal<SystemStatusResponse | null>(null);
     services = signal<ServiceHealthItem[]>([]);
     loading = signal(true);
     error = signal<string | null>(null);
 
     ngOnInit(): void {
         this.loadData();
-        this.startAutoRefresh();
-    }
-
-    ngOnDestroy(): void {
-        this.refreshSub?.unsubscribe();
     }
 
     private loadData(): void {
         this.loading.set(true);
         this.error.set(null);
 
-        this.api.system.getSystemStatus().pipe(
-            catchError(() => of(null))
-        ).subscribe(status => {
-            this.systemStatus.set(status);
-            this.loading.set(false);
-        });
+        this.statusService.getSystemStatus()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(status => {
+                this.systemStatus.set(status);
+                this.loading.set(false);
+            });
 
-        this.api.system.getServicesHealth().pipe(
-            catchError(() => of({ services: [] }))
-        ).subscribe(res => {
-            this.services.set(res.services);
-        });
+        this.statusService.getServicesHealth()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(res => {
+                this.services.set(res.services);
+            });
     }
 
-    private startAutoRefresh(): void {
-        this.refreshSub = interval(5000).pipe(
-            switchMap(() => {
-                return this.api.system.getSystemStatus().pipe(catchError(() => of(null)));
-            })
-        ).subscribe(status => {
-            if (status) this.systemStatus.set(status);
-        });
-    }
-
-    formatUptime(seconds?: number): string {
-        if (!seconds) return 'N/A';
+    formatUptime(seconds?: number | null): string {
+        if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
+            return 'N/A';
+        }
         const days = Math.floor(seconds / 86400);
         const hours = Math.floor((seconds % 86400) / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
@@ -74,7 +63,7 @@ export class SystemStatusWidgetComponent implements OnInit, OnDestroy {
         if (!status) return 'gray';
         const s = status.toUpperCase();
         if (s === 'OPERATIONAL' || s === 'HEALTHY' || s === 'OK') return 'green';
-        if (s === 'DEGRADED' || s === 'WARNING') return 'yellow';
+        if (s === 'DEGRADED' || s === 'WARNING' || s === 'UNKNOWN') return 'yellow';
         return 'red';
     }
 }

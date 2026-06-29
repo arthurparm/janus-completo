@@ -128,7 +128,7 @@
 .system-metrics {
   margin-left: auto;
   margin-right: 2rem;
-  /* Removido o estilo de .metric antigo pois agora usamos o HUD */
+  flex: 0 0 auto;
 }
 
 .menu-toggle {
@@ -151,8 +151,23 @@
 
 /* Mobile Responsive */
 @media (max-width: 980px) {
-  .desktop-only {
-    display: none !important;
+  .wrap {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-text {
+    font-size: 1rem;
+    letter-spacing: 0.8px;
+  }
+
+  .system-metrics {
+    margin-left: auto;
+    margin-right: 0;
   }
 
   .menu-toggle {
@@ -190,5 +205,33 @@
       margin: 12px 0 0;
       width: 100%;
     }
+
+    .visitor-badge {
+      justify-content: center;
+      width: 100%;
+      margin-top: 8px;
+    }
+  }
+}
+
+.visitor-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid rgba(var(--warning-rgb), 0.34);
+  border-radius: 16px;
+  background: rgba(var(--warning-rgb), 0.1);
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .brand-text {
+    display: none;
   }
 }

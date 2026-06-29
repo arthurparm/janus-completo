@@ -138,6 +138,24 @@ export class LoginComponent {
     }
   }
 
+  async enterVisitorMode() {
+    if (this.loading) return
+    this.loading = true
+    this.error = ''
+    this.notice = ''
+    try {
+      const result = this.auth.enterVisitorMode()
+      if (!result.ok) {
+        this.error = result.error || 'Nao foi possivel iniciar o modo visitante.'
+        return
+      }
+      await this.router.navigate(['/'])
+    } finally {
+      this.loading = false
+      this.cdr.markForCheck()
+    }
+  }
+
   handleFailure(errorMessage?: string, withRecoveryHint = false, rateLimited = false) {
     this.showRecoveryHint = withRecoveryHint
     this.error = errorMessage || (rateLimited ? this.rateLimitNotice : 'Falha no login. Verifique seus dados.')

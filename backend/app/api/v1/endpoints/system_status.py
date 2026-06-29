@@ -1,21 +1,21 @@
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from app.config import settings
 from app.services.db_migration_service import db_migration_service
 from app.services.knowledge_service import KnowledgeService, get_knowledge_service
 from app.services.llm_service import LLMService, get_llm_service
 from app.services.observability_service import ObservabilityService, get_observability_service
 from app.services.optimization_service import OptimizationService, get_optimization_service
+from app.services.system_health_service import build_service_health_items
 from app.services.system_status_service import system_status_service
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
-
-
-# --- Pydantic Model (DTO) ---
 
 
 class StatusResponse(BaseModel):
@@ -36,6 +36,9 @@ class ServiceHealthItem(BaseModel):
     name: str
     status: str
     metric_text: str | None = None
+    capability: str | None = None
+    user_impact: str | None = None
+    recommended_action: str | None = None
 
 
 class ServiceHealthResponse(BaseModel):
@@ -50,114 +53,68 @@ class UserStatusResponse(BaseModel):
     vector_points: int
 
 
-# --- Endpoints ---
+def _degraded_status_response(now: datetime) -> StatusResponse:
+    return StatusResponse(
+        app_name=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        environment=settings.ENVIRONMENT,
+        status="DEGRADED",
+        timestamp=now.isoformat(),
+        uptime_seconds=None,
+        system=None,
+        process=None,
+        performance={
+            "cpu_percent": None,
+            "memory_percent": None,
+        },
+        config=None,
+    )
 
 
 @router.get(
     "/status",
     response_model=StatusResponse,
-    summary="Verifica o estado da aplicação",
+    summary="Verifica o estado da aplicacao",
     tags=["System"],
 )
 async def get_system_status():
-    """Delega a obtenção do status da aplicação para o SystemStatusService."""
-    logger.info("Recebida requisição de status do sistema.")
-    status_data = system_status_service.get_system_status()
-    return StatusResponse(**status_data)
+    logger.info("Recebida requisicao de status do sistema.")
+    try:
+        status_data = system_status_service.get_system_status()
+        return StatusResponse(**status_data)
+    except Exception:
+        logger.warning("system_status_collection_unavailable", exc_info=True)
+        return _degraded_status_response(datetime.now(UTC))
 
 
 @router.get(
     "/health/services",
     response_model=ServiceHealthResponse,
-    summary="Saúde dos microsserviços",
+    summary="Saude dos microsservicos",
     tags=["System"],
 )
 async def get_services_health(
+    request: Request,
     observability: ObservabilityService = Depends(get_observability_service),
     knowledge: KnowledgeService = Depends(get_knowledge_service),
     llm: LLMService = Depends(get_llm_service),
     optimization: OptimizationService = Depends(get_optimization_service),
 ):
-    # Agent/Multi-Agent System
-    agent_h = await observability.get_multi_agent_system_health()
-    agent_status = agent_h.get("status", "unknown")
-    active_agents = agent_h.get("details", {}).get("active_agents")
-
-    # Knowledge Graph
-    knowledge_h = await knowledge.get_health_status()
-    knowledge_status = knowledge_h.get("status", "unknown")
-    total_nodes = knowledge_h.get("total_nodes")
-
-    # LLM Manager
-    llm_h = await llm.get_health_status()
-    llm_status = llm_h.get("status", "unknown")
-    llm_details = llm_h.get("details", {})
-    open_cb = llm_details.get("open_circuits", 0)
-    cached_llms = llm_details.get("cached_llms", 0)
-
-    # Memory (System RAM usage via optimization metrics)
-    mem_mb: float | None = None
-    try:
-        analysis = await optimization.analyze_system(analysis_type="performance", detailed=False)
-        raw_mem_mb = analysis.get("metrics_snapshot", {}).get("memory_usage_mb")
-        if raw_mem_mb is not None:
-            mem_mb = float(raw_mem_mb)
-    except Exception:
-        try:
-            history = await optimization.get_metrics_history(limit=1)
-            if history:
-                last = history[-1]
-                raw_mem_mb = getattr(last, "memory_usage_mb", None)
-                if raw_mem_mb is not None:
-                    mem_mb = float(raw_mem_mb)
-        except Exception:
-            mem_mb = None
-
-    # Simple heuristic for memory status. Unknown telemetry must not look healthy.
-    memory_status = "unknown"
-    memory_metric_text = "Uso: indisponivel"
-    if mem_mb is not None:
-        memory_status = "ok"
-        if mem_mb >= 8192:
-            memory_status = "degraded"
-        if mem_mb >= 16384:
-            memory_status = "error"
-        memory_metric_text = f"Uso: {int(round(mem_mb))}MB"
-
-    services = [
-        ServiceHealthItem(
-            key="agent",
-            name="Agent Service",
-            status=agent_status,
-            metric_text=f"Agentes: {active_agents if active_agents is not None else '—'}",
-        ),
-        ServiceHealthItem(
-            key="knowledge",
-            name="Knowledge Service",
-            status=knowledge_status,
-            metric_text=f"Ontologias: {total_nodes if isinstance(total_nodes, (int, float)) else '—'}",
-        ),
-        ServiceHealthItem(
-            key="memory",
-            name="Memory Service",
-            status=memory_status,
-            metric_text=memory_metric_text,
-        ),
-        ServiceHealthItem(
-            key="llm",
-            name="LLM Gateway",
-            status=llm_status,
-            metric_text=f"CB Abertos: {open_cb}, Cache: {cached_llms}",
-        ),
-    ]
-
-    return ServiceHealthResponse(services=services)
+    workers = getattr(request.app.state, "orchestrator_workers", [])
+    services = await build_service_health_items(
+        observability,
+        knowledge,
+        llm,
+        optimization,
+        workers,
+    )
+    return ServiceHealthResponse(services=[ServiceHealthItem(**item) for item in services])
 
 
 @router.get(
     "/status/user",
     response_model=UserStatusResponse,
-    summary="Resumo de status por usuário (ator ou admin)",
+    summary="Resumo de status por usuario (ator ou admin)",
     tags=["System"],
 )
 async def get_user_status(
@@ -179,11 +136,8 @@ async def get_user_status(
     target_uid = user_id or str(actor)
     if (not is_admin) and (user_id is not None) and (str(user_id) != str(actor)):
         raise HTTPException(status_code=403, detail="Forbidden")
-    m = await observability.get_user_metrics(target_uid)
-    return UserStatusResponse(**m)
-
-
-
+    metrics = await observability.get_user_metrics(target_uid)
+    return UserStatusResponse(**metrics)
 
 
 @router.get(
@@ -196,7 +150,9 @@ async def validate_db_schema():
 
 
 @router.post(
-    "/db/migrate", summary="Migra schema Database (cria índices/constraints ausentes)", tags=["System"]
+    "/db/migrate",
+    summary="Migra schema Database (cria indices/constraints ausentes)",
+    tags=["System"],
 )
 async def migrate_db_schema():
     return db_migration_service.migrate_schema()

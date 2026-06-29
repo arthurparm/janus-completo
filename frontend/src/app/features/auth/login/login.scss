@@ -326,6 +326,34 @@ label {
     gap: 0.75rem;
 }
 
+.visitor-access {
+    display: grid;
+    gap: 0.45rem;
+    padding-top: 0.25rem;
+}
+
+.glass-button.visitor {
+    background: rgba(246, 179, 72, 0.09);
+    color: #fcd9a0;
+    border-color: rgba(246, 179, 72, 0.28);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+
+    &:hover:not(:disabled) {
+        border-color: rgba(246, 179, 72, 0.48);
+        box-shadow: 0 0 18px rgba(246, 179, 72, 0.16);
+        transform: translateY(-1px);
+    }
+}
+
+.visitor-access p {
+    margin: 0;
+    color: rgba(234, 242, 248, 0.58);
+    font-size: 0.74rem;
+    line-height: 1.35;
+    text-align: center;
+}
+
 .signup {
     display: flex;
     justify-content: center;

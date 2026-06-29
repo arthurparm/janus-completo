@@ -6,7 +6,7 @@
     </div>
 
     <!-- System HUD (Substitui métricas antigas) -->
-    <div class="system-metrics desktop-only">
+    <div class="system-metrics">
       <app-system-hud></app-system-hud>
     </div>
 
@@ -22,7 +22,10 @@
       </a>
 
       @if (isAuthenticated$ | async) {
-      <button class="logout-btn" (click)="logout()">Sair</button>
+        @if (isVisitor$ | async) {
+          <span class="visitor-badge" aria-label="Modo visitante ativo">Visitante</span>
+        }
+        <button class="logout-btn" (click)="logout()">Sair</button>
       }
     </nav>
   </div>

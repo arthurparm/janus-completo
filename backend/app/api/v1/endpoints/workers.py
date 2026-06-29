@@ -1,6 +1,8 @@
 import asyncio
+from collections.abc import Mapping
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Request
 
 from app.core.workers.orchestrator import (
@@ -10,6 +12,30 @@ from app.core.workers.orchestrator import (
 )
 
 router = APIRouter(tags=["Workers"])
+logger = structlog.get_logger(__name__)
+
+
+def _valid_worker_records(raw_workers: Any) -> tuple[list[Mapping[str, Any]], int]:
+    if not isinstance(raw_workers, list):
+        logger.warning(
+            "workers_invalid_collection",
+            collection_type=type(raw_workers).__name__,
+        )
+        return [], 0 if raw_workers in (None, []) else 1
+
+    workers: list[Mapping[str, Any]] = []
+    ignored = 0
+    for index, worker in enumerate(raw_workers):
+        if not isinstance(worker, Mapping):
+            ignored += 1
+            logger.warning(
+                "workers_invalid_item",
+                index=index,
+                item_type=type(worker).__name__,
+            )
+            continue
+        workers.append(worker)
+    return workers, ignored
 
 
 def _task_status(task: Any) -> dict[str, Any]:
@@ -94,7 +120,7 @@ def _cancel_worker_task(task: Any) -> int:
 async def start_workers(request: Request):
     app = request.app
     # Prevent double-start if any existing worker is still running
-    current: list[dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
+    current, _ignored = _valid_worker_records(getattr(app.state, "orchestrator_workers", []) or [])
     if any(_is_worker_active(w.get("task")) for w in current):
         raise HTTPException(status_code=400, detail="Workers already running. Stop them first.")
 
@@ -116,9 +142,15 @@ async def start_workers(request: Request):
 @router.post("/stop-all", summary="Stop all orchestrator-managed workers")
 async def stop_workers(request: Request):
     app = request.app
-    current: list[dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
+    current, ignored = _valid_worker_records(getattr(app.state, "orchestrator_workers", []) or [])
     if not current:
-        return {"status": "ok", "message": "No workers tracked", "count": 0}
+        app.state.orchestrator_workers = []
+        return {
+            "status": "ok",
+            "message": "No workers tracked",
+            "count": 0,
+            "ignored": ignored,
+        }
 
     stopped = 0
     for w in current:
@@ -127,14 +159,18 @@ async def stop_workers(request: Request):
     # Clear state registry
     app.state.orchestrator_workers = []
 
-    return {"status": "stopped", "stopped_count": stopped}
+    return {"status": "stopped", "stopped_count": stopped, "ignored": ignored}
 
 
 @router.get("/status", summary="Get status for orchestrator-managed workers")
 async def workers_status(request: Request):
     app = request.app
-    current: list[dict[str, Any]] = getattr(app.state, "orchestrator_workers", []) or []
+    current, ignored = _valid_worker_records(getattr(app.state, "orchestrator_workers", []) or [])
     return {
         "tracked": len(current),
-        "workers": [{"name": w["name"], **_task_status(w["task"])} for w in current],
+        "ignored": ignored,
+        "workers": [
+            {"name": str(w.get("name") or "worker"), **_task_status(w.get("task"))}
+            for w in current
+        ],
     }

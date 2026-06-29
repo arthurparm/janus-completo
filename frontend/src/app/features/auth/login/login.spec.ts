@@ -10,6 +10,7 @@ describe('LoginComponent', () => {
   let authSpy: {
     loginWithPassword: ReturnType<typeof vi.fn>
     loginWithProvider: ReturnType<typeof vi.fn>
+    enterVisitorMode: ReturnType<typeof vi.fn>
     requestPasswordReset: ReturnType<typeof vi.fn>
     resetPassword: ReturnType<typeof vi.fn>
   }
@@ -19,6 +20,7 @@ describe('LoginComponent', () => {
     authSpy = {
       loginWithPassword: vi.fn(),
       loginWithProvider: vi.fn(),
+      enterVisitorMode: vi.fn(),
       requestPasswordReset: vi.fn(),
       resetPassword: vi.fn(),
       isAuthRateLimited: vi.fn().mockReturnValue(false),
@@ -54,6 +56,16 @@ describe('LoginComponent', () => {
     await comp.loginEmailPassword()
 
     expect(authSpy.loginWithPassword).toHaveBeenCalledWith('a@b.com', '123456', true)
+    expect(navigateSpy).toHaveBeenCalledWith(['/'])
+  })
+
+  it('deve entrar em modo visitante e navegar para home', async () => {
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true)
+    authSpy.enterVisitorMode.mockReturnValue({ ok: true })
+
+    await comp.enterVisitorMode()
+
+    expect(authSpy.enterVisitorMode).toHaveBeenCalled()
     expect(navigateSpy).toHaveBeenCalledWith(['/'])
   })
 

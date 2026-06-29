@@ -33,6 +33,7 @@ describe('authSessionInterceptor', () => {
           useValue: {
             isAuthRateLimited: () => false,
             authRateLimitRemainingSeconds: () => 0,
+            isVisitorSession: () => false,
             refreshAccessToken,
             captureRateLimit
           }
@@ -75,6 +76,7 @@ describe('authSessionInterceptor', () => {
           useValue: {
             isAuthRateLimited: () => false,
             authRateLimitRemainingSeconds: () => 0,
+            isVisitorSession: () => false,
             refreshAccessToken: vi.fn(),
             captureRateLimit
           }
@@ -100,5 +102,41 @@ describe('authSessionInterceptor', () => {
 
     await expect(firstValueFrom(out$)).rejects.toBeInstanceOf(HttpErrorResponse)
     expect(captureRateLimit).toHaveBeenCalledTimes(1)
+  })
+
+  it('nao tenta refresh nem redireciona quando visitante recebe 401 de recurso privado', async () => {
+    const refreshAccessToken = vi.fn()
+    const navigate = vi.fn()
+    const notifyWarning = vi.fn()
+
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthRateLimited: () => false,
+            authRateLimitRemainingSeconds: () => 0,
+            isVisitorSession: () => true,
+            refreshAccessToken,
+            captureRateLimit: vi.fn()
+          }
+        },
+        { provide: Router, useValue: { url: '/conversations', navigate } },
+        { provide: NotificationService, useValue: { notifyWarning } }
+      ]
+    })
+
+    const next = vi.fn((req: HttpRequest<unknown>) =>
+      throwError(() => new HttpErrorResponse({ status: 401, statusText: 'Unauthorized', url: req.url }))
+    )
+
+    const req = new HttpRequest('GET', '/api/v1/chat/conversations')
+    const out$ = TestBed.runInInjectionContext(() => authSessionInterceptor(req, next))
+
+    await expect(firstValueFrom(out$)).rejects.toBeInstanceOf(HttpErrorResponse)
+    expect(refreshAccessToken).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+    expect(notifyWarning).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalledTimes(1)
   })
 })
