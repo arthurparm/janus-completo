@@ -5,9 +5,8 @@ This module ensures that the Janus application does not start in 'production' mo
 with insecure default passwords. This is a critical security measure.
 """
 import structlog
-from pydantic import SecretStr
-
 from app.config import settings
+from pydantic import SecretStr
 
 logger = structlog.get_logger(__name__)
 
@@ -18,6 +17,15 @@ INSECURE_DEFAULTS: dict[str, set[str]] = {
     "POSTGRES_PASSWORD": {"janus_pass", "change_me_postgres_password", "__required__"},
     "RABBITMQ_PASSWORD": {"janus_pass", "change_me_rabbitmq_password", "__required__"},
     "AUTH_JWT_SECRET": {
+        "",
+        "none",
+        "null",
+        "changeme",
+        "change_me",
+        "dev_secret_change_me",
+        "janus_dev_secret",
+    },
+    "AUDIT_LEDGER_HMAC_KEY": {
         "",
         "none",
         "null",

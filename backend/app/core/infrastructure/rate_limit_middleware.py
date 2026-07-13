@@ -1,4 +1,3 @@
-import asyncio
 import time
 from pathlib import Path
 from threading import Lock
@@ -48,10 +47,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Convert requests/min to requests/sec for token bucket
         self.rate_ip = max(0.1, getattr(settings, "RATE_LIMIT_PER_IP_PER_MIN", 60) / 60.0)
         self.burst_ip = max(1, int(getattr(settings, "RATE_LIMIT_PER_IP_PER_MIN", 60)))
-        
+
         self.rate_key = max(0.1, getattr(settings, "RATE_LIMIT_PER_KEY_PER_MIN", 300) / 60.0)
         self.burst_key = max(1, int(getattr(settings, "RATE_LIMIT_PER_KEY_PER_MIN", 300)))
-        
+
         self.script_sha: str | None = None
         self._fallback_lock = Lock()
         self._fallback_buckets: dict[str, tuple[float, float]] = {}
@@ -63,7 +62,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             media_type="application/problem+json",
             status_code=503,
         )
-        
+
     async def _get_script_sha(self):
         if self.script_sha:
             return self.script_sha
@@ -77,9 +76,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return None
 
     def _should_use_local_fallback(self, path: str) -> bool:
-        return path.startswith("/api/v1/documents/upload") or path.startswith(
-            "/api/v1/documents/status/"
-        ) or path.startswith("/api/v1/documents/list")
+        return (
+            path.startswith("/api/v1/chat")
+            or path.startswith("/api/v1/documents/upload")
+            or path.startswith("/api/v1/documents/status/")
+            or path.startswith("/api/v1/documents/list")
+        )
 
     def _consume_local_bucket(self, key: str) -> tuple[bool, float]:
         now = time.time()
@@ -138,17 +140,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 if self.fail_closed:
                     return self._service_unavailable_response(path)
                 return await call_next(request)
-            
+
             # Identify client
             client_ip = request.client.host if request.client else "unknown"
             api_key = request.headers.get("X-API-Key")
-            
+
             now = time.time()
-            
+
             # Check IP Limit
             # KEYS[1], ARGV[1]:rate, ARGV[2]:capacity, ARGV[3]:now, ARGV[4]:requested
             ip_key = f"rate_limit:ip:{client_ip}"
-            
+
             # Execute Lua script
             # We use evalsha for performance
             try:
@@ -178,7 +180,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     status_code=429,
                     headers={"Retry-After": str(int(retry_after) + 1)},
                 )
-            
+
             # If API Key present, check Key Limit
             if api_key:
                 key_key = f"rate_limit:apikey:{api_key}"
@@ -193,7 +195,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         status_code=429,
                         headers={"Retry-After": str(int(retry_after) + 1)},
                     )
-            
+
             response = await call_next(request)
             # Optional: Add headers X-RateLimit-Limit / Remaining based on 'val' (tokens remaining)
             # valid for the last checked limit (Key takes precedence if present)

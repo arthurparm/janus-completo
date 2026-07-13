@@ -1,8 +1,8 @@
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app.core.security.cpf import is_valid_cpf, normalize_cpf
 
@@ -49,6 +49,7 @@ class AppSettings(BaseSettings):
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: int = 6333
     QDRANT_HTTPS: bool = False
+    QDRANT_TLS_CA_CERT: str | None = None
     QDRANT_API_KEY: SecretStr | None = None
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
     QDRANT_EPISODIC_HNSW_M: int = 32
@@ -408,9 +409,9 @@ class AppSettings(BaseSettings):
     AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
     AUTH_RESET_RETURN_TOKEN: bool = False
     AUTH_TRUST_X_USER_ID_HEADER: bool = False
-    AUTH_ADMIN_CPF_ALLOWLIST: list[str] = []
+    AUTH_ADMIN_CPF_ALLOWLIST: Annotated[list[str], NoDecode] = []
     SUPABASE_JWT_SECRET: str = ""
-    CHAT_UNLIMITED_USERS: list[str] = []
+    CHAT_UNLIMITED_USERS: Annotated[list[str], NoDecode] = []
     AUTH_RATE_LIMIT_ENABLED: bool = True
     AUTH_RATE_LIMITS: dict[str, dict[str, int]] = {
         "auth.token": {"max_attempts": 20, "window_seconds": 60},
@@ -457,8 +458,8 @@ class AppSettings(BaseSettings):
 
     # Tooling safety
     LAUNCH_APP_ALLOWED_APPS: list[str] = []
-    TOOL_EGRESS_ALLOW_HOSTS: list[str] = Field(default_factory=list)
-    WORKER_EGRESS_ALLOW_HOSTS: list[str] = Field(default_factory=list)
+    TOOL_EGRESS_ALLOW_HOSTS: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    WORKER_EGRESS_ALLOW_HOSTS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # Redis
     REDIS_ENABLED: bool = False
