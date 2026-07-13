@@ -1,7 +1,6 @@
 import pytest
-from fastapi import Request, Response
-
 from app.core.infrastructure.rate_limit_middleware import RateLimitMiddleware
+from fastapi import Request, Response
 
 
 @pytest.mark.asyncio
@@ -29,7 +28,7 @@ async def test_chat_rate_limit_bypasses_unlimited_user(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_chat_rate_limit_still_blocks_non_unlimited_user(monkeypatch):
+async def test_chat_rate_limit_uses_local_fallback_when_redis_unavailable(monkeypatch):
     middleware = RateLimitMiddleware(app=lambda scope, receive, send: None)
     middleware.fail_closed = True
     monkeypatch.setattr("app.core.infrastructure.rate_limit_middleware.is_chat_unlimited_request", lambda _request: False)
@@ -49,4 +48,33 @@ async def test_chat_rate_limit_still_blocks_non_unlimited_user(monkeypatch):
         return Response(status_code=204)
 
     response = await middleware.dispatch(request, call_next)
-    assert response.status_code == 503
+    assert response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_chat_rate_limit_local_fallback_blocks_after_bucket_exhaustion(monkeypatch):
+    middleware = RateLimitMiddleware(app=lambda scope, receive, send: None)
+    middleware.fail_closed = True
+    middleware.burst_ip = 1
+    middleware.rate_ip = 0.1
+    monkeypatch.setattr("app.core.infrastructure.rate_limit_middleware.is_chat_unlimited_request", lambda _request: False)
+    monkeypatch.setattr("app.core.infrastructure.rate_limit_middleware.settings.REDIS_ENABLED", False)
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/v1/chat/stream/101",
+        "headers": [],
+        "client": ("127.0.0.1", 5000),
+        "query_string": b"",
+    }
+    request = Request(scope)
+
+    async def call_next(_request: Request) -> Response:
+        return Response(status_code=204)
+
+    first_response = await middleware.dispatch(request, call_next)
+    second_response = await middleware.dispatch(request, call_next)
+
+    assert first_response.status_code == 204
+    assert second_response.status_code == 429

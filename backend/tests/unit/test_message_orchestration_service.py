@@ -934,6 +934,30 @@ async def test_send_message_secret_recall_uses_explicit_authorized_path(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_secret_recall_ignores_ordinary_chat_message(monkeypatch):
+    service = _build_service()
+    list_secrets = AsyncMock(return_value=[])
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.secret_memory_service.should_authorize_prompt_recall",
+        lambda _message: False,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.secret_memory_service.list_secrets",
+        list_secrets,
+    )
+
+    result = await service.generate_secret_recall_reply(
+        message="Quanto e dois mais dois?",
+        role=ModelRole.ORCHESTRATOR,
+        user_id="user-1",
+        conversation_id="conv-1",
+    )
+
+    assert result is None
+    list_secrets.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_apply_response_memory_policies_appends_next_steps(monkeypatch):
     service = _build_service()
     monkeypatch.setattr(
