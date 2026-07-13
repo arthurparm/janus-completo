@@ -16,33 +16,10 @@ services:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env.pc2}
       - NEO4J_PLUGINS=["apoc"]
       
-      # Memory Configuration (optimize for 64GB system with i9-13900F)
-      # Allocate 20GB to Neo4j (conservative to leave room for Qdrant + Ollama)
-      - NEO4J_server_memory_heap_initial__size=10G
-      - NEO4J_server_memory_heap_max__size=20G
-      - NEO4J_server_memory_pagecache_size=12G
-      
-      # Performance Tuning
-      - NEO4J_dbms_memory_transaction_max__size=1G
-      - NEO4J_dbms_transaction_timeout=30s
-      - NEO4J_dbms_default__database=neo4j
-      
-      # Query Performance
-      - NEO4J_dbms_query_statistics_enabled=true
-      - NEO4J_dbms_query_statistics_record__allocation__enabled=true
-      
-      # Connection Pool
-      - NEO4J_server_bolt_connection__keep__alive=DISABLED
-      - NEO4J_server_bolt_thread__pool__min__size=20
-      - NEO4J_server_bolt_thread__pool__max__size=200
-      
-      # Cache Configuration (L3 Cache friendly)
-      - NEO4J_dbms_memory_off_heap_max__size=4G
-      - NEO4J_dbms_memory_transaction__state__off__heap__max__size=100M
-      
-      # Network
-      - NEO4J_server_bolt_advertised__address=0.0.0.0:7687
-      - NEO4J_server_http_advertised__address=0.0.0.0:7474
+      # Memory Configuration
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL:-512M}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX:-2G}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE:-512M}
       
     volumes:
       - janus_neo4j_data:/data
@@ -51,8 +28,8 @@ services:
     
     # CPU & Memory: 10 cores (P-cores for consistency) + 20GB RAM
     # i9-13900F has 8 P-cores (3.0-5.6GHz) + 16 E-cores (2.5-4.3GHz)
-    mem_limit: 22g
-    memswap_limit: 24g
+    mem_limit: ${NEO4J_MEM_LIMIT:-4g}
+    memswap_limit: ${NEO4J_MEMSWAP_LIMIT:-5g}
     cpus: "10.0"
     cpuset: "0-9"
     
@@ -73,7 +50,7 @@ services:
       - janus-pc2-net
 
   qdrant:
-    image: qdrant/qdrant:v1.16.2
+    image: qdrant/qdrant:v1.18.2
     container_name: janus_qdrant_pc2
     platform: linux/amd64
     ports:
@@ -82,6 +59,10 @@ services:
     environment:
       # Security
       - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env.pc2}
+      - QDRANT__SERVICE__ENABLE_TLS=${QDRANT_ENABLE_TLS:-false}
+      - QDRANT__TLS__CERT=${QDRANT_TLS_CERT:-/qdrant/tls/cert.pem}
+      - QDRANT__TLS__KEY=${QDRANT_TLS_KEY:-/qdrant/tls/key.pem}
+      - QDRANT__TLS__CA_CERT=${QDRANT_TLS_CA_CERT:-/qdrant/tls/ca.pem}
       
       # Storage Configuration (SSD-optimized)
       - QDRANT__STORAGE__SNAPSHOTS_PATH=/qdrant/snapshots
@@ -106,6 +87,7 @@ services:
       - janus_qdrant_data:/qdrant/storage
       - janus_qdrant_snapshots:/qdrant/snapshots
       - janus_qdrant_temp:/qdrant/temp
+      - ./.secrets/qdrant:/qdrant/tls:ro
     
     restart: unless-stopped
     
@@ -117,7 +99,7 @@ services:
     cpuset: "10-15"
     
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/health || exit 1"]
+      test: ["CMD-SHELL", "bash -lc ': >/dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 8

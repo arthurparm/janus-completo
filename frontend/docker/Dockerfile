@@ -51,7 +51,7 @@ LABEL org.opencontainers.image.revision=${JANUS_BUILD_REF} \
 EXPOSE 4300
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:4300/ || exit 1
+    CMD wget -qO- http://127.0.0.1:4300/ | grep -q "<app-root" || exit 1
 
-# Serve the built Angular app from the dist directory
-CMD ["serve", "-s", "dist", "-l", "4300", "--single"]
+# Serve the Angular browser bundle, not the parent dist directory.
+CMD ["serve", "-s", "dist/janus-angular/browser", "-l", "4300", "--single"]

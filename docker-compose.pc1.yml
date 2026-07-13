@@ -20,6 +20,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - JANUS_BUILD_REF=${JANUS_BUILD_REF:-local-dev}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env.pc1}
+      - AUDIT_LEDGER_HMAC_KEY=${AUDIT_LEDGER_HMAC_KEY:?Set AUDIT_LEDGER_HMAC_KEY in .env.pc1}
       - AUTH_ADMIN_CPF_ALLOWLIST=${AUTH_ADMIN_CPF_ALLOWLIST:-}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-["http://localhost:4300"]}
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
@@ -39,6 +40,8 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env.pc1}
       - QDRANT_HOST=${QDRANT_HOST:?Set QDRANT_HOST in .env.pc1 (<PC2_TAILSCALE_IP>)}
       - QDRANT_PORT=${QDRANT_PORT:-6333}
+      - QDRANT_HTTPS=${QDRANT_HTTPS:-false}
+      - QDRANT_TLS_CA_CERT=${QDRANT_TLS_CA_CERT:-}
       - QDRANT_API_KEY=${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env.pc1}
       - OLLAMA_HOST=${OLLAMA_HOST:?Set OLLAMA_HOST in .env.pc1 (http://<PC2_TAILSCALE_IP>:11434)}
       - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
@@ -71,6 +74,7 @@ services:
     volumes:
       - ./backend/app:/app/app:ro
       - ./backend/scripts:/app/scripts:ro
+      - ./.secrets/qdrant:/run/secrets/janus/qdrant:ro
       - janus_app_data:/app/data
       - janus_workspace:/app/workspace
     extra_hosts:
