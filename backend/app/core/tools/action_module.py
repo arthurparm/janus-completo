@@ -18,7 +18,7 @@ from enum import Enum
 from typing import Any, Literal  # noqa: F401
 
 import structlog
-from langchain.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, tool
 from prometheus_client import Counter, Histogram
 
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID

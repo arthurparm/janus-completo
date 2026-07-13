@@ -1,10 +1,10 @@
 import os
-import structlog
 import platform
 import re
 import subprocess
 
-from langchain.tools import tool
+import structlog
+from langchain_core.tools import tool
 
 from app.config import settings
 

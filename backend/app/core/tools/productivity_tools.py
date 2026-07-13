@@ -1,9 +1,9 @@
 import json
 from contextvars import ContextVar
-import structlog
 from typing import Any
 
-from langchain.tools import tool
+import structlog
+from langchain_core.tools import tool
 
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
 

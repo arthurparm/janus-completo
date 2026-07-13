@@ -1,15 +1,14 @@
 import asyncio
-import httpx
 import json
-import structlog
 from html.parser import HTMLParser
 from pathlib import Path
 
-from langchain.tools import BaseTool, tool
+import httpx
+import structlog
+from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
-from app.core.security.egress_policy import enforce_tool_http_egress
 from app.core.evolution import EvolutionManager
 from app.core.infrastructure import filesystem_manager
 from app.core.infrastructure.context_manager import context_manager
@@ -17,18 +16,19 @@ from app.core.infrastructure.enums import AgentType
 from app.core.infrastructure.python_sandbox import python_sandbox
 from app.core.memory.memory_core import get_memory_db
 from app.core.memory.working_memory import get_working_memory
+from app.core.security.egress_policy import enforce_tool_http_egress
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
 from app.core.tools.command_sandbox import run_restricted_command
-from app.core.tools.faulty_tools import get_faulty_tools
-from app.core.tools.launcher_tools import launch_app
 from app.core.tools.external_cli_tools import (
     codex_exec,
-    codex_review,
     codex_login,
+    codex_review,
     jules_new,
     jules_pull,
     register_external_cli_tools,
 )
+from app.core.tools.faulty_tools import get_faulty_tools
+from app.core.tools.launcher_tools import launch_app
 from app.db.graph import graph_db, initialize_graph_db
 from app.repositories.llm_repository import LLMRepository
 from app.repositories.tool_repository import ToolRepository
@@ -71,7 +71,7 @@ def write_file(
 
     ⚠️ USE CASE: Creating STANDALONE SCRIPTS for users to run manually.
     ⚠️ NOT FOR: Creating SYSTEM TOOLS (use auto-evolution for that)
-    
+
     CRITICAL: If user requested a "tool" or "ferramenta", DO NOT use this function.
     Instead, ask for clarification: SYSTEM TOOL (auto-evolution) vs STANDALONE SCRIPT (write_file)?
 

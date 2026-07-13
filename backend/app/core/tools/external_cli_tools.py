@@ -1,9 +1,9 @@
-import structlog
 import shutil
 import subprocess
 from pathlib import Path
 
-from langchain.tools import tool
+import structlog
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -90,7 +90,7 @@ def codex_exec(prompt: str, model: str | None = None) -> str:
     if model:
         args += ["-m", model]
     args.append(prompt)
-    
+
     logger.info("log_info", message=f"Executando Codex CLI ({cli_path})", extra={"command": "codex exec"})
     return _run_command(args, cwd=Path(settings.WORKSPACE_ROOT).resolve())
 
@@ -185,7 +185,7 @@ class CodexLoginInput(BaseModel):
 def codex_login(token: str | None = None) -> str:
     """
     Inicia o processo de login no Codex CLI.
-    
+
     Se um token for fornecido, retorna instrução para usar o fluxo oficial.
     Caso contrário, executa o fluxo padrão via `codex --login`.
     """

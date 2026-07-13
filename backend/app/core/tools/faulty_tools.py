@@ -13,7 +13,7 @@ import random
 import time
 from typing import Any
 
-from langchain.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, tool
 
 # ==================== FERRAMENTAS DEFEITUOSAS ====================
 
