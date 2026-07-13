@@ -66,7 +66,7 @@ All PC1 services share the `janus-pc1-net` bridge network (172.20.0.0/16). API h
 
 **PC2 Resource Limits** ([docker-compose.pc2.yml](file:///h:/repos/janus-completo/docker-compose.pc2.yml)):
 - neo4j (5.19-community): mem_limit=22g, cpus=10.0 (cpuset=0-9), heap=20G, pagecache=12G, APOC plugin
-- qdrant (v1.16.2): mem_limit=12g, cpus=6.0 (cpuset=10-15), HNSW without memmap, API key auth
+- qdrant (v1.18.2): mem_limit=12g, cpus=6.0 (cpuset=10-15), HNSW without memmap, API key auth, TLS-capable local runtime
 - ollama (latest): mem_limit=20g, cpus=8.0 (cpuset=16-23), GPU passthrough for RTX 4060 Ti 16GB, CUDA v12
 
 PC2 services share `janus-pc2-net` bridge network (172.21.0.0/16). Ollama has a companion `ollama-model-init` container that auto-pulls configured models on first boot.

@@ -7,7 +7,7 @@ This directory contains the Python FastAPI backend for the Janus AI system.
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.11 or 3.12. The backend dependency manifests require `<3.13`.
 
 ### Setup
 

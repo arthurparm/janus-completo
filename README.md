@@ -51,7 +51,7 @@ python tooling/dev.py doctor --host 100.89.17.105 --backend-port 8000 --frontend
 ### Prerequisites
 
 - Node.js 20
-- Python 3.11+
+- Python 3.11 or 3.12 for local backend setup/QA (`backend/pyproject.toml` and `backend/requirements.txt` require `<3.13`)
 - Docker & Docker Compose (optional for full stack)
 
 ### Frontend (Local Development)
