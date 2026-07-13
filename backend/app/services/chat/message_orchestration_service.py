@@ -620,6 +620,8 @@ class MessageOrchestrationService:
         conversation_id: str | None) -> dict[str, Any] | None:
         if not user_id:
             return None
+        if not secret_memory_service.should_authorize_prompt_recall(message):
+            return None
         items = await secret_memory_service.list_secrets(
             user_id=str(user_id),
             query=message,

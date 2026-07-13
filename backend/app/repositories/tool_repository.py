@@ -1,9 +1,8 @@
 from typing import Any
 
 import structlog
-from langchain.tools import BaseTool
-
 from app.core.tools import PermissionLevel, ToolCategory, ToolMetadata, action_registry
+from langchain_core.tools import BaseTool
 
 logger = structlog.get_logger(__name__)
 

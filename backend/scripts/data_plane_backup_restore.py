@@ -5,10 +5,11 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,18 @@ def _split_csv(raw: str | None) -> list[str]:
     if not raw:
         return []
     return [item.strip() for item in str(raw).split(",") if item.strip()]
+
+
+def _parse_iso_datetime(raw: str) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 @dataclass
@@ -130,10 +143,13 @@ class DataPlaneBackupRestoreCLI:
             "qdrant": {
                 "url": self.args.qdrant_url,
                 "collections": _split_csv(self.args.qdrant_collections),
+                "ca_cert_provided": bool(self.args.qdrant_ca_cert),
             },
         }
 
     def _capture_versions(self) -> dict[str, Any]:
+        if self.args.command == "prune":
+            return {"status": "skipped", "reason": "prune-does-not-contact-services"}
         if self.args.dry_run:
             return {component: {"status": "skipped", "reason": "dry-run"} for component in self.components}
 
@@ -191,7 +207,7 @@ class DataPlaneBackupRestoreCLI:
             f"{self._qdrant_base_url()}/",
             headers=self._qdrant_headers(),
             timeout=30,
-            verify=not self.args.insecure,
+            verify=self._qdrant_verify(),
         )
         response.raise_for_status()
         payload = response.json()
@@ -242,6 +258,82 @@ class DataPlaneBackupRestoreCLI:
             checks["qdrant"] = self._verify_qdrant()
         self.manifest["checks"] = checks
 
+    def _run_prune(self) -> None:
+        candidates = self._select_prune_candidates()
+        mode = "apply" if self.args.prune_apply else "dry-run"
+        for item in candidates:
+            path = Path(item["path"])
+            if self.args.prune_apply:
+                shutil.rmtree(path)
+                status = "deleted"
+            else:
+                status = "would-delete"
+            self._record_step(
+                "data-plane-backups",
+                "prune",
+                {
+                    "path": str(path),
+                    "run_id": item["run_id"],
+                    "created_at": item["created_at"],
+                    "reason": item["reason"],
+                    "status": status,
+                    "mode": mode,
+                },
+            )
+        self.manifest["checks"]["prune"] = {
+            "status": "ok",
+            "mode": mode,
+            "retention_days": self.args.retention_days,
+            "retain_last": self.args.retain_last,
+            "candidate_count": len(candidates),
+        }
+
+    def _select_prune_candidates(self) -> list[dict[str, Any]]:
+        runs = self._list_backup_runs()
+        cutoff = datetime.now(UTC) - timedelta(days=max(0, int(self.args.retention_days)))
+        candidates: list[dict[str, Any]] = []
+        for index, item in enumerate(runs):
+            if index < max(0, int(self.args.retain_last)):
+                continue
+            created_at = item["created_at_dt"]
+            if created_at > cutoff:
+                continue
+            candidates.append(
+                {
+                    "path": str(item["path"]),
+                    "run_id": item["run_id"],
+                    "created_at": item["created_at"],
+                    "reason": f"older-than-{self.args.retention_days}-days-and-outside-latest-{self.args.retain_last}",
+                }
+            )
+        return candidates
+
+    def _list_backup_runs(self) -> list[dict[str, Any]]:
+        runs: list[dict[str, Any]] = []
+        for path in self.base_dir.iterdir():
+            if not path.is_dir() or path.resolve() == self.run_dir.resolve():
+                continue
+            manifest_path = path / "manifest.json"
+            if not manifest_path.exists():
+                continue
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            created_at_dt = _parse_iso_datetime(str(manifest.get("created_at") or ""))
+            if created_at_dt is None:
+                created_at_dt = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+            runs.append(
+                {
+                    "path": path,
+                    "run_id": str(manifest.get("run_id") or path.name),
+                    "created_at": created_at_dt.isoformat(),
+                    "created_at_dt": created_at_dt,
+                }
+            )
+        runs.sort(key=lambda item: item["created_at_dt"], reverse=True)
+        return runs
+
     def _command_prefix(self) -> list[str]:
         if self.args.target_host:
             target = self.args.target_host
@@ -282,6 +374,7 @@ class DataPlaneBackupRestoreCLI:
 
     def _restore_postgres(self) -> None:
         artifact = self._resolve_restore_artifact("postgres", ".dump")
+        self._verify_restore_artifact_integrity(artifact)
         if self.args.dry_run:
             self._record_step("postgres", "restore", {"artifact": str(artifact), "mode": "dry-run"})
             return
@@ -334,6 +427,7 @@ class DataPlaneBackupRestoreCLI:
 
     def _restore_neo4j(self) -> None:
         artifact = self._resolve_restore_artifact("neo4j", ".dump")
+        self._verify_restore_artifact_integrity(artifact)
         if self.args.dry_run:
             self._record_step("neo4j", "restore", {"artifact": str(artifact), "mode": "dry-run"})
             return
@@ -380,12 +474,19 @@ class DataPlaneBackupRestoreCLI:
             raise ValueError("qdrant_url is required.")
         return base
 
+    def _qdrant_verify(self) -> bool | str:
+        if self.args.insecure:
+            return False
+        if self.args.qdrant_ca_cert:
+            return str(Path(self.args.qdrant_ca_cert).expanduser().resolve())
+        return True
+
     def _list_qdrant_collections(self) -> list[str]:
         response = requests.get(
             f"{self._qdrant_base_url()}/collections",
             headers=self._qdrant_headers(),
             timeout=30,
-            verify=not self.args.insecure,
+            verify=self._qdrant_verify(),
         )
         response.raise_for_status()
         payload = response.json()
@@ -410,7 +511,7 @@ class DataPlaneBackupRestoreCLI:
                 f"{self._qdrant_base_url()}/collections/{collection}/snapshots",
                 headers=self._qdrant_headers(),
                 timeout=60,
-                verify=not self.args.insecure,
+                verify=self._qdrant_verify(),
             )
             create_resp.raise_for_status()
             snapshot_name = create_resp.json().get("result", {}).get("name")
@@ -420,17 +521,19 @@ class DataPlaneBackupRestoreCLI:
                 f"{self._qdrant_base_url()}/collections/{collection}/snapshots/{snapshot_name}",
                 headers=self._qdrant_headers(),
                 timeout=300,
-                verify=not self.args.insecure,
+                verify=self._qdrant_verify(),
             )
             download_resp.raise_for_status()
             artifact = self.run_dir / f"qdrant-{collection}-{snapshot_name}"
             artifact.write_bytes(download_resp.content)
-            self._record_artifact("qdrant", artifact, {"collection": collection})
+            self._record_artifact("qdrant", artifact, {"collection": collection, "snapshot_name": snapshot_name})
 
     def _restore_qdrant(self) -> None:
         artifacts = sorted(self.run_dir.glob("qdrant-*"))
         if self.args.restore_dir:
             artifacts = sorted(Path(self.args.restore_dir).resolve().glob("qdrant-*"))
+        for artifact in artifacts:
+            self._verify_restore_artifact_integrity(artifact)
         if self.args.dry_run:
             self._record_step(
                 "qdrant",
@@ -439,14 +542,14 @@ class DataPlaneBackupRestoreCLI:
             )
             return
         for artifact in artifacts:
-            collection = artifact.name.split("-")[1]
+            collection = self._resolve_qdrant_artifact_collection(artifact)
             with artifact.open("rb") as fh:
                 response = requests.post(
                     f"{self._qdrant_base_url()}/collections/{collection}/snapshots/upload",
                     headers=self._qdrant_headers(),
                     files={"snapshot": (artifact.name, fh, "application/octet-stream")},
                     timeout=300,
-                    verify=not self.args.insecure,
+                    verify=self._qdrant_verify(),
                 )
             response.raise_for_status()
             self._record_step("qdrant", "restore", {"artifact": str(artifact), "collection": collection, "status": "completed"})
@@ -461,7 +564,7 @@ class DataPlaneBackupRestoreCLI:
                 f"{self._qdrant_base_url()}/collections/{collection}",
                 headers=self._qdrant_headers(),
                 timeout=60,
-                verify=not self.args.insecure,
+                verify=self._qdrant_verify(),
             )
             response.raise_for_status()
             result = response.json().get("result", {})
@@ -470,6 +573,63 @@ class DataPlaneBackupRestoreCLI:
                 "indexed_vectors_count": int(result.get("indexed_vectors_count", 0) or 0),
             }
         return {"status": "ok", "collections": details}
+
+    def _resolve_qdrant_artifact_collection(self, artifact: Path) -> str:
+        configured = _split_csv(self.args.qdrant_collections)
+        if len(configured) == 1:
+            return configured[0]
+
+        manifest_item = self._restore_manifest_artifact(artifact)
+        if manifest_item and manifest_item.get("component") == "qdrant":
+            collection = str(manifest_item.get("collection", "")).strip()
+            if collection:
+                return collection
+
+        parts = artifact.name.split("-", 2)
+        if len(parts) < 3 or parts[0] != "qdrant" or not parts[1]:
+            raise ValueError(f"Cannot infer Qdrant collection from artifact name: {artifact.name}")
+        return parts[1]
+
+    def _restore_manifest_artifact(self, artifact: Path) -> dict[str, Any] | None:
+        manifest_path = artifact.parent / "manifest.json"
+        if not manifest_path.exists():
+            return None
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for item in manifest.get("artifacts", []):
+            if Path(str(item.get("path", ""))).name == artifact.name:
+                return item
+        return None
+
+    def _verify_restore_artifact_integrity(self, artifact: Path) -> None:
+        manifest_item = self._restore_manifest_artifact(artifact)
+        if not manifest_item:
+            self._record_step(
+                "data-plane-backups",
+                "integrity-check",
+                {"artifact": str(artifact), "status": "skipped", "reason": "missing-manifest-entry"},
+            )
+            return
+
+        expected_sha256 = str(manifest_item.get("sha256") or "").strip().lower()
+        if not expected_sha256:
+            self._record_step(
+                "data-plane-backups",
+                "integrity-check",
+                {"artifact": str(artifact), "status": "skipped", "reason": "missing-sha256"},
+            )
+            return
+
+        actual_sha256 = _sha256_file(artifact).lower()
+        if actual_sha256 != expected_sha256:
+            raise RuntimeError(
+                "Restore artifact checksum mismatch for "
+                f"{artifact}: expected {expected_sha256}, got {actual_sha256}"
+            )
+        self._record_step(
+            "data-plane-backups",
+            "integrity-check",
+            {"artifact": str(artifact), "status": "ok", "sha256": actual_sha256},
+        )
 
     def _resolve_restore_artifact(self, component: str, suffix: str) -> Path:
         search_dir = Path(self.args.restore_dir).resolve() if self.args.restore_dir else self.run_dir
@@ -494,6 +654,13 @@ def build_parser() -> argparse.ArgumentParser:
     common_parent.add_argument("--target-host", default=None)
     common_parent.add_argument("--target-user", default=None)
     common_parent.add_argument("--insecure", action="store_true")
+    common_parent.add_argument("--retention-days", type=int, default=14)
+    common_parent.add_argument("--retain-last", type=int, default=5)
+    common_parent.add_argument(
+        "--prune-apply",
+        action="store_true",
+        help="Actually delete retention candidates. Without this flag prune only reports candidates.",
+    )
 
     common_parent.add_argument("--postgres-dsn", default=None)
     common_parent.add_argument("--postgres-user", default=os.getenv("POSTGRES_USER", "janus"))
@@ -510,9 +677,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     common_parent.add_argument("--qdrant-url", default=None)
     common_parent.add_argument("--qdrant-api-key", default=None)
+    common_parent.add_argument("--qdrant-ca-cert", default=os.getenv("QDRANT_TLS_CA_CERT"))
     common_parent.add_argument("--qdrant-collections", default=None)
 
-    for name in ("backup", "restore", "verify"):
+    for name in ("backup", "restore", "verify", "prune"):
         subparsers.add_parser(name, parents=[common_parent])
 
     return parser
