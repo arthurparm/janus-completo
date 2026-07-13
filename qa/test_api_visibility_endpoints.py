@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.core.tools.action_module import PermissionLevel, ToolCategory, ToolMetadata
+from app.services.chat_service import get_chat_service
 from app.services.knowledge_service import get_knowledge_service
 from app.services.llm_service import get_llm_service
 from app.services.observability_service import get_observability_service
@@ -154,6 +155,11 @@ class DummyOptimizationService:
         return []
 
 
+class DummyChatService:
+    def get_history(self, conversation_id, user_id=None):
+        return []
+
+
 class DummyTask:
     def done(self):
         return False
@@ -173,6 +179,7 @@ class DummySession:
 
 class DummyGraphState:
     next = True
+    values = {"owner_user_id": "1"}
 
 
 class DummyGraph:
@@ -195,6 +202,11 @@ async def dummy_session_cm():
 def client(monkeypatch):
     app = FastAPI()
 
+    @app.middleware("http")
+    async def fake_actor_middleware(request, call_next):
+        request.state.actor_user_id = "1"
+        return await call_next(request)
+
     # Stub graph orchestrator before importing pending_actions
     stub_graph_module = types.ModuleType("app.core.agents.graph_orchestrator")
     stub_graph_module.get_graph = lambda: DummyGraph()
@@ -215,6 +227,7 @@ def client(monkeypatch):
     app.dependency_overrides[get_knowledge_service] = lambda: DummyKnowledgeService()
     app.dependency_overrides[get_llm_service] = lambda: DummyLLMService()
     app.dependency_overrides[get_optimization_service] = lambda: DummyOptimizationService()
+    app.dependency_overrides[get_chat_service] = lambda: DummyChatService()
 
     # Set worker list for system overview
     app.state.orchestrator_workers = [{"name": "codex_worker", "task": DummyTask()}]
@@ -231,7 +244,7 @@ def client(monkeypatch):
     monkeypatch.setattr(pending_module, "get_graph", lambda: DummyGraph())
     monkeypatch.setattr(pending_module, "_resume_graph_execution", lambda *args, **kwargs: None)
 
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 
 def test_tools_list_endpoint(client):
@@ -302,6 +315,7 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
 
     class DummyPendingRow:
         id = 101
+        user_id = "1"
         tool_name = "codex_exec"
         args_json = '{"prompt":"hello"}'
         simulation_summary_json = '{"summary":"dry-run ok","final_risk_level":"medium"}'
@@ -311,9 +325,10 @@ def test_pending_actions_list_sql_source(client, monkeypatch):
         created_at = datetime(2026, 2, 12, 10, 30, 0)
 
     class DummyPendingRepo:
-        def list(self, status="pending", limit=50):
+        def list(self, status="pending", limit=50, user_id=None):
             assert status == "pending"
             assert limit == 50
+            assert user_id == "1"
             return [DummyPendingRow()]
 
     monkeypatch.setattr(
@@ -337,13 +352,15 @@ def test_pending_actions_list_sql_redacts_sensitive_args(client, monkeypatch):
 
     class DummyPendingRow:
         id = 111
+        user_id = "1"
         tool_name = "execute_shell"
         args_json = '{"password":"super-secret-password","email":"person@example.com","command":"echo ok"}'
         status = "pending"
         created_at = datetime(2026, 2, 12, 10, 45, 0)
 
     class DummyPendingRepo:
-        def list(self, status="pending", limit=50):
+        def list(self, status="pending", limit=50, user_id=None):
+            assert user_id == "1"
             return [DummyPendingRow()]
 
     monkeypatch.setattr(
@@ -367,6 +384,7 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
     class DummyPendingRow:
         def __init__(self):
             self.id = 202
+            self.user_id = "1"
             self.tool_name = "codex_review"
             self.args_json = '{"conversation_id":"77","commit":"abc123"}'
             self.status = "pending"
@@ -381,7 +399,8 @@ def test_pending_actions_approve_sql_action(client, monkeypatch):
                 return row
             return None
 
-        def set_status(self, action_id, status):
+        def set_status(self, action_id, status, user_id=None):
+            assert user_id == "1"
             if action_id != 202:
                 return None
             row.status = status
@@ -465,6 +484,7 @@ def test_pending_actions_reject_sql_action(client, monkeypatch):
     class DummyPendingRow:
         def __init__(self):
             self.id = 303
+            self.user_id = "1"
             self.tool_name = "codex_exec"
             self.args_json = '{"conversation_id":"88","prompt":"bye"}'
             self.status = "pending"
@@ -479,7 +499,8 @@ def test_pending_actions_reject_sql_action(client, monkeypatch):
                 return row
             return None
 
-        def set_status(self, action_id, status):
+        def set_status(self, action_id, status, user_id=None):
+            assert user_id == "1"
             if action_id != 303:
                 return None
             row.status = status

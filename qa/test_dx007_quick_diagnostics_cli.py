@@ -27,9 +27,39 @@ def test_build_report_uses_target_host_and_ports():
     )
 
     assert report["summary"]["overall_ok"] is True
+    assert report["topology"] == "split"
     assert report["health_checks"]["backend_health"]["url"] == "http://100.89.17.105:8000/health"
     assert report["health_checks"]["frontend_root"]["url"] == "http://100.89.17.105:4300"
     assert report["dependency_checks"]["qdrant_gateway"]["url"] == "https://100.89.17.105:9443"
+
+
+def test_build_report_uses_local_dependency_targets_for_localhost():
+    probed_urls: list[str] = []
+
+    def fake_http(url: str, timeout: float, insecure_tls: bool):
+        probed_urls.append(url)
+        return {"ok": True, "status_code": 200, "sample": "ok"}
+
+    def fake_tcp(host: str, port: int, timeout: float):
+        return {"ok": True}
+
+    report = build_report(
+        host="localhost",
+        backend_port=8000,
+        frontend_port=4300,
+        timeout=1.0,
+        insecure_tls=True,
+        config_paths=["backend/app/config.py"],
+        http_probe=fake_http,
+        tcp_probe=fake_tcp,
+    )
+
+    assert report["summary"]["overall_ok"] is True
+    assert report["topology"] == "local"
+    assert report["dependency_checks"]["neo4j_browser"]["url"] == "http://localhost:7474/browser/"
+    assert report["dependency_checks"]["qdrant_health"]["url"] == "http://localhost:6333/healthz"
+    assert report["dependency_checks"]["ollama_tags"]["url"] == "http://localhost:11434/api/tags"
+    assert "https://localhost:9443" not in probed_urls
 
 
 def test_build_report_marks_overall_false_when_dependency_fails():
@@ -87,3 +117,5 @@ def test_build_report_marks_config_false_when_required_env_key_missing(tmp_path:
 
     assert report["summary"]["config_ok"] is False
     assert report["summary"]["overall_ok"] is False
+    assert "QDRANT_API_KEY" in report["config_checks"][0]["missing_keys"]
+    assert "AUDIT_LEDGER_HMAC_KEY" in report["config_checks"][0]["missing_keys"]
