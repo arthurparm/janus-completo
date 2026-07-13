@@ -50,6 +50,7 @@ def test_build_report_uses_local_dependency_targets_for_localhost():
         timeout=1.0,
         insecure_tls=True,
         config_paths=["backend/app/config.py"],
+        qdrant_https=False,
         http_probe=fake_http,
         tcp_probe=fake_tcp,
     )
@@ -60,6 +61,30 @@ def test_build_report_uses_local_dependency_targets_for_localhost():
     assert report["dependency_checks"]["qdrant_health"]["url"] == "http://localhost:6333/healthz"
     assert report["dependency_checks"]["ollama_tags"]["url"] == "http://localhost:11434/api/tags"
     assert "https://localhost:9443" not in probed_urls
+
+
+def test_build_report_uses_https_local_qdrant_when_env_enabled(monkeypatch):
+    monkeypatch.setenv("QDRANT_HTTPS", "true")
+
+    def fake_http(url: str, timeout: float, insecure_tls: bool):
+        return {"ok": True, "status_code": 200, "sample": "ok"}
+
+    def fake_tcp(host: str, port: int, timeout: float):
+        return {"ok": True}
+
+    report = build_report(
+        host="localhost",
+        backend_port=8000,
+        frontend_port=4300,
+        timeout=1.0,
+        insecure_tls=True,
+        config_paths=["backend/app/config.py"],
+        qdrant_https=True,
+        http_probe=fake_http,
+        tcp_probe=fake_tcp,
+    )
+
+    assert report["dependency_checks"]["qdrant_health"]["url"] == "https://localhost:6333/healthz"
 
 
 def test_build_report_marks_overall_false_when_dependency_fails():

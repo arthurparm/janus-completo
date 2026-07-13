@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import socket
 import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_ENV_KEYS: dict[str, list[str]] = {
@@ -19,6 +19,7 @@ REQUIRED_ENV_KEYS: dict[str, list[str]] = {
         "NEO4J_PASSWORD",
         "QDRANT_API_KEY",
         "OLLAMA_HOST",
+        "AUDIT_LEDGER_HMAC_KEY",
     ],
     ".env.pc2": [
         "NEO4J_PASSWORD",
@@ -27,6 +28,7 @@ REQUIRED_ENV_KEYS: dict[str, list[str]] = {
     ],
 }
 PLACEHOLDER_MARKERS = ("SEU_DOMINIO_OU_IP", "__REQUIRED__", "changeme", "your_value_here")
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 
 
 def _http_probe(url: str, timeout: float, insecure_tls: bool) -> dict[str, Any]:
@@ -105,6 +107,36 @@ def _parse_env_file(path: Path) -> dict[str, str]:
     return values
 
 
+def _is_local_host(host: str) -> bool:
+    return host.strip().lower().strip("[]") in LOCAL_HOSTS
+
+
+def _env_flag_enabled(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _qdrant_https_enabled() -> bool:
+    if "QDRANT_HTTPS" in os.environ:
+        return _env_flag_enabled(os.environ.get("QDRANT_HTTPS"))
+    env_values = _parse_env_file(REPO_ROOT / ".env.pc1")
+    return _env_flag_enabled(env_values.get("QDRANT_HTTPS"))
+
+
+def _dependency_targets(host: str, qdrant_https: bool | None = None) -> dict[str, str]:
+    if _is_local_host(host):
+        qdrant_scheme = "https" if (_qdrant_https_enabled() if qdrant_https is None else qdrant_https) else "http"
+        return {
+            "neo4j_browser": f"http://{host}:7474/browser/",
+            "qdrant_health": f"{qdrant_scheme}://{host}:6333/healthz",
+            "ollama_tags": f"http://{host}:11434/api/tags",
+        }
+    return {
+        "neo4j_browser": "http://100.88.71.49:7474/browser/",
+        "qdrant_gateway": f"https://{host}:9443",
+        "ollama_tags": f"http://{host}:11434/api/tags",
+    }
+
+
 def build_report(
     host: str,
     backend_port: int,
@@ -112,6 +144,7 @@ def build_report(
     timeout: float,
     insecure_tls: bool,
     config_paths: list[str] | None = None,
+    qdrant_https: bool | None = None,
     http_probe: Callable[[str, float, bool], dict[str, Any]] = _http_probe,
     tcp_probe: Callable[[str, int, float], dict[str, Any]] = _tcp_probe,
 ) -> dict[str, Any]:
@@ -125,11 +158,7 @@ def build_report(
         "backend_workers_status": f"{backend_base}/api/v1/workers/status",
         "frontend_root": frontend_url,
     }
-    dependency_targets = {
-        "neo4j_browser": "http://100.88.71.49:7474/browser/",
-        "qdrant_gateway": f"https://{host}:9443",
-        "ollama_tags": f"http://{host}:11434/api/tags",
-    }
+    dependency_targets = _dependency_targets(host, qdrant_https=qdrant_https)
     dependency_tcp_targets = {
         "backend_port_open": (host, backend_port),
         "frontend_port_open": (host, frontend_port),
@@ -157,6 +186,7 @@ def build_report(
 
     return {
         "target": {"host": host, "backend_port": backend_port, "frontend_port": frontend_port},
+        "topology": "local" if _is_local_host(host) else "split",
         "summary": summary,
         "health_checks": health_checks,
         "dependency_checks": dependency_checks,

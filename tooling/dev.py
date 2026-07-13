@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -9,7 +10,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = REPO_ROOT / "frontend"
@@ -37,11 +37,44 @@ HEALTH_URLS = [
     "http://localhost:8000/api/v1/system/status",
 ]
 
+MIN_BACKEND_PYTHON = (3, 11)
+MAX_BACKEND_PYTHON_EXCLUSIVE = (3, 13)
 
-def run(cmd: list[str], *, cwd: Path | None = None) -> None:
+
+def run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
     printable = " ".join(cmd)
     print(f"$ {printable}")
-    subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
+    process_env = None
+    if env is not None:
+        process_env = {**os.environ, **env}
+    subprocess.run(cmd, cwd=str(cwd) if cwd else None, env=process_env, check=True)
+
+
+def resolve_required_executable(name: str) -> str:
+    executable = shutil.which(name)
+    if executable is None:
+        raise RuntimeError(f"{name} is required but was not found in PATH.")
+    return executable
+
+
+def is_supported_backend_python(version_info: tuple[int, int] | None = None) -> bool:
+    version = version_info or sys.version_info[:2]
+    return MIN_BACKEND_PYTHON <= tuple(version[:2]) < MAX_BACKEND_PYTHON_EXCLUSIVE
+
+
+def ensure_supported_backend_python() -> None:
+    if is_supported_backend_python():
+        return
+    current = ".".join(str(part) for part in sys.version_info[:3])
+    supported = (
+        f"{MIN_BACKEND_PYTHON[0]}.{MIN_BACKEND_PYTHON[1]} <= Python < "
+        f"{MAX_BACKEND_PYTHON_EXCLUSIVE[0]}.{MAX_BACKEND_PYTHON_EXCLUSIVE[1]}"
+    )
+    raise RuntimeError(
+        f"Unsupported Python runtime for Janus backend: {current}. "
+        f"Use {supported}. The backend requirements use environment markers in this range; "
+        "running setup or qa outside it can skip required packages and produce misleading import failures."
+    )
 
 
 def ensure_env_files() -> None:
@@ -66,12 +99,31 @@ def resolve_env_file(name: str) -> str:
     raise RuntimeError(f"Could not find {name} or {name}.example")
 
 
+def local_pc2_host_overrides() -> dict[str, str]:
+    return {
+        "NEO4J_URI": "bolt://host.docker.internal:7687",
+        "QDRANT_HOST": "host.docker.internal",
+        "OLLAMA_HOST": "http://host.docker.internal:11434",
+    }
+
+
+def local_pc2_resource_overrides() -> dict[str, str]:
+    return {
+        "NEO4J_HEAP_INITIAL": "512M",
+        "NEO4J_HEAP_MAX": "2G",
+        "NEO4J_PAGECACHE": "512M",
+        "NEO4J_MEM_LIMIT": "4g",
+        "NEO4J_MEMSWAP_LIMIT": "5g",
+    }
+
+
 def npm_install(frontend_dir: Path) -> None:
+    npm = resolve_required_executable("npm")
     lockfile = frontend_dir / "package-lock.json"
     if lockfile.exists():
-        run(["npm", "ci"], cwd=frontend_dir)
+        run([npm, "ci"], cwd=frontend_dir)
     else:
-        run(["npm", "install"], cwd=frontend_dir)
+        run([npm, "install"], cwd=frontend_dir)
 
 
 def wait_for_health(urls: list[str], retries: int = 90, sleep_seconds: float = 2.0) -> None:
@@ -95,8 +147,7 @@ def wait_for_health(urls: list[str], retries: int = 90, sleep_seconds: float = 2
 
 
 def cmd_setup() -> None:
-    if shutil.which("npm") is None:
-        raise RuntimeError("npm is required but was not found in PATH.")
+    ensure_supported_backend_python()
     run([sys.executable, "-m", "pip", "install", "-r", str(BACKEND_DIR / "requirements.txt")])
     npm_install(FRONTEND_DIR)
 
@@ -105,18 +156,6 @@ def cmd_up() -> None:
     ensure_env_files()
     env_pc2 = resolve_env_file(".env.pc2")
     env_pc1 = resolve_env_file(".env.pc1")
-    run(
-        [
-            "docker",
-            "build",
-            "-f",
-            "backend/docker/Dockerfile",
-            "-t",
-            "janus-completo-janus-api:latest",
-            "backend",
-        ],
-        cwd=REPO_ROOT,
-    )
     run(
         [
             "docker",
@@ -129,6 +168,7 @@ def cmd_up() -> None:
             "-d",
         ],
         cwd=REPO_ROOT,
+        env=local_pc2_resource_overrides(),
     )
     run(
         [
@@ -140,20 +180,24 @@ def cmd_up() -> None:
             env_pc1,
             "up",
             "-d",
+            "--build",
         ],
         cwd=REPO_ROOT,
+        env=local_pc2_host_overrides(),
     )
     wait_for_health(HEALTH_URLS)
 
 
 def cmd_qa() -> None:
+    ensure_supported_backend_python()
+    npm = resolve_required_executable("npm")
     run(
         [sys.executable, "-m", "pytest", "-q", *BACKEND_CRITICAL_TESTS],
         cwd=REPO_ROOT,
     )
-    run(["npm", "run", "lint"], cwd=FRONTEND_DIR)
-    run(["npm", "run", "test"], cwd=FRONTEND_DIR)
-    run(["npm", "run", "build", "--", "--configuration", "development"], cwd=FRONTEND_DIR)
+    run([npm, "run", "lint"], cwd=FRONTEND_DIR)
+    run([npm, "run", "test"], cwd=FRONTEND_DIR)
+    run([npm, "run", "build", "--", "--configuration", "development"], cwd=FRONTEND_DIR)
 
 
 def cmd_down() -> None:
