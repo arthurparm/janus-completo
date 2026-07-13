@@ -3,23 +3,23 @@ import hashlib
 import math
 import time
 import uuid
-from typing import Any
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from qdrant_client import AsyncQdrantClient, models
 
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
-from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.core.infrastructure.resilience import CircuitBreaker
+from app.core.memory.local_cache import MemoryLocalCache
 from app.core.memory.metrics import (
     memory_operations_total,
     memory_quota_rejections_total,
 )
-from app.core.memory.security import redact_pii, encrypt_text, decrypt_text
-from app.core.memory.local_cache import MemoryLocalCache
 from app.core.memory.providers.qdrant_provider import QdrantProvider
+from app.core.memory.qdrant_client_config import build_qdrant_client_kwargs
+from app.core.memory.security import decrypt_text, encrypt_text, redact_pii
 from app.models.schemas import Experience, ScoredExperience
 
 logger = structlog.get_logger(__name__)
@@ -41,19 +41,7 @@ class MemoryCore:
 
         # Components
         if client is None:
-            qdrant_api_key = getattr(self.settings, "QDRANT_API_KEY", None)
-            if hasattr(qdrant_api_key, "get_secret_value"):
-                qdrant_api_key = qdrant_api_key.get_secret_value()
-
-            client_kwargs: dict[str, Any] = {
-                "host": self.settings.QDRANT_HOST,
-                "port": self.settings.QDRANT_PORT,
-                "https": bool(getattr(self.settings, "QDRANT_HTTPS", False)),
-            }
-            if qdrant_api_key:
-                client_kwargs["api_key"] = qdrant_api_key
-
-            client = AsyncQdrantClient(**client_kwargs)
+            client = AsyncQdrantClient(**build_qdrant_client_kwargs(self.settings))
         self.provider = QdrantProvider(client=client, circuit_breaker=circuit_breaker)
         self.cache = MemoryLocalCache()
         self.collection_name = self.provider.collection_name
@@ -589,14 +577,14 @@ class MemoryCore:
     def _get_timestamp_ms(self, ts_str):
         try:
             return int(datetime.fromisoformat(ts_str).timestamp() * 1000)
-        except:
+        except (TypeError, ValueError):
             return int(datetime.now(UTC).timestamp() * 1000)
 
     def _ensure_valid_point_id(self, id_val):
         # Reuse logic or import from util
         try:
             return int(id_val)
-        except:
+        except (TypeError, ValueError):
             return str(uuid.uuid5(uuid.NAMESPACE_DNS, str(id_val)))
 
     def _build_filter(self, filters: dict[str, Any]) -> models.Filter | None:

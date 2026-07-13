@@ -3,17 +3,18 @@ Enhanced Qdrant client with improved timeout, retry, and circuit breaker support
 """
 
 import asyncio
-import structlog
 import random
 import time
 from typing import Any
 
+import structlog
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Filter, SearchParams
 
 from app.config import settings
 from app.core.memory.circuit_config import RESILIENCE_CONFIG
 from app.core.memory.enhanced_circuit_breaker import circuit_breaker_manager
+from app.core.memory.qdrant_client_config import build_qdrant_client_kwargs
 
 logger = structlog.get_logger(__name__)
 
@@ -61,25 +62,20 @@ class EnhancedQdrantClient:
         self.circuit_breaker = circuit_breaker_manager.get_circuit_breaker("qdrant_search")
 
         api_key = kwargs.pop("api_key", None)
-        if api_key is None:
-            cfg_api_key = getattr(settings, "QDRANT_API_KEY", None)
-            if hasattr(cfg_api_key, "get_secret_value"):
-                cfg_api_key = cfg_api_key.get_secret_value()
-            api_key = cfg_api_key
 
         # Initialize base client with timeout settings
         timeout_config = self.config.qdrant_timeouts
-        client_kwargs: dict[str, Any] = {
-            "host": host,
-            "port": port,
-            "grpc_port": grpc_port,
-            "prefer_grpc": prefer_grpc,
-            "timeout": timeout_config.connection_timeout,
-            "https": bool(kwargs.pop("https", getattr(settings, "QDRANT_HTTPS", False))),
-        }
-        if api_key:
-            client_kwargs["api_key"] = api_key
-        client_kwargs.update(kwargs)
+        client_kwargs = build_qdrant_client_kwargs(
+            settings,
+            host=host,
+            port=port,
+            grpc_port=grpc_port,
+            prefer_grpc=prefer_grpc,
+            timeout=timeout_config.connection_timeout,
+            api_key=api_key,
+            https=bool(kwargs.pop("https", getattr(settings, "QDRANT_HTTPS", False))),
+            **kwargs,
+        )
         self.client = AsyncQdrantClient(**client_kwargs)
 
         logger.info(
