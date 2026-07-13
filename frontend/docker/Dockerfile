@@ -34,15 +34,15 @@ ARG JANUS_BUILD_REF=local-dev
 ARG JANUS_BUILD_DATE
 ARG JANUS_VERSION=0.5.44
 
-# Install lightweight HTTP server
-RUN npm install -g serve --no-audit --no-fund
-
 # Copy only built artifacts from builder
 COPY --from=builder /app/dist ./dist
+COPY docker/server.mjs ./server.mjs
 
 ENV JANUS_BUILD_REF=${JANUS_BUILD_REF}
 ENV JANUS_BUILD_DATE=${JANUS_BUILD_DATE}
 ENV JANUS_VERSION=${JANUS_VERSION}
+ENV JANUS_API_URL=http://janus-api:8000
+ENV PORT=4300
 
 LABEL org.opencontainers.image.revision=${JANUS_BUILD_REF} \
       org.opencontainers.image.created=${JANUS_BUILD_DATE} \
@@ -53,5 +53,5 @@ EXPOSE 4300
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget -qO- http://127.0.0.1:4300/ | grep -q "<app-root" || exit 1
 
-# Serve the Angular browser bundle, not the parent dist directory.
-CMD ["serve", "-s", "dist/janus-angular/browser", "-l", "4300", "--single"]
+# Serve the Angular browser bundle and proxy backend API calls inside the PC1 network.
+CMD ["node", "server.mjs"]
