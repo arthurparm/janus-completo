@@ -2,7 +2,7 @@
 
 ## Pre-requisitos
 
-- Python 3.11+ (CI em Python 3.12)
+- Python 3.11 ou 3.12 (CI em Python 3.12; os manifests do backend exigem `<3.13`)
 - Docker + Docker Compose
 
 ## Setup Recomendado (PC1 + PC2)
