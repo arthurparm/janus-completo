@@ -112,6 +112,9 @@ services:
     depends_on:
       janus-api:
         condition: service_healthy
+    environment:
+      - JANUS_API_URL=${JANUS_API_URL:-http://janus-api:8000}
+      - PORT=4300
     restart: unless-stopped
     mem_limit: 1536m
     cpus: "2.0"
