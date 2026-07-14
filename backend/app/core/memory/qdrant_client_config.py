@@ -36,6 +36,9 @@ def build_qdrant_client_kwargs(
         client_kwargs["grpc_port"] = grpc_port
     if prefer_grpc is not None:
         client_kwargs["prefer_grpc"] = prefer_grpc
+    check_compatibility = getattr(settings, "QDRANT_CHECK_COMPATIBILITY", None)
+    if check_compatibility is not None:
+        client_kwargs["check_compatibility"] = bool(check_compatibility)
 
     resolved_api_key = api_key if api_key is not None else resolve_secret_value(
         getattr(settings, "QDRANT_API_KEY", None)

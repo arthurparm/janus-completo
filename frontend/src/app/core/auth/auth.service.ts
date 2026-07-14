@@ -1,9 +1,10 @@
 import { Injectable, inject, signal, computed } from '@angular/core'
-import { HttpClient, HttpErrorResponse } from '@angular/common/http'
+import { HttpClient, HttpContext, HttpErrorResponse } from '@angular/common/http'
 import { API_BASE_URL, AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
 import { firstValueFrom } from 'rxjs'
 import { toObservable } from '@angular/core/rxjs-interop'
 import { AppLoggerService } from '../services/app-logger.service'
+import { SKIP_AUTH_SESSION } from '../interceptors/auth-session.interceptor'
 import {
   clearStoredAuthToken,
   clearStoredRefreshToken,
@@ -106,7 +107,9 @@ export class AuthService {
     if (token) {
       try {
         const user = await firstValueFrom(
-          this.http.get<User>(`${API_BASE_URL}/v1/auth/local/me`)
+          this.http.get<User>(`${API_BASE_URL}/v1/auth/local/me`, {
+            context: new HttpContext().set(SKIP_AUTH_SESSION, true)
+          })
         )
         this._isAuthenticated.set(true)
         this._user.set(user)
@@ -116,7 +119,9 @@ export class AuthService {
           if (refreshed) {
             try {
               const user = await firstValueFrom(
-                this.http.get<User>(`${API_BASE_URL}/v1/auth/local/me`)
+                this.http.get<User>(`${API_BASE_URL}/v1/auth/local/me`, {
+                  context: new HttpContext().set(SKIP_AUTH_SESSION, true)
+                })
               )
               this._isAuthenticated.set(true)
               this._user.set(user)

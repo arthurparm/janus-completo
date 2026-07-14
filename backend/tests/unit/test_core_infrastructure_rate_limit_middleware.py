@@ -3,6 +3,45 @@ from app.core.infrastructure.rate_limit_middleware import RateLimitMiddleware
 from fastapi import Request, Response
 
 
+def _request(*, actor_user_id: str | None = None, client_ip: str = "127.0.0.1") -> Request:
+    request = Request({
+        "type": "http",
+        "method": "GET",
+        "path": "/api/v1/tools/",
+        "headers": [],
+        "client": (client_ip, 5000),
+        "query_string": b"",
+    })
+    request.state.actor_user_id = actor_user_id
+    return request
+
+
+def test_authenticated_requests_use_isolated_user_bucket():
+    middleware = RateLimitMiddleware(app=lambda scope, receive, send: None)
+
+    key, rate, burst, scope = middleware._rate_limit_subject(_request(actor_user_id="42"))
+
+    assert key == "rate_limit:user:42"
+    assert rate == middleware.rate_key
+    assert burst == middleware.burst_key
+    assert scope == "user"
+
+
+def test_anonymous_requests_use_source_ip_bucket(monkeypatch):
+    middleware = RateLimitMiddleware(app=lambda scope, receive, send: None)
+    monkeypatch.setattr(
+        "app.core.infrastructure.rate_limit_middleware.get_actor_user_id",
+        lambda _request: None,
+    )
+
+    key, rate, burst, scope = middleware._rate_limit_subject(_request(client_ip="10.0.0.8"))
+
+    assert key == "rate_limit:ip:10.0.0.8"
+    assert rate == middleware.rate_ip
+    assert burst == middleware.burst_ip
+    assert scope == "IP"
+
+
 @pytest.mark.asyncio
 async def test_chat_rate_limit_bypasses_unlimited_user(monkeypatch):
     middleware = RateLimitMiddleware(app=lambda scope, receive, send: None)

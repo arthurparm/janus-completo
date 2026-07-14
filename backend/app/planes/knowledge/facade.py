@@ -156,6 +156,7 @@ class KnowledgeFacade:
         self,
         *,
         message: str,
+        user_id: str,
         conversation_id: str | None,
         limit: int = 5,
         caller_endpoint: str = "/chat/rag",
@@ -166,6 +167,7 @@ class KnowledgeFacade:
             list[dict[str, Any]],
             await self._rag_service.retrieve_context(
             message=message,
+            user_id=user_id,
             conversation_id=conversation_id,
             limit=limit,
             caller_endpoint=caller_endpoint,
@@ -182,8 +184,12 @@ class KnowledgeFacade:
             ),
         )
 
-    async def index_chat_message(self, *, content: str, session_id: str, role: str) -> None:
-        await self._memory_service.index_interaction(content=content, session_id=session_id, role=role)
+    async def index_chat_message(
+        self, *, content: str, session_id: str, user_id: str, role: str
+    ) -> None:
+        await self._memory_service.index_interaction(
+            content=content, session_id=session_id, user_id=user_id, role=role
+        )
 
     async def index_document(self, **kwargs: Any) -> dict[str, Any]:
         result = cast(dict[str, Any], await self._document_service.ingest_file(**kwargs))

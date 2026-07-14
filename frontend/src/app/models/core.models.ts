@@ -12,7 +12,18 @@ export interface ConversationMeta {
   tags?: string[]
 }
 export interface ConversationsListResponse { conversations: ConversationMeta[] }
+export interface PostSprintMetaReport {
+  cycle_id?: string
+  timestamp?: string
+  overall_status?: string
+  health_score?: number
+  issues_detected?: unknown[]
+  recommendations?: unknown[]
+  summary?: string
+  metrics_snapshot?: Record<string, unknown>
+  execution_results?: unknown[]
+}
 export interface PostSprintSummaryResponse {
   lessons: ReflexionLesson[]
-  meta_report?: Record<string, unknown>
+  meta_report?: PostSprintMetaReport
 }

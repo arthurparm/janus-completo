@@ -1,11 +1,11 @@
-import { HttpErrorResponse, HttpHeaders, HttpRequest, HttpResponse } from '@angular/common/http'
+import { HttpContext, HttpErrorResponse, HttpHeaders, HttpRequest, HttpResponse } from '@angular/common/http'
 import { TestBed } from '@angular/core/testing'
 import { Router } from '@angular/router'
 import { firstValueFrom, of, throwError } from 'rxjs'
 import { vi } from 'vitest'
 import { AuthService } from '../auth/auth.service'
 import { NotificationService } from '../notifications/notification.service'
-import { authSessionInterceptor } from './auth-session.interceptor'
+import { SKIP_AUTH_SESSION, authSessionInterceptor } from './auth-session.interceptor'
 import { AUTH_TOKEN_KEY } from '../../services/api.config'
 
 describe('authSessionInterceptor', () => {
@@ -17,6 +17,21 @@ describe('authSessionInterceptor', () => {
   afterEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+  })
+
+  it('deve ignorar o interceptor de sessao quando contexto SKIP_AUTH_SESSION estiver ativo', async () => {
+    TestBed.configureTestingModule({})
+
+    const next = vi.fn(() => of(new HttpResponse({ status: 200, body: { ok: true } })))
+    const req = new HttpRequest('GET', '/api/v1/auth/local/me', null, {
+      context: new HttpContext().set(SKIP_AUTH_SESSION, true)
+    })
+
+    const out$ = TestBed.runInInjectionContext(() => authSessionInterceptor(req, next))
+    const resp = await firstValueFrom(out$)
+
+    expect(resp).toBeInstanceOf(HttpResponse)
+    expect(next).toHaveBeenCalledTimes(1)
   })
 
   it('deve fazer refresh em 401 e repetir a requisicao original', async () => {

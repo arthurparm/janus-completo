@@ -129,7 +129,13 @@ export interface RagHybridResponse {
 export interface KnowledgeStats {
   total_nodes: number
   total_relationships: number
-  labels: Record<string, number>
+  labels?: Record<string, number>
+  node_types?: Array<{ type: string; count: number }>
+  relationship_types?: Array<{ type: string; count: number }>
+}
+
+export interface KnowledgeNodeTypesResponse {
+  types: string[]
 }
 
 export interface EntityRelationshipItem {

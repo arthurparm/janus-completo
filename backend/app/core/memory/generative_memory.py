@@ -1,23 +1,24 @@
-import asyncio
 import math
 import re
 import time
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, List
+
 import structlog
 from qdrant_client import models as qdrant_models
 
 from app.core.embeddings.embedding_manager import aembed_text
+from app.core.llm import ModelPriority, ModelRole
 from app.core.memory.memory_core import get_memory_db
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_memory_collection_name,
-    get_async_qdrant_client)
+    get_async_qdrant_client,
+)
+from app.models.schemas import Experience, ScoredExperience
+from app.repositories.llm_repository import get_llm_repository
 from app.services.knowledge_graph_service import get_knowledge_graph_service
 from app.services.llm_service import LLMService
-from app.repositories.llm_repository import get_llm_repository
-from app.models.schemas import Experience, ScoredExperience
-from app.core.llm import ModelRole, ModelPriority
 
 logger = structlog.get_logger(__name__)
 
@@ -65,7 +66,7 @@ class GenerativeMemoryService:
         metadata.setdefault("stability_score", 0.5 if str(type or "") == "episodic" else 0.8)
         metadata.setdefault("scope", "user")
         metadata.setdefault("source_channel", metadata.get("origin") or "memory.generative")
-        
+
         # 1. Calculate Importance
         if metadata.get("importance") is None:
             # Tenta usar modelo local se disponível, senão fallback para o padrão
@@ -75,23 +76,23 @@ class GenerativeMemoryService:
             except Exception:
                 importance = await self._calculate_importance(content, use_local=False)
             metadata["importance"] = importance
-        
+
         # 2. Create Experience Object
         experience = Experience(
             content=content,
             type=type,
             metadata=metadata
         )
-        
+
         # 3. Save to Vector DB (Qdrant)
         memory_core = await get_memory_db()
         await memory_core.amemorize(experience)
         await self._mirror_to_user_collection(experience)
-        
+
         # 4. Save to Graph DB (Neo4j) - Memory Stream
         kg_service = get_knowledge_graph_service()
         await kg_service.persist_experience_node(experience)
-        
+
         logger.info("Memory added to generative stream", id=experience.id, importance=metadata["importance"])
         return experience
 
@@ -101,6 +102,7 @@ class GenerativeMemoryService:
         limit: int = 10,
         *,
         type_filter: str | None = None,
+        user_id: str | int | None = None,
         conversation_id: str | None = None) -> List[ScoredExperience]:
         """
         Retrieves memories based on Park et al. scoring formula.
@@ -110,19 +112,20 @@ class GenerativeMemoryService:
             query=query,
             limit=candidate_limit,
             type_filter=type_filter,
+            user_id=user_id,
             conversation_id=conversation_id)
-        
+
         # 2. Score and Rank
         scored_memories = []
         now = datetime.now(UTC)
-        
+
         for mem in candidates:
             # Relevance Score (from Vector DB)
             relevance = mem.score or 0.0
-            
+
             # Importance Score (from Metadata)
             importance = float(mem.metadata.get("importance", 5.0) or 5.0) / 10.0 # Normalize 0-1
-            
+
             # Recency Score (Exponential Decay)
             ts_str = mem.timestamp
             try:
@@ -131,26 +134,26 @@ class GenerativeMemoryService:
                     mem_ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
                 else:
                     mem_ts = now # Fallback
-                    
+
                 # Ensure timezone aware
                 if mem_ts.tzinfo is None:
                     mem_ts = mem_ts.replace(tzinfo=UTC)
-                
+
                 hours_passed = (now - mem_ts).total_seconds() / 3600.0
                 recency = math.pow(self.decay_factor, max(0, hours_passed))
             except Exception:
                 recency = 0.5
-            
+
             # Final Score
             final_score = (self.alpha * recency) + (self.beta * importance) + (self.gamma * relevance)
-            
+
             # Update score in object
             mem.score = final_score
             scored_memories.append(mem)
 
         # Sort by final score
         scored_memories.sort(key=lambda x: x.score, reverse=True)
-        
+
         return scored_memories[:limit]
 
     async def _retrieve_scoped_candidates(
@@ -159,6 +162,7 @@ class GenerativeMemoryService:
         query: str,
         limit: int,
         type_filter: str | None,
+        user_id: str | int | None,
         conversation_id: str | None) -> list[ScoredExperience]:
         collection_name = await aget_or_create_collection(build_user_memory_collection_name())
         client = get_async_qdrant_client()
@@ -171,6 +175,12 @@ class GenerativeMemoryService:
                 qdrant_models.FieldCondition(
                     key="type",
                     match=qdrant_models.MatchValue(value=str(type_filter)))
+            )
+        if user_id is not None:
+            must.append(
+                qdrant_models.FieldCondition(
+                    key="metadata.user_id",
+                    match=qdrant_models.MatchValue(value=str(user_id)))
             )
         if conversation_id:
             must.append(
@@ -272,9 +282,9 @@ class GenerativeMemoryService:
                 prompt_path = os.path.join(base_dir, "prompts", "memory_rating.txt")
                 with open(prompt_path, "r", encoding="utf-8") as f:
                     prompt_template = f.read()
-            
+
             prompt = prompt_template.replace("{memory_content}", content)
-            
+
             # Use Local Model if requested
             if use_local:
                 # Tenta usar Ollama/Local via um role específico ou config
@@ -293,14 +303,14 @@ class GenerativeMemoryService:
                 priority=priority,
                 timeout_seconds=10
             )
-            
+
             score_text = response.get("response", "").strip()
             # Extract number
             match = re.search(r"\b([1-9]|10)\b", score_text)
             if match:
                 return float(match.group(1))
             return 5.0 # Default
-            
+
         except Exception as e:
             logger.error("log_error", message=f"Failed to calculate importance: {e}")
             if use_local:
@@ -313,19 +323,19 @@ class GenerativeMemoryService:
         """
         kg_service = get_knowledge_graph_service()
         db = await kg_service.get_db()
-        
+
         # Calculate cutoff date
         cutoff_date = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
-        
+
         cypher = """
         MATCH (e:Experience)
-        WHERE e.timestamp < $cutoff_date 
+        WHERE e.timestamp < $cutoff_date
           AND e.importance < $min_importance
           AND (e.status IS NULL OR e.status <> 'archived')
         SET e.status = 'archived'
         RETURN count(e) as archived_count
         """
-        
+
         try:
             result = await db.query(cypher, {"cutoff_date": cutoff_date, "min_importance": min_importance})
             if result:

@@ -27,14 +27,21 @@ export class KnowledgeWidget {
   }
 
   getTopLabels(stats: KnowledgeStats): { label: string; count: number }[] {
-    if (!stats?.labels) return [];
-    return Object.entries(stats.labels)
+    if (stats?.labels && Object.keys(stats.labels).length > 0) {
+      return Object.entries(stats.labels)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 4)
       .map(([label, count]) => ({ label, count }));
+    }
+
+    return (stats?.node_types || [])
+      .slice()
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4)
+      .map((item) => ({ label: item.type, count: item.count }));
   }
 
   openKnowledgeView(): void {
-    void this.router.navigate(['/observability']);
+    void this.router.navigate(['/knowledge-graph']);
   }
 }

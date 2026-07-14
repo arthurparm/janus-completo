@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,11 +49,12 @@ function sendStatic(response, pathname) {
 function proxyRequest(clientRequest, clientResponse) {
   const target = new URL(clientRequest.url || '/', backendUrl);
   const headers = { ...clientRequest.headers, host: backendUrl.host };
-  const proxy = httpRequest(
+  const requestImpl = target.protocol === 'https:' ? httpsRequest : httpRequest;
+  const proxy = requestImpl(
     {
       protocol: target.protocol,
       hostname: target.hostname,
-      port: target.port || 80,
+      port: target.port || (target.protocol === 'https:' ? 443 : 80),
       method: clientRequest.method,
       path: `${target.pathname}${target.search}`,
       headers,

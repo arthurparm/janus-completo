@@ -12,6 +12,9 @@ export const environment = {
     frontendUrl: 'http://janus.arthinfo.com.br/'
   },
   apiUrl: tailscaleApiUrl,
+  serviceWorker: {
+    enabled: env['JANUS_SERVICE_WORKER_ENABLED'] === 'true',
+  },
   firebase: {
     apiKey: env['JANUS_FIREBASE_API_KEY'] || '',
     authDomain: env['JANUS_FIREBASE_AUTH_DOMAIN'] || '',

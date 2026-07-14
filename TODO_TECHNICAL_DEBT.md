@@ -28,6 +28,10 @@
 | TD-022 | Definir retencao/offsite para snapshots Qdrant. | alto | medio | medio | P1 | Parcial no Ciclo 17: retencao local auditavel com `prune` e integridade SHA-256 pre-restore; falta offsite, criptografia externa e agendamento. |
 | TD-023 | Agendar e monitorar backup/prune data-plane. | medio | medio | medio | P1 | O comando existe e foi validado manualmente; falta job agendado, alerta de falha e evidencia periodica. |
 | TD-024 | Tornar manifesto/SHA-256 obrigatorio para restore em producao. | medio | medio | baixo | P1 | Ciclo 17 preservou compatibilidade com backups legados usando `integrity-check=skipped`; ambientes produtivos devem exigir manifesto verificavel apos rollout. |
+| TD-025 | Promover smoke Playwright frontend para suite E2E versionada. | alto | medio | medio | P1 | Ciclo 19 encontrou dois bugs reais so com browser/runtime Docker; o smoke final ainda foi executado como script temporario. |
+| TD-026 | Coletar evidencia remota periodica do workflow E2E real com smoke SSE. | alto | medio | medio | P1 | Parcial: Ciclo 35 robustecou o Step Summary contra Markdown quebrado e validou `conversation_id=36`; falta execucao remota/rotina periodica com artefato e summary. |
+| TD-027 | Ampliar o smoke autenticado para operacoes mutantes de documentos, memoria e RAG sem dados estaticos. | alto | medio | medio | P1 | Parcial no Ciclo 37: memoria generativa real passou com POST/GET 200 e persistencia; documentos e RAG ainda exigem cenarios isolados e limpeza deterministica. |
+| TD-028 | Medir e reduzir variancia de latencia do chat Ollama. | alto | medio | medio | P1 | Ciclo 37 observou 16881ms na UI, 2115ms no SSE aquecido e um outlier de 64726ms; faltam serie controlada, p95/p99 e correlacao com carga/cold start. |
 
 ## Regra de Uso
 

@@ -40,5 +40,19 @@ describe('KnowledgeApiService (contract)', () => {
     expect(req.request.body).toEqual({})
     req.flush({ message: 'ok' })
   })
+
+  it('getKnowledgeStats deve chamar GET /api/v1/knowledge/stats', () => {
+    svc.getKnowledgeStats().subscribe()
+    const req = http.expectOne('/api/v1/knowledge/stats')
+    expect(req.request.method).toBe('GET')
+    req.flush({ total_nodes: 1, total_relationships: 0 })
+  })
+
+  it('getKnowledgeNodeTypes deve chamar GET /api/v1/knowledge/node-types', () => {
+    svc.getKnowledgeNodeTypes().subscribe()
+    const req = http.expectOne('/api/v1/knowledge/node-types')
+    expect(req.request.method).toBe('GET')
+    req.flush({ types: ['Entity'] })
+  })
 })
 

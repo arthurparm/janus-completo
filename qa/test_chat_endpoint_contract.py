@@ -195,7 +195,7 @@ def test_chat_message_requires_bearer_auth_without_actor_or_payload_user():
         "/api/v1/chat/message",
         json={
             "conversation_id": "conv-1",
-            "message": "hello",
+            "message": "Onde esta a funcao run no codigo?",
             "role": "orchestrator",
             "priority": "fast_and_cheap",
         },
@@ -228,7 +228,14 @@ def test_chat_message_auth_precedes_body_validation():
     assert authenticated_missing_fields.status_code == 422
 
 
-def test_chat_message_requires_citations_for_code_or_docs_queries():
+def test_chat_message_requires_citations_for_code_or_docs_queries(monkeypatch):
+    async def _no_citations(**kwargs):
+        return {"citations": [], "retrieval_failed": False}
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.chat.chat_message._collect_chat_citations_with_deadline",
+        _no_citations,
+    )
     svc = _DummyChatService()
     client = _build_client(svc)
 
@@ -319,7 +326,26 @@ def test_chat_message_low_confidence_requires_confirmation(monkeypatch):
     assert data["agent_state"]["state"] in {"waiting_confirmation", "low_confidence"}
 
 
-def test_chat_message_citations_include_clickable_source_metadata():
+def test_chat_message_required_citations_include_clickable_source_metadata(monkeypatch):
+    async def _fake_collect_citations(**kwargs):
+        return {
+            "citations": [
+                {
+                    "source_type": "code",
+                    "type": "code",
+                    "line_start": 42,
+                    "line_end": 44,
+                    "line": 42,
+                    "url": "https://example.invalid/main.py#L42",
+                }
+            ],
+            "retrieval_failed": False,
+        }
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.chat.chat_message._collect_chat_citations_with_deadline",
+        _fake_collect_citations,
+    )
     svc = _DummyChatService()
     memory = _DummyMemoryService(
         [
@@ -346,7 +372,7 @@ def test_chat_message_citations_include_clickable_source_metadata():
         "/api/v1/chat/message",
         json={
             "conversation_id": "conv-1",
-            "message": "hello",
+            "message": "Onde esta a funcao run no codigo?",
             "role": "orchestrator",
             "priority": "fast_and_cheap",
         },
@@ -363,6 +389,69 @@ def test_chat_message_citations_include_clickable_source_metadata():
     assert citation["line_end"] == 44
     assert citation["line"] == 42
     assert citation["url"] == "https://example.invalid/main.py#L42"
+
+
+def test_chat_message_optional_citations_are_not_collected_for_general_chat():
+    svc = _DummyChatService()
+    memory = _DummyMemoryService(
+        [
+            {
+                "id": "pt-1",
+                "score": 0.88,
+                "content": "def run(): pass",
+                "metadata": {"type": "code", "file_path": "/repo/app/main.py"},
+            }
+        ]
+    )
+    client = _build_client(svc, memory)
+
+    resp = client.post(
+        "/api/v1/chat/message",
+        json={
+            "conversation_id": "conv-1",
+            "message": "hello",
+            "role": "orchestrator",
+            "priority": "fast_and_cheap",
+        },
+        headers=_auth_headers(1),
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["citations"] == []
+    assert data["citation_status"]["mode"] == "optional"
+    assert data["citation_status"]["status"] == "not_applicable"
+
+
+def test_chat_message_citation_timeout_does_not_block_response(monkeypatch):
+    async def _fake_wait_for(awaitable, timeout):
+        awaitable.close()
+        raise TimeoutError()
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.chat.chat_message.asyncio.wait_for",
+        _fake_wait_for,
+    )
+    svc = _DummyChatService()
+    client = _build_client(svc)
+
+    resp = client.post(
+        "/api/v1/chat/message",
+        json={
+            "conversation_id": "conv-1",
+            "message": "Onde esta a funcao run no codigo?",
+            "role": "orchestrator",
+            "priority": "fast_and_cheap",
+        },
+        headers=_auth_headers(1),
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["response"] == "ok"
+    assert data["citations"] == []
+    assert data["citation_status"]["status"] == "retrieval_failed"
+    assert data.get("delivery_status") != "pending_study"
 
 
 def test_chat_message_document_citations_prevent_pending_study(monkeypatch):

@@ -8,7 +8,11 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "vitest run --config vitest.config.ts",
+    "test:frontend-proxy": "node --test docker/server.test.mjs",
     "test:watch": "vitest --config vitest.config.ts",
+    "e2e": "playwright test",
+    "e2e:chat-runtime": "playwright test e2e/auth-session-runtime.smoke.spec.ts --project=chromium --reporter=line --output=test-results/chat-runtime",
+    "e2e:chat-sse": "playwright test e2e/chat-sse-runtime.smoke.spec.ts --project=chromium --reporter=line --output=test-results/chat-sse",
     "lint": "eslint ./src --ext .ts --max-warnings 0",
     "lint:fix": "eslint ./src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.{ts,html,scss}\""

@@ -10,6 +10,8 @@ from app.services.chat.chat_citation_service import (
     MANDATORY_CITATION_GUARD_TEXT,
     build_citation_status,
     collect_chat_citations,
+    references_uploaded_material,
+    requires_mandatory_citations,
 )
 from app.services.chat.chat_contracts import (
     build_agent_state,
@@ -41,6 +43,7 @@ from .policies import confidence_band, confidence_confirmation_threshold
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+CITATION_COLLECTION_TIMEOUT_SECONDS = 3.0
 
 
 def _get_chat_study_job_service(http: Request, service: ChatService) -> ChatStudyJobService:
@@ -55,6 +58,24 @@ def _get_chat_study_job_service(http: Request, service: ChatService) -> ChatStud
     jobs = ChatStudyJobService(study_service=study_service, chat_service=service)
     http.app.state.chat_study_job_service = jobs
     return jobs
+
+
+async def _collect_chat_citations_with_deadline(
+    *,
+    message: str,
+    conversation_id: str,
+    memory: MemoryService,
+    limit: int,
+) -> dict[str, Any]:
+    return await asyncio.wait_for(
+        collect_chat_citations(
+            message=message,
+            conversation_id=conversation_id,
+            memory_service=memory,
+            limit=limit,
+        ),
+        timeout=CITATION_COLLECTION_TIMEOUT_SECONDS,
+    )
 
 
 @router.post("/start", response_model=ChatStartResponse, summary="Inicia uma nova conversa")
@@ -227,19 +248,38 @@ async def send_message(
     citations = result.get("citations")
     citation_status = result.get("citation_status")
     if not isinstance(citations, list) or not isinstance(citation_status, dict):
-        try:
-            citation_result = await collect_chat_citations(
-                message=payload.message,
-                conversation_id=str(result.get("conversation_id") or payload.conversation_id),
-                memory_service=memory,
-                limit=5,
-            )
-            citations = citation_result.get("citations") or []
-            citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
-        except Exception as e:
-            logger.warning("chat_message_citations_failed", error=str(e))
+        citation_lookup_required = requires_mandatory_citations(
+            payload.message
+        ) or references_uploaded_material(payload.message)
+        if citation_lookup_required:
+            try:
+                citation_result = await _collect_chat_citations_with_deadline(
+                    message=payload.message,
+                    conversation_id=str(result.get("conversation_id") or payload.conversation_id),
+                    memory=memory,
+                    limit=5,
+                )
+                citations = citation_result.get("citations") or []
+                citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "chat_message_citations_timeout",
+                    conversation_id=payload.conversation_id,
+                    timeout_seconds=CITATION_COLLECTION_TIMEOUT_SECONDS,
+                )
+                citations = []
+                citations_retrieval_failed = True
+            except Exception as e:
+                logger.warning("chat_message_citations_failed", error=str(e))
+                citations = []
+                citations_retrieval_failed = True
+        else:
             citations = []
-            citations_retrieval_failed = True
+            citations_retrieval_failed = False
+            logger.debug(
+                "chat_message_optional_citations_skipped",
+                conversation_id=payload.conversation_id,
+            )
         citation_status = build_citation_status(
             message=payload.message,
             citations=citations,

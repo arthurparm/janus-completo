@@ -464,7 +464,7 @@
               @if (latestAssistantMessage(); as latest) {
                 <div class="explain-card">
                   <div class="explain-grid">
-                    <span class="metric-pill">Fontes: {{ latest.citations?.length || 0 }}</span>
+                    <span class="metric-pill">{{ citationStatusLabel(latest.citation_status) }}</span>
                     <span class="metric-pill">Confianca: {{ understandingConfidence(latest.understanding) }}</span>
                     <span class="metric-pill">Latencia: {{ formatLatency(latest.latency_ms) }}</span>
                   </div>

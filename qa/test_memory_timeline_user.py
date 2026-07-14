@@ -34,6 +34,7 @@ class DummyKnowledgeFacade:
         end_ts: int | None,
         limit: int,
     ):
+        assert user_id == "42"
         points = [
             DummyPoint(
                 {
@@ -62,6 +63,12 @@ class DummyKnowledgeFacade:
 @pytest.fixture()
 def client(monkeypatch):
     app = FastAPI()
+
+    @app.middleware("http")
+    async def bind_authenticated_actor(request, call_next):
+        request.state.actor_user_id = "42"
+        return await call_next(request)
+
     app.include_router(memory_router, prefix="/api/v1/memory")
     app.dependency_overrides[get_memory_service] = lambda: DummyMemoryService()
     app.state.knowledge_facade = DummyKnowledgeFacade()

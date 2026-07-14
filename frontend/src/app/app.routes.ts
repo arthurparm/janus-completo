@@ -28,6 +28,11 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
+    path: 'knowledge-graph',
+    loadComponent: () => import('./features/knowledge-graph/knowledge-graph').then(m => m.KnowledgeGraphComponent),
+    canActivate: [AuthGuard]
+  },
+  {
     path: 'admin/autonomia',
     loadComponent: () => import('./features/admin/autonomia/admin-autonomia').then(m => m.AdminAutonomiaComponent),
     canActivate: [AuthGuard, RoleGuard],

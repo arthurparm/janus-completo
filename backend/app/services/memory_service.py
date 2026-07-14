@@ -234,16 +234,17 @@ class MemoryService:
             raise MemoryServiceError(f"Erro ao buscar liÃ§Ãµes recentes: {e}")
 
     async def index_interaction(
-        self, content: str, session_id: str, role: str
+        self, content: str, session_id: str, user_id: str, role: str
     ) -> None:
         """Indexa uma interaÃ§Ã£o de chat (async) no Qdrant."""
-        if not content:
+        if not content or not str(user_id or "").strip():
             return
+        resolved_user_id = str(user_id).strip()
 
         logger.info("Indexando interaÃ§Ã£o no vetor (MemÃ³ria)", role=role)
         try:
             collection_name = await aget_or_create_collection(
-                build_user_chat_collection_name()
+                build_user_chat_collection_name(resolved_user_id)
             )
             client = get_async_qdrant_client()
 
@@ -253,7 +254,12 @@ class MemoryService:
                 must=[
                     models.FieldCondition(
                         key="metadata.type", match=models.MatchValue(value="chat_msg")
-                    )]
+                    ),
+                    models.FieldCondition(
+                        key="metadata.user_id",
+                        match=models.MatchValue(value=resolved_user_id),
+                    ),
+                ]
             )
 
             current = await async_count_points(client, collection_name, qfilter, exact=True)
@@ -279,6 +285,7 @@ class MemoryService:
                     "memory_class": "episodic",
                     "session_id": str(session_id),
                     "conversation_id": str(session_id),
+                    "user_id": resolved_user_id,
                     "role": str(role),
                     "timestamp": now_ms,
                     "ts_ms": now_ms,
@@ -309,7 +316,7 @@ class MemoryService:
 
                     retention_until = datetime.now(timezone.utc) + timedelta(days=decision.retention_days)
                 DataGovernanceRepository().upsert_record(
-                    user_id=None,
+                    user_id=resolved_user_id,
                     resource_type="memory_point",
                     resource_id=str(point_id),
                     classification=decision.classification,

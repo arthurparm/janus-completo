@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import json
 import os
 import time as _time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import structlog
@@ -20,6 +22,8 @@ from app.services.chat.chat_citation_service import (
     MANDATORY_CITATION_GUARD_TEXT,
     build_citation_status,
     collect_chat_citations,
+    references_uploaded_material,
+    requires_mandatory_citations,
 )
 from app.services.chat.chat_contracts import (
     build_agent_state,
@@ -34,10 +38,12 @@ from app.services.chat.message_helpers import (
     build_understanding_payload,
     split_ui,
 )
-from app.services.chat.message_orchestration_service import MessageOrchestrationService
 from app.services.chat_study_service import ChatStudyService
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
+
+if TYPE_CHECKING:
+    from app.services.chat.message_orchestration_service import MessageOrchestrationService
 
 logger = structlog.get_logger(__name__)
 
@@ -124,6 +130,14 @@ class StreamingService:
             pass
 
         understanding = build_understanding_payload(message)
+        use_light_chat = self._message_orchestration_service._should_use_light_chat(
+            message=message,
+            role=role,
+            understanding=understanding,
+        )
+        citation_lookup_required = requires_mandatory_citations(message) or references_uploaded_material(
+            message
+        )
         try:
             conv = self._repo.get_conversation(conversation_id)
             self._conversation_service.validate_conversation_access(
@@ -216,17 +230,19 @@ class StreamingService:
                 + "\n\n"
             )
 
-        grounded_result = await self._message_orchestration_service.generate_document_grounded_reply(
-            conversation_id=conversation_id,
-            message=message,
-            role=role,
-            priority=priority,
-            timeout_seconds=timeout_seconds,
-            user_id=user_id,
-            project_id=project_id,
-            requested_knowledge_space_id=knowledge_space_id,
-            understanding=understanding,
-        )
+        grounded_result = None
+        if knowledge_space_id or citation_lookup_required:
+            grounded_result = await self._message_orchestration_service.generate_document_grounded_reply(
+                conversation_id=conversation_id,
+                message=message,
+                role=role,
+                priority=priority,
+                timeout_seconds=timeout_seconds,
+                user_id=user_id,
+                project_id=project_id,
+                requested_knowledge_space_id=knowledge_space_id,
+                understanding=understanding,
+            )
         if grounded_result is not None:
             assistant_text = str(grounded_result.get("response") or "")
             citations = grounded_result.get("citations") or []
@@ -379,7 +395,7 @@ class StreamingService:
         history = self._repo.get_recent_messages(conversation_id, limit=20)
 
         relevant_memories = None
-        if self._rag_service:
+        if self._rag_service and not use_light_chat:
             relevant_memories = await self._rag_service.retrieve_context(
                 message,
                 user_id=user_id,
@@ -614,13 +630,32 @@ class StreamingService:
                 return
 
             start_t = _time.time()
+            llm_timeout_seconds = timeout_seconds
+            llm_task_type = None
+            llm_complexity = None
+            llm_policy_overrides = None
+            if use_light_chat:
+                llm_timeout_seconds = max(
+                    1,
+                    int(os.getenv("CHAT_LIGHT_TIMEOUT_SECONDS", str(timeout_seconds or 12))),
+                )
+                llm_task_type = "general_task"
+                llm_complexity = "low"
+                llm_policy_overrides = {
+                    "role": role.value,
+                    "priority": priority.value,
+                    "timeout_seconds": llm_timeout_seconds,
+                }
             if inspect.iscoroutinefunction(self._llm.invoke_llm):
                 task = asyncio.create_task(
                     self._llm.invoke_llm(
                         prompt=prompt,
                         role=role,
                         priority=priority,
-                        timeout_seconds=timeout_seconds,
+                        timeout_seconds=llm_timeout_seconds,
+                        task_type=llm_task_type,
+                        complexity=llm_complexity,
+                        policy_overrides=llm_policy_overrides,
                         user_id=user_id,
                         project_id=project_id,
                     )
@@ -633,7 +668,10 @@ class StreamingService:
                         prompt=prompt,
                         role=role,
                         priority=priority,
-                        timeout_seconds=timeout_seconds,
+                        timeout_seconds=llm_timeout_seconds,
+                        task_type=llm_task_type,
+                        complexity=llm_complexity,
+                        policy_overrides=llm_policy_overrides,
                         user_id=user_id,
                         project_id=project_id,
                     )
@@ -678,18 +716,19 @@ class StreamingService:
 
             citations: list[dict[str, Any]] = []
             citations_retrieval_failed = False
-            try:
-                citation_result = await collect_chat_citations(
-                    message=message,
-                    conversation_id=conversation_id,
-                    memory_service=getattr(self._rag_service, "_memory", None),
-                    limit=5,
-                )
-                citations = citation_result.get("citations") or []
-                citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
-            except Exception:
-                citations = []
-                citations_retrieval_failed = True
+            if citation_lookup_required:
+                try:
+                    citation_result = await collect_chat_citations(
+                        message=message,
+                        conversation_id=conversation_id,
+                        memory_service=getattr(self._rag_service, "_memory", None),
+                        limit=5,
+                    )
+                    citations = citation_result.get("citations") or []
+                    citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
+                except Exception:
+                    citations = []
+                    citations_retrieval_failed = True
 
             result_understanding = result.get("understanding") if isinstance(result, dict) else None
             if not isinstance(result_understanding, dict):

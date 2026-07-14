@@ -409,3 +409,116 @@ Validar o SHA-256 registrado no manifesto antes de restaurar artefatos de Postgr
 - Pro: dry-run agora serve como auditoria offline de integridade de snapshots.
 - Pro: comportamento legado continua possivel, mas observavel como integridade nao verificada.
 - Contra: calcular SHA-256 adiciona custo proporcional ao tamanho dos artefatos antes do restore.
+
+## DEC-018 - Restore inicial de sessao ignora interceptor de sessao
+
+### Contexto
+
+O smoke E2E do frontend mostrou que login salvava `JANUS_AUTH_TOKEN` e `JANUS_REFRESH_TOKEN`, mas reload redirecionava para login. Instrumentacao do browser apontou `AuthService.clearSession()` chamado durante `initializeAuth()`. O request inicial de `/auth/local/me` ocorria enquanto `AuthService` ainda estava em construcao, e o `authSessionInterceptor` tentava injetar o proprio `AuthService`.
+
+### Decisao
+
+Adicionar `SKIP_AUTH_SESSION` como `HttpContextToken` no `authSessionInterceptor` e usar esse contexto apenas nos requests de `/auth/local/me` feitos por `AuthService.initializeAuth()`. O `authInterceptor` continua executando e anexando `Authorization` a partir do storage.
+
+### Alternativas Consideradas
+
+- Remover `authSessionInterceptor` globalmente: rejeitado porque perderia refresh e tratamento de 401/rate limit para o resto do app.
+- Mover toda inicializacao de auth para outro servico: rejeitado neste ciclo por maior escopo e risco.
+- Ignorar restore de sessao e exigir login a cada reload: rejeitado porque quebra comportamento esperado e testes existentes.
+
+### Consequencias
+
+- Pro: elimina dependencia circular no restore inicial.
+- Pro: preserva comportamento de refresh/manual fallback dentro do `AuthService`.
+- Pro: regressao coberta por testes de contexto e smoke E2E real.
+- Contra: cria um contexto especial que deve permanecer restrito ao bootstrap de auth.
+
+## DEC-019 - Streaming de chat leve nao executa retrieval pesado por padrao
+
+### Contexto
+
+O ID 16 mostrou que uma mensagem geral (`Ola`) enviada pelo frontend via SSE ficou operacionalmente travada: o backend aceitou a requisicao, mas antes de chamar o modelo executou retrieval RAG/cross-encoder e so persistiu a resposta cerca de 144 segundos depois.
+
+### Decisao
+
+Aplicar ao streaming a mesma classificacao de "light chat" usada no endpoint classico. Para mensagens gerais curtas, o streaming nao executa grounding documental, retrieval RAG/cross-encoder nem coleta de citacoes opcionais antes do LLM. O LLM continua sendo chamado de forma real, com perfil explicito `general_task/low` e timeout `CHAT_LIGHT_TIMEOUT_SECONDS`.
+
+### Alternativas Consideradas
+
+- Responder saudacoes com texto estatico: rejeitado por requisito explicito do usuario e por mascarar o funcionamento real do Janus.
+- Desabilitar streaming no frontend: rejeitado porque evita o sintoma sem corrigir o contrato backend.
+- Manter retrieval sempre ativo: rejeitado porque transforma conversa casual em caminho caro e instavel sem evidencia de necessidade.
+
+### Consequencias
+
+- Pro: chat casual via SSE passa a concluir sem depender de retrieval pesado.
+- Pro: reduz ruido de fontes opcionais em conversas sem demanda de evidencia.
+- Pro: preserva geracao real pelo modelo local.
+- Contra: memorias/contexto deixam de ser injetados automaticamente em mensagens leves; se uma mensagem precisar contexto, deve conter sinais de documento/codigo/anexo ou sair do perfil light.
+
+## DEC-020 - Compatibilidade Qdrant verificada por pinagem operacional, nao pelo checker interno
+
+### Contexto
+
+O runtime local usa Qdrant server `1.18.2` com TLS/API key e o `janus-api` reconstruido instalou `qdrant-client 1.18.0`. A chamada HTTPS direta a partir do container retornou `version=1.18.2` e o client listou colecoes com sucesso. Mesmo assim, a rotina interna de compatibilidade do `qdrant-client` emitiu `Failed to obtain server version`.
+
+### Decisao
+
+Adicionar `QDRANT_CHECK_COMPATIBILITY` ao `AppSettings` e passar esse valor pelo builder central de Qdrant. O padrao local fica `False`, porque a compatibilidade ja foi verificada por pinagem de imagem, versao instalada do pacote e smoke operacional via TLS/API key.
+
+### Alternativas Consideradas
+
+- Ignorar o warning: rejeitado porque polui logs e mascara sinais reais.
+- Desligar TLS ou API key para satisfazer o checker: rejeitado porque reduziria seguranca.
+- Manter o checker sempre ativo: rejeitado porque o checker falha neste runtime apesar das operacoes reais funcionarem e das versoes serem compativeis.
+
+### Consequencias
+
+- Pro: remove warning falso-positivo sem alterar operacoes reais de memoria.
+- Pro: preserva reversibilidade por variavel `QDRANT_CHECK_COMPATIBILITY=true`.
+- Contra: upgrades futuros de Qdrant devem continuar sendo validados por teste/smoke explicito, nao apenas pelo checker automatico do client.
+
+## DEC-021 - Rate limit HTTP usa identidade autenticada antes de IP
+
+### Contexto
+
+O smoke real do frontend executou 59 chamadas autenticadas em uma jornada normal e esgotou o bucket global de 60 requisicoes por IP. Ferramentas, autonomia e health retornaram 429; usuarios diferentes atras do mesmo proxy ou NAT competiriam pelo mesmo limite.
+
+### Decisao
+
+Usar bucket `rate_limit:user:{actor_user_id}` com o limite configurado por chave para identidade JWT verificada. Requisicoes anonimas continuam em `rate_limit:ip:{client_ip}`; API key continua recebendo verificacao adicional propria. O fallback local segue a mesma separacao.
+
+### Alternativas Consideradas
+
+- Apenas elevar o limite por IP: rejeitado porque preserva acoplamento entre usuarios atras de NAT.
+- Colocar os 429 em allowlist no E2E: rejeitado porque esconderia falha real de carregamento.
+- Remover rate limiting: rejeitado por reduzir protecao operacional.
+
+### Consequencias
+
+- Pro: jornadas autenticadas deixam de competir globalmente por IP.
+- Pro: login e trafego anonimo continuam protegidos pelo bucket de IP e pelo limitador especifico de auth.
+- Contra: cada usuario autenticado passa a ter burst maior, atualmente 300/min; observabilidade remota deve acompanhar abuso por identidade.
+
+## DEC-022 - Recuperacao generativa respeita usuario e conversa no armazenamento vetorial
+
+### Contexto
+
+O endpoint autenticado de memoria generativa derivava `user_id` e `conversation_id`, mas o servico aceitava apenas conversa. A divergencia produzia HTTP 500 na busca depois de uma gravacao bem-sucedida.
+
+### Decisao
+
+Completar o contrato de `retrieve_memories` com `user_id` opcional e aplicar `metadata.user_id` e `metadata.conversation_id` como filtros Qdrant quando informados. Chamadores antigos que nao informam usuario permanecem compativeis.
+
+### Alternativas Consideradas
+
+- Remover `user_id` da chamada do endpoint: rejeitado porque faria a busca funcionar sem isolamento entre usuarios.
+- Criar uma colecao por usuario neste ciclo: rejeitado por aumentar migracao e complexidade sem necessidade para corrigir o contrato atual.
+- Filtrar resultados apenas em memoria depois da busca: rejeitado porque pode reduzir recall util e transportar dados de outros usuarios.
+
+### Consequencias
+
+- Pro: elimina o 500 e restringe a consulta no proprio banco vetorial.
+- Pro: preserva compatibilidade para chamadores internos existentes.
+- Pro: teste inspeciona chaves e valores exatos do filtro.
+- Contra: memorias antigas sem `metadata.user_id` nao aparecem em consultas autenticadas e podem exigir migracao auditada futura.

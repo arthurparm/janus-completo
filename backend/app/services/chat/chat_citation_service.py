@@ -3,14 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.core.embeddings.embedding_manager import aembed_text
-from app.db.vector_store import (
-    aget_or_create_collection,
-    build_user_docs_collection_name,
-    get_async_qdrant_client,
-)
-from qdrant_client import models
-
 MANDATORY_CITATION_GUARD_TEXT = (
     "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
     "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
@@ -176,6 +168,14 @@ async def _query_document_citations(
     message: str,
     conversation_id: str | None,
     limit: int) -> list[dict[str, Any]]:
+    from app.core.embeddings.embedding_manager import aembed_text
+    from app.db.vector_store import (
+        aget_or_create_collection,
+        build_user_docs_collection_name,
+        get_async_qdrant_client,
+    )
+    from qdrant_client import models
+
     client = get_async_qdrant_client()
     collection_name = await aget_or_create_collection(build_user_docs_collection_name())
     query = (message or "").strip() or "documento"
@@ -202,6 +202,13 @@ async def _recent_document_citations(
     *,
     conversation_id: str | None,
     limit: int) -> list[dict[str, Any]]:
+    from app.db.vector_store import (
+        aget_or_create_collection,
+        build_user_docs_collection_name,
+        get_async_qdrant_client,
+    )
+    from qdrant_client import models
+
     client = get_async_qdrant_client()
     collection_name = await aget_or_create_collection(build_user_docs_collection_name())
     must: list[models.FieldCondition] = [

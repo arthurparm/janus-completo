@@ -22,9 +22,10 @@ jobs:
         env:
           E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ]; then
-            echo "Missing required secrets: E2E_USER_EMAIL / E2E_USER_PASSWORD"
+          if [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ] || [ -z "$OPENAI_API_KEY" ]; then
+            echo "Missing required secrets: E2E_USER_EMAIL / E2E_USER_PASSWORD / OPENAI_API_KEY"
             exit 1
           fi
 
@@ -173,6 +174,80 @@ jobs:
           npx playwright test e2e/admin-chat-real.smoke.spec.ts --project=chromium
         working-directory: frontend
 
+      - name: Run authenticated chat runtime smoke
+        env:
+          E2E_BASE_URL: http://localhost:4300
+          JANUS_CHAT_RUNTIME_E2E_MAX_MS: "60000"
+        run: npm run e2e:chat-runtime
+        working-directory: frontend
+
+      - name: Run real chat SSE smoke
+        env:
+          E2E_BASE_URL: http://localhost:4300
+          JANUS_RUN_REAL_CHAT_E2E: "true"
+          JANUS_LIGHT_CHAT_E2E_MAX_MS: "60000"
+        run: npm run e2e:chat-sse
+        working-directory: frontend
+
+      - name: Summarize chat SSE evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          import glob
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if not summary_path:
+              print("GITHUB_STEP_SUMMARY is not available")
+              raise SystemExit(0)
+
+          def table_value(value):
+              if value is None:
+                  return "-"
+              text = str(value).replace("\\", "\\\\").replace("|", "\\|")
+              return text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+          files = sorted(
+              glob.glob("frontend/test-results/**/chat-sse-runtime-evidence.json", recursive=True),
+              key=lambda item: Path(item).stat().st_mtime,
+              reverse=True,
+          )
+          with open(summary_path, "a", encoding="utf-8") as summary:
+              summary.write("## Chat SSE runtime evidence\n\n")
+              if not files:
+                  summary.write("No `chat-sse-runtime-evidence.json` artifact was found.\n")
+                  raise SystemExit(0)
+              evidence_path = files[0]
+              with open(evidence_path, "r", encoding="utf-8") as fh:
+                  evidence = json.load(fh)
+              rows = [
+                  ("conversation_id", evidence.get("conversation_id")),
+                  ("runtime_preflight.http_status", (evidence.get("runtime_preflight") or {}).get("http_status")),
+                  ("runtime_preflight.status", (evidence.get("runtime_preflight") or {}).get("status")),
+                  ("runtime_preflight.kernel_state", (evidence.get("runtime_preflight") or {}).get("kernel_state")),
+                  ("runtime_preflight.degraded_dependency_count", (evidence.get("runtime_preflight") or {}).get("degraded_dependency_count")),
+                  ("runtime_preflight.degraded_dependencies", ", ".join((evidence.get("runtime_preflight") or {}).get("degraded_dependencies") or [])),
+                  ("elapsed_ms", evidence.get("elapsed_ms")),
+                  ("max_light_chat_ms", evidence.get("max_light_chat_ms")),
+                  ("test_timeout_ms", evidence.get("test_timeout_ms")),
+                  ("http_status", evidence.get("http_status")),
+                  ("token_event_count", evidence.get("token_event_count")),
+                  ("done_event_count", evidence.get("done_event_count")),
+                  ("error_event_count", evidence.get("error_event_count")),
+                  ("provider", evidence.get("provider")),
+                  ("model", evidence.get("model")),
+                  ("citation_status", (evidence.get("citation_status") or {}).get("status")),
+                  ("agent_state", (evidence.get("agent_state") or {}).get("state")),
+                  ("checked_at", evidence.get("checked_at")),
+              ]
+              summary.write(f"Source: `{evidence_path}`\n\n")
+              summary.write("| Field | Value |\n|---|---|\n")
+              for key, value in rows:
+                  summary.write(f"| `{key}` | `{table_value(value)}` |\n")
+          PY
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -181,6 +256,24 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+
+      - name: Upload chat SSE evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-chat-sse-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: frontend/test-results/**/chat-sse-runtime-evidence.json
+
+      - name: Upload authenticated chat runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-chat-runtime-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: frontend/test-results/**/chat-runtime-evidence.json
 
       - name: Docker evidence (status + logs tail)
         if: always()

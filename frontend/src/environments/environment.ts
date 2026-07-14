@@ -12,6 +12,9 @@ export const environment = {
     frontendUrl: 'http://localhost:4300'
   },
   apiUrl: '/api',
+  serviceWorker: {
+    enabled: false,
+  },
   firebase: {
     apiKey: env['JANUS_FIREBASE_API_KEY'] || '',
     authDomain: env['JANUS_FIREBASE_AUTH_DOMAIN'] || '',

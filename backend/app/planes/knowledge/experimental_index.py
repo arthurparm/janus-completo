@@ -155,6 +155,9 @@ def _point_matches_domain(payload: dict[str, Any], domain: ExperimentalDomain) -
 
 def _point_matches_filters(payload: dict[str, Any], filters: dict[str, Any]) -> bool:
     metadata = payload.get("metadata") or {}
+    user_id = filters.get("user_id")
+    if user_id and str(metadata.get("user_id")) != str(user_id):
+        return False
     doc_id = filters.get("doc_id")
     if doc_id and str(metadata.get("doc_id")) != str(doc_id):
         return False

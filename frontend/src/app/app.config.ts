@@ -1,4 +1,10 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection, isDevMode, importProvidersFrom } from '@angular/core';
+import {
+  APP_INITIALIZER,
+  ApplicationConfig,
+  importProvidersFrom,
+  provideBrowserGlobalErrorListeners,
+  provideZonelessChangeDetection,
+} from '@angular/core';
 import { provideRouter, withInMemoryScrolling } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -17,6 +23,17 @@ import { getDatabase, provideDatabase } from '@angular/fire/database';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { getAuth, provideAuth } from '@angular/fire/auth';
 import { environment } from '../environments/environment';
+
+function unregisterDisabledServiceWorkers(): () => Promise<void> {
+  return async () => {
+    if (environment.serviceWorker.enabled || typeof navigator === 'undefined' || !navigator.serviceWorker) {
+      return;
+    }
+
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  };
+}
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -45,14 +62,18 @@ export const appConfig: ApplicationConfig = {
       prefix: './assets/i18n/',
       suffix: '.json'
     }),
-
-    // Firebase
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideDatabase(() => getDatabase()),
     provideFirestore(() => getFirestore()),
     provideAuth(() => getAuth()),
-
-    // Service Worker habilitado apenas em produção para evitar cache e abortos em dev
-    provideServiceWorker('ngsw-worker.js', { enabled: !isDevMode(), registrationStrategy: 'registerWhenStable:30000' })
+    {
+      provide: APP_INITIALIZER,
+      multi: true,
+      useFactory: unregisterDisabledServiceWorkers,
+    },
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: environment.serviceWorker.enabled,
+      registrationStrategy: 'registerWhenStable:30000',
+    })
   ]
 };

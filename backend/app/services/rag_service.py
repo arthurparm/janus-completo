@@ -173,6 +173,7 @@ class RAGService:
         self,
         *,
         message: str,
+        user_id: str,
         conversation_id: str | None,
         limit: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         vec = await aembed_text(message)
@@ -183,13 +184,17 @@ class RAGService:
             if bool(getattr(settings, "RAG_RERANK_ENABLED", True))
             else int(limit)
         )
-        coll = await aget_or_create_collection(build_user_chat_collection_name())
+        coll = await aget_or_create_collection(build_user_chat_collection_name(user_id))
         res = await client.query_points(
             collection_name=coll,
             query=vec,
             limit=query_limit,
             with_payload=True,
-            query_filter=qdrant_models.Filter(must=[])
+            query_filter=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="metadata.user_id",
+                        match=qdrant_models.MatchValue(value=str(user_id)))])
         )
         hits = list(getattr(res, "points", res) or [])
         memories = [
@@ -411,6 +416,7 @@ class RAGService:
         try:
             episodic_items, episodic_meta = await self._retrieve_episodic_context(
                 message=message,
+                user_id=str(user_id),
                 conversation_id=conversation_id,
                 limit=limit)
             semantic_items, semantic_context = await self._retrieve_semantic_context(
@@ -531,6 +537,7 @@ class RAGService:
         self,
         text: str,
         conversation_id: str,
+        user_id: str | None,
         role: str,
         caller_endpoint: str = "/chat/rag",
         transport: str = "unknown",
@@ -540,6 +547,7 @@ class RAGService:
             "transport": transport,
             "identity_source": identity_source,
             "conversation_id_present": bool(conversation_id),
+            "user_id_present": bool(user_id),
         }
         if not text:
             _RAG_SKIPPED.labels("index_message", "empty_text").inc()
@@ -565,11 +573,23 @@ class RAGService:
                 error_code="SKIPPED_NO_MEMORY_SERVICE",
                 extra=telemetry_base)
             return
+        if not user_id:
+            _RAG_SKIPPED.labels("index_message", "missing_user_id").inc()
+            _RAG_OPS.labels("index_message", "skipped").inc()
+            self._emit_step_telemetry(
+                endpoint=caller_endpoint,
+                step="index_message",
+                started_at=start,
+                db="qdrant",
+                confidence=0.0,
+                error_code="SKIPPED_MISSING_USER_ID",
+                extra=telemetry_base)
+            return
 
         # Delegate to MemoryService (SRP)
         try:
             await self._memory.index_interaction(
-                content=text, session_id=conversation_id, role=role
+                content=text, session_id=conversation_id, user_id=str(user_id), role=role
             )
             _RAG_OPS.labels("index_message", "success").inc()
             self._emit_step_telemetry(

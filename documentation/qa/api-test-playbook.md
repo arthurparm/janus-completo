@@ -152,19 +152,27 @@ CI workflow: `.github/workflows/quality-gates.yml`
 Workflow manual dedicado:
 - `.github/workflows/frontend-e2e-real.yml`
 - Trigger: `workflow_dispatch`
-- Secrets obrigatorios: `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`
+- Secrets obrigatorios: `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`, `OPENAI_API_KEY`
 - Variaveis operacionais: `E2E_BASE_URL` (default `http://localhost:4300` em Docker; use `http://localhost:4200` com `npm start`)
+- Smokes executados: `e2e/admin-chat-real.smoke.spec.ts`, `npm run e2e:chat-runtime` e `npm run e2e:chat-sse` com `JANUS_RUN_REAL_CHAT_E2E=true`
+- Smoke autenticado: exige stream HTTP 200, resposta visivel e persistida apos reload, `provider`, `model`, `delivery_status=completed`, limite `JANUS_CHAT_RUNTIME_E2E_MAX_MS` e zero falhas inesperadas de API/console.
+- Evidencia autenticada: artefato `frontend-chat-runtime-evidence`, retido por 30 dias, contendo `chat-runtime-evidence.json` sem credenciais ou tokens.
+- Preflight do smoke SSE: `GET /healthz` via `E2E_BASE_URL`, para diferenciar ambiente indisponivel de regressao no fluxo de chat. O teste exige `runtime_preflight.http_status=200`, `runtime_preflight.status=ok`, `runtime_preflight.kernel_state=healthy` e `runtime_preflight.degraded_dependency_count=0`.
+- Evidencia SSE: artefato `frontend-chat-sse-evidence`, retido por 30 dias, contendo `chat-sse-runtime-evidence.json` com `conversation_id`, preflight `runtime_preflight`, latencia observada, limites `max_light_chat_ms`/`test_timeout_ms`, contagem de eventos, `provider`, `model` e `citation_status` sem token de autenticacao.
+- Observacao: em GitHub Actions, o workflow usa `OPENAI_API_KEY` como provedor LLM real; nao assuma Ollama local no runner remoto.
 
 Checklist de validacao por release:
 1. Login com conta admin tecnica no frontend.
 2. Criar nova conversa em `/conversations`.
 3. Validar stream de resposta ativo (endpoint SSE de chat e resposta incremental).
-4. Gerar confirmacao pendente e validar fluxo `Aprovar`.
-5. Gerar nova confirmacao pendente e validar fluxo `Rejeitar`.
-6. Validar render de tabela markdown sem artefatos (`[object Object]`, `undefined`).
-7. Validar render de bloco de codigo markdown sem artefatos.
-8. Validar console limpo (sem `console.error` nao-whitelisted).
-9. Coletar evidencias: Playwright report/trace/video + hash de commit validado.
+4. Validar smoke autenticado com stream 200, persistencia apos reload, `delivery_status=completed` e console/API limpos.
+5. Validar smoke SSE leve com usuario sintetico, eventos `token` e `done`, ausencia de `event: error`, `provider/model` reais e `citation_status=not_applicable`.
+6. Gerar confirmacao pendente e validar fluxo `Aprovar`.
+7. Gerar nova confirmacao pendente e validar fluxo `Rejeitar`.
+8. Validar render de tabela markdown sem artefatos (`[object Object]`, `undefined`).
+9. Validar render de bloco de codigo markdown sem artefatos.
+10. Validar console limpo (sem `console.error` nao-whitelisted).
+11. Coletar evidencias: Playwright report/trace/video + hash de commit validado.
 
 ## Definition of Done (DX-011)
 

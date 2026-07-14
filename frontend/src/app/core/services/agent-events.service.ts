@@ -1,4 +1,4 @@
-import { Injectable, NgZone } from '@angular/core';
+import { DestroyRef, Injectable, NgZone } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { API_BASE_URL } from '../../services/api.config';
 import { buildChatStreamAuthHeaders } from '../../services/chat-auth-headers.util';
@@ -24,8 +24,17 @@ export class AgentEventsService {
 
     constructor(
         private zone: NgZone,
-        private logger: AppLoggerService
-    ) { }
+        private logger: AppLoggerService,
+        destroyRef: DestroyRef
+    ) {
+        if (typeof window === 'undefined') return;
+
+        const disconnectBeforePageExit = () => this.disconnect();
+        window.addEventListener('pagehide', disconnectBeforePageExit);
+        destroyRef.onDestroy(() => {
+            window.removeEventListener('pagehide', disconnectBeforePageExit);
+        });
+    }
 
     public get events$(): Observable<AgentEvent> {
         return this._events$.asObservable();

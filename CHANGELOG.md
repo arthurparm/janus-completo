@@ -463,3 +463,484 @@
 ### Risco Residual
 
 - O teste impede drift entre runbook e Compose local, mas nao verifica automaticamente se existe uma release Qdrant mais nova na internet.
+
+## Ciclo 19 - QA E2E real do frontend em Docker
+
+### Alterado
+
+- Corrigido o restore de sessao do frontend: o `/auth/local/me` inicial agora usa `SKIP_AUTH_SESSION` para evitar dependencia circular entre `AuthService` e `authSessionInterceptor`.
+- Exportado `SKIP_AUTH_SESSION` no interceptor de sessao e adicionado teste de bypass sem `AuthService`.
+- Adicionados asserts nos testes de `AuthService` para garantir que o request de restore carrega o contexto correto.
+- Ajustado `frontend/docker/server.mjs` para suportar proxy HTTP e HTTPS conforme `JANUS_API_URL`.
+
+### Evidencia Runtime
+
+- Smoke E2E Playwright contra `http://localhost:4300` criou usuario real, registrou, limpou storage, logou, validou reload de sessao, acessou `/conversations`, `/tools`, `/observability`, validou redirect seguro de non-admin em `/admin/autonomia` e enviou uma mensagem de chat.
+- Todas as chamadas API observadas no smoke responderam 200; os requests protegidos carregaram `Authorization`.
+- Screenshots do smoke: `C:\Users\arthu\AppData\Local\Temp\janus-frontend-qa-final-1783967523264`.
+
+### Validacao
+
+- `npm run lint`: passou.
+- `npm run test`: passou; 32 arquivos, 169 testes.
+- `npx ng build --configuration development`: passou.
+- `node --check frontend/docker/server.mjs`: passou.
+- `docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-frontend`: passou; `janus-api` e `janus-frontend` healthy.
+- `Invoke-WebRequest http://localhost:4300/api/v1/system/status`: retornou API real com `status=OPERATIONAL`.
+- `Invoke-WebRequest http://localhost:8000/health`: retornou `status=healthy`.
+- `py -3.12 tooling/dev.py doctor --host localhost --backend-port 8000 --frontend-port 4300 --json-out outputs/qa/quick_diagnostics_report.json`: passou com `overall_ok=true`.
+
+### Risco Residual
+
+- O smoke E2E foi executado por script temporario, ainda nao versionado como suite oficial.
+- O primeiro envio de chat carregou modelo cross-encoder no backend e teve latencia de cold start; isso nao quebrou o frontend, mas deve ser medido separadamente.
+
+## Ciclo 20 - Chat real sem bloqueio indevido no streaming
+
+### Alterado
+
+- `/api/v1/chat/message` deixou de coletar citacoes opcionais em conversa geral; citacoes agora sao buscadas no caminho sincrono apenas quando a mensagem exige codigo/documento/anexo.
+- O caminho "light chat" passa perfil explicito `general_task/low` e timeout configuravel por `CHAT_LIGHT_TIMEOUT_SECONDS`, preservando uso real do LLM sem resposta estatica.
+- `/api/v1/chat/stream/{conversation_id}` recebeu paridade com o endpoint classico: conversa leve nao aciona grounding documental nem retrieval RAG/cross-encoder antes do LLM.
+- Streaming tambem pula coleta de citacoes opcionais para chat geral, mantendo `citation_status=not_applicable`.
+- Frontend do chat nao adiciona eventos vazios ao thought stream e exibe `Fonte nao exigida` quando o backend informa `not_applicable`, removendo o ruido de `Fontes: 0`.
+
+### Evidencia Runtime
+
+- Conversa 16 falhou operacionalmente por latencia: mensagem `Ola` entrou as 19:11:15 e a resposta so persistiu as 19:13:39, com `provider=ollama`, `model=gpt-oss:20b`, `delivery_status=completed` e `citation_status=not_applicable`.
+- Logs do ID 16 mostraram `retrieve_context` em SSE levando 14748 ms antes do modelo para uma mensagem geral.
+- Apos a correcao, smoke SSE real em conversa 18 retornou `event: token` e `event: done` em 10503 ms, sem `event: error`.
+- Smoke HTTP classico real retornou `Ola` via `ollama/gpt-oss:20b` em 5864 ms com `citation_status=not_applicable`.
+
+### Validacao
+
+- `ruff check --config backend/pyproject.toml backend/app/services/chat/streaming_service.py backend/app/services/chat/message_orchestration_service.py backend/app/api/v1/endpoints/chat/chat_message.py qa/test_chat_endpoint_contract.py`: passou.
+- `python -m py_compile backend/app/services/chat/streaming_service.py`: passou.
+- `npm run lint`: passou.
+- `npm run test -- --run`: passou; 33 arquivos, 177 testes.
+- `npx ng build --configuration development`: passou.
+- `docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-api`: passou; API healthy.
+- `docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-frontend`: passou; frontend healthy.
+
+### Risco Residual
+
+- O LLM local ainda pode levar cerca de 6-10s em mensagens leves; isso e tempo de modelo real, nao resposta estatica.
+- `pytest -q qa/test_chat_endpoint_contract.py` no host segue bloqueado por dependencia ausente `aio_pika` no Python 3.13 local; a validacao de contrato ficou coberta por ruff/py_compile e smoke operacional em Docker.
+
+### Atualizacao do Ciclo
+
+- Adicionado teste unitario para garantir que `StreamingService` em light chat nao chama RAG, grounding documental nem citacoes opcionais.
+- Corrigida fragilidade de import no pacote `app.services.chat` e em citacoes para permitir testes direcionados sem carregar workers/broker desnecessarios.
+- `qa/test_chat_endpoint_contract.py` passou a cobrir que chat geral nao coleta citacoes opcionais e que pergunta de codigo mantem contrato de fonte clicavel.
+- Centralizado `QDRANT_CHECK_COMPATIBILITY` no builder do client Qdrant; o checker interno foi desligado por padrao porque o runtime ja pinou/verificou server `1.18.2` e client `1.18.0`.
+- Smoke SSE real equivalente ao ID 16 (`Ola`) retornou `event: token` e `event: done` em 5845 ms, sem `event: error`, usando `ollama/gpt-oss:20b` e `citation_status=not_applicable`.
+
+## Ciclo 21 - Smoke SSE real versionado
+
+### Alterado
+
+- Adicionado `frontend/e2e/chat-sse-runtime.smoke.spec.ts` como smoke Playwright opt-in para o contrato real de SSE do chat.
+- O teste registra usuario sintetico pela API, inicia conversa, chama `/api/v1/chat/stream/{conversation_id}` com `Ola`, parseia os eventos SSE e exige `token`, `done`, ausencia de `error`, provider/model reais e `citation_status=not_applicable`.
+- O teste fica protegido por `JANUS_RUN_REAL_CHAT_E2E=true` para nao quebrar ambientes sem backend/Ollama, mas pode ser executado contra `E2E_BASE_URL=http://localhost:4300`.
+
+### Evidencia Runtime
+
+- `npx playwright test e2e/chat-sse-runtime.smoke.spec.ts --project=chromium --reporter=line` passou contra `http://localhost:4300` com `JANUS_RUN_REAL_CHAT_E2E=true`.
+- O smoke rodou pelo frontend/proxy real e concluiu em 1 teste Playwright aprovado.
+
+### Validacao
+
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O smoke e versionado, mas ainda opt-in. Falta decidir em qual ambiente de CI/runtime ele deve ser obrigatório, porque depende de backend, Ollama e proxy funcionais.
+
+## Ciclo 22 - Comando oficial para smoke SSE real
+
+### Alterado
+
+- Adicionados scripts `npm run e2e` e `npm run e2e:chat-sse` em `frontend/package.json`.
+- Documentado em `documentation/development-guide-frontend.md` o smoke real do chat SSE, incluindo variaveis `E2E_BASE_URL` e `JANUS_RUN_REAL_CHAT_E2E`, pre-requisitos PC1/PC2 e comando PowerShell.
+
+### Evidencia Runtime
+
+- `npm run e2e:chat-sse` passou contra `http://localhost:4300` com `JANUS_RUN_REAL_CHAT_E2E=true`.
+
+### Validacao
+
+- `node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); console.log('package.json ok')"`: passou.
+- `npm run e2e:chat-sse`: passou; 1 teste Playwright.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O smoke ficou descobrivel por npm/docs, mas continua opt-in para nao exigir runtime completo em toda execucao local. Falta decidir a esteira obrigatoria adequada.
+
+## Ciclo 23 - Smoke SSE no workflow E2E real
+
+### Alterado
+
+- `.github/workflows/frontend-e2e-real.yml` agora executa `npm run e2e:chat-sse` como etapa obrigatoria do workflow manual real, com `JANUS_RUN_REAL_CHAT_E2E=true` e timeout de 60s.
+- `documentation/qa/api-test-playbook.md` passou a listar o smoke SSE leve no checklist de release e nos smokes executados pelo workflow.
+
+### Evidencia Runtime
+
+- O workflow YAML foi parseado localmente com PyYAML e manteve a estrutura esperada.
+- `npm run e2e:chat-sse` passou contra `http://localhost:4300` com `JANUS_RUN_REAL_CHAT_E2E=true`.
+
+### Validacao
+
+- Parser YAML local: passou; `workflow yaml ok`.
+- `npm run e2e:chat-sse`: passou; 1 teste Playwright.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O gate agora existe no workflow manual real, mas ainda falta evidencia de execucao no GitHub Actions remoto neste ciclo.
+
+## Ciclo 24 - Precondicao LLM real no workflow E2E
+
+### Alterado
+
+- `.github/workflows/frontend-e2e-real.yml` passou a validar `OPENAI_API_KEY` junto com `E2E_USER_EMAIL` e `E2E_USER_PASSWORD`.
+- `documentation/qa/api-test-playbook.md` documenta `OPENAI_API_KEY` como segredo obrigatorio do workflow E2E real e explicita que o runner remoto nao deve assumir Ollama local.
+
+### Evidencia
+
+- Fato observado: o workflow ja injetava `OPENAI_API_KEY` em `.env.e2e.ci`, mas nao falhava cedo quando o segredo estava ausente.
+- Inferencia: sem Ollama local no runner remoto, a falta de `OPENAI_API_KEY` poderia transformar o smoke SSE real em falha tardia de LLM.
+
+### Validacao
+
+- Parser YAML local: passou; `workflow yaml ok; openai secret required`.
+- `npm run e2e:chat-sse`: passou; 1 teste Playwright.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O workflow remoto ainda precisa ser executado no GitHub Actions para provar o ambiente completo com segredos reais.
+
+## Ciclo 25 - Evidencia JSON do smoke SSE
+
+### Alterado
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora escreve e anexa `chat-sse-runtime-evidence.json` ao resultado Playwright.
+- O artefato registra `conversation_id`, `elapsed_ms`, HTTP status, contagem de eventos `token/done/error`, `provider`, `model`, `citation_status`, `agent_state` e timestamp, sem token de autenticacao.
+- `documentation/qa/api-test-playbook.md` documenta o anexo de evidencia SSE em `frontend/test-results`.
+
+### Evidencia Runtime
+
+- `npm run e2e:chat-sse` passou e gerou JSON local com `conversation_id=26`, `elapsed_ms=2327`, `provider=ollama`, `model=gpt-oss:20b`, `error_event_count=0` e `citation_status.status=not_applicable`.
+
+### Validacao
+
+- `npm run e2e:chat-sse`: passou; 1 teste Playwright.
+- Leitura do `chat-sse-runtime-evidence.json`: passou; conteudo sem segredo e com metricas do SSE.
+- Parser YAML local: passou; `workflow yaml ok`.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O JSON local prova o smoke no runtime atual; ainda falta artefato remoto do GitHub Actions.
+
+## Ciclo 26 - Artefato dedicado para evidencia SSE
+
+### Alterado
+
+- `.github/workflows/frontend-e2e-real.yml` agora faz upload dedicado do artefato `frontend-chat-sse-evidence`.
+- O upload captura `frontend/test-results/**/chat-sse-runtime-evidence.json` separadamente do pacote amplo `frontend-e2e-real-artifacts`.
+- `documentation/qa/api-test-playbook.md` passou a apontar para o artefato dedicado.
+
+### Evidencia
+
+- Parser YAML confirmou a etapa `Upload chat SSE evidence`, com nome `frontend-chat-sse-evidence` e path contendo `chat-sse-runtime-evidence.json`.
+
+### Validacao
+
+- Parser YAML local: passou; `workflow yaml ok; sse evidence artifact configured`.
+- `npm run e2e:chat-sse`: passou; 1 teste Playwright.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- Ainda falta execucao remota do workflow para confirmar que o artefato dedicado aparece no GitHub Actions.
+
+## Ciclo 27 - Sincronizacao de memoria macro
+
+### Alterado
+
+- `META.md` atualizado do estado antigo de Ciclo 6 para Ciclo 26, incluindo foco recente em chat real/SSE, gate runtime `npm run e2e:chat-sse` e risco residual de execucao remota.
+- `ROADMAP.md` atualizado com marco explicito de Chat/SSE, workflow E2E real e artefato `frontend-chat-sse-evidence`.
+
+### Validacao
+
+- Verificacao de presenca dos arquivos obrigatorios de memoria: passou.
+- Busca textual em `META.md` e `ROADMAP.md` confirmou referencias a Ciclo 26, `e2e:chat-sse`, `frontend-chat-sse-evidence` e GitHub Actions.
+- `git diff --check -- META.md ROADMAP.md`: passou; apenas avisos LF/CRLF.
+
+### Risco Residual
+
+- A memoria macro esta sincronizada localmente, mas o risco operacional principal permanece: executar o workflow remoto e coletar artefatos reais.
+
+## Ciclo 28 - Resumo GitHub do smoke SSE
+
+### Alterado
+
+- `.github/workflows/frontend-e2e-real.yml` recebeu a etapa `Summarize chat SSE evidence`.
+- A etapa le `frontend/test-results/**/chat-sse-runtime-evidence.json` e publica uma tabela no `GITHUB_STEP_SUMMARY` com conversa, latencia, status HTTP, contagem de eventos, provider, model, citacao e estado do agente.
+
+### Evidencia Local
+
+- O script de resumo foi executado localmente contra o JSON gerado e produziu tabela com `conversation_id=27`, `elapsed_ms=5930`, `provider=ollama`, `model=gpt-oss:20b`, `error_event_count=0` e `citation_status=not_applicable`.
+
+### Validacao
+
+- Parser YAML local: passou; `workflow yaml ok; sse summary configured`.
+- `npm run e2e:chat-sse`: passou; 1 teste Playwright.
+- Script de resumo com `GITHUB_STEP_SUMMARY` temporario: passou.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- Ainda falta execucao remota para confirmar o Step Summary no GitHub Actions.
+
+## Ciclo 29 - Retencao auditavel da evidencia SSE
+
+### Alterado
+
+- `.github/workflows/frontend-e2e-real.yml` agora define `retention-days: 30` no upload `frontend-chat-sse-evidence`.
+- `documentation/qa/api-test-playbook.md` documenta que o JSON dedicado `chat-sse-runtime-evidence.json` fica retido por 30 dias.
+- `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram sincronizados com o novo estado da evidencia SSE.
+
+### Validacao
+
+- Parser YAML local: passou; confirmou `retention-days=30`, nome e path do artefato SSE.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Limitacao
+
+- `npm run e2e:chat-sse` nao conseguiu validar runtime nesta rodada porque `http://localhost:4300`, `http://127.0.0.1:4300` e `http://127.0.0.1:8000/health` recusaram conexao, e Docker Desktop nao estava acessivel.
+
+### Risco Residual
+
+- Ainda falta executar o workflow remoto com segredos reais para provar coleta, upload, summary e retencao em GitHub Actions.
+
+## Ciclo 30 - Preflight operacional do smoke SSE
+
+### Alterado
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora executa `GET /healthz` antes de registrar usuario e iniciar conversa.
+- A falha de preflight informa explicitamente que o runtime Janus esta indisponivel para o smoke SSE, separando problema de ambiente de regressao no chat.
+- `documentation/qa/api-test-playbook.md`, `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram atualizados com a preflight e a nova evidencia local.
+
+### Evidencia Local
+
+- Com Docker ajustado e PC1/PC2 ativos, `/health` retornou `status=healthy` com dependencias `llm_router`, `message_broker`, `episodic_memory_qdrant`, `neo4j`, `postgres` e `redis` saudaveis.
+- `npm run e2e:chat-sse` passou e gerou `chat-sse-runtime-evidence.json` com `conversation_id=31`, `elapsed_ms=2137`, `http_status=200`, `token_event_count=1`, `done_event_count=1`, `error_event_count=0`, `provider=ollama`, `model=gpt-oss:20b`, `citation_status=not_applicable` e `agent_state=completed`.
+
+### Validacao
+
+- Caminho saudavel: `npm run e2e:chat-sse` passou apos a preflight.
+- Caminho de falha: smoke contra `http://127.0.0.1:4399` falhou com diagnostico esperado `Janus runtime indisponivel para smoke SSE: GET /healthz falhou`.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- A evidencia local prova o fluxo real no ambiente Docker atual; ainda falta execucao remota do workflow GitHub Actions com segredos reais.
+
+## Ciclo 31 - Evidencia SSE com preflight registrada
+
+### Alterado
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora inclui `runtime_preflight` no `chat-sse-runtime-evidence.json`.
+- `.github/workflows/frontend-e2e-real.yml` passa a publicar `runtime_preflight.http_status`, `runtime_preflight.status` e `runtime_preflight.kernel_state` no Step Summary.
+- `documentation/qa/api-test-playbook.md`, `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram atualizados para refletir a evidencia enriquecida.
+
+### Evidencia Local
+
+- `npm run e2e:chat-sse` passou com `conversation_id=32`, `elapsed_ms=2216`, `http_status=200`, `error_event_count=0`, `provider=ollama`, `model=gpt-oss:20b`, `runtime_preflight.http_status=200` e `runtime_preflight.status=ok`.
+- `runtime_preflight.kernel_state` ficou `null` porque `/healthz` via frontend/proxy nao expos esse campo; o teste registra a ausencia sem inventar valor.
+
+### Validacao
+
+- Parser YAML local: passou; confirmou campos `runtime_preflight.*` no Step Summary.
+- Verificador local do JSON: passou; confirmou `runtime_preflight.http_status=200`, `runtime_preflight.status=ok` e `error_event_count=0`.
+- `npm run e2e:chat-sse`: passou.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- Falta executar o workflow remoto para confirmar os novos campos no Step Summary do GitHub Actions.
+
+## Ciclo 32 - Contrato obrigatorio da preflight SSE
+
+### Alterado
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora extrai `dependencies.kernel_state` de `/healthz`.
+- O smoke passa a exigir `runtime_preflight.http_status=200`, `runtime_preflight.status=ok` e `runtime_preflight.kernel_state=healthy` antes de criar usuario/conversa.
+- `documentation/qa/api-test-playbook.md`, `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram atualizados para refletir o contrato obrigatorio.
+
+### Evidencia Local
+
+- `GET http://127.0.0.1:4300/healthz` retornou HTTP 200 e payload com `status=ok` e `dependencies.kernel_state=healthy`.
+- `npm run e2e:chat-sse` passou com `conversation_id=33`, `elapsed_ms=1947`, `error_event_count=0`, `agent_state=completed`, `runtime_preflight.status=ok` e `runtime_preflight.kernel_state=healthy`.
+
+### Validacao
+
+- `npm run e2e:chat-sse`: passou.
+- Verificador local do JSON: passou; `evidence contract ok; conversation_id=33; elapsed_ms=1947; kernel_state=healthy`.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O contrato agora falha se `/healthz` degradar, mesmo antes do chat. Isso e desejado para gate E2E real, mas precisa ser considerado ao diagnosticar falhas remotas.
+
+## Ciclo 33 - Evidencia SSE com degradacao operacional zero
+
+### Alterado
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora registra `runtime_preflight.degraded_dependency_count` e `runtime_preflight.degraded_dependencies`.
+- O smoke exige `degraded_dependency_count=0` e `degraded_dependencies=[]` antes de executar o fluxo de chat.
+- `.github/workflows/frontend-e2e-real.yml` exibe os campos de degradacao operacional no Step Summary.
+- `documentation/qa/api-test-playbook.md`, `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram atualizados com o contrato ampliado.
+
+### Evidencia Local
+
+- `/healthz` retornou `degraded_dependencies={}`.
+- `npm run e2e:chat-sse` passou com `conversation_id=34`, `elapsed_ms=2170`, `error_event_count=0`, `agent_state=completed`, `runtime_preflight.kernel_state=healthy` e `runtime_preflight.degraded_dependency_count=0`.
+
+### Validacao
+
+- Parser YAML local: passou; confirmou campos de degradacao no Step Summary.
+- `npm run e2e:chat-sse`: passou.
+- Verificador local do JSON: passou; `evidence contract ok; conversation_id=34; degraded_dependency_count=0`.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- O gate agora falha quando o ambiente esta degradado, mesmo se o stream de chat pudesse responder. Isso e uma decisao deliberada para smoke E2E real, mas deve ser interpretado como falha operacional, nao necessariamente bug de chat.
+
+## Ciclo 34 - Timeout alinhado do smoke SSE
+
+### Alterado
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora define `TEST_TIMEOUT_MS = Math.max(60_000, MAX_LIGHT_CHAT_MS + 15_000)`.
+- O timeout total do Playwright passou a usar `TEST_TIMEOUT_MS`, evitando desalinhamento quando `JANUS_LIGHT_CHAT_E2E_MAX_MS` for ajustado.
+- `documentation/development-guide-frontend.md` documenta a margem operacional de 15s.
+- `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram atualizados com o novo estado do gate.
+
+### Evidencia Local
+
+- Com `JANUS_LIGHT_CHAT_E2E_MAX_MS=60000`, `npm run e2e:chat-sse` passou com `conversation_id=35`, `elapsed_ms=2089`, `error_event_count=0` e `degraded_dependency_count=0`.
+
+### Validacao
+
+- `npm run e2e:chat-sse`: passou.
+- Verificador local do JSON: passou; `timeout-aligned smoke evidence ok; conversation_id=35; elapsed_ms=2089`.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- A execucao remota ainda precisa validar o comportamento com latencia real do provider cloud.
+
+## Ciclo 35 - Step Summary SSE com escape Markdown
+
+### Alterado
+
+- `.github/workflows/frontend-e2e-real.yml` recebeu a funcao `table_value` no script `Summarize chat SSE evidence`.
+- Valores do Step Summary agora tratam `None` como `-`, escapam `|`, preservam barra invertida e normalizam quebras de linha para espaco.
+- `META.md`, `ROADMAP.md` e `TODO_TECHNICAL_DEBT.md` foram atualizados com o estado do gate remoto.
+
+### Evidencia Local
+
+- O script real extraido do workflow foi executado em diretorio temporario contra JSON sintetico com `|`, barra invertida e quebra de linha; a tabela gerada manteve `x\|y`, `ollama\|local`, `line1 line2` e `dep\|one`.
+- `npm run e2e:chat-sse` passou com `conversation_id=36`, `elapsed_ms=5065`, `error_event_count=0` e `degraded_dependency_count=0`.
+
+### Validacao
+
+- Parser YAML local: passou; confirmou `table_value`.
+- Execucao local do script do Step Summary com JSON sintetico: passou; `workflow summary escaping ok`.
+- `npm run e2e:chat-sse`: passou.
+- `npm run lint`: passou.
+- `npx ng build --configuration development`: passou.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py`: passou; 29 testes.
+
+### Risco Residual
+
+- Falta confirmar a renderizacao visual no Step Summary real do GitHub Actions.
+
+## Ciclo 36 - Chat autenticado sem 403/429
+
+### Alterado
+
+- CORS local agora permite `localhost:4300` e `127.0.0.1:4300` no ambiente, template e fallback do Compose.
+- O rate limiter HTTP usa bucket por usuario JWT verificado; trafego anonimo permanece por IP.
+- `e2e:chat-runtime` valida sessao, stream, persistencia, metadados, latencia e falhas de API/console.
+- Evidencias de chat autenticado e SSE usam diretorios separados e artefatos dedicados no workflow manual.
+- Evidencia SSE registra os limites `max_light_chat_ms` e `test_timeout_ms`.
+
+### Evidencia Local
+
+- Baseline: stream da conversa `37` retornou 403 por origem; depois, uma jornada de 59 chamadas atingiu 429 por IP.
+- Final: conversa `42`, `chat_elapsed_ms=2898`, stream 200, `ollama/gpt-oss:20b`, persistida apos reload, 55 eventos de API, zero falhas de console e nenhum 429 recente.
+- SSE independente: conversa `43`, `elapsed_ms=2295`, token/done presentes, zero error events e health sem degradacao.
+
+### Risco Residual
+
+- Smoke admin local nao foi concluido porque `AUTH_ADMIN_CPF_ALLOWLIST` nao esta configurada; o workflow remoto injeta a allowlist, mas ainda precisa ser executado.
+- Operacoes mutantes de documentos, memoria e RAG permanecem fora deste ciclo.
+
+## Ciclo 37 - Memoria real no chat e lifecycle do stream
+
+### Alterado
+
+- A recuperacao de memoria generativa agora aceita `user_id` e aplica filtros simultaneos de usuario e conversa no Qdrant.
+- O teste de timeline foi alinhado ao contrato autenticado e verifica o ator usado na consulta.
+- O smoke autenticado adiciona uma memoria semantica pela UI, busca pelo marcador exclusivo e confirma persistencia apos reload.
+- O stream de eventos do agente e abortado em `pagehide`, evitando erro falso de consumo quando a pagina e recarregada.
+
+### Evidencia Local
+
+- Baseline: `POST /memory/generative` retornou 200, mas `GET /memory/generative` retornou 500 por argumento `user_id` incompativel.
+- Final: conversa `47`, chat em `16881ms`, memoria em `1374ms`, POST/GET 200, persistencia verdadeira, 76 eventos de API e zero falhas de console.
+- SSE final: conversa `49`, `2115ms`, token/done presentes, zero eventos de erro e preflight sem degradacao.
+- Outlier observado: conversa `48` concluiu no backend em `64726ms` depois de o cliente expirar em 35s.
+
+### Validacao
+
+- Backend: 38 testes direcionados passaram; `ruff` passou.
+- Frontend: lint passou; 178 testes passaram; build development passou.
+- Playwright autenticado e Playwright SSE real passaram.
+- `tooling/dev.py doctor` passou com `overall_ok=True`.
+
+### Risco Residual
+
+- Uma execucao fria excedeu 60s; ainda faltam amostras suficientes para p95/p99 e diagnostico da variancia do Ollama.
+- Upload/indexacao de documentos e RAG mutante continuam pendentes no smoke autenticado.

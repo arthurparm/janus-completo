@@ -135,6 +135,7 @@ def _infer_collection_spec(collection_name: str) -> CollectionSpec:
             name=collection_name,
             payload_indexes={
                 "metadata.type": PayloadSchemaType.KEYWORD,
+                "metadata.user_id": PayloadSchemaType.KEYWORD,
                 "metadata.session_id": PayloadSchemaType.KEYWORD,
                 "metadata.conversation_id": PayloadSchemaType.KEYWORD,
                 "metadata.role": PayloadSchemaType.KEYWORD,

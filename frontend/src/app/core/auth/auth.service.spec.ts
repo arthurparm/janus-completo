@@ -3,6 +3,7 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { HttpHeaders } from '@angular/common/http'
 import { AuthService } from './auth.service'
 import { API_BASE_URL, AUTH_REFRESH_TOKEN_KEY, AUTH_TOKEN_KEY, VISITOR_MODE_KEY } from '../../services/api.config'
+import { SKIP_AUTH_SESSION } from '../interceptors/auth-session.interceptor'
 
 describe('AuthService', () => {
   let http: HttpTestingController
@@ -135,6 +136,7 @@ describe('AuthService', () => {
     const svc = TestBed.inject(AuthService)
     const req = http.expectOne(meEndpoint)
     expect(req.request.method).toBe('GET')
+    expect(req.request.context.get(SKIP_AUTH_SESSION)).toBe(true)
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
     await waitForAuthReady(svc)
@@ -150,6 +152,7 @@ describe('AuthService', () => {
     const svc = TestBed.inject(AuthService)
     const req = http.expectOne(meEndpoint)
     expect(req.request.method).toBe('GET')
+    expect(req.request.context.get(SKIP_AUTH_SESSION)).toBe(true)
     req.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
     await waitForAuthReady(svc)
@@ -248,6 +251,7 @@ describe('AuthService', () => {
 
     const me1 = http.expectOne(meEndpoint)
     expect(me1.request.method).toBe('GET')
+    expect(me1.request.context.get(SKIP_AUTH_SESSION)).toBe(true)
     me1.flush({ detail: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' })
 
     for (let i = 0; i < 4; i += 1) {
@@ -268,6 +272,7 @@ describe('AuthService', () => {
 
     const me2 = http.expectOne(meEndpoint)
     expect(me2.request.method).toBe('GET')
+    expect(me2.request.context.get(SKIP_AUTH_SESSION)).toBe(true)
     me2.flush({ id: 'uid-123', email: 'a@b.com', roles: ['user'] })
 
     await waitForAuthReady(svc)

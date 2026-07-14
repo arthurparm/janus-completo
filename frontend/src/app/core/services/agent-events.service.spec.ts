@@ -140,4 +140,23 @@ describe('AgentEventsService', () => {
 
     expect(signal.aborted).toBe(true)
   })
+
+  it('aborta a conexao antes de recarregar ou sair da pagina', async () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(10))
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
+      await new Promise(() => undefined)
+      return new Response(null, { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const service = TestBed.inject(AgentEventsService)
+    service.connect('conv-page-exit')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const signal = init.signal as AbortSignal
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+
+    expect(signal.aborted).toBe(true)
+  })
 })

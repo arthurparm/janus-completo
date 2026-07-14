@@ -1056,3 +1056,1119 @@ Resultado: passou; Git reportou apenas avisos de normalizacao LF/CRLF.
 ### Risco Residual
 
 - Restore real nao foi executado neste ciclo porque a mudanca e uma validacao previa; restore fim a fim ja foi coberto no Ciclo 15 e deve ser repetido quando a politica offsite/agendada existir.
+
+## Ciclo 19 - Validacao E2E real do frontend
+
+### Comandos Executados
+
+```powershell
+npm run lint
+```
+
+Resultado: passou.
+
+```powershell
+npm run test
+```
+
+Resultado: passou; 32 arquivos, 169 testes.
+
+```powershell
+npx ng build --configuration development
+```
+
+Resultado: passou; bundle gerado em `frontend/dist/janus-angular`.
+
+```powershell
+node --check frontend/docker/server.mjs
+```
+
+Resultado: passou.
+
+```powershell
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-frontend
+```
+
+Resultado: passou; `janus-api` e `janus-frontend` foram recriados e ficaram healthy.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri http://localhost:4300/api/v1/system/status
+Invoke-WebRequest -UseBasicParsing -Uri http://localhost:8000/health
+```
+
+Resultado: passou; frontend proxy retornou API real `status=OPERATIONAL` e backend retornou `status=healthy`.
+
+```powershell
+py -3.12 tooling/dev.py doctor --host localhost --backend-port 8000 --frontend-port 4300 --json-out outputs/qa/quick_diagnostics_report.json
+```
+
+Resultado: passou; `overall_ok=true`.
+
+```powershell
+node <smoke Playwright temporario>
+```
+
+Resultado final: passou. Cobertura do smoke:
+
+- registro local com usuario real;
+- login local apos limpar storage;
+- persistencia de sessao apos reload;
+- acesso a `/conversations`, `/tools`, `/observability`;
+- redirect seguro de non-admin em `/admin/autonomia`;
+- inicio de conversa e chamada `/api/v1/chat/stream/{id}` com 200;
+- eventos de console `error`/`warning`: nenhum no smoke final.
+
+Validacao adicional de chat apos o smoke:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://localhost:4300/api/v1/chat/8/history/paginated?limit=80
+```
+
+Resultado: passou; historico retornou 2 mensagens, incluindo resposta assistant `OK smoke frontend` com `delivery_status=completed`, `provider=ollama` e `model=gpt-oss:20b`.
+
+### Falhas Encontradas Durante o Ciclo
+
+- Falha inicial: runtime Docker do frontend nao proxyava `/api/*`; o fallback SPA retornava HTML com HTTP 200 para chamadas de API.
+- Falha intermediaria: sessao autenticada nao sobrevivia a reload por dependencia circular no request inicial de restore.
+
+### Evidencias
+
+- Screenshots e sumario Playwright: `C:\Users\arthu\AppData\Local\Temp\janus-frontend-qa-final-1783967523264`.
+- `outputs/qa/quick_diagnostics_report.json` atualizado pelo doctor.
+
+### Risco Residual
+
+- O smoke deve ser promovido para suite versionada para evitar regressao manual.
+- O chat real funcionou, mas a screenshot foi capturada antes da resposta final; a confirmacao final veio por API de historico. Cold start de modelo no backend gerou latencia e requer metrica propria de backend.
+
+## Ciclo 20 - Validacao do chat real e streaming
+
+### Comandos Executados
+
+```powershell
+ruff check --config backend/pyproject.toml backend/app/services/chat/streaming_service.py backend/app/services/chat/message_orchestration_service.py backend/app/api/v1/endpoints/chat/chat_message.py qa/test_chat_endpoint_contract.py
+```
+
+Resultado: passou.
+
+```powershell
+python -m py_compile backend/app/services/chat/streaming_service.py
+```
+
+Resultado: passou.
+
+```powershell
+npm run lint
+npm run test -- --run
+npx ng build --configuration development
+```
+
+Resultado: passaram; Vitest reportou 33 arquivos e 177 testes.
+
+```powershell
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-api
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-frontend
+```
+
+Resultado: passou; containers `janus_api_pc1` e `janus_frontend_pc1` ficaram healthy.
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/api/v1/chat/health
+```
+
+Resultado: passou; `health=healthy`, `chat=healthy`, `repository_accessible=True`.
+
+```powershell
+POST /api/v1/chat/message com usuario sintetico, mensagem "Ola"
+```
+
+Resultado: passou; `elapsed_ms=5864`, `provider=ollama`, `model=gpt-oss:20b`, `citation_status=not_applicable`.
+
+```powershell
+curl.exe -sS -N --max-time 35 -X POST http://localhost:8000/api/v1/chat/stream/{conversation_id}
+```
+
+Resultado: passou apos correcao; conversa 18 retornou `event: token` e `event: done` em 10503 ms, sem `event: error`.
+
+### Falhas Encontradas Durante o Ciclo
+
+- `pytest -q qa/test_chat_endpoint_contract.py` falhou na coleta por `ModuleNotFoundError: aio_pika` no Python 3.13 do host.
+- Primeira tentativa de smoke SSE com `curl --data-binary` falhou com `json_invalid` por encoding/quoting do PowerShell; repetida com arquivo UTF-8 sem BOM passou.
+
+### Evidencias
+
+- Consulta ao Postgres confirmou conversa 16 com user `Ola` e assistant persistido 144s depois.
+- Logs antes da correcao mostraram `retrieve_context` em SSE com `latency_ms=14748` para conversa geral.
+
+### Risco Residual
+
+- Falta suite automatizada de streaming leve no backend.
+- Latencia do modelo local real ainda precisa ser acompanhada por metricas de p95/p99 separadas de retrieval.
+
+## Ciclo 20 - Atualizacao: regressao automatizada e Qdrant runtime
+
+### Comandos Executados
+
+```powershell
+$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+```powershell
+ruff check --config backend/pyproject.toml backend/app/config.py backend/app/core/memory/qdrant_client_config.py backend/app/api/v1/endpoints/chat/chat_message.py backend/app/services/chat/message_orchestration_service.py backend/app/services/chat/streaming_service.py backend/app/services/chat/chat_citation_service.py backend/app/services/chat/__init__.py backend/tests/unit/test_chat_streaming_service.py backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py
+```
+
+Resultado: passou.
+
+```powershell
+docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d --build janus-api
+Invoke-RestMethod http://localhost:8000/health
+```
+
+Resultado: passou; `janus-api` healthy.
+
+```powershell
+curl.exe -skS -H "api-key: ***" https://localhost:6333/
+docker exec janus_api_pc1 python -c "import importlib.metadata as m; print(m.version('qdrant-client'))"
+```
+
+Resultado: Qdrant server `1.18.2`; client Python `1.18.0`.
+
+```powershell
+POST /api/v1/chat/stream/{conversation_id} com mensagem "Ola"
+```
+
+Resultado: passou; conversa 21 retornou `event: token` e `event: done` em 5845 ms, sem `event: error`, com `provider=ollama`, `model=gpt-oss:20b`, `citation_status=not_applicable`.
+
+### Falhas Encontradas Durante o Ciclo
+
+- Teste de contrato de citacoes tentou Qdrant real no host e falhou por DNS antes de chegar no fallback de memoria fake; corrigido com monkeypatch do coletor no teste de contrato do endpoint.
+- Smoke SSE com texto contendo "rebuild" foi classificado como `action_request` e acionou `retrieve_context` em 11634 ms; isso nao representa o caso do ID 16, mas confirma que mensagens fora do perfil light ainda usam contexto real.
+
+### Risco Residual
+
+- O smoke SSE real ainda nao esta versionado como E2E oficial.
+- `QDRANT_CHECK_COMPATIBILITY=False` exige que upgrades de Qdrant continuem acompanhados de verificacao explicita de versao e smoke operacional.
+
+## Ciclo 21 - Smoke SSE real versionado
+
+### Comandos Executados
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+npx playwright test e2e/chat-sse-runtime.smoke.spec.ts --project=chromium --reporter=line
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+npm run lint
+```
+
+Resultado: passou.
+
+```powershell
+npx ng build --configuration development
+```
+
+Resultado: passou.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- O novo smoke `frontend/e2e/chat-sse-runtime.smoke.spec.ts` executa registro real, `chat/start` real e `chat/stream` real pelo proxy do frontend.
+- O teste valida eventos SSE parseados, nao apenas HTTP 200.
+
+### Risco Residual
+
+- O teste e opt-in por `JANUS_RUN_REAL_CHAT_E2E=true`; ainda falta decidir quando ele sera obrigatorio em pipeline/runtime.
+
+## Ciclo 22 - Comando oficial para smoke SSE real
+
+### Comandos Executados
+
+```powershell
+node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); console.log('package.json ok')"
+```
+
+Resultado: passou.
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+npm run lint
+```
+
+Resultado: passou.
+
+```powershell
+npx ng build --configuration development
+```
+
+Resultado: passou.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- `frontend/package.json` agora expoe `e2e` e `e2e:chat-sse`.
+- `documentation/development-guide-frontend.md` documenta objetivo, pre-requisitos e comandos do smoke SSE real.
+
+### Risco Residual
+
+- O comando oficial ainda depende de o operador habilitar `JANUS_RUN_REAL_CHAT_E2E=true` e ter runtime completo ativo.
+
+## Ciclo 23 - Smoke SSE no workflow E2E real
+
+### Comandos Executados
+
+```powershell
+@'
+from pathlib import Path
+import yaml
+path = Path('.github/workflows/frontend-e2e-real.yml')
+with path.open('r', encoding='utf-8') as fh:
+    data = yaml.safe_load(fh)
+assert data['jobs']['frontend-e2e-real']['steps']
+print('workflow yaml ok')
+'@ | py -3.12 -
+```
+
+Resultado: passou; `workflow yaml ok`.
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+npm run lint
+```
+
+Resultado: passou.
+
+```powershell
+npx ng build --configuration development
+```
+
+Resultado: passou.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- `.github/workflows/frontend-e2e-real.yml` contem etapa `Run real chat SSE smoke`.
+- `documentation/qa/api-test-playbook.md` lista o smoke SSE leve no checklist de release.
+
+### Risco Residual
+
+- Nao houve execucao remota do workflow no GitHub Actions neste ciclo.
+
+## Ciclo 24 - Precondicao LLM real no workflow E2E
+
+### Comandos Executados
+
+```powershell
+@'
+from pathlib import Path
+import yaml
+path = Path('.github/workflows/frontend-e2e-real.yml')
+with path.open('r', encoding='utf-8') as fh:
+    data = yaml.safe_load(fh)
+steps = data['jobs']['frontend-e2e-real']['steps']
+validate = next(step for step in steps if step.get('name') == 'Validate required secrets')
+assert 'OPENAI_API_KEY' in validate['env']
+assert 'OPENAI_API_KEY' in validate['run']
+print('workflow yaml ok; openai secret required')
+'@ | py -3.12 -
+```
+
+Resultado: passou; `workflow yaml ok; openai secret required`.
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+npm run lint
+```
+
+Resultado: passou.
+
+```powershell
+npx ng build --configuration development
+```
+
+Resultado: passou.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- `.github/workflows/frontend-e2e-real.yml` agora falha cedo se `OPENAI_API_KEY` estiver ausente.
+- `documentation/qa/api-test-playbook.md` lista `OPENAI_API_KEY` como segredo obrigatorio para o workflow E2E real.
+
+### Risco Residual
+
+- A validacao local prova sintaxe e contrato, mas nao substitui execucao remota do workflow com segredos reais.
+
+## Ciclo 25 - Evidencia JSON do smoke SSE
+
+### Comandos Executados
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+Get-ChildItem -Path 'frontend/test-results' -Recurse -Filter 'chat-sse-runtime-evidence.json'
+Get-Content <arquivo-gerado> -Raw
+```
+
+Resultado: passou; JSON gerado com `conversation_id=26`, `elapsed_ms=2327`, `http_status=200`, `token_event_count=1`, `done_event_count=1`, `error_event_count=0`, `provider=ollama`, `model=gpt-oss:20b`, `citation_status.status=not_applicable`.
+
+```powershell
+@'
+from pathlib import Path
+import yaml
+path = Path('.github/workflows/frontend-e2e-real.yml')
+with path.open('r', encoding='utf-8') as fh:
+    data = yaml.safe_load(fh)
+steps = data['jobs']['frontend-e2e-real']['steps']
+assert any(step.get('name') == 'Run real chat SSE smoke' for step in steps)
+print('workflow yaml ok')
+'@ | py -3.12 -
+```
+
+Resultado: passou.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- `frontend/e2e/chat-sse-runtime.smoke.spec.ts` agora anexa `chat-sse-runtime-evidence` como JSON no Playwright.
+- O artefato local nao contem token de autenticacao.
+
+### Risco Residual
+
+- Falta artefato equivalente gerado por execucao remota do workflow.
+
+## Ciclo 26 - Artefato dedicado para evidencia SSE
+
+### Comandos Executados
+
+```powershell
+@'
+from pathlib import Path
+import yaml
+path = Path('.github/workflows/frontend-e2e-real.yml')
+with path.open('r', encoding='utf-8') as fh:
+    data = yaml.safe_load(fh)
+steps = data['jobs']['frontend-e2e-real']['steps']
+upload = next(step for step in steps if step.get('name') == 'Upload chat SSE evidence')
+assert upload['with']['name'] == 'frontend-chat-sse-evidence'
+assert 'chat-sse-runtime-evidence.json' in upload['with']['path']
+print('workflow yaml ok; sse evidence artifact configured')
+'@ | py -3.12 -
+```
+
+Resultado: passou; `workflow yaml ok; sse evidence artifact configured`.
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- `.github/workflows/frontend-e2e-real.yml` tem etapa `Upload chat SSE evidence`.
+- O artefato dedicado usa nome `frontend-chat-sse-evidence`.
+
+### Risco Residual
+
+- Falta confirmar o upload dedicado em execucao remota do GitHub Actions.
+
+## Ciclo 27 - Sincronizacao de memoria macro
+
+### Comandos Executados
+
+```powershell
+$required = 'META.md','ROADMAP.md','NOTES.md','CHANGELOG.md','DECISIONS.md','TEST_LOG.md','TODO_TECHNICAL_DEBT.md'
+foreach ($f in $required) { if (!(Test-Path $f)) { throw "missing $f" } }
+```
+
+Resultado: passou; arquivos obrigatorios presentes.
+
+```powershell
+Select-String -Path 'META.md','ROADMAP.md' -Pattern 'Ciclo 26|frontend-chat-sse-evidence|e2e:chat-sse|GitHub Actions|chat/SSE'
+```
+
+Resultado: passou; referencias encontradas em `META.md` e `ROADMAP.md`.
+
+```powershell
+git diff --check -- META.md ROADMAP.md
+```
+
+Resultado: passou; apenas avisos de normalizacao LF/CRLF.
+
+### Evidencias
+
+- `META.md` agora registra Ciclo 26 como estado atual e menciona o gate `npm run e2e:chat-sse`.
+- `ROADMAP.md` agora contem `Fase 4.1 - Status de Chat/SSE`.
+
+### Risco Residual
+
+- Nao houve execucao de build/test neste ciclo porque a mudanca foi documental/memoria macro; o risco de runtime permanece coberto pelos ciclos anteriores.
+
+## Ciclo 28 - Resumo GitHub do smoke SSE
+
+### Comandos Executados
+
+```powershell
+@'
+from pathlib import Path
+import yaml
+path = Path('.github/workflows/frontend-e2e-real.yml')
+with path.open('r', encoding='utf-8') as fh:
+    data = yaml.safe_load(fh)
+steps = data['jobs']['frontend-e2e-real']['steps']
+summary = next(step for step in steps if step.get('name') == 'Summarize chat SSE evidence')
+assert 'GITHUB_STEP_SUMMARY' in summary['run']
+assert 'chat-sse-runtime-evidence.json' in summary['run']
+print('workflow yaml ok; sse summary configured')
+'@ | py -3.12 -
+```
+
+Resultado: passou.
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright.
+
+```powershell
+$env:GITHUB_STEP_SUMMARY=<arquivo temporario>
+py -3.12 - <script de resumo do workflow>
+```
+
+Resultado: passou; summary local gerou tabela com `conversation_id=27`, `elapsed_ms=5930`, `http_status=200`, `token_event_count=1`, `done_event_count=1`, `error_event_count=0`, `provider=ollama`, `model=gpt-oss:20b`, `citation_status=not_applicable`, `agent_state=completed`.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes.
+
+### Evidencias
+
+- `.github/workflows/frontend-e2e-real.yml` contem etapa `Summarize chat SSE evidence`.
+- Summary local foi gerado a partir de `chat-sse-runtime-evidence.json`.
+
+### Risco Residual
+
+- Falta confirmar renderizacao do Step Summary no GitHub Actions remoto.
+
+## Ciclo 29 - Retencao auditavel da evidencia SSE
+
+### Comandos Executados
+
+```powershell
+py -3.12 - <parser YAML do workflow>
+```
+
+Resultado: passou; confirmou `workflow yaml ok; chat SSE evidence retention configured for 30 days`.
+
+```powershell
+$env:E2E_BASE_URL='http://localhost:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: falhou antes do fluxo de chat; `apiRequestContext.post` recebeu `ECONNREFUSED ::1:4300`.
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: falhou antes do fluxo de chat; `apiRequestContext.post` recebeu `ECONNREFUSED 127.0.0.1:4300`.
+
+```powershell
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+Get-NetTCPConnection -LocalPort 4300,8000 -ErrorAction SilentlyContinue
+Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:4300/' -TimeoutSec 3
+Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 3
+```
+
+Resultado: Docker Desktop inacessivel; nenhuma conexao TCP em `4300`/`8000`; ambos endpoints recusaram conexao.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 72.35s.
+
+### Evidencias
+
+- `.github/workflows/frontend-e2e-real.yml` contem `retention-days: 30` no upload `frontend-chat-sse-evidence`.
+- `documentation/qa/api-test-playbook.md` documenta retencao de 30 dias para `chat-sse-runtime-evidence.json`.
+
+### Risco Residual
+
+- Smoke real local ficou bloqueado por ambiente desligado; falta repetir com PC2/PC1 ativos ou executar o workflow remoto.
+
+## Ciclo 30 - Preflight operacional do smoke SSE
+
+### Comandos Executados
+
+```powershell
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:4300/' -TimeoutSec 5
+Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 5
+```
+
+Resultado: frontend respondeu HTTP 200; API ficou saudavel apos readiness curto.
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou apos preflight; execucao final passou em 3.5s.
+
+Evidencia final:
+
+```json
+{
+  "conversation_id": "31",
+  "elapsed_ms": 2137,
+  "http_status": 200,
+  "token_event_count": 1,
+  "done_event_count": 1,
+  "error_event_count": 0,
+  "provider": "ollama",
+  "model": "gpt-oss:20b",
+  "citation_status": {
+    "mode": "optional",
+    "status": "not_applicable",
+    "count": 0,
+    "reason": null
+  },
+  "agent_state": {
+    "state": "completed",
+    "requires_confirmation": false
+  }
+}
+```
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4399'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado esperado: falhou; wrapper validou a mensagem `Janus runtime indisponivel para smoke SSE: GET /healthz falhou`.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 40.66s.
+
+### Risco Residual
+
+- O smoke local validou Ollama; o workflow remoto pode usar outro provider via `OPENAI_API_KEY`, entao ainda precisa execucao em GitHub Actions.
+
+## Ciclo 31 - Evidencia SSE com preflight registrada
+
+### Comandos Executados
+
+```powershell
+py -3.12 - <parser YAML do workflow>
+```
+
+Resultado: passou; confirmou `workflow yaml ok; runtime preflight summary configured`.
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright em 3.5s.
+
+Evidencia final:
+
+```json
+{
+  "conversation_id": "32",
+  "elapsed_ms": 2216,
+  "http_status": 200,
+  "token_event_count": 1,
+  "done_event_count": 1,
+  "error_event_count": 0,
+  "provider": "ollama",
+  "model": "gpt-oss:20b",
+  "runtime_preflight": {
+    "http_status": 200,
+    "status": "ok",
+    "kernel_state": null
+  }
+}
+```
+
+```powershell
+py -3.12 - <verificador local do JSON>
+```
+
+Resultado: passou; `evidence ok; conversation_id=32; elapsed_ms=2216; preflight_status=ok`.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 38.86s.
+
+### Risco Residual
+
+- Falta execucao remota do workflow para confirmar Step Summary e artefato no GitHub Actions.
+
+## Ciclo 32 - Contrato obrigatorio da preflight SSE
+
+### Comandos Executados
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:4300/healthz' -TimeoutSec 5
+```
+
+Resultado: HTTP 200; payload com `status=ok` e `dependencies.kernel_state=healthy`.
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright em 3.2s.
+
+Evidencia final:
+
+```json
+{
+  "conversation_id": "33",
+  "elapsed_ms": 1947,
+  "http_status": 200,
+  "token_event_count": 1,
+  "done_event_count": 1,
+  "error_event_count": 0,
+  "provider": "ollama",
+  "model": "gpt-oss:20b",
+  "runtime_preflight": {
+    "http_status": 200,
+    "status": "ok",
+    "kernel_state": "healthy"
+  },
+  "agent_state": {
+    "state": "completed",
+    "requires_confirmation": false
+  }
+}
+```
+
+```powershell
+py -3.12 - <verificador local do JSON>
+```
+
+Resultado: passou; `evidence contract ok; conversation_id=33; elapsed_ms=1947; kernel_state=healthy`.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 41.16s.
+
+### Risco Residual
+
+- Falta executar o workflow remoto para validar o contrato de preflight no ambiente GitHub Actions.
+
+## Ciclo 33 - Evidencia SSE com degradacao operacional zero
+
+### Comandos Executados
+
+```powershell
+(Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:4300/healthz' -TimeoutSec 5).Content
+```
+
+Resultado: HTTP 200; payload com `status=ok`, `dependencies.kernel_state=healthy` e `dependencies.degraded_dependencies={}`.
+
+```powershell
+py -3.12 - <parser YAML do workflow>
+```
+
+Resultado: passou; `workflow yaml ok; degraded dependency summary configured`.
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright em 3.3s.
+
+Evidencia final:
+
+```json
+{
+  "conversation_id": "34",
+  "elapsed_ms": 2170,
+  "http_status": 200,
+  "error_event_count": 0,
+  "provider": "ollama",
+  "model": "gpt-oss:20b",
+  "runtime_preflight": {
+    "http_status": 200,
+    "status": "ok",
+    "kernel_state": "healthy",
+    "degraded_dependency_count": 0,
+    "degraded_dependencies": []
+  },
+  "agent_state": {
+    "state": "completed",
+    "requires_confirmation": false
+  }
+}
+```
+
+```powershell
+py -3.12 - <verificador local do JSON>
+```
+
+Resultado: passou; `evidence contract ok; conversation_id=34; degraded_dependency_count=0`.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 43.09s.
+
+### Risco Residual
+
+- Falta execucao remota para confirmar artifact/summary com o novo contrato no GitHub Actions.
+
+## Ciclo 34 - Timeout alinhado do smoke SSE
+
+### Comandos Executados
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright em 3.3s.
+
+Evidencia final:
+
+```json
+{
+  "conversation_id": "35",
+  "elapsed_ms": 2089,
+  "http_status": 200,
+  "error_event_count": 0,
+  "provider": "ollama",
+  "model": "gpt-oss:20b",
+  "runtime_preflight": {
+    "http_status": 200,
+    "status": "ok",
+    "kernel_state": "healthy",
+    "degraded_dependency_count": 0,
+    "degraded_dependencies": []
+  },
+  "agent_state": {
+    "state": "completed",
+    "requires_confirmation": false
+  }
+}
+```
+
+```powershell
+py -3.12 - <verificador local do JSON>
+```
+
+Resultado: passou; `timeout-aligned smoke evidence ok; conversation_id=35; elapsed_ms=2089`.
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 38.37s.
+
+### Risco Residual
+
+- Falta validar no GitHub Actions remoto com `OPENAI_API_KEY` e latencia externa.
+
+## Ciclo 35 - Step Summary SSE com escape Markdown
+
+### Comandos Executados
+
+```powershell
+py -3.12 - <parser YAML do workflow>
+```
+
+Resultado: passou; `workflow yaml ok; table_value configured`.
+
+```powershell
+py -3.12 - <execucao do script real do Step Summary contra JSON sintetico>
+```
+
+Resultado: passou; `workflow summary escaping ok`.
+
+```powershell
+$env:E2E_BASE_URL='http://127.0.0.1:4300'
+$env:JANUS_RUN_REAL_CHAT_E2E='true'
+$env:JANUS_LIGHT_CHAT_E2E_MAX_MS='60000'
+npm run e2e:chat-sse
+```
+
+Resultado: passou; 1 teste Playwright em 6.4s.
+
+Evidencia final:
+
+```json
+{
+  "conversation_id": "36",
+  "elapsed_ms": 5065,
+  "http_status": 200,
+  "error_event_count": 0,
+  "provider": "ollama",
+  "model": "gpt-oss:20b",
+  "runtime_preflight": {
+    "http_status": 200,
+    "status": "ok",
+    "kernel_state": "healthy",
+    "degraded_dependency_count": 0,
+    "degraded_dependencies": []
+  },
+  "agent_state": {
+    "state": "completed",
+    "requires_confirmation": false
+  }
+}
+```
+
+```powershell
+npm run lint
+npx ng build --configuration development
+```
+
+Resultado: passaram.
+
+```powershell
+$env:PYTHONPATH='backend'
+py -3.12 -m pytest -q backend/tests/unit/test_qdrant_client_config.py qa/test_chat_endpoint_contract.py backend/tests/unit/test_chat_streaming_service.py
+```
+
+Resultado: passou; 29 testes em 40.17s.
+
+### Risco Residual
+
+- Falta validar o Step Summary renderizado em execucao remota real.
+
+## Ciclo 36 - Chat autenticado sem 403/429
+
+### Baseline
+
+- `e2e/auth-session-runtime.smoke.spec.ts`: falhou; `/api/v1/chat/stream/37` retornou 403 por origem `127.0.0.1:4300`.
+- Segunda execucao apos CORS: chat concluiu, mas o gate encontrou 429 em `/tools/`, `/autonomy/goals` e `/system/health/services` apos 59 chamadas.
+
+### Validacao Final
+
+- `ruff check ...rate_limit_middleware.py ...test_core_infrastructure_rate_limit_middleware.py`: passou.
+- Pytest direcionado inicial: 34 testes passaram; suite ampliada de chat/rate limit: 37 testes passaram.
+- `npm run lint`: passou.
+- `npm run test`: 177 testes passaram em 33 arquivos.
+- `npx ng build --configuration development`: passou; bundle gerado em 5.370s.
+- `npm run e2e:chat-runtime`: passou; conversa `42`, 2898ms, stream 200, persistencia verdadeira, zero falhas de console.
+- `npm run e2e:chat-sse`: passou; conversa `43`, 2295ms, zero eventos de erro e preflight saudavel.
+- `python tooling/dev.py doctor --host 127.0.0.1 ...`: passou com `overall_ok=True`.
+- Build e recriacao da imagem `janus-api:0.5.44`: passaram.
+
+### Limitacoes
+
+- O comando `npm run build -- --configuration development` foi interpretado incorretamente pelo npm local; o gate foi executado com `npx ng build --configuration development`.
+- Smoke admin falhou na precondicao `Modo Admin` porque a allowlist local nao esta configurada; nenhuma conclusao foi tirada sobre aprovar/rejeitar.
+
+## Ciclo 37 - Memoria real e stream limpo no reload
+
+### Baseline
+
+- `npm run e2e:chat-runtime`: falhou com GET `/api/v1/memory/generative` 500; POST havia retornado 200.
+- Log backend: `retrieve_memories() got an unexpected keyword argument 'user_id'`.
+
+### Validacao Final
+
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q ...`: 38 testes direcionados passaram em 55.03s.
+- `ruff check --config backend/pyproject.toml ...`: passou.
+- `npm run test -- --run src/app/core/services/agent-events.service.spec.ts`: 4 testes passaram.
+- `npm run lint`: passou.
+- `npm run test`: 178 testes passaram em 33 arquivos.
+- `npx ng build --configuration=development`: passou.
+- `npm run e2e:chat-runtime`: passou; conversa `47`, chat `16881ms`, memoria `1374ms`, POST/GET 200, persistencia verdadeira, zero falhas de console.
+- `JANUS_RUN_REAL_CHAT_E2E=true` e `JANUS_LIGHT_CHAT_E2E_MAX_MS=60000`; `npm run e2e:chat-sse`: passou; conversa `49`, `2115ms`, token=1, done=1, error=0.
+- `py -3.12 tooling/dev.py doctor --host 127.0.0.1 ...`: passou; `overall_ok=True`.
+- Builds e recriacao das imagens `janus-api:0.5.44` e `janus-frontend:0.5.44`: passaram.
+
+### Falhas Intermediarias Explicadas
+
+- Dois testes de timeline retornaram 401 porque a fixture era anonima; foram alinhados ao contrato autenticado e passaram.
+- O primeiro rerun frontend ainda usava o bundle antigo; apos rebuild, o erro de `AgentEvents` no reload desapareceu.
+- Um smoke SSE com limite default de 35s expirou; o backend concluiu em `64726ms`. Repeticao aquecida concluiu em `2115ms`.
+
+### Limitacoes
+
+- O outlier de 64.7s impede afirmar estabilidade de latencia; falta serie de amostras e p95/p99.
+- O comando `npm run build -- --configuration development` continua incompativel com o npm local; `npx ng build --configuration=development` e o comando validado.

@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from app.core.memory.generative_memory import GenerativeMemoryService
 
 
@@ -54,6 +53,7 @@ async def test_retrieve_memories_reads_user_scoped_collection(monkeypatch):
     service = GenerativeMemoryService()
     result = await service.retrieve_memories(
         "objetivas",
+        user_id=9,
         conversation_id="6",
         limit=5)
 
@@ -64,7 +64,15 @@ async def test_retrieve_memories_reads_user_scoped_collection(monkeypatch):
 
     must = query_kwargs["query_filter"].must
     filter_keys = {condition.key for condition in must}
-    assert filter_keys == { "metadata.conversation_id"}
+    assert filter_keys == {"metadata.user_id", "metadata.conversation_id"}
+    filter_values = {
+        condition.key: condition.match.value
+        for condition in must
+    }
+    assert filter_values == {
+        "metadata.user_id": "9",
+        "metadata.conversation_id": "6",
+    }
 
     assert len(result) == 1
     memory = result[0]

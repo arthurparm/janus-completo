@@ -120,6 +120,11 @@ class QdrantKnowledgeAdapter:
         collection_name = await aget_or_create_collection(build_user_chat_collection_name(user_id))
         vec = await aembed_text(query)
         must: list[models.FieldCondition] = []
+        must.append(
+            models.FieldCondition(
+                key="metadata.user_id", match=models.MatchValue(value=str(user_id))
+            )
+        )
         if session_id:
             must.append(
                 models.FieldCondition(key="metadata.session_id", match=models.MatchValue(value=session_id))
@@ -221,6 +226,11 @@ class QdrantKnowledgeAdapter:
         ):
             coll = await aget_or_create_collection(collection_name)
             must: list[models.FieldCondition] = []
+            must.append(
+                models.FieldCondition(
+                    key="metadata.user_id", match=models.MatchValue(value=str(user_id))
+                )
+            )
             if start_ts is not None or end_ts is not None:
                 must.append(
                     models.FieldCondition(key="metadata.timestamp", range=models.Range(gte=start_ts, lte=end_ts))
@@ -316,13 +326,13 @@ class ExperimentalQuantizedRetrievalAdapter:
         end_ts: int | None = None,
         exclude_duplicate: bool = False,
     ) -> list[Any]:
-        del user_id
         vec = await aembed_text(query)
         points = self._index_manager.search(
             domain="chat",
             query_vector=vec,
             limit=limit,
             filters={
+                "user_id": user_id,
                 "session_id": session_id,
                 "role": role,
                 "start_ts": start_ts,
@@ -393,7 +403,6 @@ class ExperimentalQuantizedRetrievalAdapter:
         end_ts: int | None,
         limit: int,
     ) -> list[Any]:
-        del user_id
         if not query:
             raise RuntimeError("Timeline experimental sem query ainda não é suportado.")
         vec = await aembed_text(query)
@@ -405,6 +414,7 @@ class ExperimentalQuantizedRetrievalAdapter:
                     query_vector=vec,
                     limit=limit,
                     filters={
+                        "user_id": user_id,
                         "session_id": conversation_id,
                         "start_ts": start_ts,
                         "end_ts": end_ts,

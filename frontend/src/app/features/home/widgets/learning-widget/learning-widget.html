@@ -14,25 +14,45 @@
       </div>
     </div>
     
-    <div class="status-indicator" [class.active]="(summary$ | async)?.lessons?.length"></div>
+    <div class="status-indicator" [class.active]="hasLessons((summary$ | async)) || hasMetaReport((summary$ | async))"></div>
   </div>
 
   <!-- Content Area -->
   <div class="flex-1 overflow-hidden flex flex-col">
-    <div *ngIf="(summary$ | async)?.lessons?.length; else emptyState" class="flex-1 overflow-y-auto pr-1 space-y-2">
-      <div *ngFor="let lesson of (summary$ | async)?.lessons" class="lesson-card">
-        <p>"{{ lesson.content }}"</p>
-        <div class="meta">
-          <span>{{ lesson.id }}</span>
-          <span class="score" *ngIf="lesson.score">★ {{ lesson.score }}</span>
+    <ng-container *ngIf="summary$ | async as summary; else unavailableState">
+      <div *ngIf="hasLessons(summary); else metaReportState" class="flex-1 overflow-y-auto pr-1 space-y-2">
+        <div *ngFor="let lesson of summary.lessons" class="lesson-card">
+          <p>"{{ lesson.content }}"</p>
+          <div class="meta">
+            <span>{{ lesson.id }}</span>
+            <span class="score" *ngIf="lesson.score">★ {{ lesson.score }}</span>
+          </div>
         </div>
       </div>
-    </div>
-    
+      <ng-template #metaReportState>
+        <div *ngIf="hasMetaReport(summary); else emptyState" class="lesson-card meta-report-card">
+          <p>{{ getMetaSummary(summary) }}</p>
+          <div class="meta">
+            <span>Status {{ getMetaStatus(summary) | uppercase }}</span>
+            <span class="score" *ngIf="getHealthScore(summary) !== null">
+              Saúde {{ getHealthScore(summary) }}%
+            </span>
+          </div>
+        </div>
+      </ng-template>
+    </ng-container>
+
     <ng-template #emptyState>
       <div class="empty-state">
         <span class="icon">🧠</span>
-        <p>Ainda estou aprendendo...</p>
+        <p>Sem lições consolidadas ainda.</p>
+      </div>
+    </ng-template>
+
+    <ng-template #unavailableState>
+      <div class="empty-state">
+        <span class="icon">🧠</span>
+        <p>Reflexão indisponível.</p>
       </div>
     </ng-template>
   </div>

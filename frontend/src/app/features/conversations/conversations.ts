@@ -281,7 +281,10 @@ export class ConversationsComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((event) => {
         this.events.update((items) => [event, ...items].slice(0, 24))
-        this.appendThought('agent', event.agent_role || 'agent', event.content || 'evento sem descricao', event.timestamp)
+        const content = sanitizeDiagnosticText(event.content, '').trim()
+        if (content) {
+          this.appendThought('agent', event.agent_role || 'agent', content, event.timestamp)
+        }
       })
 
     this.destroyRef.onDestroy(() => {
@@ -1298,6 +1301,7 @@ export class ConversationsComponent {
   citationStatusLabel(status?: CitationStatus): string {
     const s = String(status?.status || '')
     if (s === 'present') return `Fontes: ${status?.count ?? 0}`
+    if (s === 'not_applicable') return 'Fonte nao exigida'
     if (s === 'missing_required') return 'Sem citação rastreável (obrigatória)'
     if (s === 'retrieval_failed') return 'Falha ao recuperar citações'
     return 'Sem citação'

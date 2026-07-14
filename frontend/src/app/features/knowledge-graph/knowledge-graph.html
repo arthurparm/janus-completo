@@ -1,0 +1,93 @@
+<app-header />
+
+<main class="knowledge-graph-page">
+  <section class="graph-header">
+    <div>
+      <p class="graph-eyebrow">Sistema & Inteligencia</p>
+      <h1>Grafo de Conhecimento</h1>
+      <p class="graph-subtitle">
+        Visao operacional baseada nos endpoints reais de conhecimento.
+      </p>
+    </div>
+
+    <div class="graph-actions">
+      <button type="button" class="icon-button" (click)="loadGraphSummary()" [disabled]="loading()" title="Atualizar grafo">
+        <span class="material-icons">refresh</span>
+      </button>
+      <a class="secondary-link" routerLink="/">Voltar</a>
+    </div>
+  </section>
+
+  <p class="graph-error" *ngIf="error()">{{ error() }}</p>
+
+  <section class="summary-grid" *ngIf="stats() as currentStats; else loadingOrEmpty">
+    <article class="summary-card">
+      <span class="material-icons">hub</span>
+      <div>
+        <strong>{{ currentStats.total_nodes || 0 }}</strong>
+        <p>Nos registrados</p>
+      </div>
+    </article>
+
+    <article class="summary-card">
+      <span class="material-icons">account_tree</span>
+      <div>
+        <strong>{{ currentStats.total_relationships || 0 }}</strong>
+        <p>Arestas registradas</p>
+      </div>
+    </article>
+
+    <article class="summary-card">
+      <span class="material-icons">category</span>
+      <div>
+        <strong>{{ nodeTypeMetrics().length }}</strong>
+        <p>Tipos de nos</p>
+      </div>
+    </article>
+  </section>
+
+  <section class="graph-grid">
+    <article class="graph-panel">
+      <div class="panel-heading">
+        <span class="material-icons">label</span>
+        <h2>Tipos de nos</h2>
+      </div>
+
+      <div class="metric-list" *ngIf="nodeTypeMetrics().length; else emptyNodeTypes">
+        <div class="metric-row" *ngFor="let item of nodeTypeMetrics()">
+          <span>{{ item.type }}</span>
+          <strong>{{ item.count }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="graph-panel">
+      <div class="panel-heading">
+        <span class="material-icons">schema</span>
+        <h2>Tipos de relacao</h2>
+      </div>
+
+      <div class="metric-list" *ngIf="relationshipTypeMetrics().length; else emptyRelationshipTypes">
+        <div class="metric-row" *ngFor="let item of relationshipTypeMetrics()">
+          <span>{{ item.type }}</span>
+          <strong>{{ item.count }}</strong>
+        </div>
+      </div>
+    </article>
+  </section>
+</main>
+
+<ng-template #loadingOrEmpty>
+  <section class="empty-state">
+    <span class="material-icons">{{ loading() ? 'sync' : 'hub' }}</span>
+    <p>{{ loading() ? 'Carregando grafo...' : 'Nenhum dado de grafo disponivel.' }}</p>
+  </section>
+</ng-template>
+
+<ng-template #emptyNodeTypes>
+  <p class="empty-panel">Nenhum tipo de no retornado.</p>
+</ng-template>
+
+<ng-template #emptyRelationshipTypes>
+  <p class="empty-panel">Nenhum tipo de relacao retornado.</p>
+</ng-template>

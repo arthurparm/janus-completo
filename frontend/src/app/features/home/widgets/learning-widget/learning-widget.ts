@@ -26,6 +26,35 @@ export class LearningWidget {
     );
   }
 
+  hasLessons(summary: PostSprintSummaryResponse | null): boolean {
+    return (summary?.lessons?.length ?? 0) > 0;
+  }
+
+  hasMetaReport(summary: PostSprintSummaryResponse | null): boolean {
+    return Boolean(summary?.meta_report);
+  }
+
+  getMetaStatus(summary: PostSprintSummaryResponse | null): string {
+    return summary?.meta_report?.overall_status || 'unknown';
+  }
+
+  getHealthScore(summary: PostSprintSummaryResponse | null): number | null {
+    const score = Number(summary?.meta_report?.health_score);
+    return Number.isFinite(score) ? score : null;
+  }
+
+  getMetaSummary(summary: PostSprintSummaryResponse | null): string {
+    const report = summary?.meta_report;
+    if (!report) return 'Sem relatório de reflexão disponível.';
+    if (report.summary?.trim()) return report.summary.trim();
+    const issueCount = report.issues_detected?.length ?? 0;
+    const recommendationCount = report.recommendations?.length ?? 0;
+    if (issueCount === 0 && recommendationCount === 0) {
+      return 'Nenhuma falha detectada no ciclo mais recente.';
+    }
+    return `${issueCount} issue(s), ${recommendationCount} recomendação(ões).`;
+  }
+
   openLearningInsights(): void {
     try {
       localStorage.setItem('janus.conversations.show_advanced_mode', '1');

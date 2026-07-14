@@ -6,9 +6,14 @@ import { AuthService } from '../auth/auth.service'
 import { NotificationService } from '../notifications/notification.service'
 import { getStoredAuthToken } from '../../services/auth.utils'
 
+export const SKIP_AUTH_SESSION = new HttpContextToken<boolean>(() => false)
 const SKIP_REFRESH = new HttpContextToken<boolean>(() => false)
 
 export const authSessionInterceptor: HttpInterceptorFn = (req, next) => {
+  if (req.context.get(SKIP_AUTH_SESSION)) {
+    return next(req)
+  }
+
   const auth = inject(AuthService)
   const router = inject(Router)
   const notifications = inject(NotificationService)

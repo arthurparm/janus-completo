@@ -22,7 +22,6 @@ from app.core.monitoring.chat_metrics import (
     CHAT_TOKENS_TOTAL,
 )
 from app.core.routing import RouteIntent, get_knowledge_routing_policy
-from app.core.workers.async_consolidation_worker import publish_consolidation_task
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.repositories.document_manifest_repository import DocumentManifestRepository
 from app.services.active_memory_service import active_memory_service
@@ -95,10 +94,11 @@ class MessageOrchestrationService:
         *,
         text: str,
         conversation_id: str,
+        user_id: str | None,
         role: str,
         project_id: str | None,
         identity_source: str) -> None:
-        if not self._rag_service or not text:
+        if not self._rag_service or not text or not user_id:
             return
 
         async def _index() -> None:
@@ -106,6 +106,7 @@ class MessageOrchestrationService:
                 await self._rag_service.maybe_index_message(
                     text=text,
                     conversation_id=conversation_id,
+                    user_id=user_id,
                     role=role,
                     caller_endpoint="/api/v1/chat/message",
                     transport="rest",
@@ -1312,6 +1313,7 @@ class MessageOrchestrationService:
             user_id=user_id,
             project_id=project_id,
         )
+        resolved_user_id = str(user_id or conv.get("user_id") or "").strip() or None
 
         max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
         size_bytes = 0
@@ -1330,12 +1332,13 @@ class MessageOrchestrationService:
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         self.schedule_active_memory_capture(
-            user_id=user_id or conv.get("user_id"),
+            user_id=resolved_user_id,
             message=message,
             conversation_id=conversation_id)
         self._schedule_rag_index_message(
             text=message,
             conversation_id=conversation_id,
+            user_id=resolved_user_id,
             role="user",
             project_id=project_id,
             identity_source=identity_source)
@@ -1609,6 +1612,7 @@ class MessageOrchestrationService:
             self._schedule_rag_index_message(
                 text=clean_text or assistant_text,
                 conversation_id=conversation_id,
+                user_id=resolved_user_id,
                 role="assistant",
                 project_id=project_id,
                 identity_source=identity_source)
@@ -1675,6 +1679,7 @@ class MessageOrchestrationService:
                 fallback=knowledge_route.fallback)
             relevant_memories = await self._rag_service.retrieve_context(
                 message,
+                user_id=resolved_user_id,
                 conversation_id=conversation_id,
                 caller_endpoint="/api/v1/chat/message",
                 transport="rest",
@@ -1690,11 +1695,22 @@ class MessageOrchestrationService:
         try:
             start_t = _time.time()
             if use_light_chat:
+                light_timeout_seconds = max(
+                    1,
+                    int(os.getenv("CHAT_LIGHT_TIMEOUT_SECONDS", str(timeout_seconds or 12))),
+                )
                 result = await self._llm.invoke_llm(
                     prompt=prompt,
                     role=role,
                     priority=priority,
-                    timeout_seconds=timeout_seconds,
+                    timeout_seconds=light_timeout_seconds,
+                    task_type="general_task",
+                    complexity="low",
+                    policy_overrides={
+                        "role": role.value,
+                        "priority": priority.value,
+                        "timeout_seconds": light_timeout_seconds,
+                    },
                     project_id=project_id)
             else:
                 result = await self._agent_loop.run_loop(
@@ -1734,6 +1750,7 @@ class MessageOrchestrationService:
         self._schedule_rag_index_message(
             text=rag_text,
             conversation_id=conversation_id,
+            user_id=resolved_user_id,
             role="assistant",
             project_id=project_id,
             identity_source=identity_source)
@@ -1815,6 +1832,8 @@ class MessageOrchestrationService:
                     aggregate_id=conversation_id,
                     dedupe_key=dedupe_key)
             else:
+                from app.core.workers.async_consolidation_worker import publish_consolidation_task
+
                 asyncio.create_task(
                     publish_consolidation_task(consolidation_payload, correlation_id=conversation_id)
                 )

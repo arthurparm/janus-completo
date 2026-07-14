@@ -51,6 +51,7 @@ class AppSettings(BaseSettings):
     QDRANT_HTTPS: bool = False
     QDRANT_TLS_CA_CERT: str | None = None
     QDRANT_API_KEY: SecretStr | None = None
+    QDRANT_CHECK_COMPATIBILITY: bool = False
     QDRANT_COLLECTION_EPISODIC: str = "janus_episodic_memory"
     QDRANT_EPISODIC_HNSW_M: int = 32
     QDRANT_EPISODIC_EF_CONSTRUCT: int = 200

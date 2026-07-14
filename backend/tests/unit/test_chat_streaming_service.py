@@ -31,6 +31,9 @@ class _FakeRepo:
 
 
 class _FakeLLM:
+    def __init__(self):
+        self.calls = []
+
     def select_provider(self, role, priority, project_id=None):
         return {"provider": "dummy", "model": "m"}
 
@@ -38,8 +41,30 @@ class _FakeLLM:
         return False
 
     def invoke_llm(
-        self, prompt, role, priority, timeout_seconds=None, project_id=None
+        self,
+        prompt,
+        role,
+        priority,
+        timeout_seconds=None,
+        task_type=None,
+        complexity=None,
+        policy_overrides=None,
+        project_id=None,
+        user_id=None,
     ):
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "role": role,
+                "priority": priority,
+                "timeout_seconds": timeout_seconds,
+                "task_type": task_type,
+                "complexity": complexity,
+                "policy_overrides": policy_overrides,
+                "project_id": project_id,
+                "user_id": user_id,
+            }
+        )
         return {"response": "ok from llm", "provider": "dummy", "model": "m"}
 
 
@@ -72,9 +97,18 @@ class _FakePromptService:
 class _FakeMessageOrchestration:
     def __init__(self):
         self.calls = 0
+        self.grounded_calls = 0
         self.grounded_result = None
 
+    def _should_use_light_chat(self, *, message, role, understanding):
+        if role != ModelRole.ORCHESTRATOR:
+            return False
+        if not understanding or understanding.get("intent") not in {"general", "question"}:
+            return False
+        return len((message or "").strip()) <= 160
+
     async def generate_document_grounded_reply(self, **kwargs):
+        self.grounded_calls += 1
         return self.grounded_result
 
     def schedule_active_memory_capture(self, **kwargs):
@@ -129,6 +163,11 @@ class _FakeRoutingDecision:
         }
 
 
+class _FailingRagService:
+    async def retrieve_context(self, *args, **kwargs):
+        raise AssertionError("light chat must not retrieve RAG context")
+
+
 def _parse_sse_chunks(chunks: list[str]) -> list[tuple[str, object]]:
     events: list[tuple[str, object]] = []
     for chunk in chunks:
@@ -180,6 +219,50 @@ async def test_streaming_service_emits_protocol_partial_and_done():
     assert any(line.startswith("event: token") for line in lines), lines
     assert any(line.startswith("event: partial") for line in lines), lines
     assert any(line.startswith("event: done") for line in lines), lines
+
+
+@pytest.mark.asyncio
+async def test_streaming_service_light_chat_skips_rag_grounding_and_optional_citations(monkeypatch):
+    async def _explode_collect_citations(**kwargs):
+        raise AssertionError("light chat must not collect optional citations")
+
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.collect_chat_citations",
+        _explode_collect_citations,
+    )
+    repo = _FakeRepo()
+    llm = _FakeLLM()
+    convo_service = ConversationService(repo)
+    msg_orch = _FakeMessageOrchestration()
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=llm,
+        tool_service=None,
+        prompt_service=_FakePromptService(),
+        rag_service=_FailingRagService(),
+        conversation_service=convo_service,
+        message_orchestration_service=msg_orch,
+    )
+
+    chunks = [
+        line
+        async for line in streaming.stream_message(
+            conversation_id="conv-1",
+            message="Ola",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+        )
+    ]
+    events = _parse_sse_chunks(chunks)
+    done = [p for e, p in events if e == "done" and isinstance(p, dict)][-1]
+
+    assert msg_orch.grounded_calls == 0
+    assert llm.calls
+    assert llm.calls[-1]["task_type"] == "general_task"
+    assert llm.calls[-1]["complexity"] == "low"
+    assert llm.calls[-1]["timeout_seconds"] == 12
+    assert done["citation_status"]["status"] == "not_applicable"
+    assert any(event == "token" for event, _ in events), events
 
 
 @pytest.mark.asyncio

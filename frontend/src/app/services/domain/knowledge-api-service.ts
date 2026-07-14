@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
-import { RagUserChatResponse, RagUserChatV2Response, KnowledgeHealthResponse, KnowledgeHealthDetailedResponse, KnowledgeSpace, KnowledgeSpaceStatus, KnowledgeSpaceCreateRequest, KnowledgeSpaceListResponse, KnowledgeSpaceAttachRequest, KnowledgeSpaceConsolidationResponse, KnowledgeSpaceQueryResponse, RagSearchResponse, RagHybridResponse, KnowledgeStats, EntityRelationshipsResponse } from '../../models';
+import { RagUserChatResponse, RagUserChatV2Response, KnowledgeHealthResponse, KnowledgeHealthDetailedResponse, KnowledgeSpace, KnowledgeSpaceStatus, KnowledgeSpaceCreateRequest, KnowledgeSpaceListResponse, KnowledgeSpaceAttachRequest, KnowledgeSpaceConsolidationResponse, KnowledgeSpaceQueryResponse, RagSearchResponse, RagHybridResponse, KnowledgeStats, EntityRelationshipsResponse, KnowledgeNodeTypesResponse } from '../../models';
 
 @Injectable({ providedIn: 'root' })
 export class KnowledgeApiService {
@@ -175,6 +175,10 @@ ragProductivitySearch(params: {
 
 getKnowledgeStats(): Observable<KnowledgeStats> {
     return this.http.get<KnowledgeStats>(this.apiContext.buildUrl(`/api/v1/knowledge/stats`))
+  }
+
+getKnowledgeNodeTypes(): Observable<KnowledgeNodeTypesResponse> {
+    return this.http.get<KnowledgeNodeTypesResponse>(this.apiContext.buildUrl(`/api/v1/knowledge/node-types`))
   }
 
 getEntityRelationships(entityName: string): Observable<EntityRelationshipsResponse> {

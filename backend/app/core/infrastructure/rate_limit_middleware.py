@@ -7,6 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from app.config import settings
+from app.core.infrastructure.auth import get_actor_user_id
 from app.core.infrastructure.redis_manager import redis_manager
 from app.core.security.chat_unlimited import is_chat_unlimited_request
 
@@ -83,23 +84,45 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/v1/documents/list")
         )
 
-    def _consume_local_bucket(self, key: str) -> tuple[bool, float]:
+    def _rate_limit_subject(self, request: Request) -> tuple[str, float, int, str]:
+        actor = getattr(request.state, "actor_user_id", None)
+        if actor is None:
+            actor = get_actor_user_id(request)
+        if actor is not None and str(actor).strip():
+            return f"rate_limit:user:{actor}", self.rate_key, self.burst_key, "user"
+
+        client_ip = request.client.host if request.client else "unknown"
+        return f"rate_limit:ip:{client_ip}", self.rate_ip, self.burst_ip, "IP"
+
+    def _consume_local_bucket(
+        self,
+        key: str,
+        *,
+        rate: float | None = None,
+        burst: int | None = None,
+    ) -> tuple[bool, float]:
+        active_rate = float(rate if rate is not None else self.rate_ip)
+        active_burst = int(burst if burst is not None else self.burst_ip)
         now = time.time()
         with self._fallback_lock:
-            tokens, updated_at = self._fallback_buckets.get(key, (float(self.burst_ip), now))
+            tokens, updated_at = self._fallback_buckets.get(key, (float(active_burst), now))
             elapsed = max(0.0, now - updated_at)
-            replenished = min(float(self.burst_ip), float(tokens) + (elapsed * float(self.rate_ip)))
+            replenished = min(float(active_burst), float(tokens) + (elapsed * active_rate))
             if replenished >= 1.0:
                 self._fallback_buckets[key] = (replenished - 1.0, now)
                 return True, 0.0
             self._fallback_buckets[key] = (replenished, now)
-            wait_seconds = (1.0 - replenished) / max(float(self.rate_ip), 0.1)
+            wait_seconds = (1.0 - replenished) / max(active_rate, 0.1)
             return False, wait_seconds
 
     async def _call_with_local_fallback(self, request: Request, call_next):
         path = request.url.path
-        client_ip = request.client.host if request.client else "unknown"
-        allowed, retry_after = self._consume_local_bucket(f"local_rate_limit:{client_ip}:{path}")
+        subject_key, rate, burst, _scope = self._rate_limit_subject(request)
+        allowed, retry_after = self._consume_local_bucket(
+            f"local_{subject_key}:{path}",
+            rate=rate,
+            burst=burst,
+        )
         if not allowed:
             _RATE_LIMIT_FALLBACK_TOTAL.labels(path=path, status="blocked").inc()
             return Response(
@@ -141,21 +164,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     return self._service_unavailable_response(path)
                 return await call_next(request)
 
-            # Identify client
-            client_ip = request.client.host if request.client else "unknown"
+            # Authenticated callers get an isolated principal bucket. Anonymous
+            # traffic remains constrained by source IP.
+            subject_key, subject_rate, subject_burst, subject_scope = self._rate_limit_subject(request)
             api_key = request.headers.get("X-API-Key")
 
             now = time.time()
 
-            # Check IP Limit
+            # Check principal/IP limit
             # KEYS[1], ARGV[1]:rate, ARGV[2]:capacity, ARGV[3]:now, ARGV[4]:requested
-            ip_key = f"rate_limit:ip:{client_ip}"
-
-            # Execute Lua script
-            # We use evalsha for performance
             try:
                 allowed, val = await client.evalsha(
-                    script_sha, 1, ip_key, self.rate_ip, self.burst_ip, now, 1
+                    script_sha, 1, subject_key, subject_rate, subject_burst, now, 1
                 )
             except Exception:
                 # If script missing (redis restart), reload and retry once
@@ -163,7 +183,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 script_sha = await self._get_script_sha()
                 if script_sha:
                     allowed, val = await client.evalsha(
-                        script_sha, 1, ip_key, self.rate_ip, self.burst_ip, now, 1
+                        script_sha, 1, subject_key, subject_rate, subject_burst, now, 1
                     )
                 else:
                     if self.fail_closed and self._should_use_local_fallback(path):
@@ -175,7 +195,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if not allowed:
                 retry_after = float(val)
                 return Response(
-                    content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per IP)","instance":"%s"}' % path,
+                    content='{"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Rate limit exceeded (per %s)","instance":"%s"}' % (subject_scope, path),
                     media_type="application/problem+json",
                     status_code=429,
                     headers={"Retry-After": str(int(retry_after) + 1)},
