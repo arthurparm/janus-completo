@@ -4,27 +4,26 @@ import time
 from typing import Any, Optional
 
 import structlog
-
-from qdrant_client import models as qdrant_models
-
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
-from app.core.llm import ModelPriority, ModelRole
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
+from app.core.llm import ModelPriority, ModelRole
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
 from app.core.routing import RouteDecision, RouteIntent, RouteTarget, get_knowledge_routing_policy
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_chat_collection_name,
     build_user_docs_collection_name,
-    get_async_qdrant_client)
+    get_async_qdrant_client,
+)
 from app.repositories.chat_repository import ChatRepository
+from app.services.llm_service import LLMService
+from app.services.memory_service import MemoryService
 from app.services.procedural_memory_service import procedural_memory_service
 from app.services.secret_memory_service import secret_memory_service
 from app.services.semantic_reranker_service import get_semantic_reranker
-from app.services.llm_service import LLMService
-from app.services.memory_service import MemoryService
 from app.services.user_preference_memory_service import user_preference_memory_service
+from qdrant_client import models as qdrant_models
 
 logger = structlog.get_logger(__name__)
 
@@ -33,13 +32,13 @@ try:
 except Exception:
 
     class _Noop:
-        def labels(self, *args, **kwargs):
+        def labels(self, *args: Any, **kwargs: Any) -> "_Noop":
             return self
 
-        def inc(self, *args, **kwargs):
+        def inc(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def observe(self, *args, **kwargs):
+        def observe(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     Counter = Histogram = _Noop
@@ -163,6 +162,8 @@ class RAGService:
             score += 1.25
         ts_ms = metadata.get("ts_ms") or metadata.get("timestamp")
         try:
+            if ts_ms is None:
+                raise ValueError("episodic memory timestamp is missing")
             age_hours = max(0.0, (int(time.time() * 1000) - int(ts_ms)) / 3_600_000.0)
         except Exception:
             age_hours = 72.0
@@ -231,8 +232,10 @@ class RAGService:
         self,
         *,
         message: str,
+        user_id: str,
         limit: int) -> tuple[list[dict[str, Any]], str | None]:
         items = await user_preference_memory_service.list_preferences(
+            user_id=user_id,
             query=message,
             limit=min(5, max(1, limit)),
             active_only=True)
@@ -242,9 +245,11 @@ class RAGService:
         self,
         *,
         message: str,
+        user_id: str,
         conversation_id: str | None,
         limit: int) -> tuple[list[dict[str, Any]], str | None]:
         items = await procedural_memory_service.list_rules(
+            user_id=user_id,
             conversation_id=conversation_id,
             query=message,
             limit=min(5, max(1, limit)),
@@ -421,9 +426,11 @@ class RAGService:
                 limit=limit)
             semantic_items, semantic_context = await self._retrieve_semantic_context(
                 message=message,
+                user_id=str(user_id),
                 limit=limit)
             procedural_items, procedural_context = await self._retrieve_procedural_context(
                 message=message,
+                user_id=str(user_id),
                 conversation_id=conversation_id,
                 limit=limit)
             episodic_context = self._format_episodic_context(episodic_items)

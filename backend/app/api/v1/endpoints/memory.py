@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.core.memory.generative_memory import generative_memory_service
 from app.core.security.request_guard import require_authenticated_actor_id
 from app.models.schemas import Experience, ScoredExperience
+from app.planes.knowledge.facade import KnowledgeFacade
 from app.services.memory_service import MemoryService, get_memory_service
 from app.services.secret_memory_service import secret_memory_service
 from app.services.user_preference_memory_service import user_preference_memory_service
@@ -16,7 +17,7 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-class MemoryTimelineItem(BaseModel):
+class MemoryTimelineItem(BaseModel):  # type: ignore[misc]
     content: str
     ts_ms: int | None = None
     metadata: dict[str, Any] | None = None
@@ -30,7 +31,7 @@ class MemoryTimelineItem(BaseModel):
     scope: str | None = None
 
 
-class UserPreferenceMemoryItem(BaseModel):
+class UserPreferenceMemoryItem(BaseModel):  # type: ignore[misc]
     id: str | None = None
     content: str
     ts_ms: int | None = None
@@ -52,14 +53,14 @@ class UserPreferenceMemoryItem(BaseModel):
     score: float | None = None
 
 
-class SecretMemoryCreateRequest(BaseModel):
+class SecretMemoryCreateRequest(BaseModel):  # type: ignore[misc]
     label: str
     value: str
     secret_type: str | None = None
     secret_scope: str | None = None
     conversation_id: str | None = None
 
-class SecretMemoryItem(BaseModel):
+class SecretMemoryItem(BaseModel):  # type: ignore[misc]
     id: str | None = None
     ts_ms: int | None = None
     secret_label: str
@@ -138,8 +139,8 @@ def _point_to_item(point: Any) -> MemoryTimelineItem:
     )
 
 
-def get_knowledge_facade(request: Request):
-    return request.app.state.knowledge_facade
+def get_knowledge_facade(request: Request) -> KnowledgeFacade:
+    return cast(KnowledgeFacade, request.app.state.knowledge_facade)
 
 
 def _sort_and_dedupe_timeline(items: list[MemoryTimelineItem], limit: int) -> list[MemoryTimelineItem]:
@@ -158,7 +159,9 @@ def _sort_and_dedupe_timeline(items: list[MemoryTimelineItem], limit: int) -> li
     return ordered[:limit]
 
 
-@router.get("/timeline", response_model=list[MemoryTimelineItem])
+@router.get(  # type: ignore[untyped-decorator]
+    "/timeline", response_model=list[MemoryTimelineItem]
+)
 async def get_memories_timeline(
     request: Request,
     start_date: str | None = Query(None, description="Start date (ISO 8601), inclusive"),
@@ -168,8 +171,8 @@ async def get_memories_timeline(
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     conversation_id: str | None = Query(None, description="Conversation ID for scoped timeline"),
     service: MemoryService = Depends(get_memory_service),
-    knowledge = Depends(get_knowledge_facade),
-):
+    knowledge: KnowledgeFacade = Depends(get_knowledge_facade),
+) -> list[MemoryTimelineItem]:
     """
     Retrieves memories within a specific timeframe ("Time Travel").
     Allows semantic filtering via `query`.
@@ -209,14 +212,16 @@ async def get_memories_timeline(
             detail="Failed to retrieve user timeline memories",
         )
 
-@router.get("/generative", response_model=list[ScoredExperience])
+@router.get(  # type: ignore[untyped-decorator]
+    "/generative", response_model=list[ScoredExperience]
+)
 async def get_generative_memories(
     request: Request,
     query: str = Query(..., description="Query for memory retrieval"),
     limit: int = Query(10, ge=1, le=100),
     type: str | None = Query(None, description="Filter by memory type (episodic|semantic|procedural)"),
     conversation_id: str | None = Query(None, description="Filter by conversation_id"),
-):
+) -> list[ScoredExperience]:
     """
     Retrieves memories using the Generative Agents scoring (Recency * Importance * Relevance).
     """
@@ -242,7 +247,9 @@ async def get_generative_memories(
             detail=f"Failed to retrieve generative memories: {e}"
         )
 
-@router.post("/generative", response_model=Experience)
+@router.post(  # type: ignore[untyped-decorator]
+    "/generative", response_model=Experience
+)
 async def add_generative_memory(
     request: Request,
     content: str,
@@ -250,12 +257,12 @@ async def add_generative_memory(
     type: str = "episodic",
     conversation_id: str | None = Query(None, description="Conversation ID to bind memory"),
     session_id: str | None = Query(None, description="Session ID alias (defaults to conversation_id)"),
-):
+) -> Experience:
     """
     Adds a memory to the Generative Stream (calculates importance if missing).
     """
     try:
-        meta = {}
+        meta: dict[str, Any] = {}
         if importance is not None:
             meta["importance"] = importance
         resolved_user_id = require_authenticated_actor_id(request)
@@ -271,7 +278,12 @@ async def add_generative_memory(
             meta["session_id"] = str(resolved_session_id)
         meta["origin"] = str(meta.get("origin") or "frontend.generative_memory_panel")
 
-        memory = await generative_memory_service.add_memory(content, type=type, metadata=meta)
+        memory = await generative_memory_service.add_memory(
+            content,
+            type=type,
+            metadata=meta,
+            user_id=resolved_user_id,
+        )
         return memory
     except Exception as e:
         logger.error("log_error", message=f"Error adding generative memory: {e}", exc_info=True)
@@ -281,14 +293,16 @@ async def add_generative_memory(
         )
 
 
-@router.get("/preferences", response_model=list[UserPreferenceMemoryItem])
+@router.get(  # type: ignore[untyped-decorator]
+    "/preferences", response_model=list[UserPreferenceMemoryItem]
+)
 async def get_user_preferences(
     request: Request,
     conversation_id: str | None = Query(None, description="Optional conversation filter"),
     query: str | None = Query(None, description="Optional semantic query"),
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
-):
+) -> list[UserPreferenceMemoryItem]:
     resolved_user_id = require_authenticated_actor_id(request)
     try:
         items = await user_preference_memory_service.list_preferences(
@@ -307,14 +321,16 @@ async def get_user_preferences(
         )
 
 
-@router.get("/secrets", response_model=list[SecretMemoryItem])
+@router.get(  # type: ignore[untyped-decorator]
+    "/secrets", response_model=list[SecretMemoryItem]
+)
 async def get_user_secrets(
     request: Request,
     conversation_id: str | None = Query(None, description="Optional conversation filter"),
     query: str | None = Query(None, description="Optional semantic query"),
     limit: int = Query(20, ge=1, le=100),
     active_only: bool = Query(True),
-):
+) -> list[SecretMemoryItem]:
     resolved_user_id = require_authenticated_actor_id(request)
     try:
         items = await secret_memory_service.list_secrets(
@@ -334,11 +350,13 @@ async def get_user_secrets(
         )
 
 
-@router.post("/secrets", response_model=SecretMemoryItem, status_code=status.HTTP_201_CREATED)
+@router.post(  # type: ignore[untyped-decorator]
+    "/secrets", response_model=SecretMemoryItem, status_code=status.HTTP_201_CREATED
+)
 async def add_user_secret(
     request: Request,
     body: SecretMemoryCreateRequest,
-):
+) -> SecretMemoryItem:
     resolved_user_id = require_authenticated_actor_id(request)
     try:
         stored = await secret_memory_service.store_secret(

@@ -160,28 +160,22 @@ class KnowledgeFacade:
         conversation_id: str | None,
         limit: int = 5,
         caller_endpoint: str = "/chat/rag",
-    ) -> list[dict[str, Any]]:
+    ) -> str | None:
         if self._rag_service is None:
-            return []
-        return cast(
-            list[dict[str, Any]],
-            await self._rag_service.retrieve_context(
+            return None
+        return await self._rag_service.retrieve_context(
             message=message,
             user_id=user_id,
             conversation_id=conversation_id,
             limit=limit,
             caller_endpoint=caller_endpoint,
-            ),
         )
 
     async def search_memories(
         self, *, query: str, filters: dict[str, Any], limit: int | None = None, min_score: float | None = None
     ) -> list[dict[str, Any]]:
-        return cast(
-            list[dict[str, Any]],
-            await self._memory_service.recall_filtered(
-                query=query, filters=filters, limit=limit, min_score=min_score
-            ),
+        return await self._memory_service.recall_filtered(
+            query=query, filters=filters, limit=limit, min_score=min_score
         )
 
     async def index_chat_message(

@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.procedural_memory_service import ProceduralMemoryService
 
 
@@ -24,18 +23,23 @@ async def test_maybe_capture_builds_procedural_metadata(monkeypatch):
     svc = ProceduralMemoryService()
     captured: dict[str, object] = {}
 
-    async def _fake_exists(*, dedupe_key: str) -> bool:
+    async def _fake_exists(*, user_id: str, dedupe_key: str) -> bool:
+        captured["exists_user_id"] = user_id
         captured["checked_dedupe_key"] = dedupe_key
         return False
 
-    async def _fake_deactivate_scope_conflicts(*, scope: str, keep_dedupe_key: str) -> None:
+    async def _fake_deactivate_scope_conflicts(
+        *, user_id: str, scope: str, keep_dedupe_key: str
+    ) -> None:
+        captured["deactivate_user_id"] = user_id
         captured["scope"] = scope
         captured["keep_dedupe_key"] = keep_dedupe_key
 
-    async def _fake_add_memory(content: str, type: str, metadata: dict):
+    async def _fake_add_memory(content: str, type: str, metadata: dict, *, user_id: str):
         captured["content"] = content
         captured["type"] = type
         captured["metadata"] = metadata
+        captured["user_id"] = user_id
         return _FakeExperience()
 
     monkeypatch.setattr(svc, "_rule_exists", _fake_exists)
@@ -57,6 +61,9 @@ async def test_maybe_capture_builds_procedural_metadata(monkeypatch):
     metadata = captured["metadata"]
     assert metadata["type"] == "procedural_rule"
     assert metadata["memory_class"] == "procedural"
+    assert captured["user_id"] == "1"
+    assert captured["exists_user_id"] == "1"
+    assert captured["deactivate_user_id"] == "1"
     assert metadata["scope"] == "closing"
     assert metadata["recall_policy"] == "always"
     assert metadata["retention_policy"] == "persistent"

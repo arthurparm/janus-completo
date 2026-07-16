@@ -4,7 +4,7 @@ import os
 import re
 import textwrap
 import time as _time
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from app.core.agents.utils import parse_json_lenient
@@ -49,6 +49,12 @@ from app.services.rag_service import RAGService
 from app.services.secret_memory_service import secret_memory_service
 
 logger = structlog.get_logger(__name__)
+
+
+def _attach_understanding_typed(
+    payload: dict[str, Any], understanding: dict[str, Any] | None
+) -> dict[str, Any]:
+    return cast(dict[str, Any], attach_understanding(payload, understanding))
 
 
 class MessageOrchestrationService:
@@ -100,10 +106,11 @@ class MessageOrchestrationService:
         identity_source: str) -> None:
         if not self._rag_service or not text or not user_id:
             return
+        rag_service = self._rag_service
 
         async def _index() -> None:
             try:
-                await self._rag_service.maybe_index_message(
+                await rag_service.maybe_index_message(
                     text=text,
                     conversation_id=conversation_id,
                     user_id=user_id,
@@ -156,9 +163,9 @@ class MessageOrchestrationService:
         *,
         conversation_id: str) -> list[dict[str, Any]]:
         try:
-            return self._manifest_repo.list_manifests(
+            return cast(list[dict[str, Any]], self._manifest_repo.list_manifests(
                 conversation_id=str(conversation_id),
-                limit=50)
+                limit=50))
         except Exception as exc:
             logger.warning(
                 "document_manifest_lookup_failed",
@@ -480,7 +487,7 @@ class MessageOrchestrationService:
             gaps = list(result.get("gaps_or_conflicts") or [])
             gaps.append("Knowledge space sem consolidação pronta; resposta entregue via chunk_only.")
             result["gaps_or_conflicts"] = gaps
-        return result
+        return cast(dict[str, Any], result)
 
     def build_knowledge_space_runtime_notice(
         self,
@@ -497,10 +504,10 @@ class MessageOrchestrationService:
         if not knowledge_space_id:
             return None
         service = KnowledgeSpaceService(manifest_repo=self._manifest_repo, llm_service=self._llm)
-        return service.estimate_query_timing(
+        return cast(dict[str, Any], service.estimate_query_timing(
             knowledge_space_id=knowledge_space_id,
             question=message,
-            mode="auto")
+            mode="auto"))
 
     def resolve_active_knowledge_space_id(
         self,
@@ -670,8 +677,11 @@ class MessageOrchestrationService:
         user_message: str,
         user_id: str | None = None,
         conversation_id: str) -> str:
+        if not user_id:
+            return assistant_text
         try:
             rules = await procedural_memory_service.list_rules(
+                user_id=str(user_id),
                 conversation_id=conversation_id,
                 query=None,
                 limit=10,
@@ -1369,7 +1379,7 @@ class MessageOrchestrationService:
                 }
                 if ui:
                     result["ui"] = ui
-                return attach_understanding(result, understanding)
+                return _attach_understanding_typed(result, understanding)
 
         if self._prompt_service.is_discovery_query(message):
             start_t = _time.time()
@@ -1416,7 +1426,7 @@ class MessageOrchestrationService:
                     project_id=project_id)
             except Exception:
                 pass
-            return attach_understanding(result_with_conv, understanding)
+            return _attach_understanding_typed(result_with_conv, understanding)
 
         if self._prompt_service.is_docs_query(message):
             start_t = _time.time()
@@ -1462,7 +1472,7 @@ class MessageOrchestrationService:
                     project_id=project_id)
             except Exception:
                 pass
-            return attach_understanding(result_with_conv, understanding)
+            return _attach_understanding_typed(result_with_conv, understanding)
 
         if self._prompt_service.is_capabilities_query(message):
             start_t = _time.time()
@@ -1508,7 +1518,7 @@ class MessageOrchestrationService:
                     project_id=project_id)
             except Exception:
                 pass
-            return attach_understanding(result_with_conv, understanding)
+            return _attach_understanding_typed(result_with_conv, understanding)
 
         if self._prompt_service.is_tool_request(message) and is_explicit_tool_creation(message):
             start_t = _time.time()
@@ -1565,7 +1575,7 @@ class MessageOrchestrationService:
                     project_id=project_id)
             except Exception:
                 pass
-            return attach_understanding(result_with_conv, understanding)
+            return _attach_understanding_typed(result_with_conv, understanding)
 
         grounded_result = await self.generate_document_grounded_reply(
             conversation_id=conversation_id,
@@ -1631,7 +1641,7 @@ class MessageOrchestrationService:
                     project_id=project_id)
             except Exception:
                 pass
-            return attach_understanding(result_with_conv, understanding)
+            return _attach_understanding_typed(result_with_conv, understanding)
 
         secret_result = await self.generate_secret_recall_reply(
             message=message,
@@ -1660,7 +1670,7 @@ class MessageOrchestrationService:
                     project_id=project_id)
             except Exception:
                 pass
-            return attach_understanding(result_with_conv, understanding)
+            return _attach_understanding_typed(result_with_conv, understanding)
 
         persona = conv.get("persona") or "assistant"
         history = await asyncio.to_thread(self._repo.get_recent_messages, conversation_id, limit=60)
@@ -1738,6 +1748,7 @@ class MessageOrchestrationService:
         assistant_text = await self.apply_response_memory_policies(
             assistant_text=str(result.get("response", "")),
             user_message=message,
+            user_id=resolved_user_id,
             conversation_id=conversation_id)
         clean_text, ui = split_ui(assistant_text)
         await asyncio.to_thread(
@@ -1796,7 +1807,7 @@ class MessageOrchestrationService:
                 project_id=project_id)
         except Exception:
             pass
-        return attach_understanding(result_with_conv, understanding)
+        return _attach_understanding_typed(result_with_conv, understanding)
 
     def trigger_post_response_events(
         self,

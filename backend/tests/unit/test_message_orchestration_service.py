@@ -123,15 +123,19 @@ class _FakeLLMService:
 class _FakeRagService:
     def __init__(self):
         self.retrieve_calls = 0
+        self.retrieve_kwargs = None
         self.index_calls = 0
+        self.index_kwargs = []
         self.summary_calls = 0
 
     async def retrieve_context(self, message, **kwargs):
         self.retrieve_calls += 1
+        self.retrieve_kwargs = kwargs
         return [{"content": "ctx"}]
 
     async def maybe_index_message(self, text, **kwargs):
         self.index_calls += 1
+        self.index_kwargs.append(kwargs)
 
     async def maybe_summarize(
         self, conversation_id, role=None, priority=None, project_id=None
@@ -266,13 +270,17 @@ async def test_send_message_agent_loop_path_persists_and_enqueues_post_event():
         message="Implemente uma rotina de deploy com rollback e validacao completa.",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
         project_id="proj-1",
     )
+    await asyncio.sleep(0)
 
     assert agent_loop.calls == 1
     assert ("conv-1", "assistant", "resposta do agent loop") in repo.messages
     assert result["conversation_id"] == "conv-1"
     assert result["response"] == "resposta do agent loop"
+    assert rag.retrieve_kwargs["user_id"] == "user-1"
+    assert {call["user_id"] for call in rag.index_kwargs} == {"user-1"}
     assert len(outbox.calls) == 1
     payload, aggregate_id, dedupe_key = outbox.calls[0]
     assert aggregate_id == "conv-1"
@@ -314,6 +322,7 @@ async def test_send_message_light_chat_bypasses_agent_loop_and_skips_rag_lookup(
         message="Qual é o status do sistema?",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.FAST_AND_CHEAP,
+        user_id="user-1",
         project_id="proj-1",
     )
     await asyncio.gather(*scheduled)
@@ -889,6 +898,7 @@ async def test_send_message_standard_path_reuses_initial_prompt_and_single_rag_l
         message="Implemente um endpoint de health check com teste.",
         role=ModelRole.ORCHESTRATOR,
         priority=ModelPriority.HIGH_QUALITY,
+        user_id="user-1",
         project_id="proj-1",
     )
     await asyncio.gather(*scheduled)
@@ -968,6 +978,7 @@ async def test_apply_response_memory_policies_appends_next_steps(monkeypatch):
     result = await service.apply_response_memory_policies(
         assistant_text="Resposta objetiva.",
         user_message="Explique cache invalidation.",
+        user_id="user-1",
         conversation_id="conv-1",
     )
 

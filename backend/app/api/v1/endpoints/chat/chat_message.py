@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -46,6 +46,18 @@ logger = structlog.get_logger(__name__)
 CITATION_COLLECTION_TIMEOUT_SECONDS = 3.0
 
 
+def _required_int(value: Any, *, field_name: str) -> int:
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    return int(value)
+
+
+def _bounded_confidence(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return max(0.0, min(1.0, float(value)))
+
+
 def _get_chat_study_job_service(http: Request, service: ChatService) -> ChatStudyJobService:
     existing = getattr(http.app.state, "chat_study_job_service", None)
     if existing is not None:
@@ -78,12 +90,14 @@ async def _collect_chat_citations_with_deadline(
     )
 
 
-@router.post("/start", response_model=ChatStartResponse, summary="Inicia uma nova conversa")
+@router.post(  # type: ignore[untyped-decorator]
+    "/start", response_model=ChatStartResponse, summary="Inicia uma nova conversa"
+)
 async def start_chat(
     request: ChatStartRequest,
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
-):
+) -> ChatStartResponse:
     ctx = resolve_authenticated_user_context(
         http, None, allow_anonymous_fallback=False, endpoint_label="/api/v1/chat/start"
     )
@@ -108,12 +122,12 @@ async def start_chat(
     "/message",
     response_model=ChatMessageResponse,
     summary="Envia uma mensagem e recebe a resposta do LLM",
-)
+)  # type: ignore[untyped-decorator]
 async def send_message(
     service: ChatService = Depends(get_chat_service),
     http: Request = None,
     memory: MemoryService = Depends(get_memory_service),
-):
+) -> ChatMessageResponse:
     ctx = resolve_authenticated_user_context(
         http, None, allow_anonymous_fallback=False, endpoint_label="/api/v1/chat/message"
     )
@@ -290,7 +304,9 @@ async def send_message(
     pending_action_id = None
     try:
         if result.get("pending_action_id") is not None:
-            pending_action_id = int(result.get("pending_action_id"))
+            pending_action_id = _required_int(
+                result.get("pending_action_id"), field_name="pending_action_id"
+            )
     except Exception:
         pending_action_id = None
     if pending_action_id is None:
@@ -300,7 +316,7 @@ async def send_message(
     if isinstance(understanding, dict):
         raw_confidence = understanding.get("confidence")
         try:
-            confidence = max(0.0, min(1.0, float(raw_confidence)))
+            confidence = _bounded_confidence(raw_confidence)
         except Exception:
             confidence = 0.0
         threshold = confidence_confirmation_threshold()
@@ -350,7 +366,9 @@ async def send_message(
                 try:
                     await service.update_message_payload(
                         conversation_id=payload.conversation_id,
-                        message_id=int(last_assistant_message.get("id")),
+                        message_id=_required_int(
+                            last_assistant_message.get("id"), field_name="message_id"
+                        ),
                         patch={
                             "text": placeholder_text,
                             "knowledge_space_id": active_knowledge_space_id,
@@ -374,7 +392,7 @@ async def send_message(
             result["source_scope"] = result.get("source_scope") or {
                 "knowledge_space_id": active_knowledge_space_id
             }
-            return ChatMessageResponse(**result)
+            return cast(ChatMessageResponse, ChatMessageResponse(**result))
         placeholder_text = (
             "Estou estudando a base para responder com segurança. "
             "Isso pode demorar um pouco porque preciso localizar evidências rastreáveis."
@@ -403,7 +421,9 @@ async def send_message(
             try:
                 await service.update_message_payload(
                     conversation_id=payload.conversation_id,
-                    message_id=int(last_assistant_message.get("id")),
+                    message_id=_required_int(
+                        last_assistant_message.get("id"), field_name="message_id"
+                    ),
                     patch={
                         "text": placeholder_text,
                         "citations": [],
@@ -508,7 +528,9 @@ async def send_message(
         try:
             await service.update_message_payload(
                 conversation_id=payload.conversation_id,
-                message_id=int(last_assistant_message.get("id")),
+                message_id=_required_int(
+                    last_assistant_message.get("id"), field_name="message_id"
+                ),
                 patch={
                     "text": result.get("response"),
                     "citations": result.get("citations") or [],
@@ -532,4 +554,4 @@ async def send_message(
                 error=str(e),
             )
 
-    return ChatMessageResponse(**result)
+    return cast(ChatMessageResponse, ChatMessageResponse(**result))

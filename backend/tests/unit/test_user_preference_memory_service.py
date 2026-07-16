@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.user_preference_memory_service import UserPreferenceMemoryService
 
 
@@ -35,18 +34,23 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
     svc = UserPreferenceMemoryService()
     captured: dict[str, object] = {}
 
-    async def _fake_exists(*, dedupe_key: str) -> bool:
+    async def _fake_exists(*, user_id: str, dedupe_key: str) -> bool:
+        captured["exists_user_id"] = user_id
         captured["checked_dedupe_key"] = dedupe_key
         return False
 
-    async def _fake_deactivate_scope_conflicts(*, scope: str, keep_dedupe_key: str) -> None:
+    async def _fake_deactivate_scope_conflicts(
+        *, user_id: str, scope: str, keep_dedupe_key: str
+    ) -> None:
+        captured["deactivate_user_id"] = user_id
         captured["deactivated_scope"] = scope
         captured["deactivated_dedupe_key"] = keep_dedupe_key
 
-    async def _fake_add_memory(content: str, type: str, metadata: dict):
+    async def _fake_add_memory(content: str, type: str, metadata: dict, *, user_id: str):
         captured["content"] = content
         captured["type"] = type
         captured["metadata"] = metadata
+        captured["user_id"] = user_id
         return _FakeExperience()
 
     monkeypatch.setattr(svc, "_preference_exists", _fake_exists)
@@ -68,6 +72,9 @@ async def test_maybe_capture_builds_structured_metadata(monkeypatch):
     metadata = captured["metadata"]
     assert metadata["type"] == "user_preference"
     assert metadata["memory_class"] == "semantic"
+    assert captured["user_id"] == "1"
+    assert captured["exists_user_id"] == "1"
+    assert captured["deactivate_user_id"] == "1"
     assert metadata["preference_kind"] == "dont"
     assert metadata["user_id"] == "1"
     assert metadata["conversation_id"] == "42"

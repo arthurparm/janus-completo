@@ -1,7 +1,6 @@
 from typing import Any, Dict, List, Optional
 
 import pytest
-
 from app.core.protocols import MemoryRepositoryProtocol
 from app.models.schemas import Experience
 from app.services.memory_service import MemoryService
@@ -169,6 +168,7 @@ async def test_index_interaction_uses_chat_collection_and_deterministic_point_id
         return name
 
     async def _fake_count(*args, **kwargs):
+        captured["count_filter"] = args[2]
         return 0
 
     async def _fake_embed(text: str):
@@ -180,14 +180,23 @@ async def test_index_interaction_uses_chat_collection_and_deterministic_point_id
     monkeypatch.setattr("app.services.memory_service.get_async_qdrant_client", lambda: DummyClient())
     monkeypatch.setattr("app.services.memory_service.time.time", lambda: 1234.567)
 
-    await service.index_interaction("hello", "sess-1", "user")
+    await service.index_interaction("hello", "sess-1", "user-1", "user")
     first_point = captured["points"][0]
 
-    await service.index_interaction("hello", "sess-1", "user")
+    await service.index_interaction("hello", "sess-1", "user-1", "user")
     second_point = captured["points"][0]
 
     assert captured["collection_name"] == "global_chat"
     assert first_point.id == second_point.id
     assert first_point.payload["metadata"]["origin"] == "chat.index_interaction"
     assert first_point.payload["metadata"]["conversation_id"] == "sess-1"
+    assert first_point.payload["metadata"]["user_id"] == "user-1"
+    count_conditions = {
+        condition.key: condition.match.value
+        for condition in captured["count_filter"].must
+    }
+    assert count_conditions == {
+        "metadata.type": "chat_msg",
+        "metadata.user_id": "user-1",
+    }
     assert first_point.payload["type"] == "chat_msg"

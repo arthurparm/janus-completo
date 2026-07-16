@@ -1,6 +1,7 @@
 import re
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 import requests
 import structlog
@@ -422,7 +423,9 @@ async def reset_client() -> None:
 
 
 
-async def delete_points_by_filter(collection_name: str, filter_conditions: dict) -> None:
+async def delete_points_by_filter(
+    collection_name: str, filter_conditions: dict[str, Any]
+) -> None:
     """Deleta pontos que correspondem ao filtro especificado."""
     collection_name = _validate_collection_name(collection_name)
     client = get_async_qdrant_client()
@@ -457,7 +460,7 @@ async def delete_points_by_ids(collection_name: str, point_ids: list[str]) -> No
         logger.error("log_error", message=f"Erro ao deletar pontos de '{collection_name}': {e}", exc_info=True)
         raise
 
-async def aget_collection_info(collection_name: str) -> dict:
+async def aget_collection_info(collection_name: str) -> dict[str, Any]:
     """Versão assíncrona para obter informações da coleção."""
     collection_name = _validate_collection_name(collection_name)
     client = get_async_qdrant_client()

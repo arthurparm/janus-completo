@@ -29,27 +29,38 @@ class GenerativeMemoryService:
     Manages Memory Stream in Neo4j.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.alpha = 1.0  # Recency weight
         self.beta = 1.0   # Importance weight
         self.gamma = 1.0  # Relevance weight
         self.decay_factor = 0.995 # Per hour
-        self._llm_service = None
+        self._llm_service: LLMService | None = None
 
     @property
-    def llm_service(self):
+    def llm_service(self) -> LLMService:
         if not self._llm_service:
             self._llm_service = LLMService(get_llm_repository())
         return self._llm_service
 
-    async def add_memory(self, content: str, type: str = "episodic", metadata: dict[str, Any] = None) -> Experience:
+    async def add_memory(
+        self,
+        content: str,
+        type: str = "episodic",
+        metadata: dict[str, Any] | None = None,
+        *,
+        user_id: str | int,
+    ) -> Experience:
         """
         Adds a memory to the stream.
         1. Calculates importance (LLM) if not provided.
         2. Saves to Vector DB (MemoryCore).
         3. Saves to Graph DB (Neo4j) as linked stream.
         """
-        metadata = metadata or {}
+        resolved_user_id = str(user_id or "").strip()
+        if not resolved_user_id:
+            raise ValueError("user_id is required to add generative memory")
+        metadata = dict(metadata or {})
+        metadata["user_id"] = resolved_user_id
         # Keep conversation/session identifiers aligned for downstream timeline filters.
         if metadata.get("conversation_id") and not metadata.get("session_id"):
             metadata["session_id"] = metadata.get("conversation_id")
@@ -207,6 +218,8 @@ class GenerativeMemoryService:
         if not timestamp:
             ts_ms = payload.get("ts_ms") or metadata.get("ts_ms") or metadata.get("timestamp")
             try:
+                if ts_ms is None:
+                    raise ValueError("memory timestamp is missing")
                 timestamp = datetime.fromtimestamp(float(ts_ms) / 1000.0, tz=UTC).isoformat()
             except Exception:
                 timestamp = datetime.now(UTC).isoformat()
@@ -317,7 +330,9 @@ class GenerativeMemoryService:
                 raise e # Propagate to allow fallback
             return 5.0
 
-    async def prune_memories(self, retention_days: int = 60, min_importance: float = 3.0):
+    async def prune_memories(
+        self, retention_days: int = 60, min_importance: float = 3.0
+    ) -> None:
         """
         Marks old and unimportant memories as archived in Neo4j.
         """

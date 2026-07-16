@@ -7,14 +7,14 @@ import time
 from typing import Any
 
 import structlog
-from qdrant_client import models as qdrant_models
-
 from app.core.embeddings.embedding_manager import aembed_text
 from app.core.memory.generative_memory import generative_memory_service
 from app.db.vector_store import (
     aget_or_create_collection,
     build_user_memory_collection_name,
-    get_async_qdrant_client)
+    get_async_qdrant_client,
+)
+from qdrant_client import models as qdrant_models
 
 logger = structlog.get_logger(__name__)
 
@@ -103,13 +103,14 @@ class UserPreferenceMemoryService:
         dedupe_key = self._dedupe_key(
             preference_kind=str(extracted["preference_kind"]),
             instruction_text=str(extracted["instruction_text"]))
-        exists = await self._preference_exists(dedupe_key=dedupe_key)
+        exists = await self._preference_exists(user_id=user_id, dedupe_key=dedupe_key)
         if exists:
             return {"status": "duplicate", "dedupe_key": dedupe_key, **extracted}
 
         now_ms = int(time.time() * 1000)
         resolved_conversation = str(conversation_id) if conversation_id else None
         await self._deactivate_scope_conflicts(
+            user_id=user_id,
             scope=str(extracted["scope"]),
             keep_dedupe_key=dedupe_key)
         metadata = {
@@ -140,7 +141,12 @@ class UserPreferenceMemoryService:
             preference_kind=str(extracted["preference_kind"]),
             instruction_text=str(extracted["instruction_text"]))
         try:
-            exp = await generative_memory_service.add_memory(content, type="semantic", metadata=metadata)
+            exp = await generative_memory_service.add_memory(
+                content,
+                type="semantic",
+                metadata=metadata,
+                user_id=user_id,
+            )
             return {
                 "status": "created",
                 "id": getattr(exp, "id", None),
@@ -154,6 +160,7 @@ class UserPreferenceMemoryService:
     async def list_preferences(
         self,
         *,
+        user_id: str,
         conversation_id: str | None = None,
         limit: int = 20,
         active_only: bool = True,
@@ -164,6 +171,10 @@ class UserPreferenceMemoryService:
         client = get_async_qdrant_client()
 
         must: list[qdrant_models.FieldCondition] = [
+            qdrant_models.FieldCondition(
+                key="metadata.user_id",
+                match=qdrant_models.MatchValue(value=str(user_id)),
+            ),
             qdrant_models.FieldCondition(
                 key="metadata.type", match=qdrant_models.MatchValue(value="user_preference")
             )]
@@ -298,9 +309,9 @@ class UserPreferenceMemoryService:
         lowered = re.sub(r"[\W_]+", " ", lowered)
         return re.sub(r"\s+", " ", lowered).strip()
 
-    async def _preference_exists(self, *, dedupe_key: str) -> bool:
+    async def _preference_exists(self, *, user_id: str, dedupe_key: str) -> bool:
         try:
-            items = await self.list_preferences(limit=50, active_only=True)
+            items = await self.list_preferences(user_id=user_id, limit=50, active_only=True)
             return any(str(item.get("dedupe_key")) == dedupe_key for item in items)
         except Exception as exc:
             logger.warning("user_preference_dedupe_check_failed", error=str(exc))
@@ -309,10 +320,11 @@ class UserPreferenceMemoryService:
     async def _deactivate_scope_conflicts(
         self,
         *,
+        user_id: str,
         scope: str,
         keep_dedupe_key: str) -> None:
         try:
-            items = await self.list_preferences(limit=50, active_only=True)
+            items = await self.list_preferences(user_id=user_id, limit=50, active_only=True)
             conflicting_ids = [
                 str(item.get("id") or "").strip()
                 for item in items

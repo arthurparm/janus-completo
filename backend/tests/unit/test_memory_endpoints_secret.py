@@ -16,6 +16,10 @@ class _DummyMemoryService:
 
 
 def test_memory_secrets_endpoint_returns_masked_items(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.memory.require_authenticated_actor_id",
+        lambda _request: "user-1",
+    )
     app = FastAPI()
     app.include_router(memory_router, prefix="/api/v1/memory")
     app.dependency_overrides[get_memory_service] = lambda: _DummyMemoryService()

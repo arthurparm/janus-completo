@@ -1,4 +1,5 @@
 import time
+from typing import Any, cast
 
 import structlog
 
@@ -7,21 +8,16 @@ try:
 except Exception:
 
     class _Noop:
-        def labels(self, *args, **kwargs):
+        def labels(self, *args: Any, **kwargs: Any) -> "_Noop":
             return self
 
-        def observe(self, *args, **kwargs):
+        def observe(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def inc(self, *args, **kwargs):
+        def inc(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     Histogram = Counter = _Noop
-
-from typing import Any
-
-from fastapi import Request
-from qdrant_client import models
 
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_text
@@ -35,8 +31,10 @@ from app.db.vector_store import (
     build_user_chat_collection_name,
     get_async_qdrant_client,
 )
-from app.repositories.data_governance_repository import DataGovernanceRepository
 from app.models.schemas import Experience
+from app.repositories.data_governance_repository import DataGovernanceRepository
+from fastapi import Request
+from qdrant_client import models
 
 logger = structlog.get_logger(__name__)
 _MEMORY_SERVICE_LATENCY = Histogram(
@@ -71,7 +69,7 @@ class MemoryService:
         error_code: str | None = None,
         extra: dict[str, Any] | None = None) -> dict[str, Any]:
         latency_ms = int((time.perf_counter() - started_at) * 1000)
-        return emit_step_telemetry(
+        return cast(dict[str, Any], emit_step_telemetry(
             endpoint="/memory/service",
             step=step,
             source="memory_service",
@@ -79,7 +77,7 @@ class MemoryService:
             latency_ms=latency_ms,
             confidence=confidence,
             error_code=error_code,
-            extra=extra)
+            extra=extra))
 
     async def add_experience(self, type: str, content: str, metadata: dict[str, Any]) -> Experience:
         """
@@ -96,8 +94,8 @@ class MemoryService:
             return experience
         except Exception as e:
             logger.error("Erro no serviÃ§o de memÃ³ria ao adicionar experiÃªncia", exc_info=e)
-            _MEMORY_SERVICE_ERRORS.labels("add_experience", type(e).__name__).inc()
-            self._emit_step_telemetry(step="add_experience", started_at=start, confidence=0.0, error_code=type(e).__name__)
+            _MEMORY_SERVICE_ERRORS.labels("add_experience", e.__class__.__name__).inc()
+            self._emit_step_telemetry(step="add_experience", started_at=start, confidence=0.0, error_code=e.__class__.__name__)
             raise MemoryServiceError("Falha ao adicionar experiÃªncia.") from e
 
     async def recall_experiences(
@@ -117,7 +115,7 @@ class MemoryService:
             elapsed = time.perf_counter() - start
             _MEMORY_SERVICE_LATENCY.labels("recall_experiences").observe(elapsed)
             self._emit_step_telemetry(step="recall_experiences", started_at=start, confidence=confidence_from_scores([r.get("score") for r in result if isinstance(r, dict)]), extra={"result_count": len(result)})
-            return result
+            return cast(list[dict[str, Any]], result)
         except Exception as e:
             logger.error("Erro no serviÃ§o de memÃ³ria ao buscar experiÃªncias", exc_info=e)
             _MEMORY_SERVICE_ERRORS.labels("recall_experiences", type(e).__name__).inc()
@@ -144,7 +142,7 @@ class MemoryService:
             elapsed = time.perf_counter() - start
             _MEMORY_SERVICE_LATENCY.labels("recall_filtered").observe(elapsed)
             self._emit_step_telemetry(step="recall_filtered", started_at=start, confidence=confidence_from_scores([r.get("score") for r in result if isinstance(r, dict)]), extra={"result_count": len(result)})
-            return result
+            return cast(list[dict[str, Any]], result)
         except Exception as e:
             logger.error("Erro no serviÃ§o ao buscar filtrado", exc_info=e)
             _MEMORY_SERVICE_ERRORS.labels("recall_filtered", type(e).__name__).inc()
@@ -176,7 +174,7 @@ class MemoryService:
             elapsed = time.perf_counter() - start
             _MEMORY_SERVICE_LATENCY.labels("recall_by_timeframe").observe(elapsed)
             self._emit_step_telemetry(step="recall_by_timeframe", started_at=start, confidence=confidence_from_scores([r.get("score") for r in result if isinstance(r, dict)]), extra={"result_count": len(result)})
-            return result
+            return cast(list[dict[str, Any]], result)
         except Exception as e:
             logger.error("Erro no serviÃ§o ao buscar por janela temporal", exc_info=e)
             _MEMORY_SERVICE_ERRORS.labels("recall_by_timeframe", type(e).__name__).inc()
@@ -201,7 +199,7 @@ class MemoryService:
             elapsed = time.perf_counter() - start
             _MEMORY_SERVICE_LATENCY.labels("recall_recent_failures").observe(elapsed)
             self._emit_step_telemetry(step="recall_recent_failures", started_at=start, confidence=confidence_from_scores([r.get("score") for r in result if isinstance(r, dict)]), extra={"result_count": len(result)})
-            return result
+            return cast(list[dict[str, Any]], result)
         except Exception as e:
             logger.error("Erro no serviÃ§o ao buscar falhas recentes", exc_info=e)
             _MEMORY_SERVICE_ERRORS.labels("recall_recent_failures", type(e).__name__).inc()
@@ -226,7 +224,7 @@ class MemoryService:
             elapsed = time.perf_counter() - start
             _MEMORY_SERVICE_LATENCY.labels("recall_recent_lessons").observe(elapsed)
             self._emit_step_telemetry(step="recall_recent_lessons", started_at=start, confidence=confidence_from_scores([r.get("score") for r in result if isinstance(r, dict)]), extra={"result_count": len(result)})
-            return result
+            return cast(list[dict[str, Any]], result)
         except Exception as e:
             logger.error("Erro no serviÃ§o ao buscar liÃ§Ãµes recentes", exc_info=e)
             _MEMORY_SERVICE_ERRORS.labels("recall_recent_lessons", type(e).__name__).inc()
@@ -347,4 +345,4 @@ class MemoryService:
 
 # PadrÃ£o de InjeÃ§Ã£o de DependÃªncia: Getter para o serviÃ§o
 def get_memory_service(request: Request) -> MemoryService:
-    return request.app.state.memory_service
+    return cast(MemoryService, request.app.state.memory_service)
