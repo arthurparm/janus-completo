@@ -1,5 +1,4 @@
 import pytest
-
 from app.services.active_memory_service import ActiveMemoryService
 
 
@@ -30,6 +29,7 @@ async def test_active_memory_prioritizes_secret_capture(monkeypatch):
     )
 
     result = await svc.maybe_capture_from_message(
+        user_id="test-user",
         message="Minha senha do Wi-Fi é Abc12345",
         conversation_id="c-1",
     )

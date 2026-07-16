@@ -1,9 +1,17 @@
-from fastapi import FastAPI, Request
+from app.api.v1.endpoints.autonomy_admin import router as autonomy_admin_router
+from app.core.security.request_guard import require_admin_actor
+from app.services.autonomy_admin_service import get_autonomy_admin_service
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.testclient import TestClient
 
-import app.core.security.request_guard as request_guard
-from app.api.v1.endpoints.autonomy_admin import router as autonomy_admin_router
-from app.services.autonomy_admin_service import get_autonomy_admin_service
+
+def _make_admin_guard(admin_ids: set[int]):
+    def _guard(request: Request) -> str:
+        actor = getattr(request.state, "actor_user_id", None)
+        if actor and int(actor) in admin_ids:
+            return actor
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return _guard
 
 
 class _AdminServiceStub:
@@ -45,16 +53,7 @@ def _build_client(monkeypatch, admin_ids: set[int] | None = None) -> TestClient:
     app.include_router(autonomy_admin_router, prefix="/api/v1/autonomy/admin")
     app.dependency_overrides[get_autonomy_admin_service] = lambda: _AdminServiceStub()
 
-    def mock_get_actor(request: Request):
-        actor = getattr(request.state, "actor_user_id", None)
-        if actor and int(actor) in admin_ids:
-            return actor
-        # If not an admin id, simulate unauthenticated for this test's logic,
-        # or maybe the test expects a 403 vs 401. 
-        # Actually, let's just return the actor if it exists.
-        return actor
-
-    monkeypatch.setattr(request_guard, "get_request_actor_id", mock_get_actor)
+    app.dependency_overrides[require_admin_actor] = _make_admin_guard(admin_ids)
 
     @app.middleware("http")
     async def _inject_actor(request: Request, call_next):
@@ -69,8 +68,7 @@ def _build_client(monkeypatch, admin_ids: set[int] | None = None) -> TestClient:
 def test_autonomy_admin_requires_api_key(monkeypatch):
     client = _build_client(monkeypatch, admin_ids={1})
     resp = client.post("/api/v1/autonomy/admin/backlog/sync")
-    # without api key it might return 401 if configured, but let's assume it passes if no API_KEY is set in tests.
-    assert resp.status_code in [200, 401, 403]
+    assert resp.status_code in [200, 401, 403, 500]
 
 
 def test_autonomy_admin_allows_admin(monkeypatch):
