@@ -1012,3 +1012,57 @@
 - Chat UI observado em `16881ms`; SSE aquecido em `2115ms`.
 - Um outlier frio levou `64726ms`; nao ha amostra suficiente para afirmar p95 ou estabilidade de cauda.
 - Decisao recomendada: manter a correcao e medir distribuicao de latencia antes de alterar roteamento/modelo.
+
+## Ciclo 38 - Alinhamento de testes unitarios com contratos de producao
+
+### Problema
+
+- Fato observado: 42 testes unitarios em `backend/tests/unit/` falhavam por drift entre fakes/mocks e contratos de producao.
+- Classificacao: divida tecnica de testes, impacto medio, risco baixo, prioridade P1.
+
+### Hipotese
+
+- Acredito que alinhar os fakes aos contratos atuais elimina as falhas sem alterar producao porque as divergencias sao exclusivamente de interface de teste.
+
+### Metodo e Criterio
+
+- Metodo: analise individual dos 3 maiores clusters coerentes (SG012, collaboration hook, autonomy enqueue); correcao minimal nos fakes; validacao com suite completa.
+- Criterio: 14 testes alvo passam; suite unitaria nao regred; qa/ contratos nao regred; ruff/format passam.
+
+### Observacoes
+
+- SG012: o padrao `from app.core.security import auth_rate_limiter` seguido de `monkeypatch.setattr(auth_rate_limiter, ...)` nao afeta a referencia ja importada em `auth.py`. Correcao: monkeypatch no modulo `auth` diretamente. A assinatura de `set_reset_token` em producao inclui `user_id` como primeiro parametro posicional.
+- Collaboration hook: producao chama `goal_repo.get_goal(goal_id)` antes de `transition_status` para verificar se a meta ja esta concluida. O fake nao implementava `get_goal`.
+- Autonomy enqueue: producao substituiu `get_next_goal()` por `list_goals(status=...)`. O fake nao implementava `list_goals`.
+- Resultado: 42 -> 30 falhas, 591 -> 603 passed. 12 testes corrigidos, zero regressoes.
+
+### Incertezas
+
+- 30 testes restantes falham por drift em outros clusters (documents, knowledge, memory scroll, observability, security, etc.); cada cluster exige analise individual.
+
+## Ciclo 39 - Mais alinhamento de testes unitarios (goal_manager, documents)
+
+### Problema
+
+- Fato observado: apos Ciclo 38, 30 testes unitarios ainda falhavam por drift.
+- Classificacao: divida tecnica de testes, impacto medio, risco baixo, prioridade P1.
+
+### Hipotese
+
+- Os clusters goal_manager e documents sao os proximos maiores coerentes e podem ser corrigidos com alteracoes minimas nos fakes.
+
+### Metodo e Criterio
+
+- Metodo: analise individual dos 3 clusters (goal_manager_sql_facade, documents_endpoint_async_upload, documents_security); correcao minimal nos fakes e monkeypatches; validacao com suite completa.
+- Criterio: 7 testes alvo passam; suite unitaria nao regred; ruff/format passam.
+
+### Observacoes
+
+- goal_manager: producao chama `goal_repo.list_children(goal.id)` no metodo `_to_goal` para verificar metas filhas bloqueantes; fake nao implementava.
+- documents_endpoint_async_upload: producao substituiu `get_request_actor_id` e `resolve_user_scope_id` por `require_authenticated_actor_id`; `get_manifest` agora recebe `uid`; `app.state.knowledge_facade` e dependencia obrigatoria.
+- documents_security: `socket` e importado em `url_safety`, nao em `documents`; `fake_getaddrinfo` precisava aceitar `type=` kwarg; `_is_allowlisted_host` e `require_authenticated_actor_id` precisavam mock.
+- Resultado: 30 -> 23 falhas, 603 -> 610 passed. 7 testes corrigidos, zero regressoes.
+
+### Incertezas
+
+- 23 testes restantes falham em clusters menores (observability, security/asvs, knowledge, chat citation, meta-agent, technical_qa, sg011, etc.); cada cluster exige analise individual.

@@ -522,3 +522,55 @@ Completar o contrato de `retrieve_memories` com `user_id` opcional e aplicar `me
 - Pro: preserva compatibilidade para chamadores internos existentes.
 - Pro: teste inspeciona chaves e valores exatos do filtro.
 - Contra: memorias antigas sem `metadata.user_id` nao aparecem em consultas autenticadas e podem exigir migracao auditada futura.
+
+## DEC-023 - Alinhar fakes de teste com contratos de producao por cluster
+
+### Contexto
+
+Apos o Ciclo 37, 42 testes unitarios em `backend/tests/unit/` falhavam. Analise mostrou que todas as falhas eram drift entre fakes/mocks e contratos de producao (interfaces evoluiram, fakes nao acompanharam). Nenhuma falha indicava bug de producao.
+
+### Decisao
+
+Corrigir os 3 maiores clusters coerentes neste ciclo, alterando apenas os fakes de teste:
+
+- SG012 (5 testes): monkeypatch no modulo `auth` em vez de `auth_rate_limiter`; assinatura de `set_reset_token` com `user_id`.
+- Collaboration hook (3 testes): adicionar `get_goal` ao `_FakeGoalManager`.
+- Autonomy enqueue (3 testes): substituir `get_next_goal` por `list_goals` no `_FakeGoalManager`.
+
+### Alternativas Consideradas
+
+- Corrigir todos os 42 testes em um ciclo: rejeitado por escopo largo e risco de regressao.
+- Deletar os testes falhos: rejeitado por violar a regra de nao enfraquecer testes.
+- Alterar producao para compatibilidade retroativa com fakes: rejeitado por inverter a direcao de correcao.
+
+### Consequencias
+
+- Pro: 12 testes corrigidos, suite unitaria de 591 -> 603 passed.
+- Pro: zero regressoes em qa/ contratos.
+- Pro: padrao estabelecido para corrigir os 30 testes restantes em ciclos futuros.
+- Contra: 30 testes ainda falham por drift em outros clusters.
+
+## DEC-024 - Segunda leva de alinhamento de fakes (goal_manager, documents)
+
+### Contexto
+
+Apos o Ciclo 38 corrigir 12 testes, 30 ainda falhavam. Os proximos 3 clusters coerentes eram goal_manager_sql_facade (2 testes), documents_endpoint_async_upload (3 testes) e documents_security (2 testes).
+
+### Decisao
+
+Corrigir os 3 clusters alterando apenas fakes e monkeypatches:
+
+- goal_manager: adicionar `list_children` ao `_FakeGoalRepo`.
+- documents_endpoint_async_upload: trocar `get_request_actor_id`/`resolve_user_scope_id` por `require_authenticated_actor_id`; corrigir assinatura de `get_manifest`; adicionar `_FakeKnowledgeFacade` em `app.state`.
+- documents_security: monkeypatch `url_safety.socket` em vez de `documents.socket`; adicionar `**_kwargs` a `fake_getaddrinfo`; mock `_is_allowlisted_host` e `require_authenticated_actor_id`.
+
+### Alternativas Consideradas
+
+- Esperar e corrigir tudo de uma vez: rejeitado por prolongar divida.
+- Refatorar producao para facilitar testes: rejeitado por inverter direcao.
+
+### Consequencias
+
+- Pro: 7 testes corrigidos, suite unitaria de 603 -> 610 passed.
+- Pro: zero regressoes.
+- Contra: 23 testes ainda falham em clusters menores.

@@ -1,8 +1,7 @@
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app.api.v1.endpoints import documents as documents_endpoint
 from app.services.document_service import DocumentFileTooLargeError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 class _FakeManifestRepo:
@@ -13,10 +12,10 @@ class _FakeManifestRepo:
     def list_manifests(self, **kwargs):
         return list(self.items)
 
-    def get_manifest(self, doc_id, ):
+    def get_manifest(self, doc_id, _uid=None):
         return self.manifest
 
-    def delete_manifest(self, doc_id, ):
+    def delete_manifest(self, doc_id, _uid=None):
         return True
 
 
@@ -51,16 +50,28 @@ class _EmptyQdrantClient:
         return None
 
 
+class _FakeKnowledgeFacade:
+    async def get_document_points(self, **_kwargs):
+        return ([], None)
+
+    async def search_documents(self, **_kwargs):
+        return []
+
+    async def delete_document(self, **_kwargs):
+        return None
+
+
 def _build_client(service: _FakeDocumentService) -> TestClient:
     app = FastAPI()
     app.state.document_service = service
+    app.state.knowledge_facade = _FakeKnowledgeFacade()
     app.include_router(documents_endpoint.router, prefix="/api/v1/documents")
     return TestClient(app)
 
 
 def test_upload_document_returns_202_and_accepts_form_user_id(monkeypatch):
     service = _FakeDocumentService()
-    monkeypatch.setattr(documents_endpoint, "get_request_actor_id", lambda request: None)
+    monkeypatch.setattr(documents_endpoint, "require_authenticated_actor_id", lambda request: "u-1")
     client = _build_client(service)
 
     response = client.post(
@@ -75,9 +86,6 @@ def test_upload_document_returns_202_and_accepts_form_user_id(monkeypatch):
     assert service.stage_calls[0]["conversation_id"] == "conv-1"
 
 
-
-
-
 def test_upload_document_returns_413_for_streaming_oversize(monkeypatch):
     service = _FakeDocumentService(
         stage_error=DocumentFileTooLargeError(
@@ -86,7 +94,7 @@ def test_upload_document_returns_413_for_streaming_oversize(monkeypatch):
             doc_id="doc:u-1:oversize",
         )
     )
-    monkeypatch.setattr(documents_endpoint, "get_request_actor_id", lambda request: None)
+    monkeypatch.setattr(documents_endpoint, "require_authenticated_actor_id", lambda request: "u-1")
     client = _build_client(service)
 
     response = client.post(
@@ -121,12 +129,7 @@ def test_document_status_and_list_are_manifest_driven(monkeypatch):
     }
     service = _FakeDocumentService(manifest=manifest, items=[manifest])
 
-    async def _fake_collection(name):
-        return name
-
-    monkeypatch.setattr(documents_endpoint, "resolve_user_scope_id", lambda request, user_id: "u-1")
-    monkeypatch.setattr(documents_endpoint, "aget_or_create_collection", _fake_collection)
-    monkeypatch.setattr(documents_endpoint, "get_async_qdrant_client", lambda: _EmptyQdrantClient())
+    monkeypatch.setattr(documents_endpoint, "require_authenticated_actor_id", lambda request: "u-1")
     client = _build_client(service)
 
     status_response = client.get("/api/v1/documents/status/doc:u-1:1")

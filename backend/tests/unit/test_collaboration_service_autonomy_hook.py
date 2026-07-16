@@ -19,6 +19,9 @@ class _FakeGoalManager:
     def __init__(self):
         self.calls: list[tuple[str, str]] = []
 
+    def get_goal(self, goal_id: str):
+        return SimpleNamespace(id=goal_id, status="pending")
+
     def transition_status(self, goal_id: str, status: str, **_kwargs):
         self.calls.append((goal_id, status))
         return SimpleNamespace(id=goal_id, status=status)
@@ -41,6 +44,7 @@ def _make_state(status: str, goal_id: str | None) -> TaskState:
 def test_maybe_finalize_autonomy_goal_marks_completed(monkeypatch):
     fake_goal_manager = _FakeGoalManager()
     import app.services.collaboration_service as collaboration_module
+
     monkeypatch.setattr(collaboration_module, "AutonomyGoalRepository", lambda: fake_goal_manager)
 
     service = CollaborationService(CollaborationRepository())
@@ -55,6 +59,7 @@ def test_maybe_finalize_autonomy_goal_marks_completed(monkeypatch):
 def test_maybe_finalize_autonomy_goal_marks_failed_for_terminal_error(monkeypatch):
     fake_goal_manager = _FakeGoalManager()
     import app.services.collaboration_service as collaboration_module
+
     monkeypatch.setattr(collaboration_module, "AutonomyGoalRepository", lambda: fake_goal_manager)
 
     service = CollaborationService(CollaborationRepository())
@@ -67,6 +72,7 @@ def test_maybe_finalize_autonomy_goal_marks_failed_for_terminal_error(monkeypatc
 def test_maybe_finalize_autonomy_goal_ignores_non_terminal_status(monkeypatch):
     fake_goal_manager = _FakeGoalManager()
     import app.services.collaboration_service as collaboration_module
+
     monkeypatch.setattr(collaboration_module, "AutonomyGoalRepository", lambda: fake_goal_manager)
 
     service = CollaborationService(CollaborationRepository())
@@ -79,6 +85,7 @@ def test_maybe_finalize_autonomy_goal_ignores_non_terminal_status(monkeypatch):
 def test_maybe_finalize_autonomy_goal_is_idempotent_on_same_taskstate(monkeypatch):
     fake_goal_manager = _FakeGoalManager()
     import app.services.collaboration_service as collaboration_module
+
     monkeypatch.setattr(collaboration_module, "AutonomyGoalRepository", lambda: fake_goal_manager)
 
     service = CollaborationService(CollaborationRepository())

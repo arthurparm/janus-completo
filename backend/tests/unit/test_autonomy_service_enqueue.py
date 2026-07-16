@@ -90,8 +90,12 @@ class _FakeGoalManager:
         self._goal = goal
         self.status_updates: list[tuple[str, str]] = []
 
-    def get_next_goal(self):
-        return self._goal
+    def list_goals(self, status: str | None = None, **_kwargs):
+        if self._goal is None:
+            return []
+        if status is not None and self._goal.status != status:
+            return []
+        return [self._goal]
 
     def update_goal_status(self, goal_id: str, status: str, **_kwargs):
         self.status_updates.append((goal_id, status))

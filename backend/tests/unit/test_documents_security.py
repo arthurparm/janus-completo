@@ -27,7 +27,8 @@ document_service_stub.DocumentFileTooLargeError = _DocumentFileTooLargeError
 document_service_stub.DocumentIngestionService = _DocumentIngestionService
 sys.modules.setdefault("app.services.document_service", document_service_stub)
 
-from app.api.v1.endpoints import documents
+import app.core.security.url_safety as url_safety  # noqa: E402
+from app.api.v1.endpoints import documents  # noqa: E402
 
 
 class _ManifestRepo:
@@ -87,8 +88,9 @@ def test_upload_document_rejects_unsupported_file_type():
     assert service.stage_calls == []
 
 
-def test_link_url_rejects_private_hosts():
+def test_link_url_rejects_private_hosts(monkeypatch):
     service = _DocService()
+    monkeypatch.setattr(documents, "require_authenticated_actor_id", lambda request: "u-1")
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
@@ -114,7 +116,7 @@ def test_link_url_rejects_private_hosts():
 def test_link_url_accepts_public_http_url(monkeypatch):
     service = _DocService()
 
-    def fake_getaddrinfo(host: str, port: int):
+    def fake_getaddrinfo(host: str, port: int, **_kwargs):
         return [(None, None, None, None, ("93.184.216.34", port))]
 
     class _Response:
@@ -128,11 +130,13 @@ def test_link_url_accepts_public_http_url(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def get(self, url: str, follow_redirects: bool = False):
+        async def get(self, url: str, follow_redirects: bool = False, **_kwargs):
             assert follow_redirects is False
             return _Response()
 
-    monkeypatch.setattr(documents.socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(url_safety.socket, "getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr(documents, "_is_allowlisted_host", lambda raw_url: True)
+    monkeypatch.setattr(documents, "require_authenticated_actor_id", lambda request: "u-1")
     monkeypatch.setattr(httpx, "AsyncClient", lambda timeout=10: _Client())
 
     result = asyncio.run(

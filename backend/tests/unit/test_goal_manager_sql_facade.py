@@ -52,6 +52,9 @@ class _FakeGoalRepo:
     def get_goal(self, goal_id):
         return self.rows.get(goal_id)
 
+    def list_children(self, _goal_id):
+        return []
+
     def get_next_pending_goal(self):
         pending = [r for r in self.rows.values() if r.status == "pending"]
         return pending[0] if pending else None

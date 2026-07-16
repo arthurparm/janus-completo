@@ -2172,3 +2172,50 @@ Resultado: passou; 29 testes em 40.17s.
 
 - O outlier de 64.7s impede afirmar estabilidade de latencia; falta serie de amostras e p95/p99.
 - O comando `npm run build -- --configuration development` continua incompativel com o npm local; `npx ng build --configuration=development` e o comando validado.
+
+## Ciclo 38 - Alinhamento de testes unitarios com contratos de producao
+
+### Baseline
+
+- `qa/` contratos criticos: 66 passed, 0 failed.
+- `backend/tests/unit/`: 42 failed, 591 passed, 1 skipped.
+
+### Validacao Final
+
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_sg012_auth_reset_token_leak.py backend/tests/unit/test_collaboration_service_autonomy_hook.py backend/tests/unit/test_autonomy_service_enqueue.py`: 14 passed.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/`: 30 failed, 603 passed, 1 skipped (12 testes corrigidos, zero regressoes).
+- `ruff check` e `ruff format --check` nos 3 arquivos: passou.
+- `qa/` contratos selecionados (35 testes): passaram.
+
+### Falhas Intermediarias Explicadas
+
+- SG012 (5 testes): monkeypatch em `auth_rate_limiter.enforce_auth_rate_limit` nao afetava a referencia importada em `auth.py`; `_RepoStub.set_reset_token` tinha assinatura desatualizada (sem `user_id`).
+- Collaboration hook (3 testes): `_FakeGoalManager` nao implementava `get_goal`, adicionado em producao para verificar status antes de transicionar.
+- Autonomy enqueue (3 testes): `_FakeGoalManager` nao implementava `list_goals`, que substituiu `get_next_goal` em producao.
+
+### Limitacoes
+
+- 30 testes unitarios ainda falham por drift de contrato; cada cluster exige analise individual.
+- mypy nao executado por limitacao de tempo; ruff e pytest cobrem validacao principal.
+
+## Ciclo 39 - Mais alinhamento de testes unitarios (goal_manager, documents)
+
+### Baseline
+
+- `backend/tests/unit/`: 30 failed, 603 passed, 1 skipped (apos Ciclo 38).
+
+### Validacao Final
+
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/test_goal_manager_sql_facade.py backend/tests/unit/test_documents_endpoint_async_upload.py backend/tests/unit/test_documents_security.py`: 8 passed.
+- `$env:PYTHONPATH='backend'; py -3.12 -m pytest -q backend/tests/unit/`: 23 failed, 610 passed, 1 skipped (7 testes corrigidos, zero regressoes).
+- `ruff check` e `ruff format --check` nos 3 arquivos: passou.
+
+### Falhas Intermediarias Explicadas
+
+- goal_manager_sql_facade (2 testes): `_FakeGoalRepo` nao implementava `list_children`, adicionado em producao para verificar metas filhas bloqueantes.
+- documents_endpoint_async_upload (3 testes): testes referenciavam `get_request_actor_id` e `resolve_user_scope_id` que nao existem mais; producao usa `require_authenticated_actor_id`; `_FakeManifestRepo.get_manifest` tinha assinatura sem `uid`; `app.state.knowledge_facade` nao era configurado.
+- documents_security (2 testes): `monkeypatch.setattr(documents.socket, ...)` falhava porque `socket` e importado em `url_safety`, nao em `documents`; `fake_getaddrinfo` nao aceitava `type=` kwarg; `_is_allowlisted_host` precisava mock; `require_authenticated_actor_id` precisava mock.
+
+### Limitacoes
+
+- 23 testes unitarios ainda falham por drift em outros clusters (observability, security, knowledge, chat, meta-agent, etc.).
