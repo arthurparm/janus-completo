@@ -37,7 +37,7 @@ async def issue_token(
     enforce_auth_rate_limit(request, endpoint_key="auth.token", identifier=payload.user_id)
     actor_id = require_authenticated_actor_id(request)
     target_id = int(payload.user_id)
-    if actor_id != target_id and not repo.is_admin(actor_id):
+    if int(actor_id) != target_id and not repo.is_admin(int(actor_id)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     tok = create_token(target_id, payload.expires_in)
     return TokenResponse(token=tok)

@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.testclient import TestClient
 
-import app.core.security.request_guard as request_guard
 from app.api.v1.endpoints.workspace import router as workspace_router
+from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
 from app.services.collaboration_service import get_collaboration_service
 
 
@@ -23,17 +23,31 @@ class _CollabStub:
         return None
 
 
+def _make_auth_guard():
+    def _guard(request: Request) -> str:
+        actor = getattr(request.state, "actor_user_id", None)
+        if actor:
+            return str(actor)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    return _guard
+
+
+def _make_admin_guard(admin_ids: set[int]):
+    def _guard(request: Request) -> str:
+        actor = getattr(request.state, "actor_user_id", None)
+        if actor and int(actor) in admin_ids:
+            return str(actor)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return _guard
+
+
 def _build_client(monkeypatch, admin_ids: set[int] | None = None) -> TestClient:
     admin_ids = admin_ids or set()
     app = FastAPI()
     app.include_router(workspace_router, prefix="/api/v1")
     app.dependency_overrides[get_collaboration_service] = lambda: _CollabStub()
-
-    class _Repo:
-        def is_admin(self, user_id: int) -> bool:
-            return user_id in admin_ids
-
-    monkeypatch.setattr(request_guard, "UserRepository", lambda: _Repo())
+    app.dependency_overrides[require_authenticated_actor_id] = _make_auth_guard()
+    app.dependency_overrides[require_admin_actor] = _make_admin_guard(admin_ids)
 
     @app.middleware("http")
     async def _inject_actor(request: Request, call_next):

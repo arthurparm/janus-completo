@@ -4,6 +4,7 @@ import pytest
 
 from app.api.v1.endpoints.auth import LocalResetRequest, local_request_reset
 from app.config import settings
+from app.core.security import auth_rate_limiter
 
 
 class _RepoStub:
@@ -25,6 +26,7 @@ class _RepoStub:
 async def test_request_reset_does_not_return_token_in_development_even_when_disabled_flag(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "development")
     monkeypatch.setattr(settings, "AUTH_RESET_RETURN_TOKEN", False)
+    monkeypatch.setattr(auth_rate_limiter, "enforce_auth_rate_limit", lambda *a, **kw: None)
 
     repo = _RepoStub(user=SimpleNamespace(id=10))
     resp = await local_request_reset(
@@ -40,6 +42,7 @@ async def test_request_reset_does_not_return_token_in_development_even_when_disa
 async def test_request_reset_returns_token_only_in_test_env_with_opt_in(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "test")
     monkeypatch.setattr(settings, "AUTH_RESET_RETURN_TOKEN", True)
+    monkeypatch.setattr(auth_rate_limiter, "enforce_auth_rate_limit", lambda *a, **kw: None)
 
     repo = _RepoStub(user=SimpleNamespace(id=11))
     resp = await local_request_reset(
@@ -54,6 +57,7 @@ async def test_request_reset_returns_token_only_in_test_env_with_opt_in(monkeypa
 async def test_request_reset_never_returns_token_in_production(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "AUTH_RESET_RETURN_TOKEN", True)
+    monkeypatch.setattr(auth_rate_limiter, "enforce_auth_rate_limit", lambda *a, **kw: None)
 
     repo = _RepoStub(user=SimpleNamespace(id=12))
     resp = await local_request_reset(
@@ -69,6 +73,7 @@ async def test_request_reset_never_returns_token_in_production(monkeypatch):
 async def test_request_reset_returns_token_in_ci_with_opt_in(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "ci")
     monkeypatch.setattr(settings, "AUTH_RESET_RETURN_TOKEN", True)
+    monkeypatch.setattr(auth_rate_limiter, "enforce_auth_rate_limit", lambda *a, **kw: None)
 
     repo = _RepoStub(user=SimpleNamespace(id=13))
     resp = await local_request_reset(
@@ -83,6 +88,7 @@ async def test_request_reset_returns_token_in_ci_with_opt_in(monkeypatch):
 async def test_request_reset_does_not_return_token_in_staging(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "staging")
     monkeypatch.setattr(settings, "AUTH_RESET_RETURN_TOKEN", True)
+    monkeypatch.setattr(auth_rate_limiter, "enforce_auth_rate_limit", lambda *a, **kw: None)
 
     repo = _RepoStub(user=SimpleNamespace(id=14))
     resp = await local_request_reset(
