@@ -47,12 +47,12 @@ precheckDeployment(model_id: string): Observable<{ precheck_passed: boolean; bia
     return this.http.post<{ precheck_passed: boolean; bias_score: number; safety_warnings?: string | null }>(this.apiContext.buildUrl(`/api/v1/deployment/precheck?model_id=${encodeURIComponent(model_id)}`), {})
   }
 
-getGPUUsage(user_id: string): Observable<GPUUsageResponse> {
-    return this.http.get<GPUUsageResponse>(this.apiContext.buildUrl(`/api/v1/resources/gpu/usage/${encodeURIComponent(user_id)}`))
+getGPUUsage(_userId: string): Observable<GPUUsageResponse> {
+    return this.http.get<GPUUsageResponse>(this.apiContext.buildUrl(`/api/v1/resources/gpu/usage/self`))
   }
 
-setGPUBudget(user_id: string, budget: number): Observable<GPUBudgetResponse> {
-    return this.http.post<GPUBudgetResponse>(this.apiContext.buildUrl(`/api/v1/resources/gpu/budget`), { user_id, budget })
+setGPUBudget(_userId: string, budget: number): Observable<GPUBudgetResponse> {
+    return this.http.post<GPUBudgetResponse>(this.apiContext.buildUrl(`/api/v1/resources/gpu/budget`), { budget })
   }
 
 setLLMABExperiment(experiment_id: number): Observable<ABExperimentSetResponse> {

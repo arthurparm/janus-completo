@@ -73,7 +73,6 @@ export interface KnowledgeSpaceStatus extends KnowledgeSpace {
 
 export interface KnowledgeSpaceCreateRequest {
   name: string;
-  user_id?: string;
   source_type?: string;
   source_id?: string;
   edition_or_version?: string;
@@ -87,7 +86,6 @@ export interface KnowledgeSpaceListResponse {
 }
 
 export interface KnowledgeSpaceAttachRequest {
-  user_id?: string;
   source_type?: string;
   source_id?: string;
   edition_or_version?: string;

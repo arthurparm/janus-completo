@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field, ValidationError
 from app.core.autonomy.goal_manager import GoalManager, GoalStatus, get_goal_manager
 from app.core.autonomy.goal_metrics import goal_metrics_calculator
 from app.core.autonomy.safety_plan_validator import safety_plan_validator
-from app.core.security.request_guard import require_authenticated_actor_id
+from app.core.security.request_guard import (
+    require_admin_actor_context,
+    require_authenticated_actor_id,
+)
 from app.core.tools.action_module import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
 from app.services.autonomy_admin_service import maybe_trigger_self_study_on_goal_completion
@@ -151,6 +154,7 @@ async def start_autonomy(
     http: Request,
     service: AutonomyService = Depends(get_autonomy_service),
 ):
+    actor = require_admin_actor_context(http)
     # Validação do plano (se fornecido), incluindo schema e políticas
     if request.plan:
         _validate_plan_steps(
@@ -166,7 +170,7 @@ async def start_autonomy(
 
     config = AutonomyConfig(
         interval_seconds=request.interval_seconds,
-        user_id=require_authenticated_actor_id(http),
+        user_id=actor.actor_id,
         project_id=request.project_id,
         risk_profile=request.risk_profile,
         auto_confirm=request.auto_confirm,
@@ -178,7 +182,7 @@ async def start_autonomy(
         plan=request.plan,
     )
     try:
-        ok = await service.start(config)
+        ok = await service.start(config, actor=actor)
     except AutonomyConflictError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -212,8 +216,8 @@ async def start_autonomy(
 
 
 @router.post("/stop", summary="Para o AutonomyLoop")
-async def stop_autonomy(service: AutonomyService = Depends(get_autonomy_service)):
-    ok = await service.stop()
+async def stop_autonomy(http: Request, service: AutonomyService = Depends(get_autonomy_service)):
+    ok = await service.stop(actor=require_admin_actor_context(http))
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="AutonomyLoop não está ativo."
@@ -230,7 +234,9 @@ async def autonomy_status(service: AutonomyService = Depends(get_autonomy_servic
 
 @router.put("/plan", summary="Atualiza o plano de execução do AutonomyLoop")
 async def update_autonomy_plan(
-    request: PlanUpdateRequest, service: AutonomyService = Depends(get_autonomy_service)
+    request: PlanUpdateRequest,
+    http: Request,
+    service: AutonomyService = Depends(get_autonomy_service),
 ):
     # Validação do plano contra configuração atual (allowlist/blocklist e schema)
     status_payload = service.get_status()
@@ -241,7 +247,7 @@ async def update_autonomy_plan(
         blocklist=config.get("blocklist", []) or [],
     )
 
-    service.update_plan(request.plan)
+    service.update_plan(request.plan, actor=require_admin_actor_context(http))
     return {"status": "updated", "steps_count": len(request.plan)}
 
 
@@ -256,9 +262,12 @@ class PolicyUpdateRequest(BaseModel):
 
 @router.put("/policy", summary="Atualiza configurações de políticas do AutonomyLoop")
 async def update_policy(
-    request: PolicyUpdateRequest, service: AutonomyService = Depends(get_autonomy_service)
+    request: PolicyUpdateRequest,
+    http: Request,
+    service: AutonomyService = Depends(get_autonomy_service),
 ):
     service.update_policy_config(
+        actor=require_admin_actor_context(http),
         risk_profile=request.risk_profile,
         auto_confirm=request.auto_confirm,
         allowlist=request.allowlist,
@@ -389,15 +398,6 @@ async def get_autonomy_health(
     except Exception:
         active_checks["audit_ledger_ping"] = {"pass": False, "latency_ms": round((time.time() - t0) * 1000, 1)}
 
-    # Evolution Sandbox importable
-    t0 = time.time()
-    try:
-        import importlib
-        importlib.import_module("app.core.evolution.evolution_sandbox")
-        active_checks["evolution_sandbox_importable"] = {"pass": True, "latency_ms": round((time.time() - t0) * 1000, 1)}
-    except Exception:
-        active_checks["evolution_sandbox_importable"] = {"pass": False, "latency_ms": round((time.time() - t0) * 1000, 1)}
-
     # ActionRegistry has tools
     t0 = time.time()
     try:
@@ -453,14 +453,12 @@ async def get_autonomy_health(
 @router.get("/maturity", summary="Autonomy maturity score based on implemented phases")
 async def get_autonomy_maturity(request: Request):
     components = {
-        "sandbox": ("backend.app.core.evolution.evolution_sandbox", 10),
         "namespace_isolation": ("backend.app.core.tools.action_module", 10),
         "governance": ("backend.app.core.autonomy.goal_conflict_detector", 10),
         "resilience": ("backend.app.core.autonomy.domain_circuit_breaker", 10),
         "observability": ("backend.app.core.autonomy.goal_metrics", 10),
         "scale": ("backend.app.core.autonomy.knowledge_federation", 10),
         "hardening": ("backend.app.core.autonomy.safety_plan_validator", 10),
-        "tests": ("backend.tests.unit.test_evolution_sandbox", 10),
         "documentation": ("documentation.autonomy_architecture", 5),
         "intelligence": ("backend.app.core.autonomy.decision_quality_tracker", 10),
         "cost_governance": ("backend.app.core.autonomy.autonomy_cost_tracker", 5),

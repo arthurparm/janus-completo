@@ -9,7 +9,8 @@ def get_knowledge_facade(request: Request) -> KnowledgeFacade:
 
 def resolve_knowledge_user_id(request: Request | None, explicit_user_id: str | None) -> str:
     if request is not None:
-        actor = getattr(request.state, "actor_user_id", None)
+        actor_context = getattr(request.state, "actor_context", None)
+        actor = actor_context.actor_id if actor_context is not None else None
         actor_str = str(actor).strip() if actor is not None else ""
         explicit = str(explicit_user_id).strip() if explicit_user_id is not None else ""
         if actor_str:

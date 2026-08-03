@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from app.core.memory.security import redact_pii_text_only
+REDACTED_SECRET = "[REDACTED_SECRET]"
+REDACTED_PII = "[REDACTED_PII]"
+REDACTED_PAYMENT = "[REDACTED_PAYMENT]"
+REDACTION_FAILED = "[REDACTION_FAILED]"
 
 _SENSITIVE_KEY_HINTS = (
     "password",
@@ -17,61 +21,95 @@ _SENSITIVE_KEY_HINTS = (
     "credential",
     "access_key",
     "private_key",
-    "bearer",
+    "client_secret",
+    "session",
+    "cvv",
+    "cvc",
 )
-
-_INLINE_SECRET_PATTERNS = (
-    re.compile(r"(?i)\b(sk-[a-z0-9]{16,})\b"),
-    re.compile(r"(?i)\b(ghp_[a-z0-9]{20,})\b"),
-    re.compile(r"(?i)\b(xox[baprs]-[a-z0-9-]{20,})\b"),
-    re.compile(r"(?i)\b(eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9._-]{10,})\b"),
+_PII_KEY_HINTS = (
+    "user_id",
+    "actor_id",
+    "owner_id",
+    "email",
+    "phone",
+    "cpf",
+    "cnpj",
+    "full_name",
+    "display_name",
+    "address",
 )
+_PAYMENT_KEY_HINTS = ("card", "cvv", "cvc", "payment", "bank_account")
 
-_SENSITIVE_VALUE_MASK = "[REDACTED_SECRET]"
+_TEXT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"), REDACTED_SECRET),
+    (re.compile(r"(?i)\b(?:bearer\s+)?eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9._-]{10,}\b"), REDACTED_SECRET),
+    (re.compile(r"(?i)\b(?:sk-|gh[pousr]_|xox[baprs]-)[a-z0-9_-]{12,}\b"), REDACTED_SECRET),
+    (re.compile(r"(?i)([?&](?:token|key|secret|password|signature|sig)=)[^&#\s]+"), r"\1" + REDACTED_SECRET),
+    (re.compile(r"\b(?:\d[ -]*?){13,19}\b"), REDACTED_PAYMENT),
+    (re.compile(r"(?i)\b(?:cvv|cvc)\s*[:=]\s*\d{3,4}\b"), REDACTED_PAYMENT),
+    (re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b"), REDACTED_PII),
+    (re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b"), REDACTED_PII),
+    (re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b"), REDACTED_PII),
+    (re.compile(r"(?<!\d)(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}(?!\d)"), REDACTED_PII),
+)
 
 
 def _looks_sensitive_key(key: str | None) -> bool:
-    if not key:
-        return False
-    lowered = key.lower()
-    return any(hint in lowered for hint in _SENSITIVE_KEY_HINTS)
+    lowered = str(key or "").lower()
+    return any(
+        hint in lowered
+        for hint in _SENSITIVE_KEY_HINTS + _PII_KEY_HINTS + _PAYMENT_KEY_HINTS
+    )
 
 
-def _mask_secret_text(value: str) -> str:
-    if not value:
-        return value
-
-    masked = value
-    for pattern in _INLINE_SECRET_PATTERNS:
-        masked = pattern.sub("[REDACTED_SECRET]", masked)
-
-    return redact_pii_text_only(masked)
+def _placeholder_for_key(key: str | None) -> str:
+    lowered = str(key or "").lower()
+    if any(hint in lowered for hint in _PAYMENT_KEY_HINTS):
+        return REDACTED_PAYMENT
+    if any(hint in lowered for hint in _PII_KEY_HINTS):
+        return REDACTED_PII
+    return REDACTED_SECRET
 
 
-def _mask_value(value: Any) -> str:
-    _ = value
-    return _SENSITIVE_VALUE_MASK
+def _redact_text(value: str) -> str:
+    result = value
+    for pattern, replacement in _TEXT_PATTERNS:
+        result = pattern.sub(replacement, result)
+    return result
+
+
+def _redact(value: Any, key_hint: str | None, seen: set[int]) -> Any:
+    if _looks_sensitive_key(key_hint):
+        return _placeholder_for_key(key_hint)
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, Mapping):
+        identity = id(value)
+        if identity in seen:
+            return REDACTION_FAILED
+        seen.add(identity)
+        try:
+            return {str(key): _redact(child, str(key), seen) for key, child in value.items()}
+        finally:
+            seen.remove(identity)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        identity = id(value)
+        if identity in seen:
+            return REDACTION_FAILED
+        seen.add(identity)
+        try:
+            redacted = [_redact(child, key_hint, seen) for child in value]
+            return tuple(redacted) if isinstance(value, tuple) else redacted
+        finally:
+            seen.remove(identity)
+    if _looks_sensitive_key(key_hint):
+        return REDACTED_SECRET
+    return value
 
 
 def redact_sensitive_payload(value: Any, key_hint: str | None = None) -> Any:
-    """
-    Redacts sensitive values recursively from payloads used in logs/audit/persistence.
-    """
-    if isinstance(value, dict):
-        return {k: redact_sensitive_payload(v, key_hint=str(k)) for k, v in value.items()}
-
-    if isinstance(value, list):
-        return [redact_sensitive_payload(item, key_hint=key_hint) for item in value]
-
-    if isinstance(value, tuple):
-        return tuple(redact_sensitive_payload(item, key_hint=key_hint) for item in value)
-
-    if isinstance(value, str):
-        if _looks_sensitive_key(key_hint):
-            return _mask_value(value)
-        return _mask_secret_text(value)
-
-    if _looks_sensitive_key(key_hint):
-        return _mask_value(value)
-
-    return value
+    """Recursively redact every logging/audit payload; failure never returns the source value."""
+    try:
+        return _redact(value, key_hint, set())
+    except Exception:
+        return REDACTION_FAILED

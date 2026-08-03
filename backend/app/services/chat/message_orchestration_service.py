@@ -35,7 +35,6 @@ from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
     estimate_tokens,
-    format_tool_creation_response,
     is_explicit_tool_creation,
     split_ui,
 )
@@ -1522,17 +1521,13 @@ class MessageOrchestrationService:
 
         if self._prompt_service.is_tool_request(message) and is_explicit_tool_creation(message):
             start_t = _time.time()
-            if not self._tools:
-                assistant_text = "Tool creation is unavailable: tool service is not configured."
-            else:
-                try:
-                    from app.core.evolution import EvolutionManager
+            from app.core.security.security_alerts import emit_security_alert
 
-                    manager = EvolutionManager(self._llm, self._tools)
-                    tool_result = await manager.evolve_tool(message)
-                    assistant_text = format_tool_creation_response(tool_result)
-                except Exception as e:
-                    assistant_text = f"Falha ao criar ferramenta: {e}"
+            emit_security_alert(
+                "autonomous_evolution_attempt_blocked",
+                {"capability": "chat_tool_creation"},
+            )
+            assistant_text = "Tool creation and autonomous code evolution are permanently disabled."
 
             clean_text, ui = split_ui(assistant_text)
             elapsed = max(0.0, _time.time() - start_t)

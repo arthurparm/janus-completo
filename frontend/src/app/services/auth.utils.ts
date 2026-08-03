@@ -5,11 +5,11 @@ export function decodeTokenUserId(token: string | null): number | null {
   try {
     const parts = token.split('.')
     if (parts.length < 2) return null
-    const body = parts[0]
+    const body = parts[1]
     const padded = body + '='.repeat((4 - (body.length % 4)) % 4)
     const jsonStr = atob(padded.replace(/-/g, '+').replace(/_/g, '/'))
     const payload = JSON.parse(jsonStr)
-    const uid = Number(payload?.user_id)
+    const uid = Number(payload?.sub)
     return Number.isFinite(uid) ? uid : null
   } catch {
     return null
@@ -83,7 +83,7 @@ export function decodeTokenExp(token: string | null): number | null {
   try {
     const parts = token.split('.')
     if (parts.length < 2) return null
-    const body = parts[0]
+    const body = parts[1]
     const padded = body + '='.repeat((4 - (body.length % 4)) % 4)
     const jsonStr = atob(padded.replace(/-/g, '+').replace(/_/g, '/'))
     const payload = JSON.parse(jsonStr)

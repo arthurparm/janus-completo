@@ -191,44 +191,6 @@ export class AuthService {
     return false
   }
 
-  async registerLocal(payload: {
-    username: string
-    fullName: string
-    cpf?: string
-    phone?: string
-    email: string
-    password: string
-    terms: boolean
-  }): Promise<AuthActionResult> {
-    try {
-      const out = await firstValueFrom(
-        this.http.post<LocalAuthResponse>(`${API_BASE_URL}/v1/auth/local/register`, {
-          username: payload.username,
-          full_name: payload.fullName,
-          cpf: payload.cpf,
-          phone: payload.phone,
-          email: payload.email,
-          password: payload.password,
-          terms: payload.terms
-        })
-      )
-      const token = String(out?.token || '')
-      const refreshToken = String(out?.refresh_token || '')
-      if (token && refreshToken) {
-        storeAuthToken(token, true)
-        storeRefreshToken(refreshToken, true)
-        localStorage.removeItem(VISITOR_MODE_KEY)
-        this._isVisitor.set(false)
-        this._isAuthenticated.set(true)
-        this._user.set(out.user)
-        return { ok: true }
-      }
-      return { ok: false, error: 'Falha ao registrar. Verifique seus dados.' }
-    } catch (err) {
-      return { ok: false, error: this.extractErrorDetail(err) }
-    }
-  }
-
   async requestPasswordReset(email: string): Promise<string | null> {
     try {
       const out = await firstValueFrom(

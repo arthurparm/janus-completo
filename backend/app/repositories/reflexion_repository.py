@@ -1,10 +1,8 @@
 from typing import Any
 
 import structlog
-
 from app.core.agents.agent_manager import agent_circuit_breakers, get_agent_manager
 from app.core.optimization import ReflexionConfig, ReflexionSession
-from app.core.tools import get_faulty_tools
 from app.services.memory_service import MemoryService
 
 logger = structlog.get_logger(__name__)
@@ -52,6 +50,6 @@ class ReflexionRepository:
         return {
             "status": "healthy",
             "module": "reflexion",
-            "faulty_tools_count": len(get_faulty_tools()),
+            "faulty_tools_count": 0,
             "circuit_breakers": cb_states,
         }

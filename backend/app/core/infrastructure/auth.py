@@ -1,141 +1,219 @@
-import base64
-import hashlib
-import hmac
-import json
+from __future__ import annotations
+
 import secrets
 import time
+import uuid
+from typing import Any, cast
 
+import jwt
 import structlog
 from fastapi import Request
 
 from app.config import settings
-from app.repositories.observability_repository import record_audit_event_direct
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
 
 logger = structlog.get_logger(__name__)
-_DEV_FALLBACK_SECRET = secrets.token_urlsafe(32)
+_DEV_FALLBACK_SECRET = secrets.token_urlsafe(48)
 _DEV_SECRET_WARNING_EMITTED = False
+_ALGORITHM = "HS256"
 
 
-def _get_signing_secret() -> bytes:
+def _get_signing_secret() -> str:
     global _DEV_SECRET_WARNING_EMITTED
 
     configured = (settings.AUTH_JWT_SECRET or "").strip()
     if configured:
-        return configured.encode("utf-8")
+        return configured
 
-    if str(settings.ENVIRONMENT).lower() == "production":
-        raise RuntimeError(
-            "AUTH_JWT_SECRET é obrigatório em produção. Defina uma chave forte no ambiente."
-        )
+    environment = str(settings.ENVIRONMENT).strip().lower()
+    if environment in {"production", "staging", "homologation"}:
+        raise RuntimeError("AUTH_JWT_SECRET is required in deployed environments")
 
     if not _DEV_SECRET_WARNING_EMITTED:
-        logger.warning(
-            "AUTH_JWT_SECRET ausente fora de produção; usando segredo efêmero apenas nesta execução."
-        )
+        logger.warning("auth_jwt_secret_missing_using_ephemeral_process_key")
         _DEV_SECRET_WARNING_EMITTED = True
-
-    return _DEV_FALLBACK_SECRET.encode("utf-8")
-
-
-def _sign(payload: dict) -> str:
-    secret = _get_signing_secret()
-    data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    sig = hmac.new(secret, data, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(sig).decode("ascii").rstrip("=")
+    return _DEV_FALLBACK_SECRET
 
 
-def create_token(user_id: int, expires_in: int | None = None) -> str:
-    exp = int(time.time()) + int(expires_in or settings.AUTH_JWT_EXPIRES_SECONDS)
-    payload = {"user_id": int(user_id), "exp": exp}
-    sig = _sign(payload)
-    body = (
-        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-        .decode("ascii")
-        .rstrip("=")
+def _issuer() -> str:
+    return str(getattr(settings, "AUTH_JWT_ISSUER", "janus-api"))
+
+
+def _audience() -> str:
+    return str(getattr(settings, "AUTH_JWT_AUDIENCE", "janus-clients"))
+
+
+def _encode_token(
+    *,
+    actor_id: str | int,
+    token_type: str,
+    auth_method: str,
+    expires_in: int,
+    audience: str | None = None,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
+    now = int(time.time())
+    payload: dict[str, Any] = {
+        "sub": str(actor_id),
+        "amr": [str(auth_method)],
+        "typ": token_type,
+        "iat": now,
+        "nbf": now,
+        "exp": now + int(expires_in),
+        "jti": uuid.uuid4().hex,
+        "iss": _issuer(),
+        "aud": audience or _audience(),
+    }
+    if extra_claims:
+        payload.update(extra_claims)
+    return cast(
+        str,
+        jwt.encode(
+        payload,
+        _get_signing_secret(),
+        algorithm=_ALGORITHM,
+        headers={"kid": str(getattr(settings, "AUTH_JWT_KEY_ID", "primary"))},
+        ),
     )
-    return f"{body}.{sig}"
 
 
-def create_refresh_token(user_id: int, expires_in: int | None = None) -> str:
-    exp = int(time.time()) + int(expires_in or settings.AUTH_REFRESH_EXPIRES_SECONDS)
-    payload = {"user_id": int(user_id), "exp": exp, "typ": "refresh"}
-    sig = _sign(payload)
-    body = (
-        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-        .decode("ascii")
-        .rstrip("=")
+def create_token(
+    user_id: int,
+    expires_in: int | None = None,
+    *,
+    auth_method: str = AuthMethod.LOCAL,
+) -> str:
+    return _encode_token(
+        actor_id=user_id,
+        token_type="access",
+        auth_method=auth_method,
+        expires_in=int(expires_in or settings.AUTH_JWT_EXPIRES_SECONDS),
     )
-    return f"{body}.{sig}"
 
 
-def _decode_token_payload(token: str) -> dict | None:
+def create_refresh_token(
+    user_id: int,
+    expires_in: int | None = None,
+    *,
+    auth_method: str = AuthMethod.LOCAL,
+) -> str:
+    return _encode_token(
+        actor_id=user_id,
+        token_type="refresh",
+        auth_method=auth_method,
+        expires_in=int(expires_in or settings.AUTH_REFRESH_EXPIRES_SECONDS),
+    )
+
+
+def create_actor_envelope(actor: ActorContext, *, audience: str) -> str:
+    return _encode_token(
+        actor_id=actor.actor_id,
+        token_type="actor-context",
+        auth_method=actor.auth_method,
+        expires_in=int(getattr(settings, "ACTOR_CONTEXT_ENVELOPE_TTL_SECONDS", 60)),
+        audience=audience,
+        extra_claims={
+            "actor_type": actor.actor_type.value,
+            "roles": list(actor.roles),
+            "trace_id": actor.trace_id,
+            "resource_owner": actor.resource_owner,
+        },
+    )
+
+
+def _decode_token(token: str, *, token_type: str, audience: str | None = None) -> dict[str, Any] | None:
     try:
-        if "." not in token:
+        payload = jwt.decode(
+            token,
+            _get_signing_secret(),
+            algorithms=[_ALGORITHM],
+            audience=audience or _audience(),
+            issuer=_issuer(),
+            options={"require": ["sub", "amr", "typ", "iat", "nbf", "exp", "jti"]},
+        )
+        if payload.get("typ") != token_type:
             return None
-        body, sig = token.split(".", 1)
-        padded = body + "=" * (-len(body) % 4)
-        payload_json = base64.urlsafe_b64decode(padded.encode("ascii"))
-        payload = json.loads(payload_json.decode("utf-8"))
-        if not isinstance(payload, dict):
-            return None
-        if not hmac.compare_digest(_sign(payload), sig):
-            return None
-        if int(payload.get("exp", 0)) < int(time.time()):
-            return None
-        return payload
-    except Exception:
+        return cast(dict[str, Any], payload)
+    except jwt.PyJWTError:
         return None
+
+
+def verify_access_claims(token: str) -> dict[str, Any] | None:
+    return _decode_token(token, token_type="access")
 
 
 def verify_token(token: str) -> int | None:
-    payload = _decode_token_payload(token)
-    if not payload:
-        return None
-    if payload.get("typ") == "refresh":
+    payload = verify_access_claims(token)
+    if payload is None:
         return None
     try:
-        return int(payload.get("user_id"))
-    except Exception:
+        return int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
         return None
 
 
 def verify_refresh_token(token: str) -> int | None:
-    payload = _decode_token_payload(token)
-    if not payload:
-        return None
-    if payload.get("typ") != "refresh":
+    payload = _decode_token(token, token_type="refresh")
+    if payload is None:
         return None
     try:
-        return int(payload.get("user_id"))
+        return int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def verify_actor_envelope(token: str, *, audience: str) -> ActorContext | None:
+    payload = _decode_token(token, token_type="actor-context", audience=audience)
+    if payload is None:
+        return None
+    try:
+        actor = ActorContext.authenticated(
+            actor_id=payload["sub"],
+            roles=payload.get("roles") or (),
+            auth_method=(payload.get("amr") or [AuthMethod.INTERNAL])[0],
+            trace_id=payload["trace_id"],
+            actor_type=ActorType(str(payload.get("actor_type") or ActorType.SYSTEM)),
+        )
+        owner = payload.get("resource_owner")
+        return actor.bind_resource_owner(owner) if owner is not None else actor
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def get_actor_context(request: Request) -> ActorContext | None:
+    auth = request.headers.get("Authorization") or ""
+    if not auth.lower().startswith("bearer "):
+        return None
+    payload = verify_access_claims(auth.split(" ", 1)[1].strip())
+    if payload is None:
+        return None
+    try:
+        actor_id = int(payload["sub"])
+        from app.repositories.user_repository import UserRepository
+
+        roles = UserRepository().list_roles(actor_id)
+        actor_type = ActorType.SYSTEM if "SYSTEM" in roles else ActorType.HUMAN
+        trace_id = str(getattr(request.state, "trace_id", "") or uuid.uuid4().hex)
+        return ActorContext.authenticated(
+            actor_id=actor_id,
+            roles=roles,
+            auth_method=(payload.get("amr") or ["unknown"])[0],
+            trace_id=trace_id,
+            actor_type=actor_type,
+        )
     except Exception:
         return None
 
 
 def get_actor_user_id(request: Request) -> int | None:
-    auth = request.headers.get("Authorization") or ""
-    if auth.lower().startswith("bearer "):
-        token = auth.split(" ", 1)[1].strip()
-        uid = verify_token(token)
-        if uid is not None:
-            return uid
-
-    env = str(getattr(settings, "ENVIRONMENT", "development")).strip().lower()
-    trust_header = bool(getattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", False))
-    if env == "production" or not trust_header:
-        return None
-
-    xuid = request.headers.get("X-User-Id")
+    """Compatibility accessor backed exclusively by ActorContext."""
+    actor = getattr(getattr(request, "state", None), "actor_context", None)
     try:
-        if xuid:
-            logger.warning("X-User-Id accepted for authentication", x_user_id=xuid)
-            record_audit_event_direct(
-                endpoint="auth",
-                action="x_user_id_used_for_auth",
-                tool="auth.get_actor_user_id",
-                status="allowed",
-                details_json={"x_user_id": xuid},
-            )
-            return int(xuid)
-    except Exception:
+        if actor is not None:
+            return int(actor.actor_id)
+        auth = request.headers.get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            return verify_token(auth.split(" ", 1)[1].strip())
         return None
-    return None
+    except (TypeError, ValueError):
+        return None

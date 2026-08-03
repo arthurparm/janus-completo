@@ -9,7 +9,6 @@ import msgpack
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 try:
@@ -38,10 +37,12 @@ from app.core.infrastructure import (
     setup_logging,
     setup_tracing,
 )
-from app.core.infrastructure.auth import get_actor_user_id
 from app.core.kernel import Kernel, KernelState
 from app.core.middleware.security_headers import SecurityHeadersMiddleware
 from app.core.monitoring import get_health_monitor
+from app.core.security.autonomy_guard import validate_autonomous_evolution_disabled
+from app.core.security.containment_middleware import SecurityContainmentMiddleware
+from app.core.security.route_policy import validate_route_policy
 from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
 
 # Determine log path
@@ -90,6 +91,9 @@ def cancel_tracked_orchestrator_workers(raw_workers: Any) -> int:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.route_policy_matrix = validate_route_policy(app)
+    validate_autonomous_evolution_disabled(app)
+
     # 0.5 Validate critical secrets in production before bootstrapping services.
     from app.core.security.secret_validator import validate_production_secrets
 
@@ -207,11 +211,15 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown complete.")
 
 
+_is_development = str(settings.ENVIRONMENT).strip().lower() == "development"
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Janus: An autonomous, modular AI software architect with a clean, decoupled architecture.",
     lifespan=lifespan,
+    docs_url="/docs" if _is_development else None,
+    redoc_url="/redoc" if _is_development else None,
+    openapi_url="/openapi.json" if _is_development else None,
 )
 setup_tracing(app)
 
@@ -239,51 +247,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityContainmentMiddleware)
 add_exception_handlers(app)
-
-# --- Autenticação por API Key (global) ---
-# Se a variável de ambiente PUBLIC_API_KEY estiver definida, exige o header X-API-Key
-API_KEY = getattr(settings, "PUBLIC_API_KEY", None)
-PUBLIC_API_KEY_EXEMPT_EXACT_PATHS = frozenset(
-    {
-        "/docs",
-        "/openapi.json",
-        "/redoc",
-        "/health",
-        "/healthz",
-        "/metrics",
-    }
-)
-PUBLIC_API_KEY_EXEMPT_PREFIXES = ("/static/",)
-
-
-def is_public_api_key_exempt_path(path: str) -> bool:
-    normalized = str(path or "")
-    if normalized in PUBLIC_API_KEY_EXEMPT_EXACT_PATHS:
-        return True
-    return any(normalized.startswith(prefix) for prefix in PUBLIC_API_KEY_EXEMPT_PREFIXES)
-
-if API_KEY:
-
-    @app.middleware("http")
-    async def require_api_key(request: Request, call_next):
-        path = request.url.path
-        if request.method == "OPTIONS" or is_public_api_key_exempt_path(path):
-            return await call_next(request)
-        key = request.headers.get("X-API-Key")
-        if key != API_KEY:
-            logger.warning("Unauthorized request", path=path)
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
-        return await call_next(request)
-
-
-@app.middleware("http")
-async def actor_binding(request: Request, call_next):
-    actor = get_actor_user_id(request)
-    request.state.actor_user_id = str(actor) if actor is not None else None
-    request.state.actor_project_id = (request.headers.get("X-Project-Id") or "").strip() or None
-    return await call_next(request)
-
 
 app.include_router(api_router, prefix="/api/v1")
 

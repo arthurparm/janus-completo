@@ -3,7 +3,7 @@
   "dataset": {
     "dataset_id": "technical-qa",
     "version": "v1",
-    "hash": "7afde567efce32c3d37e0964b48309638adc26dd08abbb08caf91782300895a0",
+    "hash": "bd1c254bfe3ab3d06436864860329c07ca01cf6f3d802ff969be6fd9eb85df7a",
     "num_cases": 15,
     "path": "/repo/backend/evals/technical-qa/datasets/technical-qa.v1.json"
   },

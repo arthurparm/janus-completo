@@ -8,11 +8,11 @@ import { AUTH_TOKEN_KEY } from '../api.config'
 import { authInterceptor } from '../../core/interceptors/auth.interceptor'
 
 function makeFakeToken(userId: number): string {
-  const payload = btoa(JSON.stringify({ user_id: userId }))
+  const payload = btoa(JSON.stringify({ sub: String(userId) }))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '')
-  return `${payload}.ignored.signature`
+  return `header.${payload}.signature`
 }
 
 describe('ChatApiService (contract)', () => {

@@ -18,20 +18,15 @@ def actor_user_id(http: Request | None) -> str | None:
     if http is None:
         return None
     try:
-        actor = getattr(http.state, "actor_user_id", None)
-        return str(actor) if actor else None
+        actor = getattr(http.state, "actor_context", None)
+        return actor.actor_id if actor is not None else None
     except Exception:
         return None
 
 
 def actor_project_id(http: Request | None) -> str | None:
-    if http is None:
-        return None
-    try:
-        project = getattr(http.state, "actor_project_id", None)
-        return str(project) if project else None
-    except Exception:
-        return None
+    _ = http
+    return None
 
 
 def is_chat_auth_enforced() -> bool:

@@ -208,7 +208,6 @@ Authorization: Bearer {{token}}
 # X-Request-ID: {{correlation_id}}
 # User-Agent: Janus-HTTP-Test/{{client_version}}
 # Authorization: Bearer {{token}}
-# X-User-Id: {{actor_user_id}}
 #
 # {
 #   "user_id": {{user_id_int}},
@@ -225,7 +224,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("productivity/notes: 200/403", function() { client.assert([200,403].includes(response.status)); }); %}
 
@@ -236,7 +234,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("productivity oauth start(GET): 200/400/403", function() { client.assert([200,400,403].includes(response.status)); }); %}
 

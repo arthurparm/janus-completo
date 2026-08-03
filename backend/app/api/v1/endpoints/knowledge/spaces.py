@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.services.knowledge_space_service import (
     KnowledgeSpaceService,
@@ -32,11 +32,10 @@ router = APIRouter(prefix="/spaces")
 async def create_knowledge_space(
     payload: KnowledgeSpaceCreateRequest,
     request: Request,
-    user_id: str | None = Query(None),
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
     row = service.create_space(
-        user_id=resolve_knowledge_user_id(request, user_id),
+        user_id=resolve_knowledge_user_id(request, None),
         name=payload.name,
         source_type=payload.source_type,
         source_id=payload.source_id,
@@ -55,11 +54,10 @@ async def create_knowledge_space(
 )
 async def list_knowledge_spaces(
     request: Request,
-    user_id: str | None = Query(None),
     limit: int = 100,
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
-    rows = service.list_spaces(user_id=resolve_knowledge_user_id(request, user_id), limit=limit)
+    rows = service.list_spaces(user_id=resolve_knowledge_user_id(request, None), limit=limit)
     return KnowledgeSpaceListResponse(items=[KnowledgeSpaceResponse(**row) for row in rows])
 
 
@@ -71,12 +69,11 @@ async def list_knowledge_spaces(
 async def get_knowledge_space_status(
     knowledge_space_id: str,
     request: Request,
-    user_id: str | None = Query(None),
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
     row = service.get_space_status(
         knowledge_space_id=knowledge_space_id,
-        user_id=resolve_knowledge_user_id(request, user_id),
+        user_id=resolve_knowledge_user_id(request, None),
     )
     return KnowledgeSpaceStatusResponse(**row)
 
@@ -91,13 +88,12 @@ async def attach_document_to_space(
     doc_id: str,
     payload: AttachDocumentRequest,
     request: Request,
-    user_id: str | None = Query(None),
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
     row = await service.attach_document(
         knowledge_space_id=knowledge_space_id,
         doc_id=doc_id,
-        user_id=resolve_knowledge_user_id(request, user_id),
+        user_id=resolve_knowledge_user_id(request, None),
         source_type=payload.source_type,
         source_id=payload.source_id,
         doc_role=payload.doc_role,
@@ -117,11 +113,10 @@ async def consolidate_knowledge_space(
     knowledge_space_id: str,
     payload: KnowledgeSpaceConsolidationRequest,
     request: Request,
-    user_id: str | None = Query(None),
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
     ops: KnowledgeOpsService = Depends(get_knowledge_ops_service),
 ):
-    resolved_user_id = resolve_knowledge_user_id(request, user_id)
+    resolved_user_id = resolve_knowledge_user_id(request, None)
     service.mark_consolidation_requested(
         knowledge_space_id=knowledge_space_id,
         user_id=resolved_user_id,
@@ -135,7 +130,7 @@ async def consolidate_knowledge_space(
         },
         correlation_id=knowledge_space_id,
     )
-    stats["status_url"] = f"/api/v1/knowledge/spaces/{knowledge_space_id}?user_id={resolved_user_id}"
+    stats["status_url"] = f"/api/v1/knowledge/spaces/{knowledge_space_id}"
     return ConsolidationResponse(message="Consolidação estrutural publicada.", stats=stats)
 
 
@@ -148,12 +143,11 @@ async def query_knowledge_space(
     knowledge_space_id: str,
     payload: KnowledgeSpaceQueryRequest,
     request: Request,
-    user_id: str | None = Query(None),
     service: KnowledgeSpaceService = Depends(get_knowledge_space_service),
 ):
     result = await service.query_space(
         knowledge_space_id=knowledge_space_id,
-        user_id=resolve_knowledge_user_id(request, user_id),
+        user_id=resolve_knowledge_user_id(request, None),
         question=payload.question,
         mode=payload.mode,
         limit=payload.limit,

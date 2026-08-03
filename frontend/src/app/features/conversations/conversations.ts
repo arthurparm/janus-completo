@@ -762,7 +762,6 @@ export class ConversationsComponent {
     const state = this.feedbackState(msg)
     if (state.submitting || state.submitted) return
     const messageId = String(msg.backendMessageId || msg.id)
-    const userId = this.context.userIdString()
     const comment = this.feedbackCommentDraft(msg.id).trim() || undefined
 
     this.feedbackStateByMessageId.update((curr) => ({
@@ -771,8 +770,8 @@ export class ConversationsComponent {
     }))
 
     const request$ = rating === 'positive'
-      ? this.api.feedback.thumbsUpFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
-      : this.api.feedback.thumbsDownFeedback({ conversation_id: conversationId, message_id: messageId, comment, user_id: userId })
+      ? this.api.feedback.thumbsUpFeedback({ conversation_id: conversationId, message_id: messageId, comment })
+      : this.api.feedback.thumbsDownFeedback({ conversation_id: conversationId, message_id: messageId, comment })
 
     request$
       .pipe(catchError((err) => {

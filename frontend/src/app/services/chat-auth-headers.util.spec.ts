@@ -12,19 +12,19 @@ describe('buildChatStreamAuthHeaders', () => {
     sessionStorage.clear()
   })
 
-  it('deve montar headers com bearer e x-project-id', () => {
-    const payload = btoa(JSON.stringify({ user_id: 42 }))
+  it('deve montar headers somente com bearer e rastreio', () => {
+    const payload = btoa(JSON.stringify({ sub: '42' }))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/g, '')
-    const fakeToken = `${payload}.ignored.signature`
+    const fakeToken = `header.${payload}.signature`
     localStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
 
     const headers = buildChatStreamAuthHeaders({ projectId: 'p-1' })
 
     expect(headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
     expect(headers.get('X-User-Id')).toBeNull()
-    expect(headers.get('X-Project-Id')).toBe('p-1')
+    expect(headers.get('X-Project-Id')).toBeNull()
     expect(headers.get('X-Request-ID')).toBeTruthy()
     expect(headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
   })
@@ -38,11 +38,11 @@ describe('buildChatStreamAuthHeaders', () => {
   })
 
   it('deve usar token de sessionStorage quando localStorage estiver vazio', () => {
-    const payload = btoa(JSON.stringify({ user_id: 7 }))
+    const payload = btoa(JSON.stringify({ sub: '7' }))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/g, '')
-    const fakeToken = `${payload}.ignored.signature`
+    const fakeToken = `header.${payload}.signature`
     sessionStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
 
     const headers = buildChatStreamAuthHeaders()

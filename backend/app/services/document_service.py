@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -10,13 +9,10 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
-from fastapi import UploadFile
-from qdrant_client import models
-
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_texts
-from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.core.governance.data_classification import classify_text, default_retention_decision
+from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.core.workers.document_ingestion_worker import publish_document_ingestion_task
 from app.db.vector_store import (
     aget_or_create_collection,
@@ -31,6 +27,8 @@ from app.repositories.observability_repository import record_audit_event_direct
 from app.services.document_parser_service import DocumentParserService
 from app.services.document_semantic_enrichment_service import DocumentSemanticEnrichmentService
 from app.services.outbox_service import OutboxService
+from fastapi import UploadFile
+from qdrant_client import models
 
 try:
     from opentelemetry import trace  # type: ignore
@@ -116,7 +114,7 @@ class DocumentIngestionService:
         storage_path = self.resolve_storage_path(user_id=str(user_id), doc_id=doc_id, filename=filename)
         storage_path.parent.mkdir(parents=True, exist_ok=True)
 
-        manifest = self._manifest_repo.create_manifest(
+        self._manifest_repo.create_manifest(
             doc_id=doc_id,
             user_id=str(user_id),
             conversation_id=str(conversation_id) if conversation_id is not None else None,
@@ -458,7 +456,7 @@ class DocumentIngestionService:
                     if tid and tid != "-":
                         span.set_attribute("janus.trace_id", tid)
                     if sid and sid != "-":
-                        span.set_attribute("janus.user_id", sid)
+                        span.set_attribute("janus.user_id", "[REDACTED_PII]")
                     span.set_attribute("doc.filename", filename)
                     span.set_attribute("doc.content_type", (content_type or "").lower())
                 except Exception as exc:

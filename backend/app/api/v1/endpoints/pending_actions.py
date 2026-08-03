@@ -665,7 +665,6 @@ async def list_pending(
     include_sql: bool = False,
     pending_status: str | None = "pending",
     limit: int = 50,
-    user_id: str | None = None,
     http: Request = None,
     chat_service: ChatService = Depends(get_chat_service),
 ):
@@ -679,7 +678,7 @@ async def list_pending(
     if include_sql or include_graph:
         resolved_user_id = _resolve_pending_actions_user_id(
             http,
-            user_id,
+            None,
             endpoint_label="/api/v1/pending_actions",
         )
 

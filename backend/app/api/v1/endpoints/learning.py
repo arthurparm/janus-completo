@@ -1,9 +1,10 @@
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.core.security.request_guard import require_admin_actor
 from app.services.learning_service import (
     ExperimentNotFoundError,
     LearningService,
@@ -26,7 +27,6 @@ class HarvestRequest(BaseModel):
     min_score: float | None = Field(
         None, ge=0.0, le=1.0, description="Pontuação mínima opcional para filtrar"
     )
-    user_id: str | None = None
 
 
 class TrainingConfig(BaseModel):
@@ -45,7 +45,6 @@ class TrainRequest(BaseModel):
     model_type: str = Field("CLASSIFIER")
     model_name: str | None = Field(None, description="Nome do modelo a ser treinado")
     data_source: str | None = Field(None, description="Fonte opcional de dados para treino")
-    user_id: str | None = None
     training_config: TrainingConfig = Field(default_factory=TrainingConfig)
 
 
@@ -129,7 +128,9 @@ class ExperimentListResponse(BaseModel):
     "/harvest", response_model=LearningResponse, summary="Inicia a coleta de dados para treino"
 )
 async def trigger_harvesting(
-    request: HarvestRequest, learning_service: LearningService = Depends(get_learning_service)
+    request: HarvestRequest,
+    http: Request,
+    learning_service: LearningService = Depends(get_learning_service),
 ):
     """Delega a coleta de dados de experiência para o LearningService."""
     try:
@@ -137,7 +138,7 @@ async def trigger_harvesting(
             limit=request.limit,
             query=request.query,
             min_score=request.min_score,
-            origin=request.user_id,
+            origin=require_admin_actor(http),
         )
         return result
     except LearningServiceError as e:
@@ -151,7 +152,9 @@ async def trigger_harvesting(
     "/train", response_model=TrainingAckResponse, summary="Agenda o treino de um novo modelo"
 )
 async def trigger_training(
-    request: TrainRequest, learning_service: LearningService = Depends(get_learning_service)
+    request: TrainRequest,
+    http: Request,
+    learning_service: LearningService = Depends(get_learning_service),
 ):
     """Agenda o processo de treinamento de modelo via fila e retorna ack com task_id."""
     try:
@@ -161,7 +164,10 @@ async def trigger_training(
             config_dict["data_source"] = request.data_source
 
         result = await learning_service.trigger_training(
-            request.model_type, config_dict, model_name=request.model_name, user_id=request.user_id
+            request.model_type,
+            config_dict,
+            model_name=request.model_name,
+            user_id=require_admin_actor(http),
         )
         return result
     except TrainingFailedError as e:

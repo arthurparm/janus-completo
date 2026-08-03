@@ -250,7 +250,7 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                         _PROD_WORKER_LATENCY.labels("calendar_send").observe(
                             __import__("time").perf_counter() - _t0
                         )
-                        _PROD_WORKER_USER_LATENCY.labels(str(user_id), "calendar_send").observe(
+                        _PROD_WORKER_USER_LATENCY.labels("[REDACTED_PII]", "calendar_send").observe(
                             __import__("time").perf_counter() - _t0
                         )
                     except Exception:
@@ -428,11 +428,11 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                         resp.raise_for_status()
                     try:
                         _GOOGLE_MAIL_SENT_TOTAL.inc()
-                        _PROD_WORKER_USER_EVENTS.labels(str(user_id), "mail_send", "ok").inc()
+                        _PROD_WORKER_USER_EVENTS.labels("[REDACTED_PII]", "mail_send", "ok").inc()
                         _PROD_WORKER_LATENCY.labels("mail_send").observe(
                             __import__("time").perf_counter() - _t0
                         )
-                        _PROD_WORKER_USER_LATENCY.labels(str(user_id), "mail_send").observe(
+                        _PROD_WORKER_USER_LATENCY.labels("[REDACTED_PII]", "mail_send").observe(
                             __import__("time").perf_counter() - _t0
                         )
                     except Exception:

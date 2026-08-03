@@ -66,8 +66,6 @@ export interface GoalCreateRequest {
 // Autonomy
 export interface AutonomyStartRequest {
   interval_seconds?: number
-  user_id?: string
-  project_id?: string
   risk_profile?: 'conservative' | 'balanced' | 'aggressive'
   auto_confirm?: boolean
   allowlist?: string[]

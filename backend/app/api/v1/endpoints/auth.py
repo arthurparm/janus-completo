@@ -1,13 +1,14 @@
-from datetime import datetime, timedelta, timezone
 import hashlib
-import hmac
 import secrets
+from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.core.infrastructure.auth import create_refresh_token, create_token, verify_refresh_token
+from app.core.security.actor_context import AuthMethod
 from app.core.security.auth_rate_limiter import enforce_auth_rate_limit
 from app.core.security.cpf import is_valid_cpf, normalize_cpf
 from app.core.security.passwords import hash_password, verify_password
@@ -17,30 +18,12 @@ from app.repositories.user_repository import ConsentRepository, UserRepository
 router = APIRouter(tags=["Auth"], prefix="/auth")
 
 
-class TokenRequest(BaseModel):
-    user_id: int = Field(...)
-    expires_in: int = Field(default=3600)
-
-
 class TokenResponse(BaseModel):
     token: str
 
 
 def get_user_repo(request: Request) -> UserRepository:
     return UserRepository()
-
-
-@router.post("/token", response_model=TokenResponse)
-async def issue_token(
-    payload: TokenRequest, request: Request, repo: UserRepository = Depends(get_user_repo)
-):
-    enforce_auth_rate_limit(request, endpoint_key="auth.token", identifier=payload.user_id)
-    actor_id = require_authenticated_actor_id(request)
-    target_id = int(payload.user_id)
-    if int(actor_id) != target_id and not repo.is_admin(int(actor_id)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    tok = create_token(target_id, payload.expires_in)
-    return TokenResponse(token=tok)
 
 
 class SupabaseExchangeRequest(BaseModel):
@@ -52,35 +35,18 @@ async def supabase_exchange(
     payload: SupabaseExchangeRequest, repo: UserRepository = Depends(get_user_repo)
 ):
     try:
-        parts = payload.token.split(".")
-        if len(parts) < 3:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
-
         supabase_secret = str(getattr(settings, "SUPABASE_JWT_SECRET", "") or "").strip()
         if not supabase_secret:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Supabase auth not configured"
             )
 
-        header_b64 = parts[0]
-        body_b64 = parts[1]
-        sig_b64 = parts[2]
-        sig_padded = sig_b64 + "=" * (-len(sig_b64) % 4)
-        import base64
-
-        expected_sig = hmac.new(
-            supabase_secret.encode("utf-8"),
-            f"{header_b64}.{body_b64}".encode(),
-            hashlib.sha256,
-        ).digest()
-        actual_sig = base64.urlsafe_b64decode(sig_padded.encode("ascii"))
-        if not hmac.compare_digest(expected_sig, actual_sig):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
-
-        import json
-
-        body_padded = body_b64 + "=" * (-len(body_b64) % 4)
-        data = json.loads(base64.urlsafe_b64decode(body_padded.encode("ascii")).decode("utf-8"))
+        data = jwt.decode(
+            payload.token,
+            supabase_secret,
+            algorithms=["HS256"],
+            options={"require": ["exp", "sub"], "verify_aud": False},
+        )
         email = str(data.get("email") or "").strip()
         sub = str(data.get("sub") or "").strip()
         if not email and not sub:
@@ -91,7 +57,7 @@ async def supabase_exchange(
         if not u:
             display = (data.get("user_metadata") or {}).get("full_name") or None
             u = repo.create_user(email=email or None, display_name=display)
-        tok = create_token(int(u.id), 3600)
+        tok = create_token(int(u.id), 3600, auth_method=AuthMethod.SUPABASE)
         return TokenResponse(token=tok)
     except HTTPException:
         raise
@@ -112,16 +78,6 @@ class AuthUserResponse(BaseModel):
 class AuthExchangeResponse(BaseModel):
     token: str
     user: AuthUserResponse
-
-
-class LocalRegisterRequest(BaseModel):
-    email: str = Field(..., min_length=3)
-    password: str = Field(..., min_length=8)
-    username: str = Field(..., min_length=3, max_length=50)
-    full_name: str = Field(..., min_length=2)
-    cpf: str | None = None
-    phone: str | None = None
-    terms: bool = Field(default=False)
 
 
 class LocalLoginRequest(BaseModel):
@@ -249,6 +205,7 @@ def _is_cpf_already_registered(repo: UserRepository, cpf_value: str | None) -> b
 
 def _ensure_firebase_initialized() -> None:
     import firebase_admin
+
     from app.core.infrastructure.firebase import get_firebase_service
 
     if firebase_admin._apps:
@@ -301,77 +258,19 @@ async def firebase_exchange(
     elif uid and not user.external_id:
         repo.set_external_id(int(user.id), uid)
 
-    if not repo.has_any_admin() and not repo.has_role(int(user.id), "ADMIN"):
-        repo.assign_role(int(user.id), "ADMIN")
+    if not repo.has_role(int(user.id), "USER") and not repo.is_admin(int(user.id)):
+        repo.assign_role(int(user.id), "USER")
 
     roles = [r.lower() for r in repo.list_roles(int(user.id)) if isinstance(r, str)]
     if repo.is_admin(int(user.id)) and "admin" not in roles:
         roles.append("admin")
 
     permissions = ["read"]
-    tok = create_token(int(user.id), 3600)
+    tok = create_token(int(user.id), 3600, auth_method=AuthMethod.FIREBASE)
     return AuthExchangeResponse(
         token=tok,
         user=AuthUserResponse(id=str(user.id), roles=roles, permissions=permissions),
     )
-
-
-@router.post("/local/register", response_model=LocalAuthResponse)
-async def local_register(
-    payload: LocalRegisterRequest, repo: UserRepository = Depends(get_user_repo)
-):
-    if not payload.terms:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Terms not accepted"
-        )
-
-    email = payload.email.strip().lower()
-    username = payload.username.strip()
-    full_name = payload.full_name.strip()
-    normalized_cpf = _validate_cpf_or_raise(payload.cpf)
-
-    if repo.get_by_email(email):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-    if repo.get_by_username(username):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
-    if _is_cpf_already_registered(repo, normalized_cpf):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CPF already registered")
-
-    cpf_hash = (
-        hashlib.sha256(normalized_cpf.encode("utf-8")).hexdigest() if normalized_cpf else None
-    )
-    pw_hash = hash_password(payload.password)
-    user = repo.create_user(
-        email=email,
-        display_name=full_name,
-        username=username,
-        password_hash=pw_hash,
-        cpf_hash=cpf_hash,
-    )
-
-    cpf_scope = _cpf_hash_scope(normalized_cpf)
-    if cpf_scope:
-        try:
-            ConsentRepository().add_consent(int(user.id), scope=cpf_scope, granted=True)
-        except Exception:
-            pass
-
-    if _is_allowlisted_admin_cpf(normalized_cpf):
-        _ensure_admin_role_for_user(repo, int(user.id))
-    elif not repo.has_any_admin():
-        _ensure_admin_role_for_user(repo, int(user.id))
-    else:
-        if not repo.has_role(int(user.id), "USER"):
-            repo.assign_role(int(user.id), "USER")
-
-    try:
-        ConsentRepository().add_consent(int(user.id), scope="terms_v1", granted=True)
-    except Exception:
-        pass
-
-    tok = create_token(int(user.id), 3600)
-    refresh = create_refresh_token(int(user.id))
-    return LocalAuthResponse(token=tok, refresh_token=refresh, user=_build_local_user(repo, user))
 
 
 @router.post("/local/login", response_model=LocalAuthResponse)
@@ -478,9 +377,7 @@ async def local_refresh(
 
 @router.get("/local/me", response_model=LocalAuthUserResponse)
 async def local_me(request: Request, repo: UserRepository = Depends(get_user_repo)):
-    uid = getattr(request.state, "actor_user_id", None)
-    if not uid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    uid = require_authenticated_actor_id(request)
     user = repo.get_user(int(uid))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

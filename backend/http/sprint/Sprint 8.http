@@ -79,7 +79,6 @@ try {
 # X-Request-ID: {{correlation_id}}
 # User-Agent: Janus-HTTP-Test/{{client_version}}
 # Authorization: Bearer {{token}}
-# X-User-Id: {{actor_user_id}}
 #
 # ------JanusBoundaryStatic
 # Content-Disposition: form-data; name="url"
@@ -106,7 +105,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("documents/status: 200 ou 422", function() { client.assert([200,422].includes(response.status)); }); %}
 
@@ -117,7 +115,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("documents/list: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -128,7 +125,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("documents/search: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -159,7 +155,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("memory/timeline: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -190,7 +185,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("rag/user_chat: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -211,7 +205,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("rag/hybrid_search: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -244,7 +237,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
-X-User-Id: {{actor_user_id}}
 
 > {% client.test("documents/status inexistente: 200 ou 422", function() { client.assert([200,422].includes(response.status)); }); %}
 

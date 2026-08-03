@@ -2,7 +2,6 @@ import { ChangeDetectorRef, Component, inject } from '@angular/core'
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms'
 import { FormsModule } from '@angular/forms'
 import { ActivatedRoute, Router } from '@angular/router'
-import { RouterLink } from '@angular/router'
 import { AuthService } from '../../../core/auth/auth.service'
 import { AppLoggerService } from '../../../core/services/app-logger.service'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
@@ -11,7 +10,7 @@ import { DestroyRef } from '@angular/core'
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, FormsModule, RouterLink],
+  imports: [ReactiveFormsModule, FormsModule],
   templateUrl: './login.html',
   styleUrls: ['./login.scss']
 })

@@ -12,32 +12,30 @@ export class KnowledgeApiService {
   ) {}
 
 createKnowledgeSpace(payload: KnowledgeSpaceCreateRequest): Observable<KnowledgeSpace> {
-    const headers = payload.user_id ? this.apiContext.headersFor(payload.user_id) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.post<KnowledgeSpace>(
       this.apiContext.buildUrl('/api/v1/knowledge/spaces'),
       payload,
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
-listKnowledgeSpaces(userId?: string, limit: number = 100): Observable<KnowledgeSpaceListResponse> {
+listKnowledgeSpaces(limit: number = 100): Observable<KnowledgeSpaceListResponse> {
     const qs = new URLSearchParams()
-    if (userId) qs.set('user_id', String(userId))
     qs.set('limit', String(limit))
-    const headers = userId ? this.apiContext.headersFor(userId) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.get<KnowledgeSpaceListResponse>(
       this.apiContext.buildUrl(`/api/v1/knowledge/spaces?${qs.toString()}`),
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
-getKnowledgeSpaceStatus(knowledgeSpaceId: string, userId?: string): Observable<KnowledgeSpaceStatus> {
+getKnowledgeSpaceStatus(knowledgeSpaceId: string): Observable<KnowledgeSpaceStatus> {
     const qs = new URLSearchParams()
-    if (userId) qs.set('user_id', String(userId))
-    const headers = userId ? this.apiContext.headersFor(userId) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.get<KnowledgeSpaceStatus>(
       this.apiContext.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}${qs.toString() ? '?' + qs.toString() : ''}`),
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
@@ -46,35 +44,35 @@ attachDocumentToKnowledgeSpace(
     docId: string,
     payload: KnowledgeSpaceAttachRequest = {},
   ): Observable<{ status: string; document: Record<string, unknown> }> {
-    const headers = payload.user_id ? this.apiContext.headersFor(payload.user_id) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.post<{ status: string; document: Record<string, unknown> }>(
       this.apiContext.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}/documents/${encodeURIComponent(docId)}/attach`),
       payload,
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
 consolidateKnowledgeSpace(
     knowledgeSpaceId: string,
-    payload: { user_id?: string; limit_docs?: number } = {},
+    payload: { limit_docs?: number } = {},
   ): Observable<KnowledgeSpaceConsolidationResponse> {
-    const headers = payload.user_id ? this.apiContext.headersFor(payload.user_id) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.post<KnowledgeSpaceConsolidationResponse>(
       this.apiContext.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}/consolidate`),
       payload,
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
 queryKnowledgeSpace(
     knowledgeSpaceId: string,
-    payload: { user_id?: string; question: string; mode?: string; limit?: number },
+    payload: { question: string; mode?: string; limit?: number },
   ): Observable<KnowledgeSpaceQueryResponse> {
-    const headers = payload.user_id ? this.apiContext.headersFor(payload.user_id) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.post<KnowledgeSpaceQueryResponse>(
       this.apiContext.buildUrl(`/api/v1/knowledge/spaces/${encodeURIComponent(knowledgeSpaceId)}/query`),
       payload,
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
@@ -100,7 +98,6 @@ ragSearch(params: {
 
 ragUserChat(params: {
     query: string
-    user_id: string
     session_id?: string
     role?: string
     limit?: number
@@ -108,7 +105,6 @@ ragUserChat(params: {
   }): Observable<RagUserChatResponse> {
     const qs = new URLSearchParams()
     qs.set('query', params.query)
-    qs.set('user_id', params.user_id)
     if (params.session_id) qs.set('session_id', params.session_id)
     if (params.role) qs.set('role', params.role)
     if (params.limit != null) qs.set('limit', String(params.limit))
@@ -118,7 +114,6 @@ ragUserChat(params: {
 
 ragUserChatV2(params: {
     query: string
-    user_id?: string
     session_id?: string
     start_ts_ms?: number
     end_ts_ms?: number
@@ -127,49 +122,44 @@ ragUserChatV2(params: {
   }): Observable<RagUserChatV2Response> {
     const qs = new URLSearchParams()
     qs.set('query', params.query)
-    if (params.user_id) qs.set('user_id', params.user_id)
     if (params.session_id) qs.set('session_id', params.session_id)
     if (params.start_ts_ms != null) qs.set('start_ts_ms', String(params.start_ts_ms))
     if (params.end_ts_ms != null) qs.set('end_ts_ms', String(params.end_ts_ms))
     if (params.limit != null) qs.set('limit', String(params.limit))
     if (params.min_score != null) qs.set('min_score', String(params.min_score))
-    const headers = params.user_id ? this.apiContext.headersFor(params.user_id) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.get<RagUserChatV2Response>(
       this.apiContext.buildUrl(`/api/v1/rag/user_chat?${qs.toString()}`),
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
 ragHybridSearch(params: {
     query: string
-    user_id?: string
     limit?: number
     min_score?: number
   }): Observable<RagHybridResponse> {
     const qs = new URLSearchParams()
     qs.set('query', params.query)
-    if (params.user_id) qs.set('user_id', params.user_id)
     if (params.limit != null) qs.set('limit', String(params.limit))
     if (params.min_score != null) qs.set('min_score', String(params.min_score))
-    const headers = params.user_id ? this.apiContext.headersFor(params.user_id) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.get<RagHybridResponse>(
       this.apiContext.buildUrl(`/api/v1/rag/hybrid_search?${qs.toString()}`),
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
 ragProductivitySearch(params: {
     query: string
-    user_id: string
     limit?: number
     min_score?: number
   }): Observable<RagSearchResponse> {
     const qs = new URLSearchParams()
     qs.set('query', params.query)
-    qs.set('user_id', params.user_id)
     if (params.limit != null) qs.set('limit', String(params.limit))
     if (params.min_score != null) qs.set('min_score', String(params.min_score))
-    const headers = this.apiContext.headersFor(params.user_id)
+    const headers = this.apiContext.headersFor()
     return this.http.get<RagSearchResponse>(this.apiContext.buildUrl(`/api/v1/rag/productivity?${qs.toString()}`), { headers })
   }
 

@@ -201,7 +201,6 @@ Content-Type: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 {
   "scope": "notes.read",
@@ -217,7 +216,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 > {% client.test("users/consents list: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -228,7 +226,6 @@ Content-Type: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 {
   "user_id": "{{s1_user_id}}",
@@ -250,7 +247,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 > {% client.test("consents/list: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -261,7 +257,6 @@ Content-Type: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 > {% client.test("consents/revoke: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -272,7 +267,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 > {% client.test("users/consents revoke: 200", function() { client.assert(response.status === 200); }); %}
 
@@ -300,7 +294,6 @@ Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
-X-User-Id: {{s1_user_id}}
 
 > {% client.test("revoke escopo invalido: 400", function() { client.assert(response.status === 400); }); %}
 

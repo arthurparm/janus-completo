@@ -29,15 +29,14 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
         if not traceparent:
             traceparent = self._fallback_traceparent(request_id)
         try:
-            actor = getattr(request.state, "actor_user_id", None)
+            actor_context = getattr(request.state, "actor_context", None)
+            actor = actor_context.actor_id if actor_context is not None else None
         except Exception:
             actor = None
-        user_id = (
-            (str(actor) if actor is not None else None) or request.headers.get("X-User-Id") or None
-        )
+        user_id = str(actor) if actor is not None else None
         session_id = request.headers.get("X-Session-Id") or None
         conversation_id = request.headers.get("X-Conversation-Id") or None
-        project_id = request.headers.get("X-Project-Id") or None
+        project_id = None
 
         structlog.contextvars.clear_contextvars()
         bind_kwargs = {"request_id": request_id}
@@ -83,7 +82,7 @@ class CorrelationMiddleware(BaseHTTPMiddleware):
                     if tracestate is not None:
                         span.set_attribute("janus.tracestate", tracestate)
                     if user_id is not None:
-                        span.set_attribute("janus.user_id", user_id)
+                        span.set_attribute("janus.user_id", "[REDACTED_PII]")
                     if session_id is not None:
                         span.set_attribute("janus.session_id", session_id)
                     if conversation_id is not None:

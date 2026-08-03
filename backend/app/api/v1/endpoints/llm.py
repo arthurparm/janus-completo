@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.services.llm_service import LLMService, LLMServiceError, get_llm_service
 
 router = APIRouter(tags=["LLM"])
@@ -26,8 +27,6 @@ class LLMInvokeRequest(BaseModel):
     policy_overrides: dict[str, Any] | None = Field(
         None, description="Overrides de politica/LLM para esta chamada"
     )
-    user_id: str | None = Field(None, description="Identificador do usuário para orçamento/AB")
-    project_id: str | None = Field(None, description="Identificador do projeto (orçamentação)")
     objective_id: str | None = Field(None, description="Identificador do objetivo/autonomia")
 
 
@@ -85,8 +84,8 @@ async def invoke_llm(
         task_type=request.task_type,
         complexity=request.complexity,
         policy_overrides=request.policy_overrides,
-        user_id=request.user_id,
-        project_id=request.project_id,
+        user_id=require_authenticated_actor_id(http_request),
+        project_id=None,
         objective_id=request.objective_id,
     )
     return LLMInvokeResponse(**result)

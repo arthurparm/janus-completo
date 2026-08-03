@@ -34,7 +34,7 @@
       "expected_keywords": ["query/code", "citations", "knowledge", "endpoint"],
       "expected_citations": [
         {
-          "file_path_contains": "backend/app/api/v1/endpoints/knowledge.py",
+          "file_path_contains": "backend/app/api/v1/endpoints/knowledge/graph.py",
           "line_min": 1
         }
       ]

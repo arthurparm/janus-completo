@@ -7,9 +7,10 @@ Endpoints para registrar feedback (👍/👎) e consultar métricas de satisfaç
 from enum import Enum
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.services.feedback_service import (
     FeedbackRating,
     FeedbackType,
@@ -92,7 +93,7 @@ class FeedbackStatsResponse(BaseModel):
 
 
 @router.post("/", response_model=FeedbackResponse)
-async def record_feedback(request: FeedbackRequest):
+async def record_feedback(payload: FeedbackRequest, request: Request):
     """
     Registra feedback do usuário sobre uma mensagem ou conversa.
 
@@ -106,13 +107,13 @@ async def record_feedback(request: FeedbackRequest):
         service = get_feedback_service()
 
         feedback = await service.record_feedback(
-            conversation_id=request.conversation_id,
-            message_id=request.message_id,
-            user_id=user_id,
-            rating=FeedbackRating(request.rating.value),
-            feedback_type=FeedbackType(request.feedback_type.value),
-            comment=request.comment,
-            context=request.context,
+            conversation_id=payload.conversation_id,
+            message_id=payload.message_id,
+            user_id=require_authenticated_actor_id(request),
+            rating=FeedbackRating(payload.rating.value),
+            feedback_type=FeedbackType(payload.feedback_type.value),
+            comment=payload.comment,
+            context=payload.context,
         )
 
         return FeedbackResponse(
@@ -124,7 +125,7 @@ async def record_feedback(request: FeedbackRequest):
 
 
 @router.post("/thumbs-up", response_model=FeedbackResponse)
-async def thumbs_up(request: QuickFeedbackRequest):
+async def thumbs_up(payload: QuickFeedbackRequest, request: Request):
     """
     Registra feedback positivo (👍) para uma mensagem.
 
@@ -135,10 +136,10 @@ async def thumbs_up(request: QuickFeedbackRequest):
         service = get_feedback_service()
 
         feedback = await service.record_thumbs_up(
-            conversation_id=request.conversation_id,
-            message_id=request.message_id,
-            user_id=user_id,
-            comment=request.comment,
+            conversation_id=payload.conversation_id,
+            message_id=payload.message_id,
+            user_id=require_authenticated_actor_id(request),
+            comment=payload.comment,
         )
 
         return FeedbackResponse(
@@ -150,7 +151,7 @@ async def thumbs_up(request: QuickFeedbackRequest):
 
 
 @router.post("/thumbs-down", response_model=FeedbackResponse)
-async def thumbs_down(request: QuickFeedbackRequest):
+async def thumbs_down(payload: QuickFeedbackRequest, request: Request):
     """
     Registra feedback negativo (👎) para uma mensagem.
 
@@ -161,10 +162,10 @@ async def thumbs_down(request: QuickFeedbackRequest):
         service = get_feedback_service()
 
         feedback = await service.record_thumbs_down(
-            conversation_id=request.conversation_id,
-            message_id=request.message_id,
-            user_id=user_id,
-            comment=request.comment,
+            conversation_id=payload.conversation_id,
+            message_id=payload.message_id,
+            user_id=require_authenticated_actor_id(request),
+            comment=payload.comment,
         )
 
         return FeedbackResponse(
@@ -196,6 +197,7 @@ async def get_feedback_stats():
 
 @router.get("/report", response_model=SatisfactionReportResponse)
 async def get_satisfaction_report(
+    request: Request,
     hours: int = Query(24, description="Janela de tempo em horas", ge=1, le=720),
 ):
     """
@@ -212,7 +214,9 @@ async def get_satisfaction_report(
     """
     try:
         service = get_feedback_service()
-        report = await service.get_satisfaction_report(user_id=user_id, hours=hours)
+        report = await service.get_satisfaction_report(
+            user_id=require_authenticated_actor_id(request), hours=hours
+        )
 
         return SatisfactionReportResponse(**report.to_dict())
 

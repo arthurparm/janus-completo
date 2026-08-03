@@ -56,12 +56,10 @@ export class ConversationsMemoryService {
     this.notices.clear('memory')
     this.state.memoryAddLoading.set(true)
     const importance = this.state.memoryImportance()
-    const userId = this.context.userIdString()
     const conversationId = this.state.selectedId() || undefined
     this.api.memory.addGenerativeMemory(content, {
       type: this.state.memoryType(),
       importance: typeof importance === 'number' ? importance : undefined,
-      userId,
       conversationId,
       sessionId: conversationId
     })
@@ -93,7 +91,6 @@ export class ConversationsMemoryService {
     this.notices.clear('memory')
     this.state.memorySearchLoading.set(true)
     this.api.memory.getGenerativeMemories(query, this.state.memorySearchLimit(), {
-      userId: this.context.userIdString(),
       conversationId: this.state.selectedId() || undefined
     })
       .pipe(catchError((err) => {

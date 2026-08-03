@@ -248,9 +248,9 @@ class UserSummaryResponse(BaseModel):
 @router.get(
     "/user_summary", response_model=UserSummaryResponse, summary="Resumo de uso por usuário"
 )
-async def user_summary(request: Request, user_id: str | None = None):
-    if user_id is None:
-        user_id = getattr(request.state, "actor_user_id", "default_user")
+async def user_summary(request: Request):
+    actor_context = getattr(request.state, "actor_context", None)
+    user_id = actor_context.actor_id if actor_context is not None else "default_user"
     chat_repo = getattr(request.app.state, "chat_repo", None)
     items = []
     if chat_repo is not None:
@@ -302,7 +302,6 @@ def _filter_event_fields(event: dict[str, Any], fields: list[str] | None) -> dic
 
 @router.get("/audit/events", summary="Lista eventos de auditoria")
 async def audit_events(
-    user_id: str | None = None,
     tool: str | None = None,
     status: str | None = None,
     start_ts: float | None = None,
@@ -314,14 +313,13 @@ async def audit_events(
     logger.info(
         "observability_endpoint_audit_events_requested",
         operation="audit_events_query",
-        user_id=user_id,
         tool=tool,
         status=status,
         limit=limit,
         offset=offset,
     )
-    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit=limit, offset=offset)
-    total = service.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+    events = service.get_audit_events(None, tool, status, start_ts, end_ts, limit=limit, offset=offset)
+    total = service.get_audit_events_count(None, tool, status, start_ts, end_ts)
     logger.info(
         "observability_endpoint_audit_events_completed",
         operation="audit_events_query",
@@ -643,7 +641,6 @@ async def request_pipeline_dashboard(
 
 @router.get("/audit/export", summary="Exporta eventos de auditoria")
 async def export_audit_events(
-    user_id: str | None = None,
     format: str = "csv",
     fields: str | None = None,
     tool: str | None = None,
@@ -658,13 +655,12 @@ async def export_audit_events(
         "observability_endpoint_audit_export_requested",
         operation="audit_export",
         format=format,
-        user_id=user_id,
         tool=tool,
         status=status,
         limit=limit,
         offset=offset,
     )
-    events = service.get_audit_events(user_id, tool, status, start_ts, end_ts, limit=limit, offset=offset)
+    events = service.get_audit_events(None, tool, status, start_ts, end_ts, limit=limit, offset=offset)
     field_list = [f.strip() for f in fields.split(",")] if fields else []
     field_list = [f for f in field_list if f]
     if not field_list:
@@ -715,10 +711,11 @@ async def export_audit_events(
     "/metrics/user", response_model=UserMetricsResponse, summary="Métricas agregadas por usuário"
 )
 async def user_metrics(
-    user_id: str | None = None,
+    request: Request,
     service: ObservabilityService = Depends(get_observability_service)
 ):
-    m = await service.get_user_metrics(user_id)
+    actor_context = getattr(request.state, "actor_context", None)
+    m = await service.get_user_metrics(actor_context.actor_id if actor_context else None)
     return UserMetricsResponse(**m)
 
 
@@ -732,10 +729,11 @@ class UserActivityResponse(BaseModel):
     "/activity/user", response_model=UserActivityResponse, summary="Atividade agregada por usuário"
 )
 async def user_activity(
-    user_id: str | None = None,
+    request: Request,
     service: ObservabilityService = Depends(get_observability_service)
 ):
-    a = service.get_user_activity(user_id)
+    actor_context = getattr(request.state, "actor_context", None)
+    a = service.get_user_activity(actor_context.actor_id if actor_context else None)
     return UserActivityResponse(**a)
 
 

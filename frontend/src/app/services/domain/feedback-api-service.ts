@@ -12,10 +12,8 @@ export class FeedbackApiService {
   ) {}
 
 thumbsUpFeedback(req: FeedbackQuickRequest): Observable<FeedbackQuickResponse> {
-    const qs = new URLSearchParams()
-    if (req.user_id) qs.set('user_id', String(req.user_id))
     return this.http.post<FeedbackQuickResponse>(
-      this.apiContext.buildUrl(`/api/v1/feedback/thumbs-up${qs.toString() ? '?' + qs.toString() : ''}`),
+      this.apiContext.buildUrl(`/api/v1/feedback/thumbs-up`),
       {
         conversation_id: req.conversation_id,
         message_id: req.message_id,
@@ -25,10 +23,8 @@ thumbsUpFeedback(req: FeedbackQuickRequest): Observable<FeedbackQuickResponse> {
   }
 
 thumbsDownFeedback(req: FeedbackQuickRequest): Observable<FeedbackQuickResponse> {
-    const qs = new URLSearchParams()
-    if (req.user_id) qs.set('user_id', String(req.user_id))
     return this.http.post<FeedbackQuickResponse>(
-      this.apiContext.buildUrl(`/api/v1/feedback/thumbs-down${qs.toString() ? '?' + qs.toString() : ''}`),
+      this.apiContext.buildUrl(`/api/v1/feedback/thumbs-down`),
       {
         conversation_id: req.conversation_id,
         message_id: req.message_id,

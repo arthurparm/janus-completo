@@ -6,6 +6,7 @@ trabalham em conjunto, coordenados por um Agente Gestor de Projetos.
 """
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,13 +16,9 @@ from app.config import settings
 from app.core.agents.specialized_agent import SpecializedAgent
 from app.core.agents.structures import AgentRole, Task, TaskPriority, TaskStatus
 from app.core.agents.workspace import SharedWorkspace
-from app.core.tools.os_tools import register_os_tools
-
-logger = structlog.get_logger(__name__)
-
-# Re-import missing utility if not in utils
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
+logger = structlog.get_logger(__name__)
 
 class MultiAgentSystem:
     """Sistema coordenado de múltiplos agentes."""
@@ -30,9 +27,6 @@ class MultiAgentSystem:
         self.workspace = SharedWorkspace()
         self.agents: dict[str, SpecializedAgent] = {}
         self.project_manager: SpecializedAgent | None = None
-
-        # Registra ferramentas de SO (SysAdmin)
-        register_os_tools()
 
         self._ensure_workspace_directory()
         logger.info("Sistema Multi-Agente inicializado")

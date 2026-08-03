@@ -293,12 +293,6 @@ async def start_auto_healer(interval_seconds: int | None = None) -> asyncio.Task
 
                 await _run_healing_step("meta_agent_cycle", trigger_meta_agent_if_needed)
 
-                # 6) Codex Auto-Fix (Placeholder)
-                async def heal_with_codex_if_needed() -> None:
-                    await _heal_with_codex(system)
-
-                await _run_healing_step("codex_auto_fix", heal_with_codex_if_needed)
-
                 await asyncio.sleep(interval_seconds)
             except Exception as e:
                 logger.error("log_error", message=f"Auto-Healer: erro no loop principal: {e}", exc_info=True)

@@ -16,15 +16,13 @@ export class ConversationsContextService {
 
   loadContext(conversationId: string): void {
     this.state.contextLoading.set(true)
-    const userId = this.userIdString()
     forkJoin({
-      docs: this.api.documents.listDocuments(conversationId, userId).pipe(
+      docs: this.api.documents.listDocuments(conversationId).pipe(
         map((resp) => resp.items || []),
         catchError(() => of([]))
       ),
       memory: this.api.memory.getMemoryTimeline({
         limit: 24,
-        user_id: userId,
         conversation_id: conversationId
       }).pipe(
         map((items) => items.filter((item) => isConversationMemory(item, conversationId))),
@@ -44,9 +42,5 @@ export class ConversationsContextService {
     this.loadContext(id)
   }
 
-  userIdString(): string | undefined {
-    const id = this.state.user()?.id
-    return id != null ? String(id) : undefined
-  }
 }
 

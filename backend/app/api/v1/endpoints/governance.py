@@ -15,7 +15,6 @@ logger = structlog.get_logger(__name__)
 
 
 class ClassificationUpsertRequest(BaseModel):
-    user_id: int | None = None
     resource_type: str
     resource_id: str
     classification: str
@@ -28,7 +27,7 @@ class ClassificationUpsertRequest(BaseModel):
 async def upsert_classification(payload: ClassificationUpsertRequest, request: Request):
     actor = require_admin_actor(request)
     record_id = data_governance_service.register_manual(
-        user_id=payload.user_id,
+        user_id=int(actor),
         resource_type=payload.resource_type,
         resource_id=payload.resource_id,
         classification=payload.classification,

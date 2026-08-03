@@ -4,9 +4,10 @@ Orquestrador de Workers
 Centraliza a inicialização de todos os workers e tarefas em background
 usando imports lazy para evitar ciclos de importação.
 """
-import structlog
 from dataclasses import dataclass
 from typing import Any
+
+import structlog
 
 from app.config import settings
 
@@ -24,16 +25,13 @@ WORKER_NAMES: list[str] = [
     "auto_scaler",
     "auto_healer",
     "router",
-    "code_agent",
     "red_team_agent",
     "professor_agent",
-    "sandbox_agent",
     "thinker_agent",
     "distillation",
     "google_productivity",
     "debate_proponent",
     "debate_critic",
-    "codex_worker",
 ]
 
 NODE_PROFILE_WORKERS: dict[str, set[str]] = {
@@ -41,7 +39,6 @@ NODE_PROFILE_WORKERS: dict[str, set[str]] = {
         "neural_training",
         "reflexion",
         "thinker_agent",
-        "code_agent",
     },
     "INTELLIGENCE_AGILE": {
         "knowledge_consolidation",
@@ -108,12 +105,11 @@ async def start_all_workers():
     from app.core.workers.agent_tasks_worker import start_agent_tasks_worker
     from app.core.workers.async_consolidation_worker import start_consolidation_worker
     from app.core.workers.auto_scaler import start_auto_scaler
-    from app.core.workers.code_agent_worker import start_code_agent_worker
-    from app.core.workers.codex_worker import start_codex_worker
-    from app.core.workers.document_ingestion_worker import start_document_ingestion_worker
-    from app.core.workers.distillation_worker import start_distillation_worker
-    from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
     from app.core.workers.debate_critic_worker import start_debate_critic_worker
+    from app.core.workers.debate_proponent_worker import start_debate_proponent_worker
+    from app.core.workers.distillation_worker import start_distillation_worker
+    from app.core.workers.document_ingestion_worker import start_document_ingestion_worker
+    from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
     from app.core.workers.meta_agent_worker import (
         start_failure_event_consumer,
         start_meta_agent_worker,
@@ -123,9 +119,7 @@ async def start_all_workers():
     from app.core.workers.red_team_agent_worker import start_red_team_agent_worker
     from app.core.workers.reflexion_worker import start_reflexion_worker
     from app.core.workers.router_worker import start_router_worker
-    from app.core.workers.sandbox_agent_worker import start_sandbox_agent_worker
     from app.core.workers.thinker_agent_worker import start_thinker_agent_worker
-    from app.core.workers.memory_maintenance_worker import memory_maintenance_worker
 
     active_profile = _get_active_node_profile()
     logger.info(
@@ -155,16 +149,13 @@ async def start_all_workers():
         "auto_scaler": start_auto_scaler,
         "auto_healer": start_auto_healer,
         "router": start_router_worker,
-        "code_agent": start_code_agent_worker,
         "red_team_agent": start_red_team_agent_worker,
         "professor_agent": start_professor_agent_worker,
-        "sandbox_agent": start_sandbox_agent_worker,
         "thinker_agent": start_thinker_agent_worker,
         "distillation": start_distillation_worker,
         "google_productivity": _start_google_productivity,
         "debate_proponent": start_debate_proponent_worker,
         "debate_critic": start_debate_critic_worker,
-        "codex_worker": start_codex_worker,
     }
 
     for worker_name in WORKER_NAMES:

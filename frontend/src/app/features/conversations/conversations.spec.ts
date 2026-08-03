@@ -124,7 +124,7 @@ describe('ConversationsComponent', () => {
     expect(component.docs()).toEqual([])
     expect(component.memoryUser()).toEqual([])
     expect(apiStub.chat.getChatHistoryPaginated).toHaveBeenCalledWith('fresh', { limit: 80, offset: 0 })
-    expect(apiStub.documents.listDocuments).toHaveBeenCalledWith('fresh', '2')
+    expect(apiStub.documents.listDocuments).toHaveBeenCalledWith('fresh')
     expect(routerNavigateSpy).toHaveBeenCalledWith(['/conversations', 'fresh'], { replaceUrl: true })
   })
 

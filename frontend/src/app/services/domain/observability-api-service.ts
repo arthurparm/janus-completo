@@ -59,9 +59,8 @@ registerSynonym(label: string, alias: string, canonical: string): Observable<{ s
     return this.http.post<{ status: string; synonym_id: number }>(this.apiContext.buildUrl(`/api/v1/observability/graph/entities/synonym`), { label, alias, canonical })
   }
 
-listAuditEvents(params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number } = {}): Observable<AuditEventsResponse> {
+listAuditEvents(params: { tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number } = {}): Observable<AuditEventsResponse> {
     const qs = new URLSearchParams()
-    if (params.user_id) qs.set('user_id', params.user_id)
     if (params.tool) qs.set('tool', params.tool)
     if (params.status) qs.set('status', params.status)
     if (typeof params.start_ts !== 'undefined') qs.set('start_ts', String(params.start_ts))
@@ -126,9 +125,8 @@ rejectPendingAction(action: PendingAction): Observable<PendingAction> {
     )
   }
 
-getReviewerMetrics(user_id: number, start_ts?: number, end_ts?: number): Observable<ReviewerMetricsResponse> {
+getReviewerMetrics(start_ts?: number, end_ts?: number): Observable<ReviewerMetricsResponse> {
     const qs = new URLSearchParams()
-    qs.set('user_id', String(user_id))
     if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
     if (typeof end_ts !== 'undefined') qs.set('end_ts', String(end_ts))
     return this.http.get<ReviewerMetricsResponse>(this.apiContext.buildUrl(`/api/v1/observability/hitl/metrics/reviewer?${qs.toString()}`))
@@ -142,12 +140,12 @@ getHitlReports(period: 'daily' | 'weekly' | 'monthly' = 'daily', start_ts?: numb
     return this.http.get<PeriodReportResponse>(this.apiContext.buildUrl(`/api/v1/observability/hitl/reports?${qs.toString()}`))
   }
 
-listConsents(user_id: number): Observable<ConsentsListResponse> {
-    return this.http.get<ConsentsListResponse>(this.apiContext.buildUrl(`/api/v1/consents/?user_id=${encodeURIComponent(String(user_id))}`))
+listConsents(): Observable<ConsentsListResponse> {
+    return this.http.get<ConsentsListResponse>(this.apiContext.buildUrl(`/api/v1/consents/`))
   }
 
-grantConsent(user_id: number, scope: string, granted: boolean = true, expires_at?: string): Observable<{ status: string; scope: string }> {
-    const body: Record<string, unknown> = { user_id: String(user_id), scope, granted: granted ? 'True' : 'False' }
+grantConsent(scope: string, granted: boolean = true, expires_at?: string): Observable<{ status: string; scope: string }> {
+    const body: Record<string, unknown> = { scope, granted: granted ? 'True' : 'False' }
     if (expires_at) body['expires_at'] = expires_at
     return this.http.post<{ status: string; scope: string }>(this.apiContext.buildUrl(`/api/v1/consents/`), body)
   }
@@ -156,9 +154,8 @@ revokeConsent(consent_id: number): Observable<{ status: string; consent_id: stri
     return this.http.post<{ status: string; consent_id: string }>(this.apiContext.buildUrl(`/api/v1/consents/${encodeURIComponent(String(consent_id))}/revoke`), {})
   }
 
-exportAuditCSV(params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number }): Observable<string> {
+exportAuditCSV(params: { tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number }): Observable<string> {
     const qs = new URLSearchParams()
-    if (params.user_id) qs.set('user_id', String(params.user_id))
     if (params.tool) qs.set('tool', String(params.tool))
     if (params.status) qs.set('status', String(params.status))
     if (params.start_ts != null) qs.set('start_ts', String(params.start_ts))
@@ -170,10 +167,9 @@ exportAuditCSV(params: { user_id?: string; tool?: string; status?: string; start
 
 exportAuditEvents(
     format: 'csv' | 'json',
-    params: { user_id?: string; tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number; fields?: string[] } = {}
+    params: { tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number; fields?: string[] } = {}
   ): Observable<string> {
     const qs = new URLSearchParams()
-    if (params.user_id) qs.set('user_id', String(params.user_id))
     if (params.tool) qs.set('tool', String(params.tool))
     if (params.status) qs.set('status', String(params.status))
     if (params.start_ts != null) qs.set('start_ts', String(params.start_ts))

@@ -3,14 +3,13 @@ import base64
 import hashlib
 import json
 import time
-import structlog
 from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import aio_pika
-from pydantic import SecretStr
+import structlog
 from aio_pika.abc import AbstractRobustConnection
 from aiormq.exceptions import (
     ChannelClosed,
@@ -19,6 +18,7 @@ from aiormq.exceptions import (
     ChannelPreconditionFailed,
 )
 from prometheus_client import Counter
+from pydantic import SecretStr
 
 from app.config import settings
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
@@ -51,7 +51,6 @@ try:
     _tracer = trace.get_tracer(__name__)
 except Exception:
     _OTEL = False
-    from contextlib import nullcontext
 
     _tracer = None
 from app.models.schemas import TaskMessage
@@ -154,22 +153,41 @@ class MessageBroker:
         if tracestate:
             merged.setdefault("tracestate", str(tracestate))
 
-        user_id = self._extract_header(merged, "x-user-id", "X-User-Id")
-        if not user_id:
-            current_user = USER_ID.get()
-            if current_user and current_user != "-":
-                merged.setdefault("x-user-id", str(current_user))
+        merged.pop("x-user-id", None)
+        merged.pop("X-User-Id", None)
+        from app.core.infrastructure.auth import create_actor_envelope
+        from app.core.security.actor_context import get_current_actor_context
+
+        actor = get_current_actor_context()
+        if actor is None:
+            from app.core.security.actor_context import ActorContext
+
+            actor = ActorContext.system(
+                actor_id="janus-broker-publisher",
+                roles=("WORKER",),
+                trace_id=str(request_id or "broker"),
+            )
+        merged["x-actor-context"] = create_actor_envelope(actor, audience="janus-broker")
 
         return merged
 
     def _bind_trace_context_from_headers(self, headers: dict[str, Any]) -> list[tuple[Any, Any]]:
         tokens: list[tuple[Any, Any]] = []
         request_id = self._extract_header(headers, "x-request-id", "X-Request-ID", "correlation_id")
-        user_id = self._extract_header(headers, "x-user-id", "X-User-Id")
+        actor_envelope = self._extract_header(headers, "x-actor-context")
         if request_id:
             tokens.append((TRACE_ID, TRACE_ID.set(str(request_id))))
-        if user_id:
-            tokens.append((USER_ID, USER_ID.set(str(user_id))))
+        if actor_envelope:
+            from app.core.infrastructure.auth import verify_actor_envelope
+            from app.core.security.actor_context import CURRENT_ACTOR_CONTEXT
+
+            actor = verify_actor_envelope(str(actor_envelope), audience="janus-broker")
+            if actor is None:
+                raise PermissionError("Invalid or expired actor context envelope")
+            tokens.append((CURRENT_ACTOR_CONTEXT, CURRENT_ACTOR_CONTEXT.set(actor)))
+            tokens.append((USER_ID, USER_ID.set(actor.actor_id)))
+        else:
+            raise PermissionError("Actor context envelope is required")
         return tokens
 
     def _reset_trace_context(self, tokens: list[tuple[Any, Any]]) -> None:
@@ -314,7 +332,7 @@ class MessageBroker:
                                 if tid and tid != "-":
                                     span.set_attribute("janus.trace_id", tid)
                                 if sid and sid != "-":
-                                    span.set_attribute("janus.user_id", sid)
+                                    span.set_attribute("janus.user_id", "[REDACTED_PII]")
                                 span.set_attribute("broker.queue", queue_name)
                                 if priority is not None:
                                     span.set_attribute("broker.priority", int(priority))
@@ -560,7 +578,7 @@ class MessageBroker:
                                 if tid and tid != "-":
                                     span.set_attribute("janus.trace_id", tid)
                                 if sid and sid != "-":
-                                    span.set_attribute("janus.user_id", sid)
+                                    span.set_attribute("janus.user_id", "[REDACTED_PII]")
                                 if header_traceparent:
                                     span.set_attribute("janus.traceparent", str(header_traceparent))
                                 if header_tracestate:
@@ -970,10 +988,10 @@ message_broker = _broker_instance
 class _AgnosticContextManager:
     def __init__(self, coro):
         self._coro = coro
-    
+
     async def __aenter__(self):
         return await self._coro
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
 

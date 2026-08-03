@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.config import settings
@@ -119,24 +119,12 @@ async def get_services_health(
 )
 async def get_user_status(
     request: Request,
-    user_id: int | None = None,
     observability: ObservabilityService = Depends(get_observability_service),
 ):
-    actor = getattr(request.state, "actor_user_id", None)
-    if actor is None:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    from app.repositories.user_repository import UserRepository
+    from app.core.security.request_guard import require_authenticated_actor_id
 
-    repo = UserRepository()
-    is_admin = False
-    try:
-        is_admin = repo.is_admin(int(actor))
-    except Exception:
-        is_admin = False
-    target_uid = user_id or str(actor)
-    if (not is_admin) and (user_id is not None) and (str(user_id) != str(actor)):
-        raise HTTPException(status_code=403, detail="Forbidden")
-    metrics = await observability.get_user_metrics(target_uid)
+    actor = require_authenticated_actor_id(request)
+    metrics = await observability.get_user_metrics(str(actor))
     return UserStatusResponse(**metrics)
 
 

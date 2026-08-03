@@ -15,6 +15,8 @@ from app.core.autonomy.goal_manager import Goal, GoalManager, GoalStatus
 from app.core.autonomy.planner import build_plan_for_goal
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine
 from app.core.evolution.reflector_agent import HealthScore  # noqa: F401
+from app.core.security.actor_context import ActorContext
+from app.core.security.authorization import authorization_service
 from app.core.tools.action_module import action_registry
 from app.models.schemas import TaskState, TaskStateEvent
 from app.repositories.autonomy_repository import AutonomyRepository
@@ -125,11 +127,11 @@ class AutonomyService:
         self._decision_tracker = decision_quality_tracker
 
     def _ensure_core_tools_registered(self) -> None:
-        """Carrega agent_tools uma vez para disparar o registro no action_registry."""
+        """Loads only the homologated, immutable production tool registry."""
         if self._core_tools_bootstrapped and action_registry.get_tool("get_current_datetime"):
             return
         try:
-            importlib.import_module("app.core.tools.agent_tools")
+            importlib.import_module("app.core.tools.production_manifest").register_production_tools()
             self._core_tools_bootstrapped = True
         except Exception as e:
             logger.warning(
@@ -156,7 +158,8 @@ class AutonomyService:
         self._action_count_hour += 1
         return False
 
-    def reset_throttle(self) -> dict[str, Any]:
+    def reset_throttle(self, *, actor: ActorContext) -> dict[str, Any]:
+        authorization_service.require_admin(actor=actor)
         now = time.time()
         self._action_count_minute = 0
         self._action_count_hour = 0
@@ -180,7 +183,8 @@ class AutonomyService:
             self._runtime_lock["lease_held"] = bool(lease_held)
         self._runtime_lock["expires_at"] = expires_at.isoformat() if expires_at else None
 
-    async def start(self, config: AutonomyConfig) -> bool:
+    async def start(self, config: AutonomyConfig, *, actor: ActorContext) -> bool:
+        authorization_service.require_admin(actor=actor)
         if self._is_active():
             logger.warning("Tentativa de iniciar AutonomyLoop já ativo.")
             return False
@@ -287,7 +291,8 @@ class AutonomyService:
         )
         return True
 
-    async def stop(self) -> bool:
+    async def stop(self, *, actor: ActorContext) -> bool:
+        authorization_service.require_admin(actor=actor)
         if not self._is_active():
             logger.warning("Tentativa de parar AutonomyLoop inativo.")
             return False
@@ -334,14 +339,16 @@ class AutonomyService:
         logger.info("AutonomyLoop parado")
         return True
 
-    async def restart(self) -> dict:
+    async def restart(self, *, actor: ActorContext) -> dict[str, Any]:
+        authorization_service.require_admin(actor=actor)
         old_config = self._config
+        stop_result: bool | dict[str, Any]
         try:
-            stop_result = await self.stop()
+            stop_result = await self.stop(actor=actor)
         except Exception:
             stop_result = {}
         await asyncio.sleep(2)
-        start_result = await self.start(config=old_config)
+        start_result = await self.start(config=old_config, actor=actor)
         record_audit_event_direct(
             endpoint="autonomy",
             action="autonomy_restarted",
@@ -378,12 +385,15 @@ class AutonomyService:
             "runtime_lock": dict(self._runtime_lock),
         }
 
-    def update_plan(self, plan: list[dict[str, Any]]) -> None:
+    def update_plan(self, plan: list[dict[str, Any]], *, actor: ActorContext) -> None:
+        authorization_service.require_admin(actor=actor)
         self._config.plan = plan or []
         logger.info("Plano de execução atualizado", steps=len(self._config.plan))
 
     def update_policy_config(
         self,
+        *,
+        actor: ActorContext,
         risk_profile: str | None = None,
         auto_confirm: bool | None = None,
         allowlist: list[str] | None = None,
@@ -391,6 +401,7 @@ class AutonomyService:
         max_actions_per_cycle: int | None = None,
         max_seconds_per_cycle: int | None = None,
     ) -> None:
+        authorization_service.require_admin(actor=actor)
         if risk_profile is not None:
             self._config.risk_profile = risk_profile
         if auto_confirm is not None:
@@ -770,7 +781,7 @@ class AutonomyService:
 
             decision_id = self._decision_tracker.record_decision(
                 goal_id=getattr(current_goal, 'id', 'unknown'),
-                decision_type="evolve_tool",
+                decision_type="blocked_autonomous_evolution",
                 predicted_outcome="Tool will improve system capability",
                 context={"health_score": health.__dict__ if health else None},
             )

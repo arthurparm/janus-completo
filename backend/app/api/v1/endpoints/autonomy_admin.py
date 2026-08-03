@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.request_guard import require_admin_actor, require_admin_actor_context
 from app.services.autonomy_admin_service import (
     AutonomyAdminService,
     get_autonomy_admin_service,
@@ -181,7 +181,7 @@ async def reset_autonomy_throttle(request: Request):
     require_admin_actor(request)
     from app.services.autonomy_service import get_autonomy_service
     service = get_autonomy_service(request)
-    result = service.reset_throttle()
+    result = service.reset_throttle(actor=require_admin_actor_context(request))
     return ThrottleResetResponse(**result)
 
 

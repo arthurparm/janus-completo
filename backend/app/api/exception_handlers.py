@@ -29,7 +29,6 @@ except Exception:
 
 from app.services.observability_service import MessageNotFoundError, ObservabilityServiceError
 from app.services.optimization_service import OptimizationServiceError
-from app.services.sandbox_service import InvalidInputError, SandboxError
 from app.services.task_service import TaskServiceError
 from app.services.tool_service import (
     ProtectedToolError,
@@ -81,7 +80,6 @@ NOT_FOUND_EXCEPTIONS = (
 
 # Excecoes que indicam uma entrada invalida do cliente (400)
 BAD_REQUEST_EXCEPTIONS = (
-    InvalidInputError,
     ProtectedToolError,
     ToolCreationError,
     TrainingFailedError,
@@ -225,7 +223,6 @@ def add_exception_handlers(app):
         MetaAgentServiceError,
         ObservabilityServiceError,
         OptimizationServiceError,
-        SandboxError,
         TaskServiceError,
         ToolServiceError,
     )

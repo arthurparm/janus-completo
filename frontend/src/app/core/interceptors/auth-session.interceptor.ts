@@ -89,7 +89,6 @@ function isAuthEndpoint(url: string): boolean {
 function shouldAttemptRefresh(url: string): boolean {
   if (!url.includes('/v1/')) return false
   if (url.includes('/v1/auth/local/login')) return false
-  if (url.includes('/v1/auth/local/register')) return false
   if (url.includes('/v1/auth/local/refresh')) return false
   if (url.includes('/v1/auth/local/request-reset')) return false
   if (url.includes('/v1/auth/local/reset')) return false

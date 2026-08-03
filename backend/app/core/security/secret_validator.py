@@ -51,9 +51,34 @@ def validate_production_secrets():
         InsecureConfigurationError: If the environment is 'production' and
             any secret is still set to a known insecure default.
     """
-    if settings.ENVIRONMENT.lower() != "production":
-        logger.info("Skipping secret validation (non-production environment).",
-                    environment=settings.ENVIRONMENT)
+    environment = settings.ENVIRONMENT.lower()
+    controlled_environments = {"production", "staging", "homologation", "development"}
+    if environment not in controlled_environments:
+        logger.info("Skipping deployed secret validation.", environment=settings.ENVIRONMENT)
+        return
+
+    alert_missing = []
+    webhook_url = str(getattr(settings, "SECURITY_ALERT_WEBHOOK_URL", "") or "").strip()
+    webhook_key = str(
+        getattr(settings, "SECURITY_ALERT_WEBHOOK_HMAC_KEY", "") or ""
+    ).strip()
+    webhook_hosts = [
+        str(host).strip().lower()
+        for host in (getattr(settings, "SECURITY_ALERT_ALLOWED_HOSTS", None) or [])
+        if str(host).strip()
+    ]
+    if not webhook_url or "__required__" in webhook_url.lower():
+        alert_missing.append("SECURITY_ALERT_WEBHOOK_URL")
+    if not webhook_key or webhook_key.lower() == "__required__":
+        alert_missing.append("SECURITY_ALERT_WEBHOOK_HMAC_KEY")
+    if not webhook_hosts or "__required__" in webhook_hosts:
+        alert_missing.append("SECURITY_ALERT_ALLOWED_HOSTS")
+    if alert_missing:
+        raise InsecureConfigurationError(
+            "Security alerting prerequisites are required: " + ", ".join(alert_missing)
+        )
+
+    if environment != "production":
         return
 
     logger.info("Validating production secrets...")

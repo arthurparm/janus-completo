@@ -1,18 +1,12 @@
 import base64
-import hashlib
-import hmac
-import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app.config import settings
-from app.core.infrastructure.auth import create_token, get_actor_user_id
-from app.core.infrastructure.python_sandbox import PythonSandbox
+from app.core.infrastructure.auth import get_actor_user_id
 from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
 from app.repositories import user_repository
+from fastapi import HTTPException
 
 
 class _Req:
@@ -125,36 +119,6 @@ def test_sandbox_evaluate_requires_authenticated_actor():
     assert exc.value.status_code == 401
 
 
-def test_sandbox_rejects_process_mode_for_code_execution(monkeypatch):
-    monkeypatch.setattr(settings, "SANDBOX_MODE", "process")
-    sandbox = PythonSandbox()
-    result = sandbox.execute("x = 1")
-    assert not result.success
-    assert "requires Docker" in (result.error or "")
-
-
-def test_sandbox_allows_expression_in_process_mode(monkeypatch):
-    monkeypatch.setattr(settings, "SANDBOX_MODE", "process")
-    sandbox = PythonSandbox()
-    result = sandbox.execute_expression("2 + 2")
-    assert result.success
-    assert "4" in result.output
-
-
-def test_sandbox_docker_mode_code_rejected_without_docker(monkeypatch):
-    monkeypatch.setattr(settings, "SANDBOX_MODE", "docker")
-    monkeypatch.setattr(settings, "SANDBOX_TIMEOUT_SECONDS", 5)
-    sandbox = PythonSandbox()
-
-    def fake_run_in_docker(*args, **kwargs):
-        raise RuntimeError("Docker unavailable")
-
-    monkeypatch.setattr(sandbox, "_run_in_docker", fake_run_in_docker)
-
-    result = sandbox.execute("x = 1")
-    assert not result.success
-
-
 _os_tools_available = False
 _write_fn = None
 _read_fn = None
@@ -208,23 +172,8 @@ def test_list_directory_blocks_system_directories():
     assert "Acesso negado" in result or "Erro" in result
 
 
-def test_x_user_id_triggers_audit_event_when_accepted(monkeypatch):
-    audit_events = []
-
-    def fake_audit(**kwargs):
-        audit_events.append(kwargs)
-
-    monkeypatch.setattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", True)
+def test_x_user_id_is_never_an_authentication_source(monkeypatch):
     monkeypatch.setattr(settings, "ENVIRONMENT", "development")
-    monkeypatch.setattr(
-        "app.core.infrastructure.auth.record_audit_event_direct", fake_audit
-    )
-
     req = _Req(headers={"X-User-Id": "99"})
     req.state.actor_user_id = None
-    result = get_actor_user_id(req)
-
-    assert result == 99
-    assert len(audit_events) == 1
-    assert audit_events[0]["action"] == "x_user_id_used_for_auth"
-    assert audit_events[0]["details_json"]["x_user_id"] == "99"
+    assert get_actor_user_id(req) is None

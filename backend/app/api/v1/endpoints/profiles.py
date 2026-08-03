@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.core.security.request_guard import require_authenticated_actor_id
 from app.repositories.user_repository import ProfileRepository
 
 router = APIRouter(tags=["Profiles"], prefix="/profiles")
 
 
 class UpsertProfileRequest(BaseModel):
-    user_id: int
     timezone: str | None = Field(None)
     language: str | None = Field(None)
     style_prefs: str | None = Field(None)
@@ -25,8 +25,9 @@ def get_profile_repo(request: Request) -> ProfileRepository:
     return ProfileRepository()
 
 
-@router.get("/{user_id}", response_model=ProfileResponse)
-async def get_profile(user_id: int, repo: ProfileRepository = Depends(get_profile_repo)):
+@router.get("/me", response_model=ProfileResponse)
+async def get_profile(request: Request, repo: ProfileRepository = Depends(get_profile_repo)):
+    user_id = int(require_authenticated_actor_id(request))
     p = repo.get_by_user(user_id)
     if not p:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
@@ -41,10 +42,12 @@ async def get_profile(user_id: int, repo: ProfileRepository = Depends(get_profil
 
 @router.post("/", response_model=ProfileResponse)
 async def upsert_profile(
-    payload: UpsertProfileRequest, repo: ProfileRepository = Depends(get_profile_repo)
+    payload: UpsertProfileRequest,
+    request: Request,
+    repo: ProfileRepository = Depends(get_profile_repo),
 ):
     p = repo.upsert(
-        user_id=payload.user_id,
+        user_id=int(require_authenticated_actor_id(request)),
         timezone=payload.timezone,
         language=payload.language,
         style_prefs=payload.style_prefs,

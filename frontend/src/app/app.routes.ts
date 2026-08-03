@@ -49,15 +49,6 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
-    path: 'registro',
-    loadComponent: () => import('./features/auth/register/register').then(m => m.RegisterComponent)
-  },
-  {
-    path: 'register',
-    redirectTo: 'registro',
-    pathMatch: 'full'
-  },
-  {
     path: '**',
     redirectTo: 'login'
   }

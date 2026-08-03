@@ -15,7 +15,6 @@ def _get_session() -> Session:
 
 
 class ConsentRequest(BaseModel):
-    user_id: str
     scope: str
     resource: str | None = None
     notes: str | None = None
@@ -34,13 +33,10 @@ class ConsentResponse(BaseModel):
 @router.post("/", response_model=ConsentResponse)
 async def grant_consent(payload: ConsentRequest, request: Request):
     actor = require_authenticated_actor_id(request)
-    ur = UserRepository()
-    if str(actor) != str(payload.user_id) and not ur.is_admin(int(actor)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     s = _get_session()
     try:
         c = Consent(
-            user_id=payload.user_id,
+            user_id=actor,
             scope=payload.scope,
             resource=payload.resource,
             granted="True",
@@ -64,17 +60,15 @@ async def grant_consent(payload: ConsentRequest, request: Request):
 
 @router.get("/", response_model=list[ConsentResponse])
 async def list_consents(
-    user_id: str | None = None, scope: str | None = None, request: Request = None
+    scope: str | None = None, request: Request = None
 ):
     s = _get_session()
     try:
         if request is not None:
             actor = require_authenticated_actor_id(request)
-            ur = UserRepository()
-            if user_id is None and not ur.is_admin(int(actor)):
-                user_id = str(actor)
-            if user_id is not None and (str(actor) != str(user_id)) and not ur.is_admin(int(actor)):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+            user_id = str(actor)
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
         q = s.query(Consent)
         if user_id:
             q = q.filter(Consent.user_id == user_id)

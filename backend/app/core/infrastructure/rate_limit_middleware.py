@@ -85,7 +85,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
 
     def _rate_limit_subject(self, request: Request) -> tuple[str, float, int, str]:
-        actor = getattr(request.state, "actor_user_id", None)
+        actor_context = getattr(request.state, "actor_context", None)
+        actor = actor_context.actor_id if actor_context is not None else None
         if actor is None:
             actor = get_actor_user_id(request)
         if actor is not None and str(actor).strip():

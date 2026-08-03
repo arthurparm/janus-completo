@@ -1,12 +1,10 @@
-from typing import Any, Callable, List, Type
+from typing import Callable, List
+
+import structlog
+from langsmith import traceable
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-import structlog
-import inspect
 
-from langsmith import traceable
-
-from app.core.tools.command_sandbox import run_restricted_command
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
 logger = structlog.get_logger(__name__)
@@ -19,13 +17,13 @@ class LeafWorker:
     """
     A leaf worker agent implemented using PydanticAI.
     It provides type-safe tool execution and structured outputs.
-    Automatically wraps unsafe tools in sandbox execution.
+    Unsafe tools are replaced by deterministic blockers with security alerts.
     """
-    
+
     def __init__(
-        self, 
-        name: str, 
-        model: str = "openai:gpt-4o", 
+        self,
+        name: str,
+        model: str = "openai:gpt-4o",
         system_prompt: str = "",
         tools: List[Callable] = None
     ):
@@ -36,60 +34,38 @@ class LeafWorker:
             output_type=WorkerResult
         )
         self._register_tools(tools or [])
-        
+
     def _register_tools(self, tools: List[Callable]):
         for tool in tools:
             # Check if tool is marked as unsafe
             # We assume a naming convention or attribute for now
             # e.g., tools decorated with @unsafe or named run_command
             is_unsafe = getattr(tool, "unsafe", False) or tool.__name__ in ["run_command", "write_file", "read_file"]
-            
+
             if is_unsafe:
-                self.agent.tool(self._create_sandboxed_wrapper(tool))
+                self.agent.tool(self._create_blocked_wrapper(tool))
             else:
                 self.agent.tool(tool)
-    
-    def _create_sandboxed_wrapper(self, original_tool: Callable) -> Callable:
-        """
-        Creates a wrapper that executes the tool logic inside sandbox if it involves code execution,
-        or just blocks filesystem access if that's the intent.
-        
-        However, for generic tools like 'run_command', we want to execute them IN the sandbox.
-        Since we don't have the implementation of 'run_command' here, we assume the tool
-        accepts a command string.
-        """
-        # Get signature to preserve Pydantic validation
-        sig = inspect.signature(original_tool)
-        
-        async def sandboxed_tool(ctx: RunContext, *args, **kwargs) -> str:
-            logger.warning("log_warning", message=f"Intercepting unsafe tool {original_tool.__name__} for sandbox execution")
-            
-            # Construct a python script that calls the tool? 
-            # Or if the tool IS 'execute_python', we just pass the code.
-            # If the tool is 'run_command', we can't easily map it to sandbox without changing tool signature
-            # unless the sandbox supports running shell commands (which it does via python subprocess)
-            
-            # Simplified Logic:
-            # If tool is 'run_python' or similar, extract code and run in sandbox.
-            # If tool is 'run_command', wrap in os.system inside python sandbox.
-            
-            if original_tool.__name__ == "run_command":
-                cmd = kwargs.get("command") or args[0]
-                return run_restricted_command(str(cmd), timeout_seconds=300)
-                
-            # For other tools, we might just warn or block if not compatible
-            # Ideally, we should have a generic 'execute_in_sandbox' tool instead.
-            return f"Tool {original_tool.__name__} blocked by security policy (not fully adapted for sandbox)."
 
-        # Copy metadata
-        sandboxed_tool.__name__ = original_tool.__name__
-        sandboxed_tool.__doc__ = original_tool.__doc__
-        # We might need to copy annotations too for PydanticAI to work
-        # But changing implementation dynamically is tricky with PydanticAI's static analysis
-        # For now, let's assume we register the sandbox tool DIRECTLY instead of wrapping if possible.
-        
-        return sandboxed_tool
-            
+    def _create_blocked_wrapper(self, original_tool: Callable) -> Callable:
+        async def blocked_tool(ctx: RunContext, *args, **kwargs) -> str:
+            del ctx, args, kwargs
+            from app.core.security.security_alerts import emit_security_alert
+
+            logger.warning(
+                "unsafe_tool_execution_blocked",
+                tool_name=original_tool.__name__,
+            )
+            emit_security_alert(
+                "removed_tool_execution_blocked",
+                {"tool_name": original_tool.__name__},
+            )
+            return f"Tool {original_tool.__name__} blocked by security policy."
+
+        blocked_tool.__name__ = original_tool.__name__
+        blocked_tool.__doc__ = original_tool.__doc__
+        return blocked_tool
+
     @traceable(name="LeafWorker.run", run_type="chain")
     async def run(self, prompt: str, context: dict = None) -> WorkerResult:
         """

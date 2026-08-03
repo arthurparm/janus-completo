@@ -403,7 +403,7 @@ def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
                 _tenant_user_spend_usd[id_]["usd"] or 0.0
             ) + cost_usd
         try:
-            LLM_TENANT_SPEND_USD.labels(kind="user", id=id_).inc(cost_usd)
+            LLM_TENANT_SPEND_USD.labels(kind="user", id="[REDACTED_PII]").inc(cost_usd)
         except Exception:
             pass
     else:
@@ -430,7 +430,7 @@ def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
                 _tenant_project_spend_usd[id_]["usd"] or 0.0
             ) + cost_usd
         try:
-            LLM_TENANT_SPEND_USD.labels(kind="project", id=id_).inc(cost_usd)
+            LLM_TENANT_SPEND_USD.labels(kind="project", id="[REDACTED_PII]").inc(cost_usd)
         except Exception:
             pass
 
@@ -466,7 +466,7 @@ def _register_objective_spend(objective_id: str | None, cost_usd: float):
             _objective_spend_usd[objective_id]["usd"] or 0.0
         ) + cost_usd
     try:
-        LLM_TENANT_SPEND_USD.labels(kind="objective", id=objective_id).inc(cost_usd)
+        LLM_TENANT_SPEND_USD.labels(kind="objective", id="[REDACTED_PII]").inc(cost_usd)
     except Exception:
         pass
 

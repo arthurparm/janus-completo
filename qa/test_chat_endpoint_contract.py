@@ -11,6 +11,7 @@ from app.api.v1.endpoints.chat import router as chat_router
 from app.config import settings
 from app.core.exceptions.chat_exceptions import ChatServiceError
 from app.core.infrastructure.auth import create_token, verify_token
+from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.chat_service import get_chat_service
 from app.services.memory_service import get_memory_service
 
@@ -143,7 +144,12 @@ def _build_client(
             token = auth.split(" ", 1)[1].strip()
             actor = verify_token(token)
             if actor is not None:
-                request.state.actor_user_id = str(actor)
+                request.state.actor_context = ActorContext.authenticated(
+                    actor_id=str(actor),
+                    roles=("USER",),
+                    auth_method=AuthMethod.LOCAL,
+                    trace_id="chat-contract-test",
+                )
         return await call_next(request)
 
     return TestClient(app)

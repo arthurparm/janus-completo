@@ -3,7 +3,6 @@ from contextlib import nullcontext
 from typing import Any
 
 import structlog
-
 from app.config import settings
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.core.llm.factory import _validate_gemini_key, _validate_openai_key, warm_llm_pool
@@ -72,7 +71,7 @@ class LLMRepository:
                         sid = user_id or USER_ID.get()
                         tid = TRACE_ID.get()
                         if sid and sid != "-":
-                            span.set_attribute("janus.user_id", sid)
+                            span.set_attribute("janus.user_id", "[REDACTED_PII]")
                         if tid and tid != "-":
                             span.set_attribute("janus.trace_id", tid)
                     except Exception:
@@ -303,7 +302,7 @@ class LLMRepository:
                             sid = user_id or USER_ID.get()
                             tid = TRACE_ID.get()
                             if sid and sid != "-":
-                                span_fb.set_attribute("janus.user_id", sid)
+                                span_fb.set_attribute("janus.user_id", "[REDACTED_PII]")
                             if tid and tid != "-":
                                 span_fb.set_attribute("janus.trace_id", tid)
                     except Exception:

@@ -1,5 +1,5 @@
-from app.core.infrastructure.auth import create_token, get_actor_user_id
 from app.config import settings
+from app.core.infrastructure.auth import create_token, get_actor_user_id
 
 
 class _Req:
@@ -7,34 +7,14 @@ class _Req:
         self.headers = headers
 
 
-def test_get_actor_prefers_bearer_token(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", True)
-    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+def test_get_actor_uses_signed_bearer_and_never_identity_header(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_JWT_SECRET", "test-secret-with-sufficient-entropy")
     token = create_token(99, expires_in=3600)
-    req = _Req(headers={"Authorization": f"Bearer {token}", "X-User-Id": "12"})
-
-    assert get_actor_user_id(req) == 99
-
-
-def test_get_actor_ignores_x_user_id_by_default(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", False)
-    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
-    req = _Req(headers={"X-User-Id": "12"})
-
-    assert get_actor_user_id(req) is None
+    request = _Req(headers={"Authorization": f"Bearer {token}", "X-User-Id": "12"})
+    assert get_actor_user_id(request) == 99
 
 
-def test_get_actor_allows_x_user_id_only_when_opted_in_non_production(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", True)
-    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
-    req = _Req(headers={"X-User-Id": "12"})
-
-    assert get_actor_user_id(req) == 12
-
-
-def test_get_actor_never_allows_x_user_id_in_production(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_TRUST_X_USER_ID_HEADER", True)
-    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
-    req = _Req(headers={"X-User-Id": "12"})
-
-    assert get_actor_user_id(req) is None
+def test_get_actor_rejects_identity_header_in_every_environment(monkeypatch):
+    for environment in ("development", "staging", "production"):
+        monkeypatch.setattr(settings, "ENVIRONMENT", environment)
+        assert get_actor_user_id(_Req(headers={"X-User-Id": "12"})) is None

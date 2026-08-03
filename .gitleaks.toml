@@ -1,0 +1,21 @@
+title = "Janus secret scanning policy"
+minVersion = "8.30.1"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented non-secret placeholders only"
+regexTarget = "match"
+regexes = [
+  '''__REQUIRED__''',
+  '''security-alerts\.example\.invalid''',
+  '''PC2_TAILSCALE_IP'''
+]
+
+[[allowlists]]
+description = "Deterministic distillation test fixture, not a credential"
+condition = "AND"
+regexTarget = "line"
+paths = ['''backend/tests/verify_distillation\.py''']
+regexes = ['''original_goal\s*=''']

@@ -33,7 +33,6 @@ export interface FeedbackQuickRequest {
   conversation_id: string;
   message_id: string;
   comment?: string;
-  user_id?: string;
 }
 
 export interface FeedbackQuickResponse {

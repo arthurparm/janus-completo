@@ -1,23 +1,21 @@
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
-from fastapi import Depends
-
 from app.core.monitoring import HealthMonitor, get_health_monitor
 from app.core.monitoring.poison_pill_handler import (
     PoisonPillHandler,
     QuarantinedMessage,
     get_poison_pill_handler,
 )
-from app.db.graph import get_graph_db
 from app.db import db
-from app.models.autonomy_models import AutonomyRun, AutonomyStep
+from app.db.graph import get_graph_db
 from app.models.audit_ledger_models import AuditLedgerEvent
+from app.models.autonomy_models import AutonomyRun, AutonomyStep
 from app.models.user_models import Message
 from app.models.user_models import Session as ChatSession
+from fastapi import Depends
 
 logger = structlog.get_logger(__name__)
 
@@ -39,9 +37,11 @@ def _normalize_ledger_payload(event: dict[str, Any]) -> dict[str, Any] | None:
         details = event.get("detail")
     if details is None:
         return None
-    if isinstance(details, dict):
-        return details
-    return {"details": details}
+    from app.core.security.redaction import redact_sensitive_payload
+
+    normalized = details if isinstance(details, dict) else {"details": details}
+    redacted = redact_sensitive_payload(normalized)
+    return redacted if isinstance(redacted, dict) else {"details": "[REDACTION_FAILED]"}
 
 
 class ObservabilityRepositoryError(Exception):
@@ -379,7 +379,6 @@ class ObservabilityRepository:
             raise ObservabilityRepositoryError("Falha ao registrar evento de auditoria.") from e
 
     def export_audit_events_json(self, sanitize: bool = True, **kwargs) -> str:
-        import json
         events = self.get_audit_events(**kwargs)
         if sanitize:
             from app.core.security.redaction import redact_sensitive_payload

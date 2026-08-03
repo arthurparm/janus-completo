@@ -86,8 +86,7 @@ export class ConversationsAutonomyService {
       ? this.api.autonomy.stopAutonomy()
       : this.api.autonomy.startAutonomy({
         interval_seconds: 60,
-        risk_profile: 'balanced',
-        user_id: this.userIdString()
+        risk_profile: 'balanced'
       })
     request$
       .pipe(catchError((err) => {
@@ -127,8 +126,4 @@ export class ConversationsAutonomyService {
     return 'Pendente'
   }
 
-  private userIdString(): string | undefined {
-    const id = this.state.user()?.id
-    return id != null ? String(id) : undefined
-  }
 }

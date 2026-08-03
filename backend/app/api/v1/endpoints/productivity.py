@@ -162,7 +162,7 @@ async def calendar_add_event(
         try:
             _PROD_REQUESTS_TOTAL.labels("calendar_add_event", "queued").inc()
             _PROD_REQUESTS_USER_TOTAL.labels(
-                actor, "calendar_add_event", "queued"
+                "[REDACTED_PII]", "calendar_add_event", "queued"
             ).inc()
         except Exception:
             pass
@@ -192,7 +192,9 @@ async def calendar_add_event(
             )
             try:
                 _PROD_REQUESTS_TOTAL.labels("calendar_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels(actor, "calendar_index", "ok").inc()
+                _PROD_REQUESTS_USER_TOTAL.labels(
+                    "[REDACTED_PII]", "calendar_index", "ok"
+                ).inc()
             except Exception:
                 pass
     except Exception:
@@ -310,7 +312,7 @@ async def mail_send(
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("mail_send", "queued").inc()
-            _PROD_REQUESTS_USER_TOTAL.labels(actor, "mail_send", "queued").inc()
+            _PROD_REQUESTS_USER_TOTAL.labels("[REDACTED_PII]", "mail_send", "queued").inc()
         except Exception:
             pass
     # Indexação opcional será tratada pelo worker em uma versão futura
@@ -449,7 +451,7 @@ async def notes_add(
             )
             try:
                 _PROD_REQUESTS_TOTAL.labels("notes_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels(actor, "notes_index", "ok").inc()
+                _PROD_REQUESTS_USER_TOTAL.labels("[REDACTED_PII]", "notes_index", "ok").inc()
             except Exception:
                 pass
     except Exception:
@@ -466,7 +468,7 @@ async def notes_add(
         )
         try:
             _PROD_REQUESTS_TOTAL.labels("notes_add", "ok").inc()
-            _PROD_REQUESTS_USER_TOTAL.labels(actor, "notes_add", "ok").inc()
+            _PROD_REQUESTS_USER_TOTAL.labels("[REDACTED_PII]", "notes_add", "ok").inc()
         except Exception:
             pass
     except Exception:

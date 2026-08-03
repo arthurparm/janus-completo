@@ -57,7 +57,7 @@ export class ConversationsRagService {
       return
     }
     const mode = this.state.ragMode()
-    const userId = this.context.userIdString()
+    const authenticated = Boolean(this.state.user())
     const conversationId = this.state.selectedId() || undefined
     this.state.ragError.set('')
     this.notices.clear('rag')
@@ -69,25 +69,25 @@ export class ConversationsRagService {
     if (mode === 'search') {
       request$ = this.api.knowledge.ragSearch({ query, limit: 5 })
     } else if (mode === 'user-chat') {
-      if (!userId) {
+      if (!authenticated) {
         this.state.ragLoading.set(false)
         this.state.ragError.set('Usuário autenticado necessário para RAG user-chat.')
         this.notices.set('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
         return
       }
-      request$ = this.api.knowledge.ragUserChat({ query, user_id: userId, session_id: conversationId, limit: 5 })
+      request$ = this.api.knowledge.ragUserChat({ query, session_id: conversationId, limit: 5 })
     } else if (mode === 'user_chat') {
-      request$ = this.api.knowledge.ragUserChatV2({ query, user_id: userId || undefined, session_id: conversationId, limit: 5 })
+      request$ = this.api.knowledge.ragUserChatV2({ query, session_id: conversationId, limit: 5 })
     } else if (mode === 'productivity') {
-      if (!userId) {
+      if (!authenticated) {
         this.state.ragLoading.set(false)
         this.state.ragError.set('Usuário autenticado necessário para RAG productivity.')
         this.notices.set('rag', 'warning', 'Entre com usuário autenticado para usar este modo.')
         return
       }
-      request$ = this.api.knowledge.ragProductivitySearch({ query, user_id: userId, limit: 5 })
+      request$ = this.api.knowledge.ragProductivitySearch({ query, limit: 5 })
     } else {
-      request$ = this.api.knowledge.ragHybridSearch({ query, user_id: userId || undefined, limit: 5 })
+      request$ = this.api.knowledge.ragHybridSearch({ query, limit: 5 })
     }
 
     request$

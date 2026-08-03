@@ -16,12 +16,12 @@ getExperimentWinner(experiment_id: number, metric_name: string = 'accuracy'): Ob
     return this.http.get<ExperimentWinnerResponse>(this.apiContext.buildUrl(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/winner?${qs.toString()}`))
   }
 
-assignUserToExperiment(experiment_id: number, user_id: string): Observable<AssignmentResponse> {
-    return this.http.post<AssignmentResponse>(this.apiContext.buildUrl(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/assign`), { user_id })
+assignUserToExperiment(experiment_id: number, _userId: string): Observable<AssignmentResponse> {
+    return this.http.post<AssignmentResponse>(this.apiContext.buildUrl(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/assign`), {})
   }
 
-submitExperimentFeedback(experiment_id: number, user_id: string, rating: number, notes?: string): Observable<FeedbackSubmitResponse> {
-    return this.http.post<FeedbackSubmitResponse>(this.apiContext.buildUrl(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/feedback`), { user_id, rating, notes })
+submitExperimentFeedback(experiment_id: number, _userId: string, rating: number, notes?: string): Observable<FeedbackSubmitResponse> {
+    return this.http.post<FeedbackSubmitResponse>(this.apiContext.buildUrl(`/api/v1/evaluation/experiments/${encodeURIComponent(String(experiment_id))}/feedback`), { rating, notes })
   }
 
 getExperimentFeedbackStats(experiment_id: number): Observable<Record<string, unknown>> {

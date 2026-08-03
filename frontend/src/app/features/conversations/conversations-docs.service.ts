@@ -39,12 +39,11 @@ export class ConversationsDocsService {
       this.state.docUploadError.set('Selecione um arquivo para upload.')
       return
     }
-    const userId = this.context.userIdString()
     this.state.docUploadError.set('')
     this.notices.clear('docs')
     this.state.docUploadInFlight.set(true)
     this.state.docUploadProgress.set(0)
-    this.api.documents.uploadDocument(file, this.state.selectedId() || undefined, userId || undefined)
+    this.api.documents.uploadDocument(file, this.state.selectedId() || undefined)
       .pipe(catchError((err) => {
         this.state.docUploadError.set(extractErrorMessage(err, 'Falha no upload do documento.'))
         this.state.docUploadInFlight.set(false)
@@ -88,7 +87,7 @@ export class ConversationsDocsService {
     this.state.docLinkError.set('')
     this.notices.clear('docs')
     this.state.docLinkLoading.set(true)
-    this.api.documents.linkUrl(conversationId, url, this.context.userIdString() || undefined)
+    this.api.documents.linkUrl(conversationId, url)
       .pipe(catchError((err) => {
         this.state.docLinkError.set(extractErrorMessage(err, 'Falha ao vincular URL.'))
         this.state.docLinkLoading.set(false)
@@ -120,7 +119,7 @@ export class ConversationsDocsService {
     this.state.docSearchError.set('')
     this.notices.clear('docs')
     this.state.docSearchLoading.set(true)
-    this.api.documents.searchDocuments(query, undefined, undefined, this.context.userIdString())
+    this.api.documents.searchDocuments(query)
       .pipe(catchError((err) => {
         this.state.docSearchError.set(extractErrorMessage(err, 'Falha ao buscar documentos.'))
         this.state.docSearchLoading.set(false)
@@ -139,7 +138,7 @@ export class ConversationsDocsService {
     if (!docId) return
     if (typeof window !== 'undefined' && !window.confirm('Excluir este documento?')) return
     this.state.deletingDocIds.update((curr) => ({ ...curr, [docId]: true }))
-    this.api.documents.deleteDocument(docId, this.context.userIdString())
+    this.api.documents.deleteDocument(docId)
       .pipe(catchError((err) => {
         this.state.docSearchError.set(extractErrorMessage(err, 'Falha ao excluir documento.'))
         this.state.deletingDocIds.update((curr) => {

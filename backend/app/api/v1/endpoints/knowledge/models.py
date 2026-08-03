@@ -108,7 +108,6 @@ class ExperimentalKnowledgeHealthResponse(BaseModel):
 
 class ExperimentalIndexBuildRequest(BaseModel):
     domain: str
-    user_id: str | None = None
     knowledge_space_id: str | None = None
     doc_id: str | None = None
     rebuild_full: bool = False

@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 from uuid import uuid4
 
-
 try:
     import psycopg  # type: ignore
 except Exception as exc:  # pragma: no cover - optional dependency at runtime
@@ -378,9 +377,7 @@ def main() -> int:
     samples: list[TokenSample] = []
     for idx in range(args.runs):
         trace_id = uuid4().hex
-        headers = {"X-Request-ID": trace_id, "X-User-Id": user_id}
-        if project_id:
-            headers["X-Project-Id"] = project_id
+        headers = {"X-Request-ID": trace_id}
 
         start_time = time.perf_counter()
         if args.mode == "chat":

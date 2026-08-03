@@ -14,30 +14,26 @@ export class DocumentsApiService {
     private logger: AppLoggerService
   ) {}
 
-linkUrl(conversation_id: string, url: string, user_id?: string): Observable<UploadResponse> {
+linkUrl(conversation_id: string, url: string): Observable<UploadResponse> {
     const form = new FormData()
     form.append('url', url)
     form.append('conversation_id', conversation_id)
-    if (user_id) form.append('user_id', user_id)
     return this.http.post<UploadResponse>(this.apiContext.buildUrl(`/api/v1/documents/link-url`), form)
   }
 
-listDocuments(conversationId?: string, userId?: string): Observable<DocListResponse> {
+listDocuments(conversationId?: string): Observable<DocListResponse> {
     const qs = new URLSearchParams();
     if (conversationId) qs.set('conversation_id', conversationId);
-    if (userId) qs.set('user_id', userId);
-    const headers = this.apiContext.headersFor(userId);
+    const headers = this.apiContext.headersFor();
     return this.http.get<DocListResponse>(this.apiContext.buildUrl(`/api/v1/documents/list${qs.toString() ? '?' + qs.toString() : ''}`), { headers });
   }
 
-uploadDocument(file: File, conversationId?: string, userId?: string): Observable<{ progress?: number; response?: UploadResponse }> {
+uploadDocument(file: File, conversationId?: string): Observable<{ progress?: number; response?: UploadResponse }> {
     const form = new FormData();
     form.append('file', file);
     if (conversationId) form.append('conversation_id', conversationId);
-    if (userId) form.append('user_id', userId);
-
-    const headers = this.apiContext.headersFor(userId);
-    this.logger.debug('[BackendApiService] uploadDocument params', { userId, userHeader: headers['X-User-Id'] });
+    const headers = this.apiContext.headersFor();
+    this.logger.debug('[BackendApiService] uploadDocument prepared', { conversationId });
     return this.http.post<UploadResponse>(this.apiContext.buildUrl(`/api/v1/documents/upload`), form, { headers, reportProgress: true, observe: 'events' }).pipe(
       map((event: HttpEvent<UploadResponse>) => {
         if (event.type === HttpEventType.UploadProgress) {
@@ -51,26 +47,24 @@ uploadDocument(file: File, conversationId?: string, userId?: string): Observable
     )
   }
 
-searchDocuments(query: string, minScore?: number, docId?: string, userId?: string): Observable<DocSearchResponse> {
+searchDocuments(query: string, minScore?: number, docId?: string): Observable<DocSearchResponse> {
     const qs = new URLSearchParams()
     qs.set('query', query)
     if (minScore !== undefined) qs.set('min_score', String(minScore))
     if (docId) qs.set('doc_id', docId)
-    if (userId) qs.set('user_id', String(userId))
-    const headers = userId ? this.apiContext.headersFor(userId) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.get<DocSearchResponse>(
       this.apiContext.buildUrl(`/api/v1/documents/search?${qs.toString()}`),
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 
-deleteDocument(docId: string, userId?: string): Observable<{ status: string; doc_id: string }> {
+deleteDocument(docId: string): Observable<{ status: string; doc_id: string }> {
     const qs = new URLSearchParams()
-    if (userId) qs.set('user_id', String(userId))
-    const headers = userId ? this.apiContext.headersFor(userId) : undefined
+    const headers = this.apiContext.headersFor()
     return this.http.delete<{ status: string; doc_id: string }>(
       this.apiContext.buildUrl(`/api/v1/documents/${encodeURIComponent(docId)}${qs.toString() ? '?' + qs.toString() : ''}`),
-      headers ? { headers } : undefined
+      { headers }
     )
   }
 }

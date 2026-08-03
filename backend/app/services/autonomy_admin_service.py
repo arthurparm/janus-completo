@@ -4,7 +4,6 @@ import ast
 import hashlib
 import json
 import re
-import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,20 +11,19 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import structlog
-from fastapi import Request
-
 from app.config import settings
 from app.core.llm import ModelPriority, ModelRole
+from app.core.memory.memory_core import get_memory_db
 from app.db.graph import get_graph_db
 from app.db.vector_store import build_deterministic_point_id
-from app.core.memory.memory_core import get_memory_db
 from app.models.schemas import Experience, GraphRelationship
-from app.repositories.memory_repository import MemoryRepository
 from app.repositories.autonomy_admin_repository import AutonomyAdminRepository
+from app.repositories.memory_repository import MemoryRepository
 from app.services.code_hybrid_search_service import get_code_hybrid_search_service
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm_service import LLMService
 from app.services.meta_agent_service import get_meta_agent_service
+from fastapi import Request
 
 logger = structlog.get_logger(__name__)
 
@@ -483,24 +481,27 @@ class AutonomyAdminService:
     def get_board(self, *, status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
         return self._repo.list_board(status=status, limit=limit)
 
-    def _git(self, args: list[str]) -> str | None:
-        try:
-            cp = subprocess.run(
-                ["git", *args],
-                cwd=str(self._repo_root),
-                capture_output=True,
-                text=True,
-                timeout=20,
-                check=False,
-            )
-            if cp.returncode != 0:
-                return None
-            return cp.stdout.strip()
-        except Exception:
-            return None
-
     def _get_head_commit(self) -> str | None:
-        return self._git(["rev-parse", "HEAD"])
+        """Resolve HEAD through read-only git metadata access; never execute a process."""
+        git_dir = self._repo_root / ".git"
+        try:
+            head = (git_dir / "HEAD").read_text(encoding="utf-8").strip()
+            if not head.startswith("ref: "):
+                return head or None
+            ref_name = head.removeprefix("ref: ").strip()
+            loose_ref = git_dir / ref_name
+            if loose_ref.is_file():
+                return loose_ref.read_text(encoding="utf-8").strip() or None
+            packed_refs = git_dir / "packed-refs"
+            if packed_refs.is_file():
+                for line in packed_refs.read_text(encoding="utf-8").splitlines():
+                    if line and not line.startswith(("#", "^")):
+                        commit, _, ref = line.partition(" ")
+                        if ref == ref_name:
+                            return commit or None
+        except (OSError, UnicodeError):
+            return None
+        return None
 
     def _resolve_files_for_study(
         self,
@@ -512,23 +513,6 @@ class AutonomyAdminService:
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
-
-        if mode == "incremental" and base_commit and target_commit:
-            out = self._git(["diff", "--name-only", f"{base_commit}..{target_commit}"])
-            if out:
-                for rel in [line.strip() for line in out.splitlines() if line.strip()]:
-                    p, allowed = self._resolve_local_study_path(rel)
-                    if not p or not allowed or allowed in seen:
-                        continue
-                    seen.add(allowed)
-                    results.append(
-                        {
-                            "file_path": allowed,
-                            "change_type": "modified",
-                            "sha_before": base_commit,
-                            "sha_after": target_commit,
-                        }
-                    )
 
         if not results and task_files:
             for rel in task_files:

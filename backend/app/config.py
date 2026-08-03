@@ -405,11 +405,17 @@ class AppSettings(BaseSettings):
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
     AUTH_JWT_SECRET: str | None = None
+    AUTH_JWT_KEY_ID: str = "primary"
+    AUTH_JWT_ISSUER: str = "janus-api"
+    AUTH_JWT_AUDIENCE: str = "janus-clients"
     AUTH_JWT_EXPIRES_SECONDS: int = 3600
     AUTH_REFRESH_EXPIRES_SECONDS: int = 30 * 24 * 60 * 60
+    ACTOR_CONTEXT_ENVELOPE_TTL_SECONDS: int = 60
+    SECURITY_ALERT_WEBHOOK_URL: str = ""
+    SECURITY_ALERT_WEBHOOK_HMAC_KEY: str = ""
+    SECURITY_ALERT_ALLOWED_HOSTS: Annotated[list[str], NoDecode] = []
     AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
     AUTH_RESET_RETURN_TOKEN: bool = False
-    AUTH_TRUST_X_USER_ID_HEADER: bool = False
     AUTH_ADMIN_CPF_ALLOWLIST: Annotated[list[str], NoDecode] = []
     SUPABASE_JWT_SECRET: str = ""
     CHAT_UNLIMITED_USERS: Annotated[list[str], NoDecode] = []
@@ -713,6 +719,7 @@ class AppSettings(BaseSettings):
         "CHAT_TOOL_BLOCKLIST",
         "TOOL_EGRESS_ALLOW_HOSTS",
         "WORKER_EGRESS_ALLOW_HOSTS",
+        "SECURITY_ALERT_ALLOWED_HOSTS",
         mode="before",
     )
     def _parse_chat_tool_lists(cls, v: Any):

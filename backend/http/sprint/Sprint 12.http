@@ -261,7 +261,6 @@ Authorization: Bearer {{token}}
 # X-Request-ID: {{correlation_id}}
 # User-Agent: Janus-HTTP-Test/{{client_version}}
 # Authorization: Bearer {{token}}
-# X-User-Id: {{actor_user_id}}
 #
 # > {% client.test("deployment/precheck: 200/400/403", function() { client.assert([200,400,403].includes(response.status)); }); %}
 #
@@ -273,7 +272,6 @@ Authorization: Bearer {{token}}
 # X-Request-ID: {{correlation_id}}
 # User-Agent: Janus-HTTP-Test/{{client_version}}
 # Authorization: Bearer {{token}}
-# X-User-Id: {{actor_user_id}}
 #
 # {
 #   "model_id": "{{model_id}}",

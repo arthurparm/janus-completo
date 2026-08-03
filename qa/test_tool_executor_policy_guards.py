@@ -263,7 +263,7 @@ async def test_execute_tool_calls_redacts_sensitive_args_before_pending_persiste
     stored = created.get("args_json", "")
     assert "super-secret-password" not in stored
     assert "person@example.com" not in stored
-    assert "[REDACTED_EMAIL]" in stored
+    assert "[REDACTED_PII]" in stored
     assert "scope_summary" not in stored
 
 
@@ -323,7 +323,7 @@ async def test_execute_tool_calls_redacts_nested_tokens_before_pending_persisten
     assert "ghp_supersecrettokenvalue1234567890" not in stored
     assert "owner@example.com" not in stored
     assert "[REDACTED_SECRET]" in stored
-    assert "[REDACTED_EMAIL]" in stored
+    assert "[REDACTED_PII]" in stored
     assert "echo ok" in stored
 
 

@@ -204,7 +204,11 @@ def client(monkeypatch):
 
     @app.middleware("http")
     async def fake_actor_middleware(request, call_next):
-        request.state.actor_user_id = "1"
+        from app.core.security.actor_context import ActorContext
+
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id="1", roles=("ADMIN",), auth_method="test", trace_id="qa-trace"
+        )
         return await call_next(request)
 
     # Stub graph orchestrator before importing pending_actions

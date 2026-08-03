@@ -14,7 +14,6 @@ from app.core.memory.memory_core import close_memory_db, get_memory_db, initiali
 from app.core.monitoring import get_health_monitor
 from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
 from app.core.senses.audio.manager import VoiceManager
-from app.core.tools.os_tools import register_os_tools
 from app.core.workers import data_harvester as data_harvester_module
 from app.core.workers.async_consolidation_worker import start_consolidation_worker
 from app.core.workers.data_harvester import DataHarvester, MemoryConnector
@@ -43,7 +42,6 @@ from app.repositories.optimization_repository import OptimizationRepository
 from app.repositories.outbox_repository import OutboxRepository
 from app.repositories.prompt_repository import PromptRepository
 from app.repositories.reflexion_repository import ReflexionRepository
-from app.repositories.sandbox_repository import SandboxRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.tool_repository import ToolRepository
 
@@ -66,7 +64,6 @@ from app.services.prompt_builder_service import PromptBuilderService
 from app.services.prompt_service import PromptService
 from app.services.rag_service import RAGService
 from app.services.reflexion_service import ReflexionService
-from app.services.sandbox_service import SandboxService
 from app.services.scheduler_service import get_scheduler, initialize_default_jobs
 from app.services.task_service import TaskService
 from app.services.tool_executor_service import ToolExecutorService
@@ -113,7 +110,6 @@ class Kernel:
         self.agent_repo = None
         self.task_repo = None
         self.context_repo = None
-        self.sandbox_repo = None
         self.reflexion_repo = None
         self.tool_repo = None
         self.collaboration_repo = None
@@ -131,7 +127,6 @@ class Kernel:
         self.knowledge_service: KnowledgeService | None = None
         self.task_service: TaskService | None = None
         self.context_service: ContextService | None = None
-        self.sandbox_service: SandboxService | None = None
         self.reflexion_service: ReflexionService | None = None
         self.tool_service: ToolService | None = None
         self.collaboration_service: CollaborationService | None = None
@@ -210,12 +205,11 @@ class Kernel:
             if build_dependency_graph:
                 self._build_dependency_graph(set_global_facades=set_global_facades)
 
-            # 4. Agentic Capabilities (OS Tools)
+            # 4. Homologated read-only tool registry
             if register_tools:
-                register_os_tools()
-                from app.core.ui.ui_tools import register_ui_tools
+                from app.core.tools.production_manifest import register_production_tools
 
-                register_ui_tools()
+                register_production_tools()
 
             # 5. Workers & Observability
             if start_background_processes:
@@ -434,7 +428,6 @@ class Kernel:
             self.agent_repo = AgentRepository(self.agent_manager)
             self.task_repo = TaskRepository(self.broker)
             self.context_repo = ContextRepository()
-            self.sandbox_repo = SandboxRepository()
             self.tool_repo = ToolRepository()
             self.collaboration_repo = CollaborationRepository()
             self.llm_repo = LLMRepository()
@@ -455,7 +448,6 @@ class Kernel:
             self.knowledge_service = KnowledgeService(self.knowledge_repo)
             self.task_service = TaskService(self.task_repo)
             self.context_service = ContextService(self.context_repo)
-            self.sandbox_service = SandboxService(self.sandbox_repo)
             self.reflexion_repo = ReflexionRepository(memory_service=self.memory_service)
             self.reflexion_service = ReflexionService(repo=self.reflexion_repo)
             self.tool_service = ToolService(self.tool_repo)

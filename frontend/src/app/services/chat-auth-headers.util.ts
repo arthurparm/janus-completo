@@ -49,9 +49,5 @@ export function buildChatStreamAuthHeaders(
     /* noop */
   }
 
-  if (options.projectId) {
-    headers.set('X-Project-Id', String(options.projectId))
-  }
-
   return headers
 }

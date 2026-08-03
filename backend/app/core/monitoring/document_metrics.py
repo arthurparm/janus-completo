@@ -96,8 +96,8 @@ class DocumentMetricsRecorder:
         try:
             self._ingest_points.labels("success").inc(points_count)
             self._ingest_files.labels(status).inc()
-            self._ingest_points_user.labels(str(user_id)).inc(points_count)
-            self._ingest_files_user.labels(str(user_id), status).inc()
+            self._ingest_points_user.labels("[REDACTED_PII]").inc(points_count)
+            self._ingest_files_user.labels("[REDACTED_PII]", status).inc()
         except Exception as e:
             logger.debug(
                 "metric_recording_failed",
@@ -113,7 +113,7 @@ class DocumentMetricsRecorder:
 
         try:
             self._ingest_files.labels(status).inc()
-            self._ingest_files_user.labels(str(user_id), status).inc()
+            self._ingest_files_user.labels("[REDACTED_PII]", status).inc()
         except Exception as e:
             logger.debug(
                 "metric_recording_failed",

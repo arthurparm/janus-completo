@@ -16,8 +16,6 @@ _EXPORT_MAP: dict[str, tuple[str, str]] = {
     "ContextManager": (".context_manager", "ContextManager"),
     "context_manager": (".context_manager", "context_manager"),
     # Python Sandbox
-    "PythonSandbox": (".python_sandbox", "PythonSandbox"),
-    "python_sandbox": (".python_sandbox", "python_sandbox"),
     # Filesystem
     "read_file": (".filesystem_manager", "read_file"),
     "write_file": (".filesystem_manager", "write_file"),
@@ -65,8 +63,6 @@ __all__ = [
     "ContextManager",
     "context_manager",
     # Python Sandbox
-    "PythonSandbox",
-    "python_sandbox",
     # Filesystem Manager
     "read_file",
     "write_file",

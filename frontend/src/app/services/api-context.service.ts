@@ -46,13 +46,11 @@ export class ApiContextService {
   setPriority(priority?: string) { this._priority = priority || undefined; }
   clearContext() { this._projectId = undefined; this._sessionId = undefined; this._conversationId = undefined; }
 
-  public headersFor(userId?: number | string): Record<string, string> {
+  public headersFor(_userId?: number | string): Record<string, string> {
     const h: Record<string, string> = {
       'X-Request-ID': this._reqId(),
       traceparent: this._traceparent(),
     };
-    if (typeof userId !== 'undefined') h['X-User-Id'] = String(userId);
-    if (this._projectId) h['X-Project-Id'] = this._projectId;
     if (this._sessionId) h['X-Session-Id'] = this._sessionId;
     if (this._conversationId) h['X-Conversation-Id'] = this._conversationId;
     if (this._persona) h['X-Persona'] = this._persona;
