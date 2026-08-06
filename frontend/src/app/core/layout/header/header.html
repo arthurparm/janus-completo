@@ -22,9 +22,6 @@
       </a>
 
       @if (isAuthenticated$ | async) {
-        @if (isVisitor$ | async) {
-          <span class="visitor-badge" aria-label="Modo visitante ativo">Visitante</span>
-        }
         <button class="logout-btn" (click)="logout()">Sair</button>
       }
     </nav>

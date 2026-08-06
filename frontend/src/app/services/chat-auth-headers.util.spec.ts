@@ -18,7 +18,7 @@ describe('buildChatStreamAuthHeaders', () => {
       .replace(/\//g, '_')
       .replace(/=+$/g, '')
     const fakeToken = `header.${payload}.signature`
-    localStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
+    sessionStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
 
     const headers = buildChatStreamAuthHeaders({ projectId: 'p-1' })
 

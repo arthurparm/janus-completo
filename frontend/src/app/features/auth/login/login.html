@@ -1,157 +1,28 @@
 <section class="login">
   <div class="glass-panel">
     <div class="panel-glow" aria-hidden="true"></div>
-
     <div class="brand">
       <div class="signal-orb" aria-hidden="true">
         <span class="signal-core"></span>
         <span class="signal-ring"></span>
         <span class="signal-ring ring-two"></span>
       </div>
-      <p class="eyebrow">JANUS // PORTAL SEGURO</p>
-      <h1>VERIFICACAO DE ACESSO</h1>
-      <p class="sub">Entrada segura para o nucleo operacional do Janus.</p>
-      <div class="status-chip">
-        <span class="status-dot"></span>
-        CANAL CRIPTOGRAFADO ATIVO
-      </div>
+      <p class="eyebrow">JANUS // OIDC</p>
+      <h1>VERIFICAÇÃO DE ACESSO</h1>
+      <p class="sub">A autenticação é concluída no provedor de identidade da organização.</p>
+      <div class="status-chip"><span class="status-dot"></span>AUTHORIZATION CODE + PKCE</div>
     </div>
 
-    <form [formGroup]="form" (ngSubmit)="loginEmailPassword()" aria-label="Login">
+    <button type="button" class="glass-button primary" (click)="beginLogin()" [disabled]="loading">
+      <span>{{ loading ? 'REDIRECIONANDO…' : 'ENTRAR COM O PROVEDOR DE IDENTIDADE' }}</span>
+      @if (!loading) { <span class="material-icons">login</span> }
+    </button>
 
-      <!-- Email -->
-      <div class="field">
-        <label for="email">Email de acesso</label>
-        <input id="email" type="email" formControlName="email" class="glass-input" placeholder="voce@janus.ai"
-          [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched" />
-        @if (form.controls.email.invalid && form.controls.email.touched) {
-          <div class="field-error">
-            > IDENTIFICADOR INVALIDO
-          </div>
-        }
-      </div>
-
-      <!-- Password -->
-      <div class="field">
-        <label for="password">Senha de acesso</label>
-        <div class="password-wrap">
-          <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password"
-            class="glass-input has-toggle" placeholder="********" />
-          <button type="button" class="toggle-password" (click)="togglePassword()"
-            [attr.aria-pressed]="showPassword">
-            {{ showPassword ? 'OCULTAR' : 'MOSTRAR' }}
-          </button>
-        </div>
-        @if (form.controls.password.invalid && form.controls.password.touched) {
-          <div class="field-error">
-            > MINIMO 6 CARACTERES
-          </div>
-        }
-      </div>
-
-      <!-- Extras -->
-      <div class="extras">
-        <label class="remember">
-          <input type="checkbox" formControlName="remember" />
-          <span>Manter sessao</span>
-        </label>
-        <button type="button" class="recover" (click)="recoverAccess()" [disabled]="loading || isRateLimited">
-          Recuperar acesso
-        </button>
-      </div>
-
-      <!-- Submit -->
-      <button class="glass-button primary" type="submit" [disabled]="form.invalid || loading || isRateLimited">
-        <span>{{ loading ? 'ENTRANDO...' : 'ENTRAR NO JANUS' }}</span>
-        @if (!loading) {
-          <span class="material-icons">login</span>
-        }
-      </button>
-
-      <!-- SSO Alt -->
-      <div class="sso">
-        <button type="button" class="glass-button secondary" (click)="loginWithGoogle()" [disabled]="loading || isRateLimited">
-          Entrar com Google
-        </button>
-        <button type="button" class="glass-button secondary" (click)="loginWithGithub()" [disabled]="loading || isRateLimited">
-          Entrar com GitHub
-        </button>
-      </div>
-
-      <div class="visitor-access">
-        <button type="button" class="glass-button visitor" (click)="enterVisitorMode()" [disabled]="loading">
-          Entrar como visitante
-        </button>
-        <p>Acesso limitado, sem credenciais e sem permissoes administrativas.</p>
-      </div>
-
-      @if (isRateLimited) {
-        <div class="notice-box" role="status" aria-live="polite">
-          > {{ rateLimitNotice }}
-        </div>
-      }
-      @if (error) {
-        <div class="error-box" role="alert" aria-live="assertive">
-          > {{ error }}
-          @if (showRecoveryHint) {
-            <div class="error-action">
-              <button type="button" class="recover-inline" (click)="recoverAccess()">Guiar recuperacao</button>
-            </div>
-          }
-        </div>
-      }
-      @if (notice) {
-        <div class="notice-box" role="status" aria-live="polite">
-          > {{ notice }}
-        </div>
-      }
-
-      @if (showResetGuide) {
-        <div class="notice-box">
-          <p><strong>Fluxo guiado de redefinicao</strong></p>
-          <p>1) Solicite a recuperacao acima. 2) Cole o token. 3) Defina sua nova senha.</p>
-
-          <div class="field">
-            <label for="resetToken">Token de recuperacao</label>
-            <input
-              id="resetToken"
-              type="text"
-              class="glass-input"
-              placeholder="Cole o token recebido"
-              [(ngModel)]="resetToken"
-              name="resetToken"
-            />
-          </div>
-
-          <div class="field">
-            <label for="newPassword">Nova senha</label>
-            <input
-              id="newPassword"
-              type="password"
-              class="glass-input"
-              placeholder="Minimo 8 caracteres"
-              [(ngModel)]="newPassword"
-              name="newPassword"
-            />
-          </div>
-
-          <div class="field">
-            <label for="confirmPassword">Confirmar nova senha</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              class="glass-input"
-              placeholder="Repita a nova senha"
-              [(ngModel)]="confirmPassword"
-              name="confirmPassword"
-            />
-          </div>
-
-          <button type="button" class="glass-button secondary" (click)="submitResetPassword()" [disabled]="loading">
-            Confirmar redefinicao
-          </button>
-        </div>
-      }
-    </form>
+    @if (error) {
+      <div class="error-box" role="alert" aria-live="assertive">{{ error }}</div>
+    }
+    @if (notice) {
+      <div class="notice-box" role="status" aria-live="polite">{{ notice }}</div>
+    }
   </div>
 </section>

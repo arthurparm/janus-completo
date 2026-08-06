@@ -49,7 +49,7 @@ describe('AgentEventsService', () => {
   })
 
   it('conecta com fetch autenticado e publica eventos SSE', async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(7))
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(7))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       const chunk = encoder.encode(
         'event: agent_event\ndata: {"task_id":"task-1","agent_role":"dev","event_type":"agent_event","content":"thinking","conversation_id":"conv-1","timestamp":123}\n\n'
@@ -85,7 +85,7 @@ describe('AgentEventsService', () => {
   })
 
   it('codifica conversationId na URL sem alterar o contexto do evento', async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(11))
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(11))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       const chunk = encoder.encode(
         'event: agent_event\ndata: {"task_id":"task-1","agent_role":"dev","event_type":"agent_event","content":"thinking","timestamp":123}\n\n'
@@ -121,7 +121,7 @@ describe('AgentEventsService', () => {
   })
 
   it('aborta a conexao atual ao desconectar', async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(9))
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(9))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       await new Promise(() => undefined)
       return new Response(null, { status: 200 })
@@ -142,7 +142,7 @@ describe('AgentEventsService', () => {
   })
 
   it('aborta a conexao antes de recarregar ou sair da pagina', async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(10))
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(10))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       await new Promise(() => undefined)
       return new Response(null, { status: 200 })

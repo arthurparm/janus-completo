@@ -1,98 +1,32 @@
 import { TestBed } from '@angular/core/testing'
-import { LoginComponent } from './login'
-import { AuthService } from '../../../core/auth/auth.service'
-import { Router } from '@angular/router'
-import { RouterTestingModule } from '@angular/router/testing'
+import { ActivatedRoute } from '@angular/router'
+import { convertToParamMap } from '@angular/router'
+import { BehaviorSubject } from 'rxjs'
 import { vi } from 'vitest'
+import { AuthService } from '../../../core/auth/auth.service'
+import { LoginComponent } from './login'
 
-describe('LoginComponent', () => {
-  let comp: LoginComponent
-  let authSpy: {
-    loginWithPassword: ReturnType<typeof vi.fn>
-    loginWithProvider: ReturnType<typeof vi.fn>
-    enterVisitorMode: ReturnType<typeof vi.fn>
-    requestPasswordReset: ReturnType<typeof vi.fn>
-    resetPassword: ReturnType<typeof vi.fn>
-  }
-  let router: Router
-
-  beforeEach(() => {
-    authSpy = {
-      loginWithPassword: vi.fn(),
-      loginWithProvider: vi.fn(),
-      enterVisitorMode: vi.fn(),
-      requestPasswordReset: vi.fn(),
-      resetPassword: vi.fn(),
-      isAuthRateLimited: vi.fn().mockReturnValue(false),
-      authRateLimitRemainingSeconds: vi.fn().mockReturnValue(0)
-    }
-
+describe('LoginComponent OIDC', () => {
+  it('redireciona exclusivamente pelo fluxo OIDC com o returnUrl validado', async () => {
+    const beginLogin = vi.fn().mockResolvedValue(undefined)
+    const params = new BehaviorSubject(convertToParamMap({ returnUrl: '/conversations' }))
     TestBed.configureTestingModule({
-      imports: [LoginComponent, RouterTestingModule],
-      providers: [{ provide: AuthService, useValue: authSpy }]
+      imports: [LoginComponent],
+      providers: [
+        { provide: AuthService, useValue: { beginLogin } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            queryParamMap: params.asObservable(),
+            snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/conversations' }) }
+          }
+        }
+      ]
     })
 
-    const fixture = TestBed.createComponent(LoginComponent)
-    comp = fixture.componentInstance
-    router = TestBed.inject(Router)
-  })
+    const component = TestBed.createComponent(LoginComponent).componentInstance
+    await component.beginLogin()
 
-  it('deve invalidar email incorreto', () => {
-    comp.form.setValue({ email: 'x', password: '123456', remember: true })
-    expect(comp.form.invalid).toBe(true)
-  })
-
-  it('deve alternar exibicao de senha', () => {
-    expect(comp.showPassword).toBe(false)
-    comp.togglePassword()
-    expect(comp.showPassword).toBe(true)
-  })
-
-  it('deve logar com email/senha validos', async () => {
-    comp.form.setValue({ email: 'a@b.com', password: '123456', remember: true })
-    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true)
-    authSpy.loginWithPassword.mockResolvedValue({ ok: true })
-
-    await comp.loginEmailPassword()
-
-    expect(authSpy.loginWithPassword).toHaveBeenCalledWith('a@b.com', '123456', true)
-    expect(navigateSpy).toHaveBeenCalledWith(['/'])
-  })
-
-  it('deve entrar em modo visitante e navegar para home', async () => {
-    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true)
-    authSpy.enterVisitorMode.mockReturnValue({ ok: true })
-
-    await comp.enterVisitorMode()
-
-    expect(authSpy.enterVisitorMode).toHaveBeenCalled()
-    expect(navigateSpy).toHaveBeenCalledWith(['/'])
-  })
-
-  it('deve exibir hint de recuperacao em erro 401', async () => {
-    comp.form.setValue({ email: 'a@b.com', password: 'bad-pass', remember: true })
-    authSpy.loginWithPassword.mockResolvedValue({
-      ok: false,
-      statusCode: 401,
-      reason: 'invalid_credentials',
-      error: 'Email/usuario ou senha invalidos.'
-    })
-
-    await comp.loginEmailPassword()
-
-    expect(comp.error).toContain('invalidos')
-    expect(comp.showRecoveryHint).toBe(true)
-    expect(comp.notice).toContain('Recuperar acesso')
-  })
-
-  it('deve bloquear tentativa de login quando houver cooldown de rate limit', async () => {
-    comp.form.setValue({ email: 'a@b.com', password: 'password123', remember: true })
-    authSpy.isAuthRateLimited.mockReturnValue(true)
-    authSpy.authRateLimitRemainingSeconds.mockReturnValue(10)
-
-    await comp.loginEmailPassword()
-
-    expect(authSpy.loginWithPassword).not.toHaveBeenCalled()
-    expect(comp.error).toContain('Aguarde 10')
+    expect(beginLogin).toHaveBeenCalledWith('/conversations')
   })
 })

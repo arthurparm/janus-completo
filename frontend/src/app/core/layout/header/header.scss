@@ -206,28 +206,7 @@
       width: 100%;
     }
 
-    .visitor-badge {
-      justify-content: center;
-      width: 100%;
-      margin-top: 8px;
-    }
   }
-}
-
-.visitor-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 4px 12px;
-  border: 1px solid rgba(var(--warning-rgb), 0.34);
-  border-radius: 16px;
-  background: rgba(var(--warning-rgb), 0.1);
-  color: var(--warning);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
 }
 
 @media (max-width: 420px) {
