@@ -19,10 +19,16 @@ describe('ToolsApiService (contract)', () => {
     http.verify()
   })
 
-  it('getTools deve montar querystring para /api/v1/tools/', () => {
+  it('getTools deve enviar filtros estruturados para a fachada', () => {
     svc.getTools('system', 'admin', 'a,b').subscribe()
-    const req = http.expectOne('/api/v1/tools/?category=system&permission_level=admin&tags=a%2Cb')
-    expect(req.request.method).toBe('GET')
+    const req = http.expectOne('/api/v1/admin-actions')
+    expect(req.request.method).toBe('POST')
+    expect(req.request.body).toEqual({
+      operation_id: 'list_tools_api_v1_tools__get',
+      path_params: {},
+      query_params: { category: 'system', permission_level: 'admin', tags: 'a,b' },
+      payload: {},
+    })
     req.flush({ tools: [] })
   })
 })

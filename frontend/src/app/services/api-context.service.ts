@@ -12,7 +12,7 @@ export class ApiContextService {
 
   public buildUrl(path: string): string {
     const p = String(path || '');
-    if (p === '/healthz') return p;
+    if (p.startsWith('/healthz/')) return p;
     if (p.startsWith('/api/')) return p;
     if (p.startsWith('/v1/')) return `${API_BASE_URL}${p}`;
     return `${API_BASE_URL}${p.startsWith('/') ? '' : '/'}${p}`;

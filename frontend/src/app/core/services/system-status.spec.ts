@@ -4,15 +4,14 @@ import { firstValueFrom } from 'rxjs';
 
 import { SystemStatusService } from './system-status.service';
 import { AppLoggerService } from './app-logger.service';
-import { API_BASE_URL } from '../../services/api.config';
 import { SUPPRESS_HTTP_ERROR_LOG } from '../interceptors/error-logger.interceptor';
 
 describe('SystemStatusService', () => {
   let service: SystemStatusService;
   let http: HttpTestingController;
   let logger: { error: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
-  const servicesHealthUrl = `${API_BASE_URL}/v1/system/health/services`;
-  const systemStatusUrl = `${API_BASE_URL}/v1/system/status`;
+  const servicesHealthUrl = '/healthz/user';
+  const systemStatusUrl = '/healthz/user';
 
   beforeEach(() => {
     logger = {

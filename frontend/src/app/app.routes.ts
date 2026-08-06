@@ -7,6 +7,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/login/login').then(m => m.LoginComponent)
   },
   {
+    path: 'auth/callback',
+    loadComponent: () => import('./features/auth/oidc-callback/oidc-callback').then(m => m.OidcCallbackComponent)
+  },
+  {
     path: 'conversations',
     loadComponent: () => import('./features/conversations/conversations').then(m => m.ConversationsComponent),
     canActivate: [AuthGuard],

@@ -1,11 +1,8 @@
 export const API_BASE_URL: string = import.meta.env?.VITE_API_BASE_URL ?? '/api';
+export const PUBLIC_API_BASE_URL: string = import.meta.env?.VITE_PUBLIC_API_BASE_URL ?? '/public-api';
 export const AUTH_TOKEN_KEY: string = import.meta.env?.VITE_AUTH_TOKEN_KEY ?? 'JANUS_AUTH_TOKEN';
-export const AUTH_REFRESH_TOKEN_KEY: string =
-  import.meta.env?.VITE_AUTH_REFRESH_TOKEN_KEY ?? 'JANUS_REFRESH_TOKEN';
 const env = (import.meta as unknown as { env: Record<string, string> }).env || {};
 export const FEATURE_SSE: boolean = (env['VITE_FEATURE_SSE'] ?? 'true') === 'true';
 export const UX_METRICS_SAMPLING: number = Number(env['VITE_UX_METRICS_SAMPLING'] ?? '0.3');
 export const SSE_RETRY_MAX_SECONDS: number = Number(env['VITE_SSE_RETRY_MAX_SECONDS'] ?? '30');
 export const SSE_MAX_RETRIES: number = Number(env['VITE_SSE_MAX_RETRIES'] ?? '8');
-export const AUTH_OPTIONAL: boolean = (env['VITE_AUTH_OPTIONAL'] ?? 'false') === 'true';
-export const VISITOR_MODE_KEY: string = env['VITE_VISITOR_MODE_KEY'] ?? 'JANUS_VISITOR_MODE';

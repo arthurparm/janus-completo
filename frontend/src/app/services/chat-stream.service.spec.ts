@@ -43,7 +43,7 @@ describe('ChatStreamService', () => {
   })
 
   it('envia o stream principal via POST com payload JSON e sem prompt na URL', async () => {
-    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(7))
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(7))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       const chunk = encoder.encode('event: done\ndata: {"conversation_id":"conv-1"}\n\n')
       return {
@@ -96,7 +96,7 @@ describe('ChatStreamService', () => {
 
   it('refaz retry com o mesmo payload estruturado sem query string', async () => {
     vi.useFakeTimers()
-    localStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(8))
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(8))
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       return {
         ok: false,

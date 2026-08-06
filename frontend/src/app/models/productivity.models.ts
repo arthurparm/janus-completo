@@ -1,4 +1,3 @@
-export interface UserRolesResponse { user_id: number; roles: string[] }
 export interface TokenResponse { token: string }
 export interface ProductivityLimitUsage { max_per_day: number; used: number; remaining: number }
 export interface ProductivityLimitsStatusResponse { user_id: string; limits: Record<string, ProductivityLimitUsage> }

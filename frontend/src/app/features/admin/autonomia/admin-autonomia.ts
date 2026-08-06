@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { HttpClient } from '@angular/common/http'
 import { catchError, finalize, firstValueFrom, of } from 'rxjs'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
@@ -9,6 +8,7 @@ import { AdminBacklogSprintType, AdminBacklogTask, AdminCodeQaResponse, Citation
 import { Header } from '../../../core/layout/header/header'
 import { UiBadgeComponent } from '../../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
+import { AdminActionsApiService } from '../../../services/domain/admin-actions-api-service'
 
 interface AutonomyDomainHealth {
   is_open?: boolean
@@ -19,10 +19,6 @@ interface AutonomyHealthResponse {
   overall_status: 'healthy' | 'degraded' | 'critical' | string
   active_goals_count: number
   domain_health: Record<string, AutonomyDomainHealth>
-}
-
-interface AutonomyAdminBoardResponse {
-  items: AdminBacklogSprintType[]
 }
 
 type MonitoringTask = AdminBacklogTask & {
@@ -40,7 +36,7 @@ type MonitoringTask = AdminBacklogTask & {
 })
 export class AdminAutonomiaComponent {
   private readonly api = inject(BackendApiService)
-  private readonly http = inject(HttpClient)
+  private readonly adminActions = inject(AdminActionsApiService)
   private readonly destroyRef = inject(DestroyRef)
   private selfStudyPollTimer: ReturnType<typeof setInterval> | null = null
   private readonly selfStudyPollIntervalMs = 1500
@@ -243,8 +239,8 @@ export class AdminAutonomiaComponent {
     this.monitoringLoading = true
     try {
       const [healthResp, boardResp] = await Promise.all([
-        firstValueFrom(this.http.get<AutonomyHealthResponse>('/api/v1/autonomy/health')),
-        firstValueFrom(this.http.get<AutonomyAdminBoardResponse>('/api/v1/autonomy/admin/board?limit=100')),
+        firstValueFrom(this.adminActions.execute<AutonomyHealthResponse>('get_autonomy_health_api_v1_autonomy_health_get')),
+        firstValueFrom(this.api.autonomy.getAutonomyAdminBoard({ limit: 100 })),
       ])
       this.monitoringData = healthResp
       this.activeGoalsCount = healthResp.active_goals_count || 0

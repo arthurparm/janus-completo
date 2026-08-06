@@ -5,13 +5,15 @@ import { map, tap } from 'rxjs/operators';
 import { ApiContextService } from '../api-context.service';
 import { AppLoggerService } from '../../core/services/app-logger.service';
 import { ChatStartResponse, ChatStartRequest, ChatMessageRequest, ChatMessage, ChatStudyJobResponse, ChatMessageResponse, ChatHistoryResponse, ChatListItem, ChatHistoryPaginatedResponse, Citation, TraceStep, ConversationMeta, ConversationsListResponse } from '../../models';
+import { AdminActionsApiService } from './admin-actions-api-service';
 
 @Injectable({ providedIn: 'root' })
 export class ChatApiService {
   constructor(
     private http: HttpClient,
     private apiContext: ApiContextService,
-    private logger: AppLoggerService
+    private logger: AppLoggerService,
+    private adminActions: AdminActionsApiService
   ) {}
 
   getConversationTrace(conversationId: string): Observable<TraceStep[]> {
@@ -148,7 +150,7 @@ getChatHistoryPaginated(conversation_id: string, params: {
   }
 
 checkChatHealth(): Observable<{ status: string, repository_accessible: boolean, total_conversations: number }> {
-    return this.http.get<{ status: string, repository_accessible: boolean, total_conversations: number }>(this.apiContext.buildUrl('/api/v1/chat/health'))
+    return this.adminActions.execute<{ status: string, repository_accessible: boolean, total_conversations: number }>('chat_health_api_v1_chat_health_get')
   }
 
   listConversations(params: { project_id?: string; limit?: number } = {}): Observable<ConversationsListResponse> {

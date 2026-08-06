@@ -39,8 +39,14 @@ describe('ObservabilityApiService (contract)', () => {
   it('getPendingActionsLegacyResidue usa endpoint administrativo tipado do observability', () => {
     svc.getPendingActionsLegacyResidue(5).subscribe();
 
-    const req = http.expectOne('/api/v1/observability/pending-actions/legacy-residue?limit=5');
-    expect(req.request.method).toBe('GET');
+    const req = http.expectOne('/api/v1/admin-actions');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      operation_id: 'pending_actions_legacy_residue_api_v1_observability_pending_actions_legacy_residue_get',
+      path_params: {},
+      query_params: { limit: 5 },
+      payload: {},
+    });
     req.flush({
       total_without_owner: 1,
       pending_without_owner: 1,

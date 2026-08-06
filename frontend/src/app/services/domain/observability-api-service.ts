@@ -2,21 +2,23 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
-import { PostSprintSummaryResponse, MetricsSummary, QuarantinedMessagesResponse, GraphQuarantineListResponse, AuditEventsResponse, ReviewerMetricsResponse, PeriodReportResponse, ConsentsListResponse, PendingAction, PendingActionLegacyResidueSummary, PoisonPillStats, ObservabilitySystemHealth } from '../../models';
+import { PostSprintSummaryResponse, MetricsSummary, QuarantinedMessagesResponse, GraphQuarantineListResponse, AuditEventsResponse, ConsentsListResponse, PendingAction, PendingActionLegacyResidueSummary, PoisonPillStats, ObservabilitySystemHealth } from '../../models';
+import { AdminActionsApiService } from './admin-actions-api-service';
 
 @Injectable({ providedIn: 'root' })
 export class ObservabilityApiService {
   constructor(
     private http: HttpClient,
-    private apiContext: ApiContextService
+    private apiContext: ApiContextService,
+    private adminActions: AdminActionsApiService
   ) {}
 
 getObservabilitySystemHealth(): Observable<ObservabilitySystemHealth> {
-    return this.http.get<ObservabilitySystemHealth>(this.apiContext.buildUrl(`/api/v1/observability/health/system`))
+    return this.adminActions.execute<ObservabilitySystemHealth>('get_system_health_api_v1_observability_health_system_get')
   }
 
 getObservabilityMetricsSummary(): Observable<MetricsSummary> {
-    return this.http.get<MetricsSummary>(this.apiContext.buildUrl(`/api/v1/observability/metrics/summary`))
+    return this.adminActions.execute<MetricsSummary>('get_metrics_summary_api_v1_observability_metrics_summary_get')
   }
 
 getMetricsSummary(): Observable<MetricsSummary> {
@@ -24,50 +26,48 @@ getMetricsSummary(): Observable<MetricsSummary> {
   }
 
 getQuarantinedMessages(queue?: string): Observable<QuarantinedMessagesResponse> {
-    const params = queue ? `?queue=${encodeURIComponent(queue)}` : ''
-    return this.http.get<QuarantinedMessagesResponse>(this.apiContext.buildUrl(`/api/v1/observability/poison-pills/quarantined${params}`))
+    return this.adminActions.execute<QuarantinedMessagesResponse>('get_quarantined_messages_api_v1_observability_poison_pills_quarantined_get', {
+      queryParams: queue ? { queue } : {},
+    })
   }
 
 cleanupQuarantine(): Observable<{ status: string; count: number }> {
-    return this.http.post<{ status: string; count: number }>(this.apiContext.buildUrl(`/api/v1/observability/poison-pills/cleanup`), {})
+    return this.adminActions.execute<{ status: string; count: number }>('cleanup_quarantine_api_v1_observability_poison_pills_cleanup_post')
   }
 
 getPoisonPillStats(queue?: string): Observable<PoisonPillStats> {
-    const params = queue ? `?queue=${encodeURIComponent(queue)}` : ''
-    return this.http.get<PoisonPillStats>(this.apiContext.buildUrl(`/api/v1/observability/poison-pills/stats${params}`))
+    return this.adminActions.execute<PoisonPillStats>('get_poison_pill_stats_api_v1_observability_poison_pills_stats_get', {
+      queryParams: queue ? { queue } : {},
+    })
   }
 
 listGraphQuarantine(limit: number = 100, offset: number = 0, filters?: { type?: string; reason?: string; confidence_ge?: number }): Observable<GraphQuarantineListResponse> {
-    const qs = new URLSearchParams()
-    qs.set('limit', String(limit))
-    qs.set('offset', String(offset))
-    if (filters?.type) qs.set('type', filters.type)
-    if (filters?.reason) qs.set('reason', filters.reason)
-    if (typeof filters?.confidence_ge !== 'undefined') qs.set('confidence_ge', String(filters?.confidence_ge))
-    return this.http.get<GraphQuarantineListResponse>(this.apiContext.buildUrl(`/api/v1/observability/graph/quarantine?${qs.toString()}`))
+    return this.adminActions.execute<GraphQuarantineListResponse>('graph_quarantine_list_api_v1_observability_graph_quarantine_get', {
+      queryParams: {
+        limit,
+        offset,
+        ...(filters?.type ? { type: filters.type } : {}),
+        ...(filters?.reason ? { reason: filters.reason } : {}),
+        ...(typeof filters?.confidence_ge !== 'undefined' ? { confidence_ge: filters.confidence_ge } : {}),
+      },
+    })
   }
 
 promoteQuarantine(node_id: number): Observable<{ status: string; node_id: number }> {
-    return this.http.post<{ status: string; node_id: number }>(this.apiContext.buildUrl(`/api/v1/observability/graph/quarantine/promote`), { node_id })
-  }
-
-rejectQuarantine(node_id: number, reason: string): Observable<{ status: string; node_id: number }> {
-    return this.http.post<{ status: string; node_id: number }>(this.apiContext.buildUrl(`/api/v1/observability/graph/quarantine/reject`), { node_id, reason })
-  }
-
-registerSynonym(label: string, alias: string, canonical: string): Observable<{ status: string; synonym_id: number }> {
-    return this.http.post<{ status: string; synonym_id: number }>(this.apiContext.buildUrl(`/api/v1/observability/graph/entities/synonym`), { label, alias, canonical })
+    return this.adminActions.execute<{ status: string; node_id: number }>('graph_quarantine_promote_api_v1_observability_graph_quarantine_promote_post', { payload: { node_id } })
   }
 
 listAuditEvents(params: { tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number } = {}): Observable<AuditEventsResponse> {
-    const qs = new URLSearchParams()
-    if (params.tool) qs.set('tool', params.tool)
-    if (params.status) qs.set('status', params.status)
-    if (typeof params.start_ts !== 'undefined') qs.set('start_ts', String(params.start_ts))
-    if (typeof params.end_ts !== 'undefined') qs.set('end_ts', String(params.end_ts))
-    qs.set('limit', String(params.limit ?? 100))
-    qs.set('offset', String(params.offset ?? 0))
-    return this.http.get<AuditEventsResponse>(this.apiContext.buildUrl(`/api/v1/observability/audit/events?${qs.toString()}`))
+    return this.adminActions.execute<AuditEventsResponse>('audit_events_api_v1_observability_audit_events_get', {
+      queryParams: {
+        ...(params.tool ? { tool: params.tool } : {}),
+        ...(params.status ? { status: params.status } : {}),
+        ...(typeof params.start_ts !== 'undefined' ? { start_ts: params.start_ts } : {}),
+        ...(typeof params.end_ts !== 'undefined' ? { end_ts: params.end_ts } : {}),
+        limit: params.limit ?? 100,
+        offset: params.offset ?? 0,
+      },
+    })
   }
 
 listPendingActions(params: {
@@ -86,11 +86,7 @@ listPendingActions(params: {
   }
 
   getPendingActionsLegacyResidue(limit: number = 20): Observable<PendingActionLegacyResidueSummary> {
-    const qs = new URLSearchParams()
-    qs.set('limit', String(limit))
-    return this.http.get<PendingActionLegacyResidueSummary>(
-      this.apiContext.buildUrl(`/api/v1/observability/pending-actions/legacy-residue?${qs.toString()}`)
-    )
+    return this.adminActions.execute<PendingActionLegacyResidueSummary>('pending_actions_legacy_residue_api_v1_observability_pending_actions_legacy_residue_get', { queryParams: { limit } })
   }
 
 approvePendingAction(action: PendingAction): Observable<PendingAction> {
@@ -125,21 +121,6 @@ rejectPendingAction(action: PendingAction): Observable<PendingAction> {
     )
   }
 
-getReviewerMetrics(start_ts?: number, end_ts?: number): Observable<ReviewerMetricsResponse> {
-    const qs = new URLSearchParams()
-    if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
-    if (typeof end_ts !== 'undefined') qs.set('end_ts', String(end_ts))
-    return this.http.get<ReviewerMetricsResponse>(this.apiContext.buildUrl(`/api/v1/observability/hitl/metrics/reviewer?${qs.toString()}`))
-  }
-
-getHitlReports(period: 'daily' | 'weekly' | 'monthly' = 'daily', start_ts?: number, end_ts?: number): Observable<PeriodReportResponse> {
-    const qs = new URLSearchParams()
-    qs.set('period', period)
-    if (typeof start_ts !== 'undefined') qs.set('start_ts', String(start_ts))
-    if (typeof end_ts !== 'undefined') qs.set('end_ts', String(end_ts))
-    return this.http.get<PeriodReportResponse>(this.apiContext.buildUrl(`/api/v1/observability/hitl/reports?${qs.toString()}`))
-  }
-
 listConsents(): Observable<ConsentsListResponse> {
     return this.http.get<ConsentsListResponse>(this.apiContext.buildUrl(`/api/v1/consents/`))
   }
@@ -155,30 +136,31 @@ revokeConsent(consent_id: number): Observable<{ status: string; consent_id: stri
   }
 
 exportAuditCSV(params: { tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number }): Observable<string> {
-    const qs = new URLSearchParams()
-    if (params.tool) qs.set('tool', String(params.tool))
-    if (params.status) qs.set('status', String(params.status))
-    if (params.start_ts != null) qs.set('start_ts', String(params.start_ts))
-    if (params.end_ts != null) qs.set('end_ts', String(params.end_ts))
-    if (params.limit != null) qs.set('limit', String(params.limit))
-    if (params.offset != null) qs.set('offset', String(params.offset))
-    return this.http.get(this.apiContext.buildUrl(`/api/v1/observability/audit/export?${qs.toString()}`), { responseType: 'text' })
+    return this.adminActions.executeText('export_audit_events_api_v1_observability_audit_export_get', {
+      queryParams: {
+        ...(params.tool ? { tool: params.tool } : {}),
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.start_ts != null ? { start_ts: params.start_ts } : {}),
+        ...(params.end_ts != null ? { end_ts: params.end_ts } : {}),
+        ...(params.limit != null ? { limit: params.limit } : {}),
+        ...(params.offset != null ? { offset: params.offset } : {}),
+      },
+    })
   }
 
 exportAuditEvents(
     format: 'csv' | 'json',
     params: { tool?: string; status?: string; start_ts?: number; end_ts?: number; limit?: number; offset?: number; fields?: string[] } = {}
   ): Observable<string> {
-    const qs = new URLSearchParams()
-    if (params.tool) qs.set('tool', String(params.tool))
-    if (params.status) qs.set('status', String(params.status))
-    if (params.start_ts != null) qs.set('start_ts', String(params.start_ts))
-    if (params.end_ts != null) qs.set('end_ts', String(params.end_ts))
-    qs.set('limit', String(params.limit ?? 1000))
-    qs.set('offset', String(params.offset ?? 0))
-    qs.set('format', format)
-    if (params.fields && params.fields.length) qs.set('fields', params.fields.join(','))
-    return this.http.get(this.apiContext.buildUrl(`/api/v1/observability/audit/export?${qs.toString()}`), { responseType: 'text' })
+    return this.adminActions.executeText('export_audit_events_api_v1_observability_audit_export_get', {
+      queryParams: {
+        ...params,
+        limit: params.limit ?? 1000,
+        offset: params.offset ?? 0,
+        format,
+        ...(params.fields?.length ? { fields: params.fields.join(',') } : {}),
+      },
+    })
   }
 
 getReflexionSummary(limit: number = 10): Observable<PostSprintSummaryResponse> {

@@ -40,11 +40,11 @@ export class ApiService {
 
   // Exemplo: healthcheck do backend
   health(): Observable<string> {
-    return this.http.get(this.buildUrl('/healthz'), { responseType: 'text' });
+    return this.http.get('/healthz/user', { responseType: 'text' });
   }
 
   // Health check detalhado com informações do sistema
   detailedHealth(): Observable<any> {
-    return this.http.get(this.buildUrl('/health'));
+    return this.http.get('/healthz/user');
   }
 }

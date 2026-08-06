@@ -76,7 +76,7 @@ describe('ChatApiService (contract)', () => {
 
   it('deve anexar Bearer e nao enviar identidade legada nos endpoints criticos de chat', () => {
     const fakeToken = makeFakeToken(7)
-    localStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
+    sessionStorage.setItem(AUTH_TOKEN_KEY, fakeToken)
 
     svc.startChat('Nova conversa').subscribe()
     const startReq = http.expectOne('/api/v1/chat/start')

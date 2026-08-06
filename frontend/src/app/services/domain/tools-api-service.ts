@@ -1,37 +1,35 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { ApiContextService } from '../api-context.service';
 import { Tool, ToolListResponse, ToolStats } from '../../models';
+import { AdminActionsApiService } from './admin-actions-api-service';
 
 @Injectable({ providedIn: 'root' })
 export class ToolsApiService {
-  constructor(
-    private http: HttpClient,
-    private apiContext: ApiContextService
-  ) {}
+  constructor(private adminActions: AdminActionsApiService) {}
 
 getTools(category?: string, permissionLevel?: string, tags?: string): Observable<ToolListResponse> {
-    const qs = new URLSearchParams()
-    if (category) qs.set('category', category)
-    if (permissionLevel) qs.set('permission_level', permissionLevel)
-    if (tags) qs.set('tags', tags)
-    return this.http.get<ToolListResponse>(this.apiContext.buildUrl(`/api/v1/tools/${qs.toString() ? '?' + qs.toString() : ''}`))
+    return this.adminActions.execute<ToolListResponse>('list_tools_api_v1_tools__get', {
+      queryParams: {
+        ...(category ? { category } : {}),
+        ...(permissionLevel ? { permission_level: permissionLevel } : {}),
+        ...(tags ? { tags } : {}),
+      },
+    })
   }
 
 getToolDetails(toolName: string): Observable<Tool> {
-    return this.http.get<Tool>(this.apiContext.buildUrl(`/api/v1/tools/${encodeURIComponent(toolName)}`))
+    return this.adminActions.execute<Tool>('get_tool_details_api_v1_tools__tool_name__get', { pathParams: { tool_name: toolName } })
   }
 
 getToolStats(): Observable<ToolStats> {
-    return this.http.get<ToolStats>(this.apiContext.buildUrl(`/api/v1/tools/stats/usage`))
+    return this.adminActions.execute<ToolStats>('get_tool_statistics_api_v1_tools_stats_usage_get')
   }
 
 getToolCategories(): Observable<{ categories: string[] }> {
-    return this.http.get<{ categories: string[] }>(this.apiContext.buildUrl(`/api/v1/tools/categories/list`))
+    return this.adminActions.execute<{ categories: string[] }>('list_categories_api_v1_tools_categories_list_get')
   }
 
 getToolPermissions(): Observable<{ permission_levels: string[] }> {
-    return this.http.get<{ permission_levels: string[] }>(this.apiContext.buildUrl(`/api/v1/tools/permissions/list`))
+    return this.adminActions.execute<{ permission_levels: string[] }>('list_permissions_api_v1_tools_permissions_list_get')
   }
 }

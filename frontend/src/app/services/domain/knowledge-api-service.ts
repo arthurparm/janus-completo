@@ -3,12 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
 import { RagUserChatResponse, RagUserChatV2Response, KnowledgeHealthResponse, KnowledgeHealthDetailedResponse, KnowledgeSpace, KnowledgeSpaceStatus, KnowledgeSpaceCreateRequest, KnowledgeSpaceListResponse, KnowledgeSpaceAttachRequest, KnowledgeSpaceConsolidationResponse, KnowledgeSpaceQueryResponse, RagSearchResponse, RagHybridResponse, KnowledgeStats, EntityRelationshipsResponse, KnowledgeNodeTypesResponse } from '../../models';
+import { AdminActionsApiService } from './admin-actions-api-service';
 
 @Injectable({ providedIn: 'root' })
 export class KnowledgeApiService {
   constructor(
     private http: HttpClient,
-    private apiContext: ApiContextService
+    private apiContext: ApiContextService,
+    private adminActions: AdminActionsApiService
   ) {}
 
 createKnowledgeSpace(payload: KnowledgeSpaceCreateRequest): Observable<KnowledgeSpace> {
@@ -129,7 +131,7 @@ ragUserChatV2(params: {
     if (params.min_score != null) qs.set('min_score', String(params.min_score))
     const headers = this.apiContext.headersFor()
     return this.http.get<RagUserChatV2Response>(
-      this.apiContext.buildUrl(`/api/v1/rag/user_chat?${qs.toString()}`),
+      this.apiContext.buildUrl(`/api/v1/rag/user-chat?${qs.toString()}`),
       { headers }
     )
   }
@@ -164,27 +166,29 @@ ragProductivitySearch(params: {
   }
 
 getKnowledgeStats(): Observable<KnowledgeStats> {
-    return this.http.get<KnowledgeStats>(this.apiContext.buildUrl(`/api/v1/knowledge/stats`))
+    return this.adminActions.execute<KnowledgeStats>('get_knowledge_stats_api_v1_knowledge_stats_get')
   }
 
 getKnowledgeNodeTypes(): Observable<KnowledgeNodeTypesResponse> {
-    return this.http.get<KnowledgeNodeTypesResponse>(this.apiContext.buildUrl(`/api/v1/knowledge/node-types`))
+    return this.adminActions.execute<KnowledgeNodeTypesResponse>('get_node_types_api_v1_knowledge_node_types_get')
   }
 
 getEntityRelationships(entityName: string): Observable<EntityRelationshipsResponse> {
-    const qs = new URLSearchParams({ max_depth: '1', limit: '20' })
-    return this.http.get<EntityRelationshipsResponse>(this.apiContext.buildUrl(`/api/v1/knowledge/entity/${encodeURIComponent(entityName)}/relationships?${qs.toString()}`))
+    return this.adminActions.execute<EntityRelationshipsResponse>('get_entity_relationships_api_v1_knowledge_entity__entity_name__relationships_get', {
+      pathParams: { entity_name: entityName },
+      queryParams: { max_depth: 1, limit: 20 },
+    })
   }
 
 getKnowledgeHealth(): Observable<KnowledgeHealthResponse> {
-    return this.http.get<KnowledgeHealthResponse>(this.apiContext.buildUrl(`/api/v1/knowledge/health`))
+    return this.adminActions.execute<KnowledgeHealthResponse>('knowledge_health_api_v1_knowledge_health_get')
   }
 
 getKnowledgeHealthDetailed(): Observable<KnowledgeHealthDetailedResponse> {
-    return this.http.get<KnowledgeHealthDetailedResponse>(this.apiContext.buildUrl(`/api/v1/knowledge/health/detailed`))
+    return this.adminActions.execute<KnowledgeHealthDetailedResponse>('detailed_health_check_api_v1_knowledge_health_detailed_get')
   }
 
 resetKnowledgeCircuitBreaker(): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(this.apiContext.buildUrl(`/api/v1/knowledge/health/reset-circuit-breaker`), {})
+    return this.adminActions.execute<{ message: string }>('reset_circuit_breaker_api_v1_knowledge_health_reset_circuit_breaker_post')
   }
 }

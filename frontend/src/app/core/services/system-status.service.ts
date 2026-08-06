@@ -3,7 +3,6 @@ import { HttpClient, HttpContext, HttpErrorResponse } from '@angular/common/http
 import { Observable, BehaviorSubject, timer, of } from 'rxjs';
 import { catchError, map, switchMap, shareReplay, retry } from 'rxjs/operators';
 import { AppLoggerService } from './app-logger.service';
-import { API_BASE_URL } from '../../services/api.config';
 import { SUPPRESS_HTTP_ERROR_LOG } from '../interceptors/error-logger.interceptor';
 
 export interface SystemStatusResponse {
@@ -35,8 +34,7 @@ export interface ServiceHealthResponse {
   providedIn: 'root',
 })
 export class SystemStatusService {
-  // Reuse the same API base used by the chat/auth flows (defaults to `/api` behind the frontend proxy).
-  private apiUrl = `${API_BASE_URL}/v1/system`;
+  private readonly userHealthUrl = '/healthz/user';
   
   // Cache shareReplay para evitar múltiplas chamadas simultâneas
   private statusCache$: Observable<SystemStatusResponse> | null = null;
@@ -57,7 +55,7 @@ export class SystemStatusService {
     if (!this.statusCache$) {
       this.statusCache$ = timer(0, 30000).pipe( // Polling a cada 30s
         switchMap(() => this.http.get<SystemStatusResponse>(
-          `${this.apiUrl}/status`,
+          this.userHealthUrl,
           { context: this.healthPollingContext() }
         ).pipe(
           map(response => {
@@ -98,7 +96,7 @@ export class SystemStatusService {
     // Polling mais frequente para health check (15s)
     this.healthCache$ = timer(0, 15000).pipe(
       switchMap(() => this.http.get<ServiceHealthResponse>(
-        `${this.apiUrl}/health/services`,
+        this.userHealthUrl,
         { context: this.healthPollingContext() }
       ).pipe(
         map(response => {
@@ -228,10 +226,21 @@ export class SystemStatusService {
   }
 
   private normalizeServiceHealthResponse(response: unknown): ServiceHealthResponse {
-    const rawServices =
-      response && typeof response === 'object' && Array.isArray((response as { services?: unknown }).services)
-        ? (response as { services: unknown[] }).services
-        : [];
+    const raw = response && typeof response === 'object' ? response as Record<string, unknown> : {};
+    let rawServices = Array.isArray(raw['services']) ? raw['services'] : [];
+    if (rawServices.length === 0) {
+      const dependencies = this.readRecord(raw['dependencies']);
+      const checks = this.readRecord(dependencies?.['checks']);
+      rawServices = Object.entries(checks ?? {}).map(([key, value]) => {
+        const check = this.readRecord(value) ?? {};
+        return {
+          key,
+          name: key,
+          status: check['status'],
+          metric_text: this.readNonEmptyString(check['error']) ?? undefined,
+        };
+      });
+    }
 
     return {
       services: rawServices.map((item, index) => this.normalizeServiceHealthItem(item, index)),
@@ -261,6 +270,8 @@ export class SystemStatusService {
 
   private normalizeServiceStatus(rawStatus: unknown): ServiceHealthItem['status'] {
     const status = this.readNonEmptyString(rawStatus)?.toLowerCase();
+    if (status === 'healthy') return 'ok';
+    if (status === 'unhealthy' || status === 'critical') return 'error';
     if (status === 'ok' || status === 'degraded' || status === 'error' || status === 'unknown') {
       return status;
     }

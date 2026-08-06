@@ -19,39 +19,40 @@ describe('KnowledgeApiService (contract)', () => {
     http.verify()
   })
 
-  it('getKnowledgeHealth deve chamar GET /api/v1/knowledge/health', () => {
+  function expectAdminAction(operationId: string) {
+    const req = http.expectOne('/api/v1/admin-actions')
+    expect(req.request.method).toBe('POST')
+    expect(req.request.body.operation_id).toBe(operationId)
+    return req
+  }
+
+  it('getKnowledgeHealth deve usar a fachada administrativa', () => {
     svc.getKnowledgeHealth().subscribe()
-    const req = http.expectOne('/api/v1/knowledge/health')
-    expect(req.request.method).toBe('GET')
+    const req = expectAdminAction('knowledge_health_api_v1_knowledge_health_get')
     req.flush({ status: 'ok' })
   })
 
   it('getKnowledgeHealthDetailed deve chamar GET /api/v1/knowledge/health/detailed', () => {
     svc.getKnowledgeHealthDetailed().subscribe()
-    const req = http.expectOne('/api/v1/knowledge/health/detailed')
-    expect(req.request.method).toBe('GET')
+    const req = expectAdminAction('detailed_health_check_api_v1_knowledge_health_detailed_get')
     req.flush({ status: 'ok' })
   })
 
   it('resetKnowledgeCircuitBreaker deve chamar POST /api/v1/knowledge/health/reset-circuit-breaker', () => {
     svc.resetKnowledgeCircuitBreaker().subscribe()
-    const req = http.expectOne('/api/v1/knowledge/health/reset-circuit-breaker')
-    expect(req.request.method).toBe('POST')
-    expect(req.request.body).toEqual({})
+    const req = expectAdminAction('reset_circuit_breaker_api_v1_knowledge_health_reset_circuit_breaker_post')
     req.flush({ message: 'ok' })
   })
 
   it('getKnowledgeStats deve chamar GET /api/v1/knowledge/stats', () => {
     svc.getKnowledgeStats().subscribe()
-    const req = http.expectOne('/api/v1/knowledge/stats')
-    expect(req.request.method).toBe('GET')
+    const req = expectAdminAction('get_knowledge_stats_api_v1_knowledge_stats_get')
     req.flush({ total_nodes: 1, total_relationships: 0 })
   })
 
   it('getKnowledgeNodeTypes deve chamar GET /api/v1/knowledge/node-types', () => {
     svc.getKnowledgeNodeTypes().subscribe()
-    const req = http.expectOne('/api/v1/knowledge/node-types')
-    expect(req.request.method).toBe('GET')
+    const req = expectAdminAction('get_node_types_api_v1_knowledge_node_types_get')
     req.flush({ types: ['Entity'] })
   })
 })

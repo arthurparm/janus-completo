@@ -183,7 +183,6 @@ export interface AuthState {
   isAuthenticated: boolean;
   user: AuthUser | null;
   token: string | null;
-  refreshToken: string | null;
   expiresAt: number | null;
 }
 
