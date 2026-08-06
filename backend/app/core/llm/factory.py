@@ -305,7 +305,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 llm = ChatOpenAI(**kwargs)
                 _add_to_pool("openai", model, llm)
             elif provider == "google_gemini":
-                if not _validate_gemini_key(
+                if not bool(settings.GEMINI_ENABLED) or not _validate_gemini_key(
                     getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
                 ):
                     continue

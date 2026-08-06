@@ -10,9 +10,16 @@ from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
-try:
-    from sentence_transformers import CrossEncoder  # type: ignore
-except Exception:
+if (
+    bool(getattr(settings, "EMBEDDINGS_LOCAL_ENABLED", False))
+    and str(getattr(settings, "RAG_RERANK_BACKEND", "heuristic")).strip().lower()
+    == "cross_encoder"
+):
+    try:
+        from sentence_transformers import CrossEncoder  # type: ignore
+    except Exception:
+        CrossEncoder = None  # type: ignore
+else:
     CrossEncoder = None  # type: ignore
 
 
@@ -52,7 +59,7 @@ class SemanticRerankerService:
                 candidate_count=len(items),
             )
 
-        backend = str(getattr(settings, "RAG_RERANK_BACKEND", "cross_encoder")).strip().lower()
+        backend = str(getattr(settings, "RAG_RERANK_BACKEND", "heuristic")).strip().lower()
         if backend == "cross_encoder":
             ranked = await self._rerank_cross_encoder(query=query, items=items, top_k=top_k)
             if ranked is not None:

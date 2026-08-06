@@ -2028,17 +2028,11 @@ class KnowledgeSpaceService:
                     result = await self._llm.invoke_llm(
                         prompt=prompt,
                         role=ModelRole.KNOWLEDGE_CURATOR,
-                        priority=ModelPriority.LOCAL_ONLY,
+                        priority=ModelPriority.FAST_AND_CHEAP,
                         timeout_seconds=45,
                         task_type="knowledge_space_consolidation",
                         complexity="medium",
-                        policy_overrides={
-                            "provider": "ollama",
-                            "model": getattr(settings, "OLLAMA_CURATOR_MODEL", "ministral-3:14b"),
-                            "strict_provider": True,
-                            "disable_failover": True,
-                            "disable_response_cache": True,
-                        },
+                        policy_overrides=self._build_cloud_only_policy(),
                     )
                     parsed = parse_json_lenient(str(result.get("response") or ""))
                 except Exception:
@@ -3030,12 +3024,9 @@ class KnowledgeSpaceService:
             return "comparative"
         return "scope"
 
-    def _build_ollama_only_policy(self, *, model: str) -> dict[str, Any]:
+    def _build_cloud_only_policy(self) -> dict[str, Any]:
         return {
-            "provider": "ollama",
-            "model": model,
-            "strict_provider": True,
-            "disable_failover": True,
+            "exclude_providers": ["ollama", "google_gemini"],
             "disable_response_cache": True,
         }
 
@@ -3470,13 +3461,11 @@ class KnowledgeSpaceService:
             result = await self._llm.invoke_llm(
                 prompt=prompt,
                 role=ModelRole.KNOWLEDGE_CURATOR,
-                priority=ModelPriority.LOCAL_ONLY,
+                priority=ModelPriority.FAST_AND_CHEAP,
                 timeout_seconds=24,
                 task_type="knowledge_space_task_planning",
                 complexity="low",
-                policy_overrides=self._build_ollama_only_policy(
-                    model=getattr(settings, "OLLAMA_CURATOR_MODEL", "ministral-3:14b")
-                ),
+                policy_overrides=self._build_cloud_only_policy(),
             )
             parsed = parse_json_lenient(str(result.get("response") or ""))
         except Exception:
@@ -3613,13 +3602,11 @@ class KnowledgeSpaceService:
             result = await self._llm.invoke_llm(
                 prompt=prompt,
                 role=ModelRole.ORCHESTRATOR,
-                priority=ModelPriority.LOCAL_ONLY,
+                priority=ModelPriority.FAST_AND_CHEAP,
                 timeout_seconds=60,
                 task_type="knowledge_space_task_execution",
                 complexity="medium",
-                policy_overrides=self._build_ollama_only_policy(
-                    model=getattr(settings, "OLLAMA_ORCHESTRATOR_MODEL", "gpt-oss:20b")
-                ),
+                policy_overrides=self._build_cloud_only_policy(),
             )
         except Exception:
             return fallback

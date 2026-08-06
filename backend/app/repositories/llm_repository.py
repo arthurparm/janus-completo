@@ -414,7 +414,11 @@ class LLMRepository:
 
         # Recupera chaves (podem ser SecretStr) e valida
         openai_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
-        gemini_key = getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+        gemini_key = (
+            getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+            if settings.GEMINI_ENABLED
+            else None
+        )
         deepseek_key = getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
         xai_key = getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
         openrouter_key = getattr(

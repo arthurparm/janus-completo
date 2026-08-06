@@ -338,7 +338,8 @@ class LLMFactory:
             "Google Gemini": {
                 "name": "Google Gemini",
                 "provider_key": "google_gemini",
-                "enabled": _validate_gemini_key(
+                "enabled": bool(settings.GEMINI_ENABLED)
+                and _validate_gemini_key(
                     getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
                 ),
                 "initializer_factory": lambda model: _create_gemini_model(
