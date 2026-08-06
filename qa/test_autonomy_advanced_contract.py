@@ -39,18 +39,20 @@ def async_client(monkeypatch):
     message_broker_stub.get_broker = get_broker
     monkeypatch.setitem(sys.modules, "app.core.infrastructure.message_broker", message_broker_stub)
 
-    from fastapi import FastAPI, Request
-
     from app.api.v1.endpoints import autonomy as autonomy_endpoint
     from app.api.v1.endpoints import autonomy_admin as autonomy_admin_endpoint
     from app.api.v1.endpoints import autonomy_history as autonomy_history_endpoint
     from app.config import settings
-    from app.core.infrastructure.auth import create_token, get_actor_user_id
+    from app.core.infrastructure.auth import get_actor_user_id
+    from fastapi import FastAPI, Request
+
+    from qa.auth_test_support import actor_from_test_request, issue_test_actor_token
 
     app = FastAPI()
 
     @app.middleware("http")
     async def actor_binding(request: Request, call_next):
+        request.state.actor_context = actor_from_test_request(request)
         actor = get_actor_user_id(request)
         request.state.actor_user_id = str(actor) if actor is not None else None
         request.state.actor_project_id = (request.headers.get("X-Project-Id") or "").strip() or None
@@ -60,8 +62,8 @@ def async_client(monkeypatch):
     app.include_router(autonomy_history_endpoint.router, prefix="/api/v1/autonomy/history")
     app.include_router(autonomy_admin_endpoint.router, prefix="/api/v1/autonomy/admin")
 
-    from app.core.autonomy.goal_manager import GoalStatus, get_goal_manager
     from app.api.v1.endpoints.autonomy_history import get_autonomy_repo
+    from app.core.autonomy.goal_manager import GoalStatus, get_goal_manager
     from app.repositories import user_repository
     from app.services.autonomy_admin_service import get_autonomy_admin_service
     from app.services.autonomy_service import get_autonomy_service
@@ -268,7 +270,7 @@ def async_client(monkeypatch):
     monkeypatch.setattr(user_repository.UserRepository, "has_role", lambda _self, _user_id, _role_name: False)
     monkeypatch.setattr(autonomy_endpoint, "record_audit_event_direct", lambda **_kwargs: None)
 
-    headers = {"Authorization": f"Bearer {create_token(1, expires_in=3600)}"}
+    headers = {"Authorization": f"Bearer {issue_test_actor_token(1)}"}
     if getattr(settings, "PUBLIC_API_KEY", None):
         headers["X-API-Key"] = str(settings.PUBLIC_API_KEY)
 

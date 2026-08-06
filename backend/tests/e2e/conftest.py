@@ -3,17 +3,18 @@ from typing import Generator
 
 import pytest
 import requests
-from app.core.infrastructure.auth import create_token
 
 # Helper to allow running tests both locally (against container) and inside container
 # Default to localhost for direct local runs. Docker jobs can still set BASE_URL/HEALTH_URL.
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000/api/v1")
-HEALTH_URL = os.getenv("HEALTH_URL", "http://localhost:8000/health")
+HEALTH_URL = os.getenv("HEALTH_URL", "http://localhost:8000/healthz/user")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("E2E_REQUEST_TIMEOUT_SECONDS", "10"))
 
 
 def _auth_headers() -> dict[str, str]:
-    token = create_token(1, expires_in=3600)
+    token = str(os.getenv("JANUS_USER_ACCESS_TOKEN") or "").strip()
+    if not token:
+        pytest.skip("JANUS_USER_ACCESS_TOKEN is required for OIDC E2E tests")
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(scope="session")

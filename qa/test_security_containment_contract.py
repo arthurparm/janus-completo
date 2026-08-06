@@ -2,24 +2,27 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from app.config import settings
 from app.core.infrastructure.auth import (
     create_actor_envelope,
-    create_token,
-    get_actor_context,
     verify_actor_envelope,
-    verify_token,
 )
 from app.core.infrastructure.logging_config import _redact_secrets
-from app.core.security.actor_context import ActorContext
+from app.core.security.actor_context import ActorContext, ActorType
 from app.core.security.authorization import authorization_service
 from app.core.security.autonomy_guard import validate_autonomous_evolution_disabled
 from app.core.security.containment_middleware import SecurityContainmentMiddleware
 from app.core.security.redaction import REDACTION_FAILED, redact_sensitive_payload
-from app.core.security.route_policy import AccessLevel, build_route_policy_matrix
+from app.core.security.route_policy import (
+    ApiProfile,
+    OwnershipMode,
+    PrincipalType,
+    build_route_policy_matrix,
+    policy_openapi_extra,
+    validate_route_policy,
+)
 from app.core.security.security_alerts import emit_security_alert
 from app.core.tools.action_module import PermissionLevel, ToolCategory, action_registry
 from app.core.tools.production_manifest import register_production_tools
@@ -33,7 +36,7 @@ def _actor() -> ActorContext:
     return ActorContext.authenticated(
         actor_id="7",
         roles=("USER",),
-        auth_method="local",
+        auth_method="oidc",
         trace_id="trace-1",
     )
 
@@ -55,47 +58,33 @@ def test_actor_context_is_immutable_and_owner_binding_returns_copy():
         )
 
 
-def test_jwt_rejects_tampering_expiration_and_wrong_token_type(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_JWT_SECRET", "test-key-with-at-least-thirty-two-bytes")
-    valid = create_token(7, expires_in=60)
-    assert verify_token(valid) == 7
-    header, payload, signature = valid.split(".")
-    tampered_payload = ("a" if payload[0] != "a" else "b") + payload[1:]
-    assert verify_token(f"{header}.{tampered_payload}.{signature}") is None
-    assert verify_token(create_token(7, expires_in=-1)) is None
-
-
-def test_roles_are_loaded_from_repository_on_every_authenticated_request(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_JWT_SECRET", "test-key-with-at-least-thirty-two-bytes")
-
-    class _Repo:
-        def list_roles(self, actor_id):
-            assert actor_id == 7
-            return ["USER"]
-
-    monkeypatch.setattr("app.repositories.user_repository.UserRepository", _Repo)
-    request = SimpleNamespace(
-        headers={"Authorization": f"Bearer {create_token(7, expires_in=60)}"},
-        state=SimpleNamespace(trace_id="trace-role-revocation"),
-    )
-    actor = get_actor_context(request)
-    assert actor is not None
-    assert actor.roles == ("USER",)
-    assert not actor.has_role("ADMIN")
-
-
 def test_signed_actor_envelope_rejects_wrong_audience(monkeypatch):
-    monkeypatch.setattr(settings, "AUTH_JWT_SECRET", "test-key-with-at-least-thirty-two-bytes")
     envelope = create_actor_envelope(_actor(), audience="janus-broker")
-    assert verify_actor_envelope(envelope, audience="janus-broker") == _actor()
+    verified = verify_actor_envelope(envelope, audience="janus-broker")
+    assert verified is not None
+    assert verified.actor_id == _actor().actor_id
     assert verify_actor_envelope(envelope, audience="other") is None
 
 
-def test_authorization_service_blocks_direct_internal_bypass():
-    with pytest.raises(Exception) as denied:
-        authorization_service.require_owner_or_admin(actor=_actor(), resource_owner="8")
-    assert getattr(denied.value, "status_code", None) == 403
-    assert authorization_service.require_owner_or_admin(actor=_actor(), resource_owner="7")
+def test_authorization_service_separates_human_admin_and_service_identity():
+    human_admin = ActorContext.authenticated(
+        actor_id="7", roles=("ADMIN",), auth_method="oidc", trace_id="human-admin"
+    )
+    service = ActorContext.authenticated(
+        actor_id="janus-worker",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method="client_credentials",
+        trace_id="service",
+    )
+    assert authorization_service.require_human_admin(actor=human_admin) is human_admin
+    assert authorization_service.require_service(actor=service) is service
+    with pytest.raises(Exception) as denied_human:
+        authorization_service.require_service(actor=human_admin)
+    assert getattr(denied_human.value, "status_code", None) == 403
+    with pytest.raises(Exception) as denied_service:
+        authorization_service.require_human_admin(actor=service)
+    assert getattr(denied_service.value, "status_code", None) == 403
 
 
 def test_middleware_default_deny_and_client_identity_rejection(monkeypatch):
@@ -106,11 +95,23 @@ def test_middleware_default_deny_and_client_identity_rejection(monkeypatch):
     )
     monkeypatch.setattr("app.core.security.containment_middleware.get_actor_context", lambda _: None)
 
-    @app.get("/health")
+    @app.get(
+        "/health",
+        openapi_extra=policy_openapi_extra(
+            profile=ApiProfile.PUBLIC, principals={PrincipalType.ANONYMOUS}
+        ),
+    )
     async def health():
         return {"ok": True}
 
-    @app.post("/api/v1/items")
+    @app.post(
+        "/api/v1/items",
+        openapi_extra=policy_openapi_extra(
+            profile=ApiProfile.USER,
+            principals={PrincipalType.USER},
+            ownership=OwnershipMode.ACTOR,
+        ),
+    )
     async def mutate():
         return {"ok": True}
 
@@ -134,18 +135,32 @@ def test_middleware_default_deny_and_client_identity_rejection(monkeypatch):
 def test_every_route_gets_a_policy_and_no_non_auth_mutation_is_public():
     app = FastAPI()
 
-    @app.get("/health")
+    @app.get(
+        "/health",
+        openapi_extra=policy_openapi_extra(
+            profile=ApiProfile.PUBLIC, principals={PrincipalType.ANONYMOUS}
+        ),
+    )
     async def health():
         return {}
 
-    @app.post("/api/v1/items")
+    @app.post(
+        "/api/v1/items",
+        openapi_extra=policy_openapi_extra(
+            profile=ApiProfile.USER,
+            principals={PrincipalType.USER},
+            ownership=OwnershipMode.ACTOR,
+        ),
+    )
     async def mutate():
         return {}
 
     matrix = build_route_policy_matrix(app.routes)
     assert matrix
-    mutation = next(p for p in matrix if p.path == "/api/v1/items" and "POST" in p.methods)
-    assert mutation.access is AccessLevel.AUTHENTICATED
+    mutation = next(p for p in matrix if p.path == "/api/v1/items" and p.method == "POST")
+    assert mutation.profile is ApiProfile.USER
+    assert mutation.ownership is OwnershipMode.ACTOR
+    validate_route_policy(app)
 
 
 def test_registry_equals_manifest_and_rejects_any_other_tool(monkeypatch):

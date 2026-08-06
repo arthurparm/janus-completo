@@ -1,11 +1,15 @@
+import os
+
 import pytest
-from app.core.infrastructure.auth import create_token
 from app.main import app
 from starlette.testclient import TestClient
 
 
 def _auth_headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {create_token(1, expires_in=3600)}"}
+    token = str(os.getenv("JANUS_USER_ACCESS_TOKEN") or "").strip()
+    if not token:
+        pytest.skip("JANUS_USER_ACCESS_TOKEN is required for OIDC integration tests")
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(scope="module")

@@ -1,9 +1,9 @@
-import base64
 from types import SimpleNamespace
 
 import pytest
 from app.config import settings
 from app.core.infrastructure.auth import get_actor_user_id
+from app.core.security.actor_context import ActorContext
 from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
 from app.repositories import user_repository
 from fastapi import HTTPException
@@ -11,79 +11,18 @@ from fastapi import HTTPException
 
 class _Req:
     def __init__(self, actor_user_id: str | int | None = None, headers: dict | None = None):
-        self.state = SimpleNamespace(actor_user_id=str(actor_user_id) if actor_user_id else None)
+        actor_context = (
+            ActorContext.authenticated(
+                actor_id=str(actor_user_id),
+                roles=("USER",),
+                auth_method="oidc",
+                trace_id="test-trace",
+            )
+            if actor_user_id is not None
+            else None
+        )
+        self.state = SimpleNamespace(actor_context=actor_context)
         self.headers = headers or {}
-
-
-def test_supabase_jwt_rejects_token_without_signature():
-    bad_token = base64.urlsafe_b64encode(b'{"alg":"HS256"}').rstrip(b"=").decode()
-    bad_token += "." + base64.urlsafe_b64encode(b'{"email":"test@test.com"}').rstrip(b"=").decode()
-
-    from app.api.v1.endpoints.auth import supabase_exchange
-
-    class _FakePayload:
-        token: str = bad_token
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", "test-secret-123")
-
-    class _NullRepo:
-        pass
-
-    repo = _NullRepo()
-
-    try:
-        import asyncio
-        asyncio.run(supabase_exchange(_FakePayload(), repo))
-        assert False, "Expected exception"
-    except HTTPException as e:
-        assert e.status_code == 400
-        assert "Invalid token" in e.detail
-    finally:
-        monkeypatch.undo()
-
-
-def test_supabase_jwt_rejects_forged_signature():
-    header = base64.urlsafe_b64encode(b'{"alg":"HS256"}').rstrip(b"=").decode()
-    payload_b64 = base64.urlsafe_b64encode(b'{"email":"hacker@evil.com"}').rstrip(b"=").decode()
-    forged_sig = base64.urlsafe_b64encode(b"fake_signature_1234567890").rstrip(b"=").decode()
-    forged_token = f"{header}.{payload_b64}.{forged_sig}"
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", "real-secret")
-
-    from app.api.v1.endpoints.auth import supabase_exchange
-
-    class _FakePayload:
-        token: str = forged_token
-
-    try:
-        import asyncio
-        asyncio.run(supabase_exchange(_FakePayload(), object()))
-        assert False, "Expected exception"
-    except HTTPException as e:
-        assert e.status_code == 400
-    finally:
-        monkeypatch.undo()
-
-
-def test_supabase_jwt_returns_503_when_secret_not_configured():
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", "")
-
-    from app.api.v1.endpoints.auth import supabase_exchange
-
-    class _FakePayload:
-        token: str = "header.payload.signature"
-
-    try:
-        import asyncio
-        asyncio.run(supabase_exchange(_FakePayload(), object()))
-        assert False, "Expected exception"
-    except HTTPException as e:
-        assert e.status_code == 503
-    finally:
-        monkeypatch.undo()
 
 
 def test_admin_config_requires_authenticated_actor():

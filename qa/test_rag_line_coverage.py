@@ -1,8 +1,8 @@
-import asyncio
 import os
 import sys
 
 import pytest
+from app.core.security.actor_context import ActorContext, AuthMethod
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -14,11 +14,6 @@ class _Point:
         self.id = id
         self.score = score
         self.payload = payload
-
-
-class _QueryRes:
-    def __init__(self, points):
-        self.points = points
 
 
 @pytest.fixture
@@ -38,9 +33,9 @@ def client(monkeypatch):
                 {"id": "2", "content": "", "metadata": {}, "score": 0.1},
             ]
 
-    class DummyQdrant:
-        async def query_points(self, **kwargs):
-            points = [
+    class DummyKnowledgeFacade:
+        async def search_user_chat(self, **kwargs):
+            return [
                 _Point(
                     id="p1",
                     score=0.95,
@@ -58,18 +53,9 @@ def client(monkeypatch):
                     },
                 ),
             ]
-            return _QueryRes(points)
 
-    async def _aget(*_a, **_k):
-        return "coll"
-
-    monkeypatch.setattr(mod, "aget_or_create_collection", _aget)
-    monkeypatch.setattr(mod, "get_async_qdrant_client", lambda: DummyQdrant())
-
-    async def _embed(_q: str):
-        return [0.1, 0.2, 0.3]
-
-    monkeypatch.setattr(mod, "aembed_text", _embed)
+        async def search_user_memory(self, **kwargs):
+            return await self.search_user_chat(**kwargs)
 
     class DummyPolicy:
         def resolve(self, *args, **kwargs):
@@ -104,6 +90,18 @@ def client(monkeypatch):
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/rag")
     app.dependency_overrides[get_memory_service] = lambda: DummyMemoryService()
+    app.state.knowledge_facade = DummyKnowledgeFacade()
+
+    @app.middleware("http")
+    async def bind_actor(request, call_next):
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id=1,
+            roles=("USER",),
+            auth_method=AuthMethod.OIDC,
+            trace_id="rag-test",
+        )
+        return await call_next(request)
+
     yield TestClient(app)
 
 
@@ -131,11 +129,20 @@ def test_rag_user_chat_fallback(monkeypatch):
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/rag")
 
-    async def _raise(*_a, **_k):
-        raise RuntimeError("x")
+    class FailingKnowledgeFacade:
+        async def search_user_chat(self, **kwargs):
+            raise RuntimeError("x")
 
-    monkeypatch.setattr(mod, "aget_or_create_collection", _raise)
     monkeypatch.setattr(mod, "get_knowledge_routing_policy", lambda: type("P", (), {"resolve": lambda *a, **k: type("D", (), {"rule_id": "r1", "primary": mod.RouteTarget.QDRANT, "secondary": [], "fallback": None})()})())
+    app.state.knowledge_facade = FailingKnowledgeFacade()
+
+    @app.middleware("http")
+    async def bind_actor(request, call_next):
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id=1, roles=("USER",), auth_method=AuthMethod.OIDC, trace_id="rag-test"
+        )
+        return await call_next(request)
+
     client = TestClient(app)
     resp = client.get("/api/v1/rag/user-chat?query=q")
     assert resp.status_code == 200
@@ -155,39 +162,24 @@ def test_rag_productivity_fallback(monkeypatch):
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/rag")
 
-    async def _raise(*_a, **_k):
-        raise RuntimeError("x")
+    class FailingKnowledgeFacade:
+        async def search_user_memory(self, **kwargs):
+            raise RuntimeError("x")
 
-    monkeypatch.setattr(mod, "aembed_text", _raise)
     monkeypatch.setattr(mod, "get_knowledge_routing_policy", lambda: type("P", (), {"resolve": lambda *a, **k: type("D", (), {"rule_id": "r1", "primary": mod.RouteTarget.QDRANT, "secondary": [], "fallback": None})()})())
+    app.state.knowledge_facade = FailingKnowledgeFacade()
+
+    @app.middleware("http")
+    async def bind_actor(request, call_next):
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id=1, roles=("USER",), auth_method=AuthMethod.OIDC, trace_id="rag-test"
+        )
+        return await call_next(request)
+
     client = TestClient(app)
     resp = client.get("/api/v1/rag/productivity?query=q")
     assert resp.status_code == 200
     assert resp.json()["citations"] == []
-
-
-def test_rag_user_chat_v2_direct_call_non_float_min_score(monkeypatch):
-    import app.api.v1.endpoints.rag as mod
-
-    class DummyQdrant:
-        async def query_points(self, **kwargs):
-            return []
-
-    async def _embed(_q: str):
-        return [0.1]
-
-    monkeypatch.setattr(mod, "aembed_text", _embed)
-    monkeypatch.setattr(mod, "get_async_qdrant_client", lambda: DummyQdrant())
-    async def _aget(*_a, **_k):
-        return "coll"
-
-    monkeypatch.setattr(mod, "aget_or_create_collection", _aget)
-
-    async def run():
-        return await mod.rag_user_chat_search_v2(query="q", min_score="x", start_ts_ms=1, end_ts_ms=2)
-
-    out = asyncio.run(run())
-    assert out
 
 
 def test_rag_hybrid_search_success(client):

@@ -1,37 +1,21 @@
-import pytest
-from app.core.kernel import KernelState
-from app.main import app, health, is_public_api_key_exempt_path
-from httpx import ASGITransport, AsyncClient
+from app.main import app, health
+from fastapi.testclient import TestClient
 
 
-def test_public_api_key_exempts_root_health_endpoints():
-    assert is_public_api_key_exempt_path("/health") is True
-    assert is_public_api_key_exempt_path("/healthz") is True
+def test_profile_health_routes_are_explicit_and_operational_routes_are_protected():
+    client = TestClient(app)
+
+    assert client.get("/healthz/public").status_code == 200
+    assert client.get("/healthz/user").status_code == 401
+    assert client.get("/healthz/control-plane").status_code == 401
+    assert client.get("/health").status_code == 401
+    assert client.get("/metrics").status_code == 401
+    assert client.get("/healthz").status_code == 404
 
 
-def test_public_api_key_health_exemption_is_not_prefix_based():
-    assert is_public_api_key_exempt_path("/health/services") is False
-    assert is_public_api_key_exempt_path("/healthz/details") is False
-
-
-def test_public_api_key_keeps_static_prefix_exemption():
-    assert is_public_api_key_exempt_path("/static/app.js") is True
-
-
-@pytest.mark.asyncio
-async def test_metrics_endpoint_exposes_auto_healer_step_metrics():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/metrics")
-
-    assert response.status_code == 200
-    metrics_text = response.text
-    assert "auto_healer_step_attempts_total" in metrics_text
-    assert "auto_healer_step_successes_total" in metrics_text
-    assert "auto_healer_step_failures_total" in metrics_text
-
-
-def test_root_health_reports_degraded_when_critical_check_is_missing(monkeypatch):
+def test_control_plane_health_reports_degraded_when_critical_check_is_missing(monkeypatch):
     import app.main as main_module
+    from app.core.kernel import KernelState
 
     class DummyKernel:
         state = KernelState.HEALTHY

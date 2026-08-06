@@ -1,16 +1,25 @@
 import pytest
-from app.core.infrastructure.auth import create_token, verify_token
 from httpx import ASGITransport, AsyncClient
+
+from qa.auth_test_support import (
+    actor_from_test_request,
+    decode_test_actor_id,
+    issue_test_actor_token,
+)
 
 
 def _auth_headers(user_id: int | str) -> dict[str, str]:
-    token = create_token(int(user_id), expires_in=3600)
+    token = issue_test_actor_token(user_id)
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def async_client():
+def async_client(monkeypatch):
     from app.main import app
+    monkeypatch.setattr(
+        "app.core.security.containment_middleware.get_actor_context",
+        actor_from_test_request,
+    )
     from app.services.chat_service import get_chat_service
     from app.services.memory_service import get_memory_service
 
@@ -111,7 +120,7 @@ def async_client():
         actor = None
         if auth.lower().startswith("bearer "):
             token = auth.split(" ", 1)[1].strip()
-            actor = verify_token(token)
+            actor = decode_test_actor_id(token)
         if actor is None:
             return ChatIdentityResolution(
                 user_id=None,

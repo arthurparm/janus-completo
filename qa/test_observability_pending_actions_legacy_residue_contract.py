@@ -1,16 +1,21 @@
 import pytest
-from app.core.infrastructure.auth import create_token
 from httpx import ASGITransport, AsyncClient
+
+from qa.auth_test_support import actor_from_test_request, issue_test_actor_token
 
 
 def _auth_headers(user_id: int) -> dict[str, str]:
-    token = create_token(user_id, expires_in=3600)
+    token = issue_test_actor_token(user_id)
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def async_client():
+def async_client(monkeypatch):
     from app.main import app
+    monkeypatch.setattr(
+        "app.core.security.containment_middleware.get_actor_context",
+        actor_from_test_request,
+    )
     from app.repositories.user_repository import UserRepository
     from app.services.observability_service import get_observability_service
 

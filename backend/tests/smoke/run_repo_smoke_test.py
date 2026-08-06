@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import time
 from urllib import error, request
@@ -35,64 +36,33 @@ def _req(method: str, path: str, data: dict | None = None, headers: dict | None 
 def main():
     t0 = time.time()
     print("[SMOKE] Iniciando teste de ciclo completo")
-    # 1. Health
-    code, body = _req("GET", "/healthz")
-    if code != 200 or (isinstance(body, dict) and body.get("status") != "ok"):
-        print(f"[FAIL] /healthz -> {code} {body}")
-        sys.exit(1)
-    print("[OK] /healthz")
-
-    # 2. Criar usuário local + obter token Bearer
-    register_payload = {
-        "email": f"smoke-{int(time.time())}@example.com",
-        "password": "SmokePass123!",
-        "username": f"smoke_{int(time.time())}",
-        "full_name": "Smoke Test",
-        "terms": True,
-    }
-    code, body = _req("POST", "/api/v1/auth/local/register", register_payload)
-    if code != 200 or not isinstance(body, dict) or "token" not in body or "user" not in body:
-        print(f"[FAIL] /api/v1/auth/local/register -> {code} {body}")
-        sys.exit(1)
-    token = str(body["token"])
+    token = str(os.getenv("JANUS_USER_ACCESS_TOKEN") or "").strip()
+    if not token:
+        print("[FAIL] JANUS_USER_ACCESS_TOKEN is required; obtain it from the configured OIDC IdP")
+        sys.exit(2)
     auth_headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Authenticated user-profile health
+    code, body = _req("GET", "/healthz/user", headers=auth_headers)
+    if code != 200 or (isinstance(body, dict) and body.get("status") != "ok"):
+        print(f"[FAIL] /healthz/user -> {code} {body}")
+        sys.exit(1)
+    print("[OK] /healthz/user")
+
+    # 2. Resolve the JIT-provisioned identity.
+    code, body = _req("GET", "/api/v1/users/me", headers=auth_headers)
+    if code != 200 or not isinstance(body, dict) or "id" not in body:
+        print(f"[FAIL] /api/v1/users/me -> {code} {body}")
+        sys.exit(1)
+    user_id = body["id"]
     print(f"[OK] register user id={user_id}")
 
-    # 3. Consentimento para calendar.write
-    code, body = _req(
-        "POST",
-        f"/api/v1/users/{user_id}/consents",
-        {"scope": "calendar.write", "granted": True, "expires_at": None},
-        headers=auth_headers,
-    )
+    # 3. Read the user-safe system status; operational status remains control-plane only.
+    code, body = _req("GET", "/api/v1/system/status/user", headers=auth_headers)
     if code != 200:
-        print(f"[FAIL] add consent -> {code} {body}")
+        print(f"[FAIL] user system status -> {code} {body}")
         sys.exit(1)
-    print("[OK] consent calendar.write")
-
-    # 4. Adicionar evento de calendário
-    evt = {
-        "event": {
-            "title": "Smoke Event",
-            "start_ts": time.time() + 60,
-            "end_ts": time.time() + 3600,
-            "location": "Remote",
-            "notes": "smoke",
-        },
-        "index": False,
-    }
-    code, body = _req("POST", "/api/v1/productivity/calendar/events/add", evt, headers=auth_headers)
-    if code != 200 or not (isinstance(body, dict) and body.get("status") == "queued"):
-        print(f"[FAIL] calendar add -> {code} {body}")
-        sys.exit(1)
-    print("[OK] calendar add queued")
-
-    # 5. Listar eventos (pode estar vazio, não falha)
-    code, body = _req("GET", "/api/v1/productivity/calendar/events", headers=auth_headers)
-    if code != 200:
-        print(f"[WARN] calendar list -> {code} {body}")
-    else:
-        print("[OK] calendar list")
+    print("[OK] user system status")
 
     elapsed = time.time() - t0
     print(f"[SMOKE] Concluído em {elapsed:.2f}s")

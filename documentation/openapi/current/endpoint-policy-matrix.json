@@ -1,0 +1,3424 @@
+[
+  {
+    "human_delegable": true,
+    "method": "PATCH",
+    "operation_id": "update_config_api_v1_admin_config_patch",
+    "ownership": "none",
+    "path": "/api/v1/admin/config",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "auto_analyze_api_v1_auto_analysis_health_check_get",
+    "ownership": "none",
+    "path": "/api/v1/auto-analysis/health-check",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "sync_backlog_api_v1_autonomy_admin_backlog_sync_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/backlog/sync",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_board_api_v1_autonomy_admin_board_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/board",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "code_qa_api_v1_autonomy_admin_code_qa_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/code-qa",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_autonomy_cost_report_api_v1_autonomy_admin_cost_report_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/cost-report",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "review_quarantine_api_v1_autonomy_admin_knowledge_quarantine_review_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/knowledge/quarantine/review",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "self_study_neo4j_audit_api_v1_autonomy_admin_self_study_neo4j_audit_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/self-study/neo4j-audit",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "self_study_neo4j_repair_api_v1_autonomy_admin_self_study_neo4j_repair_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/self-study/neo4j-repair",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "run_self_study_api_v1_autonomy_admin_self_study_run_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/self-study/run",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "self_study_runs_api_v1_autonomy_admin_self_study_runs_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/self-study/runs",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "self_study_status_api_v1_autonomy_admin_self_study_status_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/self-study/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "admin_manual_goal_completion_trigger_api_v1_autonomy_admin_self_study_trigger_on_goal_complete_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/self-study/trigger-on-goal-complete",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reset_autonomy_throttle_api_v1_autonomy_admin_throttle_reset_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/throttle/reset",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_tool_provenance_api_v1_autonomy_admin_tools__name__provenance_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/tools/{name}/provenance",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "rollback_tool_api_v1_autonomy_admin_tools__name__rollback_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/tools/{name}/rollback",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_goals_api_v1_autonomy_goals_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/goals",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "create_goal_api_v1_autonomy_goals_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/goals",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "DELETE",
+    "operation_id": "delete_goal_api_v1_autonomy_goals__goal_id__delete",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/goals/{goal_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_goal_api_v1_autonomy_goals__goal_id__get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/goals/{goal_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_goal_metrics_api_v1_autonomy_goals__goal_id__metrics_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/goals/{goal_id}/metrics",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "PATCH",
+    "operation_id": "update_goal_status_api_v1_autonomy_goals__goal_id__status_patch",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/goals/{goal_id}/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_autonomy_health_api_v1_autonomy_health_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_runs_api_v1_autonomy_history_runs_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/history/runs",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_run_api_v1_autonomy_history_runs__run_id__get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/history/runs/{run_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_enqueues_api_v1_autonomy_history_runs__run_id__enqueues_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/history/runs/{run_id}/enqueues",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_steps_api_v1_autonomy_history_runs__run_id__steps_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/history/runs/{run_id}/steps",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_autonomy_maturity_api_v1_autonomy_maturity_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/maturity",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_autonomy_plan_api_v1_autonomy_plan_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/plan",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "PUT",
+    "operation_id": "update_autonomy_plan_api_v1_autonomy_plan_put",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/plan",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "PUT",
+    "operation_id": "update_policy_api_v1_autonomy_policy_put",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/policy",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "start_autonomy_api_v1_autonomy_start_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/start",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "autonomy_status_api_v1_autonomy_status_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "stop_autonomy_api_v1_autonomy_stop_post",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/stop",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "chat_health_api_v1_chat_health_get",
+    "ownership": "none",
+    "path": "/api/v1/chat/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_agents_api_v1_collaboration_agents_get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/agents",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "create_agent_api_v1_collaboration_agents_create_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/agents/create",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_agent_details_api_v1_collaboration_agents__agent_id__get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/agents/{agent_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "health_check_api_v1_collaboration_health_get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "execute_project_api_v1_collaboration_projects_execute_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/projects/execute",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "shutdown_system_api_v1_collaboration_system_shutdown_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/system/shutdown",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_tasks_api_v1_collaboration_tasks_get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/tasks",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "create_task_api_v1_collaboration_tasks_create_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/tasks/create",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "execute_task_api_v1_collaboration_tasks_execute_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/tasks/execute",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "execute_tasks_parallel_api_v1_collaboration_tasks_execute_parallel_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/tasks/execute_parallel",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_task_details_api_v1_collaboration_tasks__task_id__get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/tasks/{task_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "add_artifact_api_v1_collaboration_workspace_artifacts_add_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/workspace/artifacts/add",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_artifact_api_v1_collaboration_workspace_artifacts__key__get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/workspace/artifacts/{key}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "send_message_api_v1_collaboration_workspace_messages_send_post",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/workspace/messages/send",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_messages_for_api_v1_collaboration_workspace_messages__agent_id__get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/workspace/messages/{agent_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_workspace_status_api_v1_collaboration_workspace_status_get",
+    "ownership": "none",
+    "path": "/api/v1/collaboration/workspace/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "invalidate_web_cache_api_v1_context_web_cache_invalidate_post",
+    "ownership": "none",
+    "path": "/api/v1/context/web-cache/invalidate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_web_cache_status_api_v1_context_web_cache_status_get",
+    "ownership": "none",
+    "path": "/api/v1/context/web-cache/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "precheck_api_v1_deployment_precheck_post",
+    "ownership": "none",
+    "path": "/api/v1/deployment/precheck",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "deployment:write"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "publish_api_v1_deployment_publish_post",
+    "ownership": "none",
+    "path": "/api/v1/deployment/publish",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "deployment:write"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "rollback_api_v1_deployment_rollback_post",
+    "ownership": "none",
+    "path": "/api/v1/deployment/rollback",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "deployment:write"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "stage_api_v1_deployment_stage_post",
+    "ownership": "none",
+    "path": "/api/v1/deployment/stage",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "deployment:write"
+    ]
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "ingest_evaluation_result",
+    "ownership": "none",
+    "path": "/api/v1/evaluation/ingest",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "evaluation:ingest"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_feedback_stats_api_v1_feedback_stats_get",
+    "ownership": "none",
+    "path": "/api/v1/feedback/stats",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_improvement_suggestions_api_v1_feedback_suggestions_get",
+    "ownership": "none",
+    "path": "/api/v1/feedback/suggestions",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "upsert_classification_api_v1_governance_classifications_post",
+    "ownership": "none",
+    "path": "/api/v1/governance/classifications",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "governance:write"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "run_purge_api_v1_governance_purge_run_post",
+    "ownership": "none",
+    "path": "/api/v1/governance/purge/run",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "governance:write"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "classes_implementations_api_v1_knowledge_classes_implementations_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/classes/implementations",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "DELETE",
+    "operation_id": "clear_knowledge_graph_api_v1_knowledge_clear_delete",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/clear",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reindex_concepts_api_v1_knowledge_concepts_reindex_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/concepts/reindex",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "publish_consolidation_api_v1_knowledge_consolidate_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/consolidate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "consolidate_document_api_v1_knowledge_consolidate_document_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/consolidate/document",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_code_entities_api_v1_knowledge_entities_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/entities",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_entity_relationships_api_v1_knowledge_entity__entity_name__relationships_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/entity/{entity_name}/relationships",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "compare_experimental_retrieval_api_v1_knowledge_experimental_compare_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/experimental/compare",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "experimental_health_snapshot_api_v1_knowledge_experimental_health_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/experimental/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "build_experimental_index_api_v1_knowledge_experimental_index_build_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/experimental/index/build",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "files_importing_api_v1_knowledge_files_importing_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/files/importing",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "functions_calling_api_v1_knowledge_functions_calling_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/functions/calling",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "knowledge_health_api_v1_knowledge_health_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "detailed_health_check_api_v1_knowledge_health_detailed_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/health/detailed",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reset_circuit_breaker_api_v1_knowledge_health_reset_circuit_breaker_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/health/reset-circuit-breaker",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "trigger_indexing_api_v1_knowledge_index_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/index",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_node_types_api_v1_knowledge_node_types_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/node-types",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_quarantine_api_v1_knowledge_quarantine_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/quarantine",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "promote_quarantine_api_v1_knowledge_quarantine_promote_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/quarantine/promote",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "register_relationship_type_api_v1_knowledge_relationship_types_register_post",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/relationship-types/register",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_knowledge_stats_api_v1_knowledge_stats_get",
+    "ownership": "none",
+    "path": "/api/v1/knowledge/stats",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "preview_dataset_api_v1_learning_dataset_preview_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/dataset/preview",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_dataset_version_api_v1_learning_dataset_version_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/dataset/version",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "evaluate_model_api_v1_learning_evaluate_post",
+    "ownership": "none",
+    "path": "/api/v1/learning/evaluate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_experiments_api_v1_learning_experiments_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/experiments",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_experiment_details_api_v1_learning_experiments__experiment_id__get",
+    "ownership": "none",
+    "path": "/api/v1/learning/experiments/{experiment_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "trigger_harvesting_api_v1_learning_harvest_post",
+    "ownership": "none",
+    "path": "/api/v1/learning/harvest",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "learning_health_api_v1_learning_health_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_models_api_v1_learning_models_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/models",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_model_details_api_v1_learning_models__model_id__get",
+    "ownership": "none",
+    "path": "/api/v1/learning/models/{model_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_learning_stats_api_v1_learning_stats_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/stats",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "trigger_training_api_v1_learning_train_post",
+    "ownership": "none",
+    "path": "/api/v1/learning/train",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_training_status_api_v1_learning_training_status_get",
+    "ownership": "none",
+    "path": "/api/v1/learning/training/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "set_ab_experiment_api_v1_llm_ab_set_experiment_post",
+    "ownership": "none",
+    "path": "/api/v1/llm/ab/set-experiment",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "invalidate_llm_cache_api_v1_llm_cache_invalidate_post",
+    "ownership": "none",
+    "path": "/api/v1/llm/cache/invalidate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_cache_status_api_v1_llm_cache_status_get",
+    "ownership": "none",
+    "path": "/api/v1/llm/cache/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_circuit_breaker_status_api_v1_llm_circuit_breakers_get",
+    "ownership": "none",
+    "path": "/api/v1/llm/circuit-breakers",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reset_circuit_breaker_api_v1_llm_circuit_breakers__provider__reset_post",
+    "ownership": "none",
+    "path": "/api/v1/llm/circuit-breakers/{provider}/reset",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "llm_health_api_v1_llm_health_get",
+    "ownership": "none",
+    "path": "/api/v1/llm/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "invalidate_response_cache_api_v1_llm_response_cache_invalidate_post",
+    "ownership": "none",
+    "path": "/api/v1/llm/response-cache/invalidate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_response_cache_status_api_v1_llm_response_cache_status_get",
+    "ownership": "none",
+    "path": "/api/v1/llm/response-cache/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "run_analysis_api_v1_meta_agent_analyze_post",
+    "ownership": "none",
+    "path": "/api/v1/meta-agent/analyze",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "health_check_api_v1_meta_agent_health_get",
+    "ownership": "none",
+    "path": "/api/v1/meta-agent/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "start_heartbeat_api_v1_meta_agent_heartbeat_start_post",
+    "ownership": "none",
+    "path": "/api/v1/meta-agent/heartbeat/start",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_heartbeat_status_api_v1_meta_agent_heartbeat_status_get",
+    "ownership": "none",
+    "path": "/api/v1/meta-agent/heartbeat/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "stop_heartbeat_api_v1_meta_agent_heartbeat_stop_post",
+    "ownership": "none",
+    "path": "/api/v1/meta-agent/heartbeat/stop",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_latest_report_api_v1_meta_agent_report_latest_get",
+    "ownership": "none",
+    "path": "/api/v1/meta-agent/report/latest",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "predictive_anomalies_api_v1_observability_anomalies_predictive_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/anomalies/predictive",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "audit_events_api_v1_observability_audit_events_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/audit/events",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "export_audit_events_api_v1_observability_audit_export_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/audit/export",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "audit_ledger_integrity_api_v1_observability_audit_ledger_integrity_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/audit/ledger/integrity",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "error_taxonomy_api_v1_observability_errors_taxonomy_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/errors/taxonomy",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "graph_audit_api_v1_observability_graph_audit_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/graph/audit",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "graph_quarantine_list_api_v1_observability_graph_quarantine_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/graph/quarantine",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "graph_quarantine_promote_api_v1_observability_graph_quarantine_promote_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/graph/quarantine/promote",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "check_all_components_api_v1_observability_health_check_all_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/health/check-all",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "health_llm_router_api_v1_observability_health_components_llm_router_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/health/components/llm_router",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "health_multi_agent_api_v1_observability_health_components_multi_agent_system_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/health/components/multi_agent_system",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "health_poison_pill_handler_api_v1_observability_health_components_poison_pill_handler_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/health/components/poison_pill_handler",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_system_health_api_v1_observability_health_system_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/health/system",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_incidents_api_v1_observability_incidents_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/incidents",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "incident_close_api_v1_observability_incidents_close_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/incidents/close",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "incident_add_evidence_api_v1_observability_incidents_evidence_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/incidents/evidence",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "incident_open_api_v1_observability_incidents_open_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/incidents/open",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "incident_events_api_v1_observability_incidents__incident_id__events_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/incidents/{incident_id}/events",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "llm_usage_api_v1_observability_llm_usage_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/llm/usage",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_metrics_summary_api_v1_observability_metrics_summary_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/metrics/summary",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "pending_actions_legacy_residue_api_v1_observability_pending_actions_legacy_residue_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/pending-actions/legacy-residue",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "cleanup_quarantine_api_v1_observability_poison_pills_cleanup_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/poison-pills/cleanup",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_quarantined_messages_api_v1_observability_poison_pills_quarantined_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/poison-pills/quarantined",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "release_from_quarantine_api_v1_observability_poison_pills_release_post",
+    "ownership": "none",
+    "path": "/api/v1/observability/poison-pills/release",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read",
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_poison_pill_stats_api_v1_observability_poison_pills_stats_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/poison-pills/stats",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "request_pipeline_dashboard_api_v1_observability_requests__request_id__dashboard_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/requests/{request_id}/dashboard",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "domain_slo_report_api_v1_observability_slo_domains_get",
+    "ownership": "none",
+    "path": "/api/v1/observability/slo/domains",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "analyze_system_api_v1_optimization_analyze_post",
+    "ownership": "none",
+    "path": "/api/v1/optimization/analyze",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_system_health_api_v1_optimization_health_get",
+    "ownership": "none",
+    "path": "/api/v1/optimization/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_detected_issues_api_v1_optimization_issues_get",
+    "ownership": "none",
+    "path": "/api/v1/optimization/issues",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_metrics_history_api_v1_optimization_metrics_history_get",
+    "ownership": "none",
+    "path": "/api/v1/optimization/metrics/history",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "run_optimization_cycle_api_v1_optimization_run_cycle_post",
+    "ownership": "none",
+    "path": "/api/v1/optimization/run-cycle",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_optimization_status_api_v1_optimization_status_get",
+    "ownership": "none",
+    "path": "/api/v1/optimization/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "migrate_db_schema_api_v1_system_db_migrate_post",
+    "ownership": "none",
+    "path": "/api/v1/system/db/migrate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute",
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "validate_db_schema_api_v1_system_db_validate_get",
+    "ownership": "none",
+    "path": "/api/v1/system/db/validate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_services_health_api_v1_system_health_services_get",
+    "ownership": "none",
+    "path": "/api/v1/system/health/services",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_system_overview_api_v1_system_overview_get",
+    "ownership": "none",
+    "path": "/api/v1/system/overview",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_system_status_api_v1_system_status_get",
+    "ownership": "none",
+    "path": "/api/v1/system/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "create_consolidation_task_api_v1_tasks_consolidation_post",
+    "ownership": "none",
+    "path": "/api/v1/tasks/consolidation",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "check_rabbitmq_health_api_v1_tasks_health_rabbitmq_get",
+    "ownership": "none",
+    "path": "/api/v1/tasks/health/rabbitmq",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
+    "ownership": "none",
+    "path": "/api/v1/tasks/outbox/reconcile",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+    "ownership": "none",
+    "path": "/api/v1/tasks/outbox/stats",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_queue_info_api_v1_tasks_queue__queue_name__get",
+    "ownership": "none",
+    "path": "/api/v1/tasks/queue/{queue_name}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_queue_policy_api_v1_tasks_queue__queue_name__policy_get",
+    "ownership": "none",
+    "path": "/api/v1/tasks/queue/{queue_name}/policy",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reconcile_queue_policy_api_v1_tasks_queue__queue_name__policy_reconcile_post",
+    "ownership": "none",
+    "path": "/api/v1/tasks/queue/{queue_name}/policy/reconcile",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "validate_queue_policy_api_v1_tasks_queue__queue_name__policy_validate_get",
+    "ownership": "none",
+    "path": "/api/v1/tasks/queue/{queue_name}/policy/validate",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_tools_api_v1_tools__get",
+    "ownership": "none",
+    "path": "/api/v1/tools/",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "tools:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_categories_api_v1_tools_categories_list_get",
+    "ownership": "none",
+    "path": "/api/v1/tools/categories/list",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "tools:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_permissions_api_v1_tools_permissions_list_get",
+    "ownership": "none",
+    "path": "/api/v1/tools/permissions/list",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "tools:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_tool_statistics_api_v1_tools_stats_usage_get",
+    "ownership": "none",
+    "path": "/api/v1/tools/stats/usage",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "tools:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_tool_details_api_v1_tools__tool_name__get",
+    "ownership": "none",
+    "path": "/api/v1/tools/{tool_name}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "tools:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "create_user_api_v1_users__post",
+    "ownership": "none",
+    "path": "/api/v1/users/",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "identity:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_user_api_v1_users__target_actor_id__get",
+    "ownership": "none",
+    "path": "/api/v1/users/{target_actor_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "identity:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "list_consents_api_v1_users__target_actor_id__consents_get",
+    "ownership": "none",
+    "path": "/api/v1/users/{target_actor_id}/consents",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "identity:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "add_consent_api_v1_users__target_actor_id__consents_post",
+    "ownership": "none",
+    "path": "/api/v1/users/{target_actor_id}/consents",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "identity:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "DELETE",
+    "operation_id": "revoke_consent_api_v1_users__target_actor_id__consents__scope__delete",
+    "ownership": "none",
+    "path": "/api/v1/users/{target_actor_id}/consents/{scope}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "identity:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "start_workers_api_v1_workers_start_all_post",
+    "ownership": "none",
+    "path": "/api/v1/workers/start-all",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "workers:manage"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "workers_status_api_v1_workers_status_get",
+    "ownership": "none",
+    "path": "/api/v1/workers/status",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "workers:manage"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "stop_workers_api_v1_workers_stop_all_post",
+    "ownership": "none",
+    "path": "/api/v1/workers/stop-all",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "workers:manage"
+    ]
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_control_plane_health",
+    "ownership": "none",
+    "path": "/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_control_plane_liveness",
+    "ownership": "none",
+    "path": "/healthz/control-plane",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_prometheus_metrics",
+    "ownership": "none",
+    "path": "/metrics",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "observability:read"
+    ]
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_oidc_config",
+    "ownership": "none",
+    "path": "/api/v1/auth/oidc-config",
+    "principals": [
+      "anonymous"
+    ],
+    "profile": "public",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_public_liveness",
+    "ownership": "none",
+    "path": "/healthz/public",
+    "principals": [
+      "anonymous"
+    ],
+    "profile": "public",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "execute_admin_action",
+    "ownership": "actor",
+    "path": "/api/v1/admin-actions",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "agent_execute_api_v1_agent_execute_post",
+    "ownership": "actor",
+    "path": "/api/v1/agent/execute",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "assistant_execute_api_v1_assistant_execute_post",
+    "ownership": "actor",
+    "path": "/api/v1/assistant/execute",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "list_conversations_api_v1_chat_conversations_get",
+    "ownership": "actor",
+    "path": "/api/v1/chat/conversations",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "send_message_api_v1_chat_message_post",
+    "ownership": "actor",
+    "path": "/api/v1/chat/message",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "start_chat_api_v1_chat_start_post",
+    "ownership": "actor",
+    "path": "/api/v1/chat/start",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "stream_message_api_v1_chat_stream__conversation_id__post",
+    "ownership": "actor",
+    "path": "/api/v1/chat/stream/{conversation_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_study_job_api_v1_chat_study_jobs__job_id__get",
+    "ownership": "actor",
+    "path": "/api/v1/chat/study-jobs/{job_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "DELETE",
+    "operation_id": "delete_conversation_api_v1_chat__conversation_id__delete",
+    "ownership": "actor",
+    "path": "/api/v1/chat/{conversation_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "stream_agent_events_api_v1_chat__conversation_id__events_get",
+    "ownership": "actor",
+    "path": "/api/v1/chat/{conversation_id}/events",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "chat_history_api_v1_chat__conversation_id__history_get",
+    "ownership": "actor",
+    "path": "/api/v1/chat/{conversation_id}/history",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "chat_history_paginated_api_v1_chat__conversation_id__history_paginated_get",
+    "ownership": "actor",
+    "path": "/api/v1/chat/{conversation_id}/history/paginated",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "PUT",
+    "operation_id": "rename_conversation_api_v1_chat__conversation_id__rename_put",
+    "ownership": "actor",
+    "path": "/api/v1/chat/{conversation_id}/rename",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_conversation_trace_api_v1_chat__conversation_id__trace_get",
+    "ownership": "actor",
+    "path": "/api/v1/chat/{conversation_id}/trace",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_current_context_api_v1_context_current_get",
+    "ownership": "actor",
+    "path": "/api/v1/context/current",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "get_enriched_context_api_v1_context_enriched_post",
+    "ownership": "actor",
+    "path": "/api/v1/context/enriched",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "format_context_for_prompt_api_v1_context_format_prompt_get",
+    "ownership": "actor",
+    "path": "/api/v1/context/format-prompt",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "search_web_api_v1_context_web_search_get",
+    "ownership": "actor",
+    "path": "/api/v1/context/web-search",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "link_url_api_v1_documents_link_url_post",
+    "ownership": "actor",
+    "path": "/api/v1/documents/link-url",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "list_documents_api_v1_documents_list_get",
+    "ownership": "actor",
+    "path": "/api/v1/documents/list",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "search_documents_api_v1_documents_search_get",
+    "ownership": "actor",
+    "path": "/api/v1/documents/search",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "document_status_api_v1_documents_status__doc_id__get",
+    "ownership": "actor",
+    "path": "/api/v1/documents/status/{doc_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "upload_document_api_v1_documents_upload_post",
+    "ownership": "actor",
+    "path": "/api/v1/documents/upload",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "DELETE",
+    "operation_id": "delete_document_api_v1_documents__doc_id__delete",
+    "ownership": "actor",
+    "path": "/api/v1/documents/{doc_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "list_experiments_api_v1_evaluation_experiments_get",
+    "ownership": "actor",
+    "path": "/api/v1/evaluation/experiments",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "create_experiment_api_v1_evaluation_experiments_post",
+    "ownership": "actor",
+    "path": "/api/v1/evaluation/experiments",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "add_arm_api_v1_evaluation_experiments__experiment_id__arms_post",
+    "ownership": "actor",
+    "path": "/api/v1/evaluation/experiments/{experiment_id}/arms",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "add_result_api_v1_evaluation_experiments__experiment_id__results_post",
+    "ownership": "actor",
+    "path": "/api/v1/evaluation/experiments/{experiment_id}/results",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "experiment_winner_api_v1_evaluation_experiments__experiment_id__winner_get",
+    "ownership": "actor",
+    "path": "/api/v1/evaluation/experiments/{experiment_id}/winner",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "record_feedback_api_v1_feedback__post",
+    "ownership": "actor",
+    "path": "/api/v1/feedback/",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_conversation_feedback_api_v1_feedback_conversation__conversation_id__get",
+    "ownership": "actor",
+    "path": "/api/v1/feedback/conversation/{conversation_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_satisfaction_report_api_v1_feedback_report_get",
+    "ownership": "actor",
+    "path": "/api/v1/feedback/report",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "thumbs_down_api_v1_feedback_thumbs_down_post",
+    "ownership": "actor",
+    "path": "/api/v1/feedback/thumbs-down",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "thumbs_up_api_v1_feedback_thumbs_up_post",
+    "ownership": "actor",
+    "path": "/api/v1/feedback/thumbs-up",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "related_concepts_api_v1_knowledge_concepts_related_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/concepts/related",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "query_knowledge_api_v1_knowledge_query_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/query",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "query_code_with_citations_api_v1_knowledge_query_code_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/query/code",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "list_knowledge_spaces_api_v1_knowledge_spaces_get",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/spaces",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "create_knowledge_space_api_v1_knowledge_spaces_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/spaces",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_knowledge_space_status_api_v1_knowledge_spaces__knowledge_space_id__get",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/spaces/{knowledge_space_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "consolidate_knowledge_space_api_v1_knowledge_spaces__knowledge_space_id__consolidate_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/spaces/{knowledge_space_id}/consolidate",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "attach_document_to_space_api_v1_knowledge_spaces__knowledge_space_id__documents__doc_id__attach_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/spaces/{knowledge_space_id}/documents/{doc_id}/attach",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "query_knowledge_space_api_v1_knowledge_spaces__knowledge_space_id__query_post",
+    "ownership": "actor",
+    "path": "/api/v1/knowledge/spaces/{knowledge_space_id}/query",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_budget_summary_api_v1_llm_budget_summary_get",
+    "ownership": "actor",
+    "path": "/api/v1/llm/budget/summary",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "invoke_llm_api_v1_llm_invoke_post",
+    "ownership": "actor",
+    "path": "/api/v1/llm/invoke",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_provider_pricing_api_v1_llm_pricing_providers_get",
+    "ownership": "actor",
+    "path": "/api/v1/llm/pricing/providers",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "list_llm_providers_api_v1_llm_providers_get",
+    "ownership": "actor",
+    "path": "/api/v1/llm/providers",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_generative_memories_api_v1_memory_generative_get",
+    "ownership": "actor",
+    "path": "/api/v1/memory/generative",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "add_generative_memory_api_v1_memory_generative_post",
+    "ownership": "actor",
+    "path": "/api/v1/memory/generative",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_user_preferences_api_v1_memory_preferences_get",
+    "ownership": "actor",
+    "path": "/api/v1/memory/preferences",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_user_secrets_api_v1_memory_secrets_get",
+    "ownership": "actor",
+    "path": "/api/v1/memory/secrets",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "add_user_secret_api_v1_memory_secrets_post",
+    "ownership": "actor",
+    "path": "/api/v1/memory/secrets",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_memories_timeline_api_v1_memory_timeline_get",
+    "ownership": "actor",
+    "path": "/api/v1/memory/timeline",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "user_activity_api_v1_observability_activity_user_get",
+    "ownership": "actor",
+    "path": "/api/v1/observability/activity/user",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "user_metrics_api_v1_observability_metrics_user_get",
+    "ownership": "actor",
+    "path": "/api/v1/observability/metrics/user",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "record_ux_metric_api_v1_observability_metrics_ux_post",
+    "ownership": "actor",
+    "path": "/api/v1/observability/metrics/ux",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "user_summary_api_v1_observability_user_summary_get",
+    "ownership": "actor",
+    "path": "/api/v1/observability/user_summary",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "list_pending_api_v1_pending_actions__get",
+    "ownership": "actor",
+    "path": "/api/v1/pending_actions/",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "approve_sql_action_api_v1_pending_actions_action__action_id__approve_post",
+    "ownership": "actor",
+    "path": "/api/v1/pending_actions/action/{action_id}/approve",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "reject_sql_action_api_v1_pending_actions_action__action_id__reject_post",
+    "ownership": "actor",
+    "path": "/api/v1/pending_actions/action/{action_id}/reject",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "approve_api_v1_pending_actions__thread_id__approve_post",
+    "ownership": "actor",
+    "path": "/api/v1/pending_actions/{thread_id}/approve",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "reject_api_v1_pending_actions__thread_id__reject_post",
+    "ownership": "actor",
+    "path": "/api/v1/pending_actions/{thread_id}/reject",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "calendar_list_events_api_v1_productivity_calendar_events_get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/calendar/events",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "calendar_add_event_api_v1_productivity_calendar_events_add_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/calendar/events/add",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "limits_status_api_v1_productivity_limits_status_get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/limits/status",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "mail_list_api_v1_productivity_mail_messages_get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/mail/messages",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "mail_send_api_v1_productivity_mail_messages_send_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/mail/messages/send",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "notes_list_api_v1_productivity_notes_get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/notes",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "notes_add_api_v1_productivity_notes_add_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/notes/add",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "google_oauth_callback_api_v1_productivity_oauth_google_callback_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/oauth/google/callback",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "google_oauth_refresh_api_v1_productivity_oauth_google_refresh_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/oauth/google/refresh",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "google_oauth_start_api_v1_productivity_oauth_google_start_get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/oauth/google/start",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "oauth_google_start_api_v1_productivity_oauth_google_start_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/oauth/google/start",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
+    "operation_id": "upsert_profile_api_v1_profiles__post",
+    "ownership": "actor",
+    "path": "/api/v1/profiles/",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_profile_api_v1_profiles_me_get",
+    "ownership": "actor",
+    "path": "/api/v1/profiles/me",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "rag_hybrid_search_api_v1_rag_hybrid_search_get",
+    "ownership": "actor",
+    "path": "/api/v1/rag/hybrid_search",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "rag_productivity_search_api_v1_rag_productivity_get",
+    "ownership": "actor",
+    "path": "/api/v1/rag/productivity",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "rag_search_api_v1_rag_search_get",
+    "ownership": "actor",
+    "path": "/api/v1/rag/search",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "rag_user_chat_search_api_v1_rag_user_chat_get",
+    "ownership": "actor",
+    "path": "/api/v1/rag/user-chat",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_user_status_api_v1_system_status_user_get",
+    "ownership": "actor",
+    "path": "/api/v1/system/status/user",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_current_user",
+    "ownership": "actor",
+    "path": "/api/v1/users/me",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "PATCH",
+    "operation_id": "update_current_user",
+    "ownership": "actor",
+    "path": "/api/v1/users/me",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "GET",
+    "operation_id": "get_user_liveness",
+    "ownership": "self",
+    "path": "/healthz/user",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  }
+]

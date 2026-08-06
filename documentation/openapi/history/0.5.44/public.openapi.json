@@ -1,0 +1,144 @@
+{
+  "components": {
+    "schemas": {
+      "OIDCConfigResponse": {
+        "properties": {
+          "audience": {
+            "title": "Audience",
+            "type": "string"
+          },
+          "authorization_endpoint": {
+            "title": "Authorization Endpoint",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code_challenge_method": {
+            "default": "S256",
+            "title": "Code Challenge Method",
+            "type": "string"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "response_type": {
+            "default": "code",
+            "title": "Response Type",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issuer",
+          "client_id",
+          "audience",
+          "scopes",
+          "authorization_endpoint"
+        ],
+        "title": "OIDCConfigResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "OIDCService": {
+        "flows": {
+          "clientCredentials": {
+            "scopes": {
+              "autonomy:admin": "autonomy:admin",
+              "deployment:write": "deployment:write",
+              "evaluation:ingest": "evaluation:ingest",
+              "governance:write": "governance:write",
+              "identity:admin": "identity:admin",
+              "observability:read": "observability:read",
+              "ops:execute": "ops:execute",
+              "ops:read": "ops:read",
+              "tools:admin": "tools:admin",
+              "workers:manage": "workers:manage"
+            },
+            "tokenUrl": "https://idp.invalid/token"
+          }
+        },
+        "type": "oauth2"
+      },
+      "OIDCUser": {
+        "openIdConnectUrl": "https://idp.invalid/.well-known/openid-configuration",
+        "type": "openIdConnect"
+      }
+    }
+  },
+  "info": {
+    "description": "Janus: An autonomous, modular AI software architect with a clean, decoupled architecture.",
+    "title": "Janus",
+    "version": "0.5.44"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/auth/oidc-config": {
+      "get": {
+        "description": "Public metadata required by the SPA's Authorization Code + PKCE flow.",
+        "operationId": "get_oidc_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "Get Oidc Config",
+        "tags": [
+          "Authentication"
+        ],
+        "x-janus-human-delegable": false,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "anonymous"
+        ],
+        "x-janus-scopes": [],
+        "x-janus-security-profile": "public"
+      }
+    },
+    "/healthz/public": {
+      "get": {
+        "operationId": "get_public_liveness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "Public liveness",
+        "tags": [
+          "System"
+        ],
+        "x-janus-human-delegable": false,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "anonymous"
+        ],
+        "x-janus-scopes": [],
+        "x-janus-security-profile": "public"
+      }
+    }
+  },
+  "x-janus-api-profile": "public"
+}

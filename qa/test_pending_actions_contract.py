@@ -1,6 +1,11 @@
 import pytest
-from app.core.infrastructure.auth import create_token, verify_token
 from httpx import ASGITransport, AsyncClient
+
+from qa.auth_test_support import (
+    actor_from_test_request,
+    decode_test_actor_id,
+    issue_test_actor_token,
+)
 
 PENDING_ACTIONS_LIST_REF = "/api/v1/pending_actions/"
 PENDING_ACTIONS_APPROVE_REF = "/api/v1/pending_actions/{thread_id}/approve"
@@ -10,16 +15,20 @@ PENDING_ACTIONS_REJECT_SQL_REF = "/api/v1/pending_actions/action/{action_id}/rej
 
 
 def _auth_headers(user_id: str) -> dict[str, str]:
-    token = create_token(int(user_id), expires_in=3600)
+    token = issue_test_actor_token(user_id)
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def async_client():
+def async_client(monkeypatch):
     import app.api.v1.endpoints.pending_actions as pa
     import app.repositories.pending_action_repository as repo_mod
     from app.api.v1.endpoints.chat.deps import ChatIdentityResolution
     from app.main import app
+    monkeypatch.setattr(
+        "app.core.security.containment_middleware.get_actor_context",
+        actor_from_test_request,
+    )
     from app.services.chat_service import get_chat_service
 
     original_get_state = pa._get_state
@@ -108,7 +117,7 @@ def async_client():
         actor = None
         if auth.lower().startswith("bearer "):
             token = auth.split(" ", 1)[1].strip()
-            verified = verify_token(token)
+            verified = decode_test_actor_id(token)
             actor = str(verified) if verified is not None else None
         return ChatIdentityResolution(
             user_id=actor,

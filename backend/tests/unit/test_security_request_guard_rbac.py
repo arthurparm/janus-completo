@@ -1,89 +1,63 @@
 from types import SimpleNamespace
 
 import pytest
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+from app.core.security.request_guard import (
+    require_human_admin_actor_context,
+    require_service_actor,
+)
 from fastapi import HTTPException
 
-from app.core.security.request_guard import require_admin_actor, require_same_user_or_admin
-from app.repositories import user_repository
+
+def _request(actor: ActorContext):
+    return SimpleNamespace(
+        state=SimpleNamespace(actor_context=actor),
+        headers={},
+    )
 
 
-class _Req:
-    def __init__(self, actor_user_id: str | int | None):
-        self.state = SimpleNamespace(actor_user_id=actor_user_id)
-        self.headers: dict[str, str] = {}
+def test_human_admin_is_derived_from_oidc_actor_context():
+    actor = ActorContext.authenticated(
+        actor_id=42,
+        roles=("ADMIN", "USER"),
+        auth_method=AuthMethod.OIDC,
+        trace_id="human-admin",
+        groups=("janus-admins",),
+    )
+    assert require_human_admin_actor_context(_request(actor)) is actor
 
 
-def test_require_admin_actor_allows_admin(monkeypatch):
-    def fake_has_role(self, user_id: int, role_name: str) -> bool:
-        return False
-
-    def fake_is_admin(self, user_id: int) -> bool:
-        assert user_id == 42
-        return True
-
-    monkeypatch.setattr(user_repository.UserRepository, "has_role", fake_has_role)
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
-    assert require_admin_actor(_Req(actor_user_id=42)) == "42"
-
-
-def test_require_admin_actor_blocks_non_admin(monkeypatch):
-    def fake_has_role(self, user_id: int, role_name: str) -> bool:
-        return False
-
-    def fake_is_admin(self, user_id: int) -> bool:
-        return False
-
-    monkeypatch.setattr(user_repository.UserRepository, "has_role", fake_has_role)
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
+def test_human_admin_rejects_service_identity():
+    actor = ActorContext.authenticated(
+        actor_id="janus-worker",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="service",
+    )
     with pytest.raises(HTTPException) as exc:
-        require_admin_actor(_Req(actor_user_id=42))
-
+        require_human_admin_actor_context(_request(actor))
     assert exc.value.status_code == 403
 
 
-def test_require_same_user_or_admin_allows_same_user(monkeypatch):
-    def fake_is_admin(self, user_id: int) -> bool:
-        raise AssertionError("is_admin should not be called")
-
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
-    assert require_same_user_or_admin(_Req(actor_user_id=42), target_user_id=42) == "42"
-
-
-def test_require_same_user_or_admin_allows_admin(monkeypatch):
-    def fake_is_admin(self, user_id: int) -> bool:
-        return True
-
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
-    assert require_same_user_or_admin(_Req(actor_user_id=1), target_user_id=42) == "1"
-
-
-def test_require_same_user_or_admin_blocks_non_admin(monkeypatch):
-    def fake_is_admin(self, user_id: int) -> bool:
-        return False
-
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
+def test_service_guard_rejects_human_admin():
+    actor = ActorContext.authenticated(
+        actor_id=42,
+        roles=("ADMIN", "USER"),
+        auth_method=AuthMethod.OIDC,
+        trace_id="human-admin",
+    )
     with pytest.raises(HTTPException) as exc:
-        require_same_user_or_admin(_Req(actor_user_id=1), target_user_id=42)
-
+        require_service_actor(_request(actor))
     assert exc.value.status_code == 403
 
 
-def test_require_admin_actor_blocks_system_actor(monkeypatch):
-    def fake_has_role(self, user_id: int, role_name: str) -> bool:
-        return role_name == "SYSTEM"
-
-    def fake_is_admin(self, user_id: int) -> bool:
-        return True
-
-    monkeypatch.setattr(user_repository.UserRepository, "has_role", fake_has_role)
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
-    with pytest.raises(HTTPException) as exc:
-        require_admin_actor(_Req(actor_user_id=42))
-
-    assert exc.value.status_code == 403
+def test_service_guard_accepts_service_identity():
+    actor = ActorContext.authenticated(
+        actor_id="janus-worker",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="service",
+    )
+    assert require_service_actor(_request(actor)) == "janus-worker"

@@ -1,14 +1,19 @@
 import pytest
-from httpx import AsyncClient, ASGITransport
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+from httpx import ASGITransport, AsyncClient
+
+USER_HEADERS = {"Authorization": "Bearer test-user"}
+SERVICE_HEADERS = {"Authorization": "Bearer test-service"}
 
 @pytest.fixture
-def async_client():
-    from app.main import app
-    from app.api.v1.endpoints.rag import get_memory_service
+def async_client(monkeypatch):
     from app.api.v1.endpoints.context import get_context_service
     from app.api.v1.endpoints.documents import get_doc_service
     from app.api.v1.endpoints.learning import get_learning_service
-    
+    from app.api.v1.endpoints.rag import get_memory_service
+    from app.core.security import containment_middleware
+    from app.main import app
+
     class DummyMemoryService:
         async def hybrid_search(self, query, **kwargs):
             return {"results": ["rag response"]}
@@ -16,13 +21,79 @@ def async_client():
             return {"results": ["doc1", "doc2"]}
         async def get_user_chat_context(self, user_id, query, **kwargs):
             return {"results": ["chat1", "chat2"]}
-            
-    import app.api.v1.endpoints.rag as rag_mod
-    original_aembed = getattr(rag_mod, "aembed_text", None)
-    async def mock_aembed(text):
-        return [0.0] * 384
-    rag_mod.aembed_text = mock_aembed
-    
+
+    class DummyHit:
+        def __init__(self, hit_id, score, content, metadata):
+            self.id = hit_id
+            self.score = score
+            self.payload = {"content": content, "metadata": metadata}
+
+    class DummyKnowledgeFacade:
+        async def search_user_chat(self, **kwargs):
+            return [
+                DummyHit(
+                    "chat-1",
+                    0.95,
+                    "chat result",
+                    {"user_id": kwargs["user_id"], "session_id": "session-1", "role": "user"},
+                )
+            ]
+
+        async def search_user_memory(self, **kwargs):
+            return [
+                DummyHit(
+                    "memory-1",
+                    0.9,
+                    "productivity result",
+                    {"user_id": kwargs["user_id"], "type": "note_item"},
+                )
+            ]
+
+        async def search_documents(self, **kwargs):
+            return [{"id": "doc123", "score": 0.9}]
+
+        async def get_document_points(self, **kwargs):
+            return [], None
+
+        async def delete_document(self, **kwargs):
+            return None
+
+    def actor_for(request):
+        token = (request.headers.get("Authorization") or "").removeprefix("Bearer ")
+        if token == "test-user":
+            return ActorContext.authenticated(
+                actor_id=1,
+                roles=("USER",),
+                auth_method=AuthMethod.OIDC,
+                trace_id="test-user",
+                issuer="https://test-idp.invalid",
+                subject="user-1",
+            )
+        if token == "test-service":
+            return ActorContext.authenticated(
+                actor_id="janus-test-service",
+                actor_type=ActorType.SERVICE,
+                roles=("SERVICE",),
+                auth_method=AuthMethod.CLIENT_CREDENTIALS,
+                trace_id="test-service",
+                client_id="janus-test-service",
+                scopes=(
+                    "autonomy:admin",
+                    "deployment:write",
+                    "evaluation:ingest",
+                    "governance:write",
+                    "identity:admin",
+                    "observability:read",
+                    "ops:execute",
+                    "ops:read",
+                    "tools:admin",
+                    "workers:manage",
+                ),
+            )
+        return None
+
+    monkeypatch.setattr(containment_middleware, "get_actor_context", actor_for)
+
     # Mock KnowledgeRoutingPolicy
     from app.core.routing import KnowledgeRoutingPolicy, RouteDecision, RouteTarget
     original_resolve = KnowledgeRoutingPolicy.resolve
@@ -114,16 +185,21 @@ def async_client():
     app.dependency_overrides[get_learning_service] = lambda: DummyLearningService()
 
     app.state.document_service = DummyDocumentService()
+    app.state.knowledge_facade = DummyKnowledgeFacade()
 
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    client = AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=USER_HEADERS,
+    )
     yield client
 
-    if original_aembed:
-        rag_mod.aembed_text = original_aembed
     KnowledgeRoutingPolicy.resolve = original_resolve
     app.dependency_overrides.clear()
     if hasattr(app.state, "document_service"):
         del app.state.document_service
+    if hasattr(app.state, "knowledge_facade"):
+        del app.state.knowledge_facade
 
 
 @pytest.mark.asyncio
@@ -138,10 +214,10 @@ class TestKnowledgeRAGContract:
         resp = await async_client.get("/api/v1/rag/productivity?query=test")
         assert resp.status_code == 200
 
-    async def test_rag_user_chat(self, async_client):
+    async def test_removed_rag_user_chat_alias_returns_not_found(self, async_client):
         resp = await async_client.get("/api/v1/rag/user_chat?query=test")
-        assert resp.status_code == 200
-        
+        assert resp.status_code == 404
+
     async def test_rag_user_chat_dash(self, async_client):
         resp = await async_client.get("/api/v1/rag/user-chat?query=test")
         assert resp.status_code == 200
@@ -160,11 +236,17 @@ class TestKnowledgeRAGContract:
         assert resp.status_code == 200
 
     async def test_context_web_cache_invalidate(self, async_client):
-        resp = await async_client.post("/api/v1/context/web-cache/invalidate", json={"query": "test"})
+        resp = await async_client.post(
+            "/api/v1/context/web-cache/invalidate",
+            json={"query": "test"},
+            headers=SERVICE_HEADERS,
+        )
         assert resp.status_code == 200
 
     async def test_context_web_cache_status(self, async_client):
-        resp = await async_client.get("/api/v1/context/web-cache/status")
+        resp = await async_client.get(
+            "/api/v1/context/web-cache/status", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_context_web_search(self, async_client):
@@ -172,10 +254,9 @@ class TestKnowledgeRAGContract:
         assert resp.status_code == 200
 
     # --- Documents ---
-    async def test_documents_link_url(self, async_client):
-        # using form data
+    async def test_documents_link_url_rejects_non_allowlisted_host(self, async_client):
         resp = await async_client.post("/api/v1/documents/link-url", data={"url": "http://example.com"})
-        assert resp.status_code in [200, 201]
+        assert resp.status_code == 400
 
     async def test_documents_list(self, async_client):
         try:
@@ -206,49 +287,73 @@ class TestKnowledgeRAGContract:
 
     # --- Learning ---
     async def test_learning_dataset_preview(self, async_client):
-        resp = await async_client.get("/api/v1/learning/dataset/preview")
+        resp = await async_client.get(
+            "/api/v1/learning/dataset/preview", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_learning_dataset_version(self, async_client):
-        resp = await async_client.get("/api/v1/learning/dataset/version")
+        resp = await async_client.get(
+            "/api/v1/learning/dataset/version", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_learning_evaluate(self, async_client):
-        resp = await async_client.post("/api/v1/learning/evaluate", json={"model_id": "model123"})
+        resp = await async_client.post(
+            "/api/v1/learning/evaluate",
+            json={"model_id": "model123"},
+            headers=SERVICE_HEADERS,
+        )
         assert resp.status_code == 200
 
     async def test_learning_experiments(self, async_client):
-        resp = await async_client.get("/api/v1/learning/experiments")
+        resp = await async_client.get(
+            "/api/v1/learning/experiments", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_learning_experiment_get(self, async_client):
-        resp = await async_client.get("/api/v1/learning/experiments/exp1")
+        resp = await async_client.get(
+            "/api/v1/learning/experiments/exp1", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_learning_harvest(self, async_client):
-        resp = await async_client.post("/api/v1/learning/harvest", json={"limit": 10})
+        resp = await async_client.post(
+            "/api/v1/learning/harvest",
+            json={"limit": 10},
+            headers=SERVICE_HEADERS,
+        )
         assert resp.status_code == 200
 
     async def test_learning_health(self, async_client):
-        resp = await async_client.get("/api/v1/learning/health")
+        resp = await async_client.get("/api/v1/learning/health", headers=SERVICE_HEADERS)
         assert resp.status_code == 200
 
     async def test_learning_models(self, async_client):
-        resp = await async_client.get("/api/v1/learning/models")
+        resp = await async_client.get("/api/v1/learning/models", headers=SERVICE_HEADERS)
         assert resp.status_code == 200
 
     async def test_learning_model_get(self, async_client):
-        resp = await async_client.get("/api/v1/learning/models/model123")
+        resp = await async_client.get(
+            "/api/v1/learning/models/model123", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_learning_stats(self, async_client):
-        resp = await async_client.get("/api/v1/learning/stats")
+        resp = await async_client.get("/api/v1/learning/stats", headers=SERVICE_HEADERS)
         assert resp.status_code == 200
 
     async def test_learning_train(self, async_client):
-        resp = await async_client.post("/api/v1/learning/train", json={"model_type": "CLASSIFIER"})
+        resp = await async_client.post(
+            "/api/v1/learning/train",
+            json={"model_type": "CLASSIFIER"},
+            headers=SERVICE_HEADERS,
+        )
         assert resp.status_code == 200
 
     async def test_learning_training_status(self, async_client):
-        resp = await async_client.get("/api/v1/learning/training/status")
+        resp = await async_client.get(
+            "/api/v1/learning/training/status", headers=SERVICE_HEADERS
+        )
         assert resp.status_code == 200

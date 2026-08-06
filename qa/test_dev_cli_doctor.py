@@ -51,6 +51,45 @@ def test_cmd_doctor_builds_command(monkeypatch, tmp_path: Path):
     assert captured["cwd"] == dev.REPO_ROOT
 
 
+def test_parse_args_readiness_defaults(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["dev.py", "readiness"])
+    args = dev.parse_args()
+
+    assert args.command == "readiness"
+    assert args.baseline.endswith("documentation\\operations\\production-readiness.baseline.json")
+    assert args.env_files == []
+    assert args.format == "markdown"
+    assert args.out == ""
+
+
+def test_cmd_readiness_builds_command(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+
+    monkeypatch.setattr(dev, "run", fake_run)
+
+    args = argparse.Namespace(
+        baseline=str(tmp_path / "baseline.json"),
+        env_files=[".env.pc1.example", ".env.pc2.example"],
+        format="json",
+        out=str(tmp_path / "readiness.json"),
+    )
+    dev.cmd_readiness(args)
+
+    cmd = captured["cmd"]
+    assert isinstance(cmd, list)
+    assert Path(cmd[0]).name.startswith("python")
+    assert Path(cmd[1]).parts[-2:] == ("tooling", "production_readiness.py")
+    assert "--baseline" in cmd and str(tmp_path / "baseline.json") in cmd
+    assert cmd.count("--env-file") == 2
+    assert "--format" in cmd and "json" in cmd
+    assert "--out" in cmd
+    assert captured["cwd"] == dev.REPO_ROOT
+
+
 def test_cmd_up_builds_compose_runtime_images(monkeypatch):
     commands: list[list[str]] = []
     envs: list[dict[str, str] | None] = []

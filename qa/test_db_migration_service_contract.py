@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
+import app.services.db_migration_service as migration_module
 from app.services.db_migration_service import DBMigrationService
 
 
@@ -21,10 +22,26 @@ class _FakeSession:
     def close(self):
         return None
 
+
 def _force_all_missing(monkeypatch, svc: DBMigrationService) -> None:
     monkeypatch.setattr(svc, "_index_exists", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(svc, "_constraint_exists", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: False)
+
+
+def test_constraint_exists_detects_named_foreign_key(monkeypatch):
+    inspector = SimpleNamespace(
+        get_unique_constraints=lambda _table: [],
+        get_foreign_keys=lambda _table: [{"name": "fk_experiments_owner_user"}],
+    )
+    monkeypatch.setattr(migration_module, "inspect", lambda _bind: inspector)
+
+    service = DBMigrationService()
+    session = _FakeSession("postgresql")
+
+    assert service._constraint_exists(
+        session, "experiments", "fk_experiments_owner_user"
+    )
 
 
 def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
@@ -37,7 +54,6 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
 
     assert result["status"] == "applied"
     assert any("ALTER TABLE users ADD CONSTRAINT unique_user_email UNIQUE (email)" in q for q in fake.executed_sql)
-    assert any("ALTER TABLE users ADD CONSTRAINT unique_user_cpf_hash UNIQUE (cpf_hash)" in q for q in fake.executed_sql)
     assert all("UNIQUE KEY" not in q for q in fake.executed_sql)
     assert any("ALTER TABLE user_privacy_consents ADD CONSTRAINT unique_user_privacy_scope_consent UNIQUE (user_id, scope)" in q for q in fake.executed_sql)
     assert any("CREATE INDEX idx_privacy_consent_user_scope ON user_privacy_consents (user_id, scope)" in q for q in fake.executed_sql)
@@ -94,7 +110,11 @@ def test_migrate_schema_promotes_pending_actions_user_id_not_null_when_residue_z
     fake = _FakeSession("postgresql")
     monkeypatch.setattr(svc, "_get_session", lambda: fake)
     monkeypatch.setattr(svc, "_index_exists", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(svc, "_constraint_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        svc,
+        "_constraint_exists",
+        lambda _s, _table, name: name != "fk_experiments_owner_user",
+    )
     monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(svc, "_table_exists", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(svc, "_backfill_pending_action_user_ids", lambda *_args, **_kwargs: None)
@@ -109,6 +129,14 @@ def test_migrate_schema_promotes_pending_actions_user_id_not_null_when_residue_z
     assert result["pending_actions_user_id_not_null_blocked"] is False
     assert any(
         "ALTER TABLE pending_actions ALTER COLUMN user_id SET NOT NULL" in q
+        for q in fake.executed_sql
+    )
+    assert any(
+        "fk_experiments_owner_user FOREIGN KEY (owner_user_id)" in q
+        for q in fake.executed_sql
+    )
+    assert any(
+        "ALTER TABLE experiments ALTER COLUMN owner_user_id SET NOT NULL" in q
         for q in fake.executed_sql
     )
 
@@ -135,3 +163,23 @@ def test_migrate_schema_reports_blocker_when_ownerless_rows_remain(monkeypatch):
         "ALTER TABLE pending_actions ALTER COLUMN user_id SET NOT NULL" not in q
         for q in fake.executed_sql
     )
+
+
+def test_outbox_lease_migration_is_additive_and_reclaims_legacy_processing(monkeypatch):
+    svc = DBMigrationService()
+    fake = _FakeSession("postgresql")
+    applied: list[str] = []
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args: True)
+    monkeypatch.setattr(svc, "_column_exists", lambda *_args: False)
+    monkeypatch.setattr(svc, "_index_exists", lambda *_args: False)
+    monkeypatch.setattr(svc, "_column_nullable", lambda *_args: True)
+
+    svc._prepare_outbox_lease_schema(fake, dialect="postgresql", applied=applied)
+
+    sql = "\n".join(fake.executed_sql)
+    for column in ("message_id", "claimed_by", "claim_token", "claimed_at", "lease_until"):
+        assert f"ALTER TABLE outbox_events ADD COLUMN {column}" in sql
+    assert "WHERE status = 'processing' AND lease_until IS NULL" in sql
+    assert "CREATE UNIQUE INDEX uq_outbox_message_id" in sql
+    assert "CREATE INDEX idx_outbox_status_lease" in sql
+    assert "ALTER TABLE outbox_events ALTER COLUMN message_id SET NOT NULL" in sql

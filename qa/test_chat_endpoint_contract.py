@@ -10,10 +10,11 @@ sys.path.append(os.path.join(os.getcwd(), "backend"))
 from app.api.v1.endpoints.chat import router as chat_router
 from app.config import settings
 from app.core.exceptions.chat_exceptions import ChatServiceError
-from app.core.infrastructure.auth import create_token, verify_token
 from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.chat_service import get_chat_service
 from app.services.memory_service import get_memory_service
+
+from qa.auth_test_support import decode_test_actor_id, issue_test_actor_token
 
 
 class _DummyRepo:
@@ -121,7 +122,7 @@ class _DummyMemoryService:
 
 
 def _auth_headers(user_id: int | str) -> dict[str, str]:
-    token = create_token(int(user_id), expires_in=3600)
+    token = issue_test_actor_token(user_id)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -142,12 +143,12 @@ def _build_client(
         auth = request.headers.get("Authorization") or ""
         if auth.lower().startswith("bearer "):
             token = auth.split(" ", 1)[1].strip()
-            actor = verify_token(token)
+            actor = decode_test_actor_id(token)
             if actor is not None:
                 request.state.actor_context = ActorContext.authenticated(
                     actor_id=str(actor),
                     roles=("USER",),
-                    auth_method=AuthMethod.LOCAL,
+                    auth_method=AuthMethod.OIDC,
                     trace_id="chat-contract-test",
                 )
         return await call_next(request)

@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.api.v1.endpoints.chat import router as chat_router
-from app.core.infrastructure.auth import create_token
 from app.services.chat_service import get_chat_service
 from app.services.memory_service import get_memory_service
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+
+from qa.auth_test_support import issue_test_actor_token
 
 
 class _ProjectScopeChatService:
@@ -104,7 +105,7 @@ class _ProjectScopeChatService:
 
 
 def _auth_headers(user_id: int | str) -> dict[str, str]:
-    token = create_token(int(user_id), expires_in=3600)
+    token = issue_test_actor_token(user_id)
     return {"Authorization": f"Bearer {token}"}
 
 

@@ -15,7 +15,9 @@ def test_janus_lab_requires_neo4j_password_when_env_missing(monkeypatch):
 def test_env_example_uses_required_placeholders_for_critical_secrets():
     env_example = Path("backend/app/.env.example").read_text(encoding="utf-8")
 
-    assert "AUTH_JWT_SECRET=__REQUIRED__" in env_example
+    assert "OIDC_ISSUER=https://" in env_example
+    assert "OIDC_SERVICE_AUDIENCE=janus-control-plane" in env_example
+    assert "AUTH_JWT_SECRET" not in env_example
     assert "POSTGRES_PASSWORD=__REQUIRED__" in env_example
     assert "RABBITMQ_PASSWORD=__REQUIRED__" in env_example
     assert "NEO4J_PASSWORD=__REQUIRED__" in env_example

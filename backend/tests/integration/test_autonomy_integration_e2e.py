@@ -108,7 +108,7 @@ class TestAutonomyIntegrationE2E:
         tracker.record_usage(
             goal_id=goal.id,
             action_type="plan_generation",
-            model="gpt-4o-mini",
+            model="gpt-5.6-luna",
             tokens_in=500,
             tokens_out=200,
         )

@@ -25,6 +25,14 @@ def test_build_checklist_rejects_invalid_type():
         raise AssertionError("build_checklist should fail for invalid task type")
 
 
+def test_build_checklist_deploy_includes_identity_and_evidence_gates():
+    payload = build_checklist("deploy")
+    item_ids = [item["id"] for item in payload["items"] if isinstance(item, dict)]
+
+    assert "deploy-identity-gate" in item_ids
+    assert "deploy-evidence-bundle" in item_ids
+
+
 def test_parse_args_checklist_defaults(monkeypatch):
     monkeypatch.setattr("sys.argv", ["dev.py", "checklist", "--type", "deploy"])
     args = dev.parse_args()
