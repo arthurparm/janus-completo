@@ -265,6 +265,42 @@ def cmd_checklist(args: argparse.Namespace) -> None:
     run(cmd, cwd=REPO_ROOT)
 
 
+def cmd_readiness(args: argparse.Namespace) -> None:
+    readiness_script = REPO_ROOT / "tooling" / "production_readiness.py"
+    cmd = [
+        sys.executable,
+        str(readiness_script),
+        "--baseline",
+        str(args.baseline),
+        "--format",
+        str(args.format),
+    ]
+    for env_file in args.env_files:
+        cmd.extend(["--env-file", str(env_file)])
+    if args.out:
+        cmd.extend(["--out", str(args.out)])
+    run(cmd, cwd=REPO_ROOT)
+
+
+def cmd_backfill_gate(args: argparse.Namespace) -> None:
+    backfill_gate_script = REPO_ROOT / "tooling" / "backfill_quarantine_gate.py"
+    cmd = [
+        sys.executable,
+        str(backfill_gate_script),
+        "--mode",
+        str(args.mode),
+    ]
+    if args.apply_constraints:
+        cmd.append("--apply-constraints")
+    if args.neo4j_backfill_limit is not None:
+        cmd.extend(["--neo4j-backfill-limit", str(args.neo4j_backfill_limit)])
+    if args.neo4j_audit_output:
+        cmd.extend(["--neo4j-audit-output", str(args.neo4j_audit_output)])
+    if args.report:
+        cmd.extend(["--report", str(args.report)])
+    run(cmd, cwd=REPO_ROOT)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Unified local developer workflow for janus-completo.",
@@ -295,6 +331,26 @@ def parse_args() -> argparse.Namespace:
     checklist_parser.add_argument("--type", dest="task_type", choices=("codigo", "docs", "deploy"), required=True)
     checklist_parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     checklist_parser.add_argument("--out", default="")
+    readiness_parser = subparsers.add_parser(
+        "readiness",
+        help="Validate the production-readiness baseline and optional env files.",
+    )
+    readiness_parser.add_argument(
+        "--baseline",
+        default=str(REPO_ROOT / "documentation" / "operations" / "production-readiness.baseline.json"),
+    )
+    readiness_parser.add_argument("--env-file", dest="env_files", action="append", default=[])
+    readiness_parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
+    readiness_parser.add_argument("--out", default="")
+    backfill_gate_parser = subparsers.add_parser(
+        "backfill-gate",
+        help="Run the operational backfill/quarantine gate before applying constraints.",
+    )
+    backfill_gate_parser.add_argument("--mode", choices=("full", "sql-only", "neo4j-only"), default="full")
+    backfill_gate_parser.add_argument("--apply-constraints", action="store_true")
+    backfill_gate_parser.add_argument("--neo4j-backfill-limit", type=int, default=None)
+    backfill_gate_parser.add_argument("--neo4j-audit-output", default="")
+    backfill_gate_parser.add_argument("--report", default="")
     return parser.parse_args()
 
 
@@ -313,6 +369,10 @@ def main() -> int:
         cmd_doctor(args)
     elif command == "checklist":
         cmd_checklist(args)
+    elif command == "readiness":
+        cmd_readiness(args)
+    elif command == "backfill-gate":
+        cmd_backfill_gate(args)
     else:
         raise RuntimeError(f"Unknown command: {command}")
     return 0

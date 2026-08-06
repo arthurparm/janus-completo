@@ -31,6 +31,11 @@ CHECKLISTS: dict[str, list[ChecklistItem]] = {
     ],
     "deploy": [
         ChecklistItem("deploy-target-confirmed", "Ambiente alvo, host e portas confirmados antes do deploy."),
+        ChecklistItem(
+            "deploy-identity-gate",
+            "Gate de identidade revisado via readiness: IdP real, endpoints HTTPS, sem localhost/placeholders e blockers registrados.",
+        ),
+        ChecklistItem("deploy-evidence-bundle", "Pacote de evidencia operacional consolidado com readiness, doctor e rollback por host."),
         ChecklistItem("deploy-migrations-safe", "Migracoes e scripts de infraestrutura validados como idempotentes."),
         ChecklistItem("deploy-health-checks", "Health checks e status de servicos definidos para verificacao pos-deploy."),
         ChecklistItem("deploy-rollback-plan", "Plano de rollback e coleta de logs pronto para incidente."),
