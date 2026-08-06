@@ -1,60 +1,41 @@
-"""
-Feedback Service - Coleta e análise de feedback do usuário.
+from __future__ import annotations
 
-Implementa o Quick Win de feedback loop (👍/👎) para começar a coletar
-dados de satisfação e melhorar continuamente as respostas do Janus.
-"""
-
-import asyncio
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
 import structlog
+from app.models.feedback_models import FeedbackEntry
+from app.repositories.feedback_repository import FeedbackRepository
 from prometheus_client import Counter, Gauge, Histogram
 
 logger = structlog.get_logger(__name__)
-
-# --- Métricas ---
-FEEDBACK_TOTAL = Counter("janus_feedback_total", "Total de feedbacks recebidos", ["rating", "type"])
-
-FEEDBACK_SCORE_GAUGE = Gauge(
-    "janus_feedback_average_score", "Score médio de satisfação (últimas 100 respostas)"
-)
-
-FEEDBACK_RESPONSE_TIME = Histogram(
-    "janus_feedback_response_time_seconds",
-    "Tempo entre resposta e feedback",
-    buckets=[1, 5, 10, 30, 60, 120, 300, 600],
-)
+FEEDBACK_TOTAL = Counter("janus_feedback_total", "Total feedback received", ["rating", "type"])
+FEEDBACK_SCORE_GAUGE = Gauge("janus_feedback_average_score", "Average feedback score")
+FEEDBACK_RESPONSE_TIME = Histogram("janus_feedback_response_time_seconds", "Feedback latency")
 
 
 class FeedbackRating(str, Enum):
-    """Tipos de rating de feedback."""
-
-    POSITIVE = "positive"  # 👍
-    NEGATIVE = "negative"  # 👎
-    NEUTRAL = "neutral"  # 😐
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    NEUTRAL = "neutral"
 
 
 class FeedbackType(str, Enum):
-    """Tipos de feedback."""
-
-    MESSAGE = "message"  # Feedback em mensagem específica
-    CONVERSATION = "conversation"  # Feedback geral da conversa
-    TOOL = "tool"  # Feedback sobre uso de ferramenta
-    SUGGESTION = "suggestion"  # Sugestão do usuário
+    MESSAGE = "message"
+    CONVERSATION = "conversation"
+    TOOL = "tool"
+    SUGGESTION = "suggestion"
 
 
 @dataclass
 class Feedback:
-    """Representa um feedback do usuário."""
-
     id: str
     conversation_id: str
     message_id: str | None
-    user_id: str | None
+    user_id: str
     rating: FeedbackRating
     feedback_type: FeedbackType
     comment: str | None
@@ -77,14 +58,12 @@ class Feedback:
 
 @dataclass
 class SatisfactionReport:
-    """Relatório de satisfação."""
-
     total_feedbacks: int
     positive_count: int
     negative_count: int
     neutral_count: int
-    satisfaction_rate: float  # 0.0 a 1.0
-    nps_score: int | None  # -100 a 100
+    satisfaction_rate: float
+    nps_score: int | None
     period_start: datetime
     period_end: datetime
     top_issues: list[str] = field(default_factory=list)
@@ -104,21 +83,27 @@ class SatisfactionReport:
 
 
 class FeedbackService:
-    """
-    Serviço de coleta e análise de feedback.
-
-    Funcionalidades:
-    - Registrar feedback positivo/negativo
-    - Calcular métricas de satisfação
-    - Identificar padrões de insatisfação
-    - Gerar relatórios para o Meta-Agent
-    """
-
-    def __init__(self, max_memory_size: int = 1000):
-        self._feedbacks: list[Feedback] = []
+    def __init__(
+        self,
+        max_memory_size: int = 1000,
+        repository: FeedbackRepository | None = None,
+    ) -> None:
         self._max_memory_size = max_memory_size
-        self._lock = asyncio.Lock()
-        logger.info("FeedbackService inicializado", max_memory_size=max_memory_size)
+        self._repository = repository or FeedbackRepository()
+
+    @staticmethod
+    def _from_entry(entry: FeedbackEntry) -> Feedback:
+        return Feedback(
+            id=str(entry.id),
+            conversation_id=str(entry.conversation_id),
+            message_id=str(entry.message_id) if entry.message_id is not None else None,
+            user_id=str(entry.owner_user_id),
+            rating=FeedbackRating(str(entry.rating)),
+            feedback_type=FeedbackType(str(entry.feedback_type)),
+            comment=entry.comment,
+            context=dict(entry.context_json or {}),
+            created_at=entry.created_at,
+        )
 
     async def record_feedback(
         self,
@@ -130,259 +115,123 @@ class FeedbackService:
         feedback_type: FeedbackType = FeedbackType.MESSAGE,
         context: dict[str, Any] | None = None,
     ) -> Feedback:
-        """
-        Registra um feedback do usuário.
-
-        Args:
-            conversation_id: ID da conversa
-            rating: Rating do feedback (positive/negative/neutral)
-            message_id: ID da mensagem específica (opcional)
-            user_id: ID do usuário
-            comment: Comentário adicional
-            feedback_type: Tipo do feedback
-            context: Contexto adicional (ex: provider, model, latency)
-
-        Returns:
-            Feedback registrado
-        """
-        import uuid
-
-        feedback = Feedback(
-            id=str(uuid.uuid4()),
+        if user_id is None:
+            raise ValueError("authenticated owner is required")
+        entry = self._repository.create(
+            feedback_id=str(uuid.uuid4()),
+            owner_user_id=int(user_id),
             conversation_id=conversation_id,
             message_id=message_id,
-            user_id=user_id,
-            rating=rating,
-            feedback_type=feedback_type,
+            rating=rating.value,
+            feedback_type=feedback_type.value,
             comment=comment,
             context=context or {},
         )
-
-        async with self._lock:
-            self._feedbacks.append(feedback)
-
-            # Manter tamanho máximo
-            if len(self._feedbacks) > self._max_memory_size:
-                self._feedbacks = self._feedbacks[-self._max_memory_size :]
-
-        # Atualizar métricas
         FEEDBACK_TOTAL.labels(rating=rating.value, type=feedback_type.value).inc()
         self._update_satisfaction_gauge()
+        return self._from_entry(entry)
 
-        logger.info(
-            "Feedback registrado",
-            feedback_id=feedback.id,
-            rating=rating.value,
-            conversation_id=conversation_id,
-            message_id=message_id,
-        )
+    async def record_thumbs_up(self, **kwargs: Any) -> Feedback:
+        return await self.record_feedback(rating=FeedbackRating.POSITIVE, **kwargs)
 
-        return feedback
-
-    async def record_thumbs_up(
-        self,
-        conversation_id: str,
-        message_id: str,
-        user_id: str | None = None,
-        comment: str | None = None,
-    ) -> Feedback:
-        """Atalho para registrar feedback positivo (👍)."""
-        return await self.record_feedback(
-            conversation_id=conversation_id,
-            message_id=message_id,
-            user_id=user_id,
-            rating=FeedbackRating.POSITIVE,
-            comment=comment,
-        )
-
-    async def record_thumbs_down(
-        self,
-        conversation_id: str,
-        message_id: str,
-        user_id: str | None = None,
-        comment: str | None = None,
-    ) -> Feedback:
-        """Atalho para registrar feedback negativo (👎)."""
-        return await self.record_feedback(
-            conversation_id=conversation_id,
-            message_id=message_id,
-            user_id=user_id,
-            rating=FeedbackRating.NEGATIVE,
-            comment=comment,
-        )
+    async def record_thumbs_down(self, **kwargs: Any) -> Feedback:
+        return await self.record_feedback(rating=FeedbackRating.NEGATIVE, **kwargs)
 
     def _update_satisfaction_gauge(self) -> None:
-        """Atualiza o gauge de satisfação com base nos últimos feedbacks."""
-        recent = self._feedbacks[-100:] if self._feedbacks else []
-        if not recent:
-            return
-
-        positive = sum(1 for f in recent if f.rating == FeedbackRating.POSITIVE)
-        total = len(recent)
-
-        satisfaction = positive / total if total > 0 else 0.5
-        FEEDBACK_SCORE_GAUGE.set(satisfaction)
+        feedbacks = [self._from_entry(item) for item in self._repository.list_global(limit=100)]
+        if feedbacks:
+            positive = sum(item.rating is FeedbackRating.POSITIVE for item in feedbacks)
+            FEEDBACK_SCORE_GAUGE.set(positive / len(feedbacks))
 
     async def get_satisfaction_report(
-        self,
-        user_id: str | None = None,
-        hours: int = 24,
+        self, user_id: str | None = None, hours: int = 24
     ) -> SatisfactionReport:
-        """
-        Gera relatório de satisfação.
-
-        Args:
-            user_id: Filtrar por usuário (opcional)
-            hours: Janela de tempo em horas
-
-        Returns:
-            SatisfactionReport com métricas
-        """
         now = datetime.now()
         cutoff = now - timedelta(hours=hours)
-
-        async with self._lock:
-            feedbacks = [
-                f
-                for f in self._feedbacks
-                if f.created_at >= cutoff and (user_id is None or f.user_id == user_id)
-            ]
-
-        if not feedbacks:
-            return SatisfactionReport(
-                total_feedbacks=0,
-                positive_count=0,
-                negative_count=0,
-                neutral_count=0,
-                satisfaction_rate=0.0,
-                nps_score=None,
-                period_start=cutoff,
-                period_end=now,
-                top_issues=[],
-            )
-
-        positive = sum(1 for f in feedbacks if f.rating == FeedbackRating.POSITIVE)
-        negative = sum(1 for f in feedbacks if f.rating == FeedbackRating.NEGATIVE)
-        neutral = sum(1 for f in feedbacks if f.rating == FeedbackRating.NEUTRAL)
+        if user_id is None:
+            entries = self._repository.list_global(limit=self._max_memory_size)
+            entries = [entry for entry in entries if entry.created_at >= cutoff]
+        else:
+            entries = self._repository.list_for_owner(owner_user_id=int(user_id), since=cutoff)
+        feedbacks = [self._from_entry(entry) for entry in entries]
+        positive = sum(item.rating is FeedbackRating.POSITIVE for item in feedbacks)
+        negative = sum(item.rating is FeedbackRating.NEGATIVE for item in feedbacks)
+        neutral = sum(item.rating is FeedbackRating.NEUTRAL for item in feedbacks)
+        denominator = positive + negative
+        satisfaction = positive / denominator if denominator else 0.0
         total = len(feedbacks)
-
-        # Taxa de satisfação: positivos / (positivos + negativos)
-        pn_total = positive + negative
-        satisfaction_rate = positive / pn_total if pn_total > 0 else 0.5
-
-        # NPS simplificado: % promotores - % detratores
-        nps_score = None
-        if total >= 10:  # Mínimo para NPS significativo
-            promoters = (positive / total) * 100
-            detractors = (negative / total) * 100
-            nps_score = int(promoters - detractors)
-
-        # Top issues: comentários de feedbacks negativos
-        top_issues = [
-            f.comment for f in feedbacks if f.rating == FeedbackRating.NEGATIVE and f.comment
+        nps = int(((positive - negative) / total) * 100) if total >= 10 else None
+        issues = [
+            item.comment
+            for item in feedbacks
+            if item.rating is FeedbackRating.NEGATIVE and item.comment
         ][:5]
-
         return SatisfactionReport(
             total_feedbacks=total,
             positive_count=positive,
             negative_count=negative,
             neutral_count=neutral,
-            satisfaction_rate=satisfaction_rate,
-            nps_score=nps_score,
+            satisfaction_rate=satisfaction,
+            nps_score=nps,
             period_start=cutoff,
             period_end=now,
-            top_issues=top_issues,
+            top_issues=issues,
         )
 
     async def get_feedback_by_conversation(
-        self,
-        conversation_id: str,
+        self, conversation_id: str, user_id: str
     ) -> list[Feedback]:
-        """Retorna todos os feedbacks de uma conversa."""
-        async with self._lock:
-            return [f for f in self._feedbacks if f.conversation_id == conversation_id]
+        return [
+            self._from_entry(entry)
+            for entry in self._repository.list_for_owner(
+                owner_user_id=int(user_id), conversation_id=conversation_id
+            )
+        ]
 
     async def get_improvement_suggestions(self) -> list[dict[str, Any]]:
-        """
-        Analisa feedbacks negativos e gera sugestões de melhoria.
-        Usado pelo Meta-Agent para auto-otimização.
-        """
-        async with self._lock:
-            negative_feedbacks = [
-                f for f in self._feedbacks if f.rating == FeedbackRating.NEGATIVE
-            ][-50:]  # Últimos 50 negativos
-
-        suggestions = []
-
-        # Agrupar por contexto (provider, model, etc.)
+        negative = [
+            self._from_entry(entry)
+            for entry in self._repository.list_global(rating="negative", limit=50)
+        ]
         by_provider: dict[str, int] = {}
         by_model: dict[str, int] = {}
-
-        for f in negative_feedbacks:
-            provider = f.context.get("provider", "unknown")
-            model = f.context.get("model", "unknown")
-
+        for item in negative:
+            provider = str(item.context.get("provider", "unknown"))
+            model = str(item.context.get("model", "unknown"))
             by_provider[provider] = by_provider.get(provider, 0) + 1
             by_model[model] = by_model.get(model, 0) + 1
-
-        # Identificar problemas recorrentes
-        for provider, count in by_provider.items():
-            if count >= 5:
-                suggestions.append(
-                    {
-                        "type": "provider_issue",
-                        "provider": provider,
-                        "occurrences": count,
-                        "suggestion": f"Considerar ajustar prioridade ou configuração do provider '{provider}'",
-                    }
-                )
-
-        for model, count in by_model.items():
-            if count >= 5:
-                suggestions.append(
-                    {
-                        "type": "model_issue",
-                        "model": model,
-                        "occurrences": count,
-                        "suggestion": f"Avaliar qualidade das respostas do modelo '{model}'",
-                    }
-                )
-
+        suggestions: list[dict[str, Any]] = []
+        for kind, values in (("provider", by_provider), ("model", by_model)):
+            suggestions.extend(
+                {"type": f"{kind}_issue", kind: name, "occurrences": count}
+                for name, count in values.items()
+                if count >= 5
+            )
         return suggestions
 
     def get_stats(self) -> dict[str, Any]:
-        """Retorna estatísticas rápidas do serviço."""
-        total = len(self._feedbacks)
-        if total == 0:
-            return {
-                "total_feedbacks": 0,
-                "positive": 0,
-                "negative": 0,
-                "satisfaction_rate": None,
-                "status": "no_data",
-            }
-
-        positive = sum(1 for f in self._feedbacks if f.rating == FeedbackRating.POSITIVE)
-        negative = sum(1 for f in self._feedbacks if f.rating == FeedbackRating.NEGATIVE)
-
-        pn_total = positive + negative
-        satisfaction = positive / pn_total if pn_total > 0 else 0.5
-
+        feedbacks = [
+            self._from_entry(entry)
+            for entry in self._repository.list_global(limit=self._max_memory_size)
+        ]
+        total = len(feedbacks)
+        positive = sum(item.rating is FeedbackRating.POSITIVE for item in feedbacks)
+        negative = sum(item.rating is FeedbackRating.NEGATIVE for item in feedbacks)
+        denominator = positive + negative
+        satisfaction = positive / denominator if denominator else None
         return {
             "total_feedbacks": total,
             "positive": positive,
             "negative": negative,
-            "satisfaction_rate": round(satisfaction, 3),
-            "status": "healthy" if satisfaction >= 0.7 else "needs_attention",
+            "satisfaction_rate": round(satisfaction, 3) if satisfaction is not None else None,
+            "status": "no_data" if total == 0 else "healthy" if satisfaction and satisfaction >= 0.7 else "needs_attention",
         }
 
 
-# Singleton instance
 _feedback_service: FeedbackService | None = None
 
 
 def get_feedback_service() -> FeedbackService:
-    """Retorna instância singleton do FeedbackService."""
     global _feedback_service
     if _feedback_service is None:
         _feedback_service = FeedbackService()
@@ -390,7 +239,6 @@ def get_feedback_service() -> FeedbackService:
 
 
 def initialize_feedback_service(max_memory_size: int = 1000) -> FeedbackService:
-    """Inicializa o FeedbackService com configurações customizadas."""
     global _feedback_service
     _feedback_service = FeedbackService(max_memory_size=max_memory_size)
     return _feedback_service

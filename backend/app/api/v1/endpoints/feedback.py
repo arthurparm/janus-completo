@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.core.security.request_guard import require_authenticated_actor_id
+from app.repositories.feedback_repository import OwnedConversationNotFoundError
 from app.services.feedback_service import (
     FeedbackRating,
     FeedbackType,
@@ -120,6 +121,8 @@ async def record_feedback(payload: FeedbackRequest, request: Request):
             id=feedback.id, rating=feedback.rating.value, message="Obrigado pelo seu feedback! 🙏"
         )
 
+    except OwnedConversationNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao registrar feedback: {e!s}")
 
@@ -146,6 +149,8 @@ async def thumbs_up(payload: QuickFeedbackRequest, request: Request):
             id=feedback.id, rating="positive", message="Fico feliz que tenha gostado! 👍"
         )
 
+    except OwnedConversationNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao registrar feedback: {e!s}")
 
@@ -174,6 +179,8 @@ async def thumbs_down(payload: QuickFeedbackRequest, request: Request):
             message="Agradeço o feedback! Vou me esforçar para melhorar. 🙏",
         )
 
+    except OwnedConversationNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao registrar feedback: {e!s}")
 
@@ -246,7 +253,7 @@ async def get_improvement_suggestions():
 
 
 @router.get("/conversation/{conversation_id}")
-async def get_conversation_feedback(conversation_id: str):
+async def get_conversation_feedback(conversation_id: str, request: Request):
     """
     Retorna todos os feedbacks de uma conversa específica.
 
@@ -254,7 +261,9 @@ async def get_conversation_feedback(conversation_id: str):
     """
     try:
         service = get_feedback_service()
-        feedbacks = await service.get_feedback_by_conversation(conversation_id)
+        feedbacks = await service.get_feedback_by_conversation(
+            conversation_id, require_authenticated_actor_id(request)
+        )
 
         return {
             "conversation_id": conversation_id,
@@ -262,5 +271,7 @@ async def get_conversation_feedback(conversation_id: str):
             "count": len(feedbacks),
         }
 
+    except OwnedConversationNotFoundError:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao obter feedbacks: {e!s}")
