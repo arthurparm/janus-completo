@@ -4,7 +4,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.request_guard import require_service_actor
 from app.services.learning_service import (
     ExperimentNotFoundError,
     LearningService,
@@ -138,7 +138,7 @@ async def trigger_harvesting(
             limit=request.limit,
             query=request.query,
             min_score=request.min_score,
-            origin=require_admin_actor(http),
+            origin=require_service_actor(http),
         )
         return result
     except LearningServiceError as e:
@@ -167,7 +167,7 @@ async def trigger_training(
             request.model_type,
             config_dict,
             model_name=request.model_name,
-            user_id=require_admin_actor(http),
+            user_id=require_service_actor(http),
         )
         return result
     except TrainingFailedError as e:

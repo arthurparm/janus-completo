@@ -2034,7 +2034,7 @@ class KnowledgeSpaceService:
                         complexity="medium",
                         policy_overrides={
                             "provider": "ollama",
-                            "model": getattr(settings, "OLLAMA_CURATOR_MODEL", "qwen2.5:14b"),
+                            "model": getattr(settings, "OLLAMA_CURATOR_MODEL", "ministral-3:14b"),
                             "strict_provider": True,
                             "disable_failover": True,
                             "disable_response_cache": True,

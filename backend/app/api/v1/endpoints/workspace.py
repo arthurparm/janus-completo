@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
+from app.core.security.request_guard import require_service_actor
 from app.services.collaboration_service import (
     AgentNotFoundError,
     CollaborationService,
@@ -13,7 +13,7 @@ from app.services.collaboration_service import (
 router = APIRouter(
     prefix="/collaboration",
     tags=["Collaboration - Workspace"],
-    dependencies=[Depends(require_authenticated_actor_id)],
+    dependencies=[Depends(require_service_actor)],
 )
 
 
@@ -75,7 +75,7 @@ def get_messages_for(
 @router.post(
     "/system/shutdown",
     tags=["Collaboration - System"],
-    dependencies=[Depends(require_admin_actor)],
+    dependencies=[Depends(require_service_actor)],
 )
 def shutdown_system(service: CollaborationService = Depends(get_collaboration_service)):
     service.shutdown_system()

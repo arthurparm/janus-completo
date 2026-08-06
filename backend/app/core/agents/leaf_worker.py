@@ -5,6 +5,7 @@ from langsmith import traceable
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
+from app.config import settings
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
 
 logger = structlog.get_logger(__name__)
@@ -23,13 +24,14 @@ class LeafWorker:
     def __init__(
         self,
         name: str,
-        model: str = "openai:gpt-4o",
+        model: str | None = None,
         system_prompt: str = "",
         tools: List[Callable] = None
     ):
         self.name = name
+        selected_model = model or f"openai:{settings.OPENAI_MODEL_NAME}"
         self.agent = Agent(
-            model,
+            selected_model,
             system_prompt=system_prompt,
             output_type=WorkerResult
         )

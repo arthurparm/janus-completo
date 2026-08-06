@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import socket
+import uuid
 from datetime import datetime
 from typing import Any
 
 import structlog
-from prometheus_client import Counter, Gauge
-
-from app.models.schemas import QueueName
-from app.models.schemas import TaskMessage
-from app.repositories.outbox_repository import OutboxEventRecord, OutboxRepository
+from app.config import settings
 from app.core.infrastructure.message_broker import get_broker
+from app.models.schemas import QueueName, TaskMessage
+from app.repositories.outbox_repository import OutboxEventRecord, OutboxRepository
+from prometheus_client import Counter, Gauge
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +37,7 @@ class OutboxService:
         self._task: asyncio.Task | None = None
         self._running = False
         self._interval_seconds = 5
+        self._worker_id = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:12]}"
 
     def enqueue_consolidation(
         self,
@@ -65,7 +68,11 @@ class OutboxService:
         )
 
     async def dispatch_pending(self, *, limit: int = 50) -> dict[str, int]:
-        claimed = self._repo.claim_pending(limit=limit)
+        claimed = self._repo.claim_pending(
+            limit=limit,
+            worker_id=self._worker_id,
+            lease_seconds=settings.OUTBOX_LEASE_SECONDS,
+        )
         if not claimed:
             self._update_gauges()
             return {"claimed": 0, "sent": 0, "retry": 0, "dead": 0}
@@ -97,7 +104,7 @@ class OutboxService:
                 # O consumidor da fila espera TaskMessage(**payload). O outbox persiste apenas o
                 # payload de negócio, então precisamos embrulhar no envelope canônico da fila.
                 task_message = TaskMessage(
-                    task_id=f"outbox-{item.id}",
+                    task_id=item.message_id,
                     task_type=str(item.event_type),
                     payload=item.payload_json if isinstance(item.payload_json, dict) else {"raw": item.payload_json},
                     timestamp=datetime.utcnow().timestamp(),
@@ -106,11 +113,21 @@ class OutboxService:
                 publish_kwargs["use_msgpack"] = True
 
             await broker.publish(queue_name=queue_name, message=message, **publish_kwargs)
-            self._repo.mark_sent(item.id)
+            if not self._repo.mark_sent(item.id, claim_token=item.claim_token):
+                logger.error(
+                    "outbox_claim_lost_after_publish",
+                    event_id=item.id,
+                    message_id=item.message_id,
+                )
+                return False, "stale"
             OUTBOX_DISPATCH_TOTAL.labels(status="sent", event_type=item.event_type).inc()
             return True, "sent"
         except Exception as e:
-            next_status = self._repo.mark_retry(item.id, error=str(e))
+            next_status = self._repo.mark_retry(
+                item.id,
+                claim_token=item.claim_token,
+                error=str(e),
+            )
             metric_status = "dead" if next_status == "dead" else "retry"
             OUTBOX_DISPATCH_TOTAL.labels(status=metric_status, event_type=item.event_type).inc()
             logger.warning(

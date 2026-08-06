@@ -1,7 +1,8 @@
-import re
-import hashlib
 import base64
+import hashlib
+import re
 from typing import Any
+
 from app.config import settings
 
 # --- PII Patterns ---
@@ -33,7 +34,7 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
     """
     if not text or not isinstance(text, str):
         return text, []
-        
+
     types: list[str] = []
     redacted = text
     for pat, name, repl in _PII_PATTERNS:
@@ -103,7 +104,7 @@ def _get_legacy_fernet():
     try:
         from cryptography.fernet import Fernet  # type: ignore
 
-        key = getattr(settings, "MEMORY_ENCRYPTION_KEY", None) or getattr(settings, "AUTH_JWT_SECRET", None)
+        key = getattr(settings, "MEMORY_ENCRYPTION_KEY", None)
         if not key:
             return None
         return Fernet(_derive_fernet_key(str(key)))

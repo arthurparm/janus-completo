@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.config import settings
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.request_guard import require_service_actor
 
 router = APIRouter(tags=["Deployment"], prefix="/deployment")
 
@@ -47,13 +47,13 @@ class StageRequest(BaseModel):
 async def stage(
     req: StageRequest, request: Request, inference = Depends(get_inference_facade)
 ):
-    require_admin_actor(request)
+    require_service_actor(request)
     return inference.stage_model(model_id=req.model_id, rollout_percent=req.rollout_percent)
 
 
 @router.post("/publish")
 async def publish(model_id: str, request: Request, inference = Depends(get_inference_facade)):
-    require_admin_actor(request)
+    require_service_actor(request)
     if not MODEL_ID_PATTERN.fullmatch(model_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,7 +91,7 @@ async def publish(model_id: str, request: Request, inference = Depends(get_infer
 
 @router.post("/precheck")
 async def precheck(model_id: str, request: Request, inference = Depends(get_inference_facade)):
-    require_admin_actor(request)
+    require_service_actor(request)
     res = inference.precheck(model_id=model_id)
     try:
         inference.stage_model(model_id=model_id, rollout_percent=0)
@@ -104,5 +104,5 @@ async def precheck(model_id: str, request: Request, inference = Depends(get_infe
 
 @router.post("/rollback")
 async def rollback(model_id: str, request: Request, inference = Depends(get_inference_facade)):
-    require_admin_actor(request)
+    require_service_actor(request)
     return inference.rollback_model(model_id=model_id)

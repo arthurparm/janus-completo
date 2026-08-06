@@ -8,13 +8,14 @@ Allows Janus Prime to spawn a lightweight "Lab" instance for testing:
 
 The Lab runs in an isolated Docker container with resource limits.
 """
-import structlog
 import os
 import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+
+import structlog
 
 try:
     import docker
@@ -337,7 +338,7 @@ class JanusLabManager:
             # Use Ollama for LLM (local, no API costs)
             "LLM_DEFAULT_PROVIDER": "ollama",
             "OLLAMA_BASE_URL": "http://janus_ollama:11434",
-            "OLLAMA_ORCHESTRATOR_MODEL": "qwen2.5:14b",
+            "OLLAMA_ORCHESTRATOR_MODEL": "gpt-oss:20b",
         }
 
         # Apply custom overrides

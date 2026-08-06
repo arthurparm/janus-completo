@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from app.core.security.request_guard import require_authenticated_actor_id
 from app.db import db
 from app.models.consent_models import Consent
-from app.repositories.user_repository import UserRepository
 
 router = APIRouter(tags=["Consents"], prefix="/consents")
 
@@ -101,9 +100,8 @@ async def revoke_consent(consent_id: int, request: Request):
                 status_code=status.HTTP_404_NOT_FOUND, detail="Consentimento não encontrado"
             )
         actor = require_authenticated_actor_id(request)
-        ur = UserRepository()
-        if str(actor) != str(c.user_id) and not ur.is_admin(int(actor)):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+        if str(actor) != str(c.user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found")
         from datetime import datetime
 
         c.granted = "False"

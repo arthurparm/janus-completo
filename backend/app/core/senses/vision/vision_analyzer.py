@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-
+from app.config import settings
 from app.core.senses.vision.screen_capture import (
     ScreenCapture,
     ScreenCaptureService,
@@ -40,19 +40,23 @@ class VisionAnalyzer:
     - Element detection
     """
 
-    def __init__(self, screen_capture: ScreenCaptureService | None = None, model: str = "llava"):
+    def __init__(
+        self,
+        screen_capture: ScreenCaptureService | None = None,
+        model: str | None = None,
+    ):
         """
         Initialize VisionAnalyzer.
 
         Args:
             screen_capture: Screen capture service (uses singleton if None)
-            model: Multimodal model to use (default: llava for Ollama)
+            model: Multimodal model to use (defaults to OLLAMA_VISION_MODEL)
         """
         self.screen_capture = screen_capture or get_screen_capture()
-        self.model = model
+        self.model = model or settings.OLLAMA_VISION_MODEL
         self._enabled = self.screen_capture.is_available()
 
-        logger.info("VisionAnalyzer initialized", model=model)
+        logger.info("VisionAnalyzer initialized", model=self.model)
 
     async def describe_screen(self) -> str | None:
         """
@@ -169,11 +173,10 @@ class VisionAnalyzer:
         """
         Send image to multimodal LLM for analysis.
 
-        Note: In production, this would use the LLM router with llava/gpt-4-vision.
-        For now, returns a placeholder or uses Ollama directly.
+        Uses the configured Ollama multimodal model directly.
         """
         try:
-            # Try to use Ollama with llava
+            # Use the explicitly configured Ollama vision model.
             from app.core.llm.factory import create_ollama_client
 
             client = await create_ollama_client(model=self.model)

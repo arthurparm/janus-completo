@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
+from app.core.security.request_guard import require_authenticated_actor_id, require_service_actor
 from app.services.resource_manager import get_user_gpu_usage
 
 router = APIRouter(tags=["Resources"], prefix="/resources")
@@ -28,7 +28,7 @@ async def set_own_gpu_budget(req: BudgetSetRequest, request: Request):
 
 @router.post("/gpu/budget/{target_actor_id}")
 async def set_actor_gpu_budget(target_actor_id: str, req: BudgetSetRequest, request: Request):
-    require_admin_actor(request)
+    require_service_actor(request)
     budgets = dict(getattr(settings, "TRAINING_GPU_BUDGET_PER_USER", {}) or {})
     budgets[target_actor_id] = float(req.budget)
     settings.TRAINING_GPU_BUDGET_PER_USER = budgets

@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from app.api.exception_handlers import get_error_taxonomy_catalog
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.actor_context import ActorContext
+from app.core.security.request_guard import require_service_actor_context
 from app.services.observability_service import (
     ObservabilityService,
     get_observability_service,
@@ -17,6 +18,15 @@ from app.services.observability_service import (
 
 router = APIRouter(tags=["Observability"])
 logger = structlog.get_logger(__name__)
+
+
+def _service_audit_details(actor: ActorContext, details: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **details,
+        "service_client_id": actor.client_id,
+        "delegated_subject": actor.delegated_subject,
+        "delegation_id": actor.delegation_id,
+    }
 
 # --- Pydantic Models (DTOs) ---
 
@@ -213,7 +223,7 @@ async def graph_quarantine_list(
     return items
 
 
-class PromoteQuarantineRequest(BaseModel):
+class GraphPromoteQuarantineRequest(BaseModel):
     node_id: int
 
 
@@ -221,7 +231,7 @@ class PromoteQuarantineRequest(BaseModel):
     "/graph/quarantine/promote", summary="Promove item de quarentena para relação no grafo"
 )
 async def graph_quarantine_promote(
-    request: PromoteQuarantineRequest,
+    request: GraphPromoteQuarantineRequest,
     service: ObservabilityService = Depends(get_observability_service),
 ):
     logger.info(
@@ -338,7 +348,7 @@ async def pending_actions_legacy_residue(
     limit: int = 20,
     service: ObservabilityService = Depends(get_observability_service),
 ):
-    require_admin_actor(request)
+    require_service_actor_context(request)
     safe_limit = max(1, int(limit))
     logger.info(
         "observability_endpoint_pending_actions_legacy_residue_requested",
@@ -362,7 +372,7 @@ async def audit_ledger_integrity(
     request: Request,
     max_errors: int = 25,
 ):
-    require_admin_actor(request)
+    require_service_actor_context(request)
     from app.repositories.audit_ledger_repository import audit_ledger_repository
 
     return audit_ledger_repository.verify_integrity(max_errors=max(1, int(max_errors)))
@@ -410,24 +420,27 @@ async def incident_open(
     payload: IncidentOpenRequest,
     request: Request,
 ):
-    actor = require_admin_actor(request)
+    actor = require_service_actor_context(request)
     incident_id = _generate_incident_id()
 
     from app.repositories.observability_repository import record_audit_event_direct
 
     record_audit_event_direct(
-        user_id=int(actor),
+        user_id=None,
         endpoint="incident_response",
         action="incident_opened",
         tool="incident_runbook",
         status="open",
-        details_json={
-            "incident_id": incident_id,
-            "severity": payload.severity,
-            "category": payload.category,
-            "summary": payload.summary,
-            "details": payload.details or {},
-        },
+        details_json=_service_audit_details(
+            actor,
+            {
+                "incident_id": incident_id,
+                "severity": payload.severity,
+                "category": payload.category,
+                "summary": payload.summary,
+                "details": payload.details or {},
+            },
+        ),
     )
 
     return {"incident_id": incident_id}
@@ -438,7 +451,7 @@ async def incident_add_evidence(
     payload: IncidentEvidenceRequest,
     request: Request,
 ):
-    actor = require_admin_actor(request)
+    actor = require_service_actor_context(request)
     canonical = json.dumps(
         {
             "incident_id": payload.incident_id,
@@ -456,19 +469,22 @@ async def incident_add_evidence(
     from app.repositories.observability_repository import record_audit_event_direct
 
     record_audit_event_direct(
-        user_id=int(actor),
+        user_id=None,
         endpoint="incident_response",
         action="incident_evidence_added",
         tool="incident_runbook",
         status="evidence",
-        details_json={
-            "incident_id": payload.incident_id,
-            "evidence_type": payload.evidence_type,
-            "evidence_hash": evidence_hash,
-            "evidence_uri": payload.evidence_uri,
-            "evidence_text": payload.evidence_text,
-            "metadata": payload.metadata or {},
-        },
+        details_json=_service_audit_details(
+            actor,
+            {
+                "incident_id": payload.incident_id,
+                "evidence_type": payload.evidence_type,
+                "evidence_hash": evidence_hash,
+                "evidence_uri": payload.evidence_uri,
+                "evidence_text": payload.evidence_text,
+                "metadata": payload.metadata or {},
+            },
+        ),
     )
 
     return {"incident_id": payload.incident_id, "evidence_hash": evidence_hash}
@@ -479,22 +495,25 @@ async def incident_close(
     payload: IncidentCloseRequest,
     request: Request,
 ):
-    actor = require_admin_actor(request)
+    actor = require_service_actor_context(request)
     from app.repositories.observability_repository import record_audit_event_direct
 
     record_audit_event_direct(
-        user_id=int(actor),
+        user_id=None,
         endpoint="incident_response",
         action="incident_closed",
         tool="incident_runbook",
         status="resolved",
-        details_json={
-            "incident_id": payload.incident_id,
-            "resolution_summary": payload.resolution_summary,
-            "root_cause": payload.root_cause,
-            "corrective_actions": payload.corrective_actions or [],
-            "validation_evidence": payload.validation_evidence or {},
-        },
+        details_json=_service_audit_details(
+            actor,
+            {
+                "incident_id": payload.incident_id,
+                "resolution_summary": payload.resolution_summary,
+                "root_cause": payload.root_cause,
+                "corrective_actions": payload.corrective_actions or [],
+                "validation_evidence": payload.validation_evidence or {},
+            },
+        ),
     )
 
     return {"incident_id": payload.incident_id, "status": "resolved"}
@@ -506,7 +525,7 @@ async def list_incidents(
     limit: int = 100,
     offset: int = 0,
 ):
-    require_admin_actor(request)
+    require_service_actor_context(request)
     from app.repositories.audit_ledger_repository import audit_ledger_repository
 
     events = audit_ledger_repository.list_events(
@@ -569,7 +588,7 @@ async def incident_events(
     limit: int = 2000,
     offset: int = 0,
 ):
-    require_admin_actor(request)
+    require_service_actor_context(request)
     from app.repositories.audit_ledger_repository import audit_ledger_repository
 
     rows = audit_ledger_repository.list_events(

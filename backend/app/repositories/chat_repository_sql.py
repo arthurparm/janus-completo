@@ -487,8 +487,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
             if project_id and cs.project_id and cs.project_id != project_id:
                 raise ChatRepositoryError("Access denied: project_id mismatch")
             cs.title = new_title
@@ -522,8 +521,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
             if project_id and cs.project_id and cs.project_id != project_id:
                 raise ChatRepositoryError("Access denied: project_id mismatch")
             s.delete(cs)
@@ -565,8 +563,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
             msg.text = new_text
             cs.updated_at = datetime.utcnow()
             s.commit()
@@ -600,8 +597,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
 
             msg = (
                 s.query(Message)
@@ -641,8 +637,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
             msg = (
                 s.query(Message)
                 .filter(Message.session_id == sid, Message.role == "assistant")
@@ -697,8 +692,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
             mapping = {
                 "text": "text",
                 "knowledge_space_id": "knowledge_space_id",
@@ -765,8 +759,7 @@ class ChatRepositorySQL:
             if user_id:
                 uid = self._resolve_user_id(user_id)
                 if uid is not None and cs.user_id is not None and cs.user_id != uid:
-                    if not self._user_repo.is_admin(uid):
-                        raise ChatRepositoryError("Access denied: user_id mismatch")
+                    raise ChatRepositoryError("Access denied: user_id mismatch")
             s.delete(msg)
             cs.updated_at = datetime.utcnow()
             s.commit()

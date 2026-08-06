@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.agents import AgentRole
-from app.core.security.request_guard import require_authenticated_actor_id
+from app.core.security.request_guard import require_service_actor
 from app.services.collaboration_service import CollaborationService, get_collaboration_service
 
 try:
@@ -27,7 +27,7 @@ except Exception:
 
 router = APIRouter(
     tags=["Collaboration"],
-    dependencies=[Depends(require_authenticated_actor_id)],
+    dependencies=[Depends(require_service_actor)],
 )
 logger = structlog.get_logger(__name__)
 

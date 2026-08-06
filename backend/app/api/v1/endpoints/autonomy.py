@@ -8,8 +8,8 @@ from app.core.autonomy.goal_manager import GoalManager, GoalStatus, get_goal_man
 from app.core.autonomy.goal_metrics import goal_metrics_calculator
 from app.core.autonomy.safety_plan_validator import safety_plan_validator
 from app.core.security.request_guard import (
-    require_admin_actor_context,
-    require_authenticated_actor_id,
+    require_service_actor,
+    require_service_actor_context,
 )
 from app.core.tools.action_module import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
@@ -154,7 +154,7 @@ async def start_autonomy(
     http: Request,
     service: AutonomyService = Depends(get_autonomy_service),
 ):
-    actor = require_admin_actor_context(http)
+    actor = require_service_actor_context(http)
     # Validação do plano (se fornecido), incluindo schema e políticas
     if request.plan:
         _validate_plan_steps(
@@ -217,7 +217,7 @@ async def start_autonomy(
 
 @router.post("/stop", summary="Para o AutonomyLoop")
 async def stop_autonomy(http: Request, service: AutonomyService = Depends(get_autonomy_service)):
-    ok = await service.stop(actor=require_admin_actor_context(http))
+    ok = await service.stop(actor=require_service_actor_context(http))
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="AutonomyLoop não está ativo."
@@ -247,7 +247,7 @@ async def update_autonomy_plan(
         blocklist=config.get("blocklist", []) or [],
     )
 
-    service.update_plan(request.plan, actor=require_admin_actor_context(http))
+    service.update_plan(request.plan, actor=require_service_actor_context(http))
     return {"status": "updated", "steps_count": len(request.plan)}
 
 
@@ -267,7 +267,7 @@ async def update_policy(
     service: AutonomyService = Depends(get_autonomy_service),
 ):
     service.update_policy_config(
-        actor=require_admin_actor_context(http),
+        actor=require_service_actor_context(http),
         risk_profile=request.risk_profile,
         auto_confirm=request.auto_confirm,
         allowlist=request.allowlist,
@@ -361,7 +361,7 @@ async def delete_goal(goal_id: str, manager: GoalManager = Depends(get_goal_mana
 
 @router.get("/goals/{goal_id}/metrics")
 async def get_goal_metrics(goal_id: str, request: Request, manager: GoalManager = Depends(get_goal_manager)):
-    require_authenticated_actor_id(request)
+    require_service_actor(request)
     goal = manager.get_goal(goal_id)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -375,7 +375,7 @@ async def get_autonomy_health(
     request: Request,
     service: AutonomyService = Depends(get_autonomy_service),
 ):
-    require_authenticated_actor_id(request)
+    require_service_actor(request)
     import time
     now = time.time()
 

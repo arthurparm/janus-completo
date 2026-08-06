@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import JSON, Column, DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 
@@ -8,6 +10,7 @@ class OutboxEvent(Base):
     __tablename__ = "outbox_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(String(64), nullable=False, default=lambda: uuid.uuid4().hex)
     event_type = Column(String(100), nullable=False)
     aggregate_id = Column(String(128), nullable=True)
     dedupe_key = Column(String(255), nullable=True)
@@ -16,6 +19,10 @@ class OutboxEvent(Base):
     attempts = Column(Integer, nullable=False, default=0)
     next_attempt_at = Column(DateTime, nullable=False, default=func.current_timestamp())
     last_error = Column(Text, nullable=True)
+    claimed_by = Column(String(128), nullable=True)
+    claim_token = Column(String(64), nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+    lease_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
     updated_at = Column(
         DateTime,
@@ -26,6 +33,8 @@ class OutboxEvent(Base):
 
     __table_args__ = (
         UniqueConstraint("dedupe_key", name="uq_outbox_dedupe_key"),
+        UniqueConstraint("message_id", name="uq_outbox_message_id"),
         Index("idx_outbox_status_next", "status", "next_attempt_at"),
+        Index("idx_outbox_status_lease", "status", "lease_until"),
         Index("idx_outbox_event_type", "event_type"),
     )

@@ -20,11 +20,13 @@ class Experiment(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     user_id = Column(String(100), nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=func.current_timestamp())
     arms = relationship("ExperimentArm", back_populates="experiment", cascade="all, delete-orphan")
     __table_args__ = (
         Index("idx_experiment_user_status", "user_id", "status"),
+        Index("idx_experiment_owner_status", "owner_user_id", "status"),
         # Evita nomes duplicados por usuário (ou global quando user_id é NULL)
         UniqueConstraint("name", "user_id", name="unique_experiment_name_user"),
     )

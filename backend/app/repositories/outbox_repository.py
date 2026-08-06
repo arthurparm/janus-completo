@@ -1,20 +1,23 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy.exc import IntegrityError
-
 from app.db import db
 from app.models.outbox_models import OutboxEvent
+from sqlalchemy import and_, or_
+from sqlalchemy.exc import IntegrityError
 
 
 @dataclass(frozen=True)
 class OutboxEventRecord:
     id: int
+    message_id: str
     event_type: str
     payload_json: dict[str, Any]
+    claim_token: str
 
 
 class OutboxRepositoryError(Exception):
@@ -42,6 +45,7 @@ class OutboxRepository:
                     return int(existing.id)
 
             event = OutboxEvent(
+                message_id=uuid.uuid4().hex,
                 event_type=event_type,
                 aggregate_id=aggregate_id,
                 dedupe_key=dedupe_key,
@@ -69,15 +73,31 @@ class OutboxRepository:
         finally:
             session.close()
 
-    def claim_pending(self, *, limit: int = 50) -> list[OutboxEventRecord]:
+    def claim_pending(
+        self,
+        *,
+        limit: int = 50,
+        worker_id: str = "outbox-dispatcher",
+        lease_seconds: int = 300,
+    ) -> list[OutboxEventRecord]:
         session = db.get_session_direct()
         now = datetime.utcnow()
+        lease_until = now + timedelta(seconds=max(30, int(lease_seconds)))
         try:
             query = (
                 session.query(OutboxEvent)
                 .filter(
-                    OutboxEvent.status.in_(("pending", "retry")),
-                    OutboxEvent.next_attempt_at <= now,
+                    or_(
+                        and_(
+                            OutboxEvent.status.in_(("pending", "retry")),
+                            OutboxEvent.next_attempt_at <= now,
+                        ),
+                        and_(
+                            OutboxEvent.status == "processing",
+                            OutboxEvent.lease_until.isnot(None),
+                            OutboxEvent.lease_until <= now,
+                        ),
+                    )
                 )
                 .order_by(OutboxEvent.created_at.asc())
             )
@@ -89,12 +109,19 @@ class OutboxRepository:
             rows = query.limit(limit).all()
             claimed: list[OutboxEventRecord] = []
             for row in rows:
+                claim_token = uuid.uuid4().hex
                 row.status = "processing"
+                row.claimed_by = str(worker_id)[:128]
+                row.claim_token = claim_token
+                row.claimed_at = now
+                row.lease_until = lease_until
                 claimed.append(
                     OutboxEventRecord(
                         id=int(row.id),
+                        message_id=str(row.message_id),
                         event_type=str(row.event_type),
                         payload_json=dict(row.payload_json or {}),
+                        claim_token=claim_token,
                     )
                 )
             session.commit()
@@ -105,15 +132,28 @@ class OutboxRepository:
         finally:
             session.close()
 
-    def mark_sent(self, event_id: int) -> None:
+    def mark_sent(self, event_id: int, *, claim_token: str) -> bool:
         session = db.get_session_direct()
         try:
-            row = session.query(OutboxEvent).filter(OutboxEvent.id == event_id).first()
+            row = (
+                session.query(OutboxEvent)
+                .filter(
+                    OutboxEvent.id == event_id,
+                    OutboxEvent.status == "processing",
+                    OutboxEvent.claim_token == claim_token,
+                )
+                .first()
+            )
             if not row:
-                return
+                return False
             row.status = "sent"
             row.last_error = None
+            row.claimed_by = None
+            row.claim_token = None
+            row.claimed_at = None
+            row.lease_until = None
             session.commit()
+            return True
         except Exception as e:
             session.rollback()
             raise OutboxRepositoryError(f"Falha ao marcar evento como enviado: {e}") from e
@@ -124,6 +164,7 @@ class OutboxRepository:
         self,
         event_id: int,
         *,
+        claim_token: str,
         error: str,
         max_attempts: int = 10,
     ) -> str:
@@ -132,10 +173,16 @@ class OutboxRepository:
             row = session.query(OutboxEvent).filter(OutboxEvent.id == event_id).first()
             if not row:
                 return "missing"
+            if row.status != "processing" or row.claim_token != claim_token:
+                return "stale"
 
             attempts = int(row.attempts or 0) + 1
             row.attempts = attempts
             row.last_error = error[:4000]
+            row.claimed_by = None
+            row.claim_token = None
+            row.claimed_at = None
+            row.lease_until = None
 
             if attempts >= max_attempts:
                 row.status = "dead"
@@ -180,6 +227,10 @@ class OutboxRepository:
             for row in rows:
                 row.status = "retry"
                 row.next_attempt_at = datetime.utcnow()
+                row.claimed_by = None
+                row.claim_token = None
+                row.claimed_at = None
+                row.lease_until = None
                 count += 1
             session.commit()
             return count

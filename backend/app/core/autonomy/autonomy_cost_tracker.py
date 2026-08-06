@@ -21,11 +21,11 @@ except ImportError:
     AUTONOMY_COST_USD = None     # type: ignore
 
 MODEL_PRICING: dict[str, dict[str, float]] = {
-    "gpt-4o": {"input_per_1k": 0.00250, "output_per_1k": 0.01000},
-    "gpt-4o-mini": {"input_per_1k": 0.00015, "output_per_1k": 0.00060},
-    "gpt-4": {"input_per_1k": 0.03000, "output_per_1k": 0.06000},
-    "gpt-3.5-turbo": {"input_per_1k": 0.00050, "output_per_1k": 0.00150},
-    "grok-2": {"input_per_1k": 0.00200, "output_per_1k": 0.00800},
+    "gpt-5.6-luna": {"input_per_1k": 0.00020, "output_per_1k": 0.00120},
+    "gemini-3.6-flash": {"input_per_1k": 0.00150, "output_per_1k": 0.00750},
+    "deepseek-v4-flash": {"input_per_1k": 0.00014, "output_per_1k": 0.00028},
+    "deepseek-v4-pro": {"input_per_1k": 0.000435, "output_per_1k": 0.00087},
+    "grok-4.5": {"input_per_1k": 0.00200, "output_per_1k": 0.00600},
 }
 
 

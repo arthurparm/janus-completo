@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.core.security.request_guard import require_admin_actor, require_admin_actor_context
+from app.core.security.request_guard import require_service_actor, require_service_actor_context
 from app.services.autonomy_admin_service import (
     AutonomyAdminService,
     get_autonomy_admin_service,
@@ -14,7 +14,7 @@ from app.services.autonomy_admin_service import (
 
 router = APIRouter(
     tags=["AutonomyAdmin"],
-    dependencies=[Depends(require_admin_actor)],
+    dependencies=[Depends(require_service_actor)],
 )
 
 
@@ -136,7 +136,7 @@ async def admin_manual_goal_completion_trigger(
 
 @router.post("/tools/{name}/rollback")
 async def rollback_tool(name: str, request: Request):
-    require_admin_actor(request)
+    require_service_actor(request)
     from app.core.tools.action_module import action_registry
 
     ok = action_registry.rollback_tool(name)
@@ -152,7 +152,7 @@ class QuarantineReviewRequest(BaseModel):
 
 @router.post("/knowledge/quarantine/review")
 async def review_quarantine(payload: QuarantineReviewRequest, request: Request):
-    require_admin_actor(request)
+    require_service_actor(request)
     from app.db.graph import get_graph_db
 
     graph = await get_graph_db()
@@ -178,16 +178,16 @@ class ThrottleResetResponse(BaseModel):
 
 @router.post("/throttle/reset", response_model=ThrottleResetResponse)
 async def reset_autonomy_throttle(request: Request):
-    require_admin_actor(request)
+    require_service_actor(request)
     from app.services.autonomy_service import get_autonomy_service
     service = get_autonomy_service(request)
-    result = service.reset_throttle(actor=require_admin_actor_context(request))
+    result = service.reset_throttle(actor=require_service_actor_context(request))
     return ThrottleResetResponse(**result)
 
 
 @router.get("/tools/{name}/provenance")
 async def get_tool_provenance(name: str, request: Request):
-    require_admin_actor(request)
+    require_service_actor(request)
     from app.core.tools.action_module import action_registry
     prov = action_registry.get_tool_provenance(name)
     if prov is None:
@@ -210,7 +210,7 @@ async def get_autonomy_cost_report(
     request: Request,
     days: int = 7,
 ):
-    require_admin_actor(request)
+    require_service_actor(request)
     from app.core.autonomy.autonomy_cost_tracker import autonomy_cost_tracker
     report = autonomy_cost_tracker.get_cost_report(days=days)
     daily = autonomy_cost_tracker.get_daily_total()

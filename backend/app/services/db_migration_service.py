@@ -33,7 +33,11 @@ class DBMigrationService:
         try:
             insp = inspect(s.get_bind())
             uniques = insp.get_unique_constraints(table) or []
-            return any(uq.get("name") == constraint_name for uq in uniques)
+            foreign_keys = insp.get_foreign_keys(table) or []
+            return any(
+                constraint.get("name") == constraint_name
+                for constraint in (*uniques, *foreign_keys)
+            )
         except Exception:
             return False
 
@@ -107,6 +111,79 @@ class DBMigrationService:
                         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                     """
+
+    def _prepare_outbox_lease_schema(
+        self, s: Session, *, dialect: str, applied: list[str]
+    ) -> None:
+        if not self._table_exists(s, "outbox_events"):
+            return
+
+        column_sql = {
+            "message_id": "VARCHAR(64) NULL",
+            "claimed_by": "VARCHAR(128) NULL",
+            "claim_token": "VARCHAR(64) NULL",
+            "claimed_at": "TIMESTAMP NULL",
+            "lease_until": "TIMESTAMP NULL",
+        }
+        for column, sql_type in column_sql.items():
+            if not self._column_exists(s, "outbox_events", column):
+                self._execute_ddl(
+                    s,
+                    f"ALTER TABLE outbox_events ADD COLUMN {column} {sql_type}",
+                    f"outbox_events.{column}",
+                    applied,
+                )
+
+        message_id_expression = (
+            "CONCAT('outbox-', CAST(id AS CHAR))"
+            if dialect in ("mysql", "mariadb")
+            else "'outbox-' || CAST(id AS VARCHAR)"
+        )
+        s.execute(
+            text(
+                "UPDATE outbox_events "
+                f"SET message_id = {message_id_expression} "
+                "WHERE message_id IS NULL"
+            )
+        )
+        s.execute(
+            text(
+                "UPDATE outbox_events SET lease_until = CURRENT_TIMESTAMP "
+                "WHERE status = 'processing' AND lease_until IS NULL"
+            )
+        )
+
+        if not self._index_exists(s, "outbox_events", "uq_outbox_message_id"):
+            self._execute_ddl(
+                s,
+                "CREATE UNIQUE INDEX uq_outbox_message_id ON outbox_events (message_id)",
+                "outbox_events.uq_message_id",
+                applied,
+            )
+        if not self._index_exists(s, "outbox_events", "idx_outbox_status_lease"):
+            self._execute_ddl(
+                s,
+                "CREATE INDEX idx_outbox_status_lease "
+                "ON outbox_events (status, lease_until)",
+                "outbox_events.idx_status_lease",
+                applied,
+            )
+
+        if self._column_nullable(s, "outbox_events", "message_id") is not False:
+            if dialect in ("postgresql", "postgres"):
+                self._execute_ddl(
+                    s,
+                    "ALTER TABLE outbox_events ALTER COLUMN message_id SET NOT NULL",
+                    "outbox_events.message_id_not_null",
+                    applied,
+                )
+            elif dialect in ("mysql", "mariadb"):
+                self._execute_ddl(
+                    s,
+                    "ALTER TABLE outbox_events MODIFY COLUMN message_id VARCHAR(64) NOT NULL",
+                    "outbox_events.message_id_not_null",
+                    applied,
+                )
 
     def _count_null_pending_action_user_ids(self, s: Session) -> int | None:
         if not self._table_exists(s, "pending_actions"):
@@ -255,57 +332,9 @@ class DBMigrationService:
             )
             add(
                 "users",
-                "username",
-                "column",
-                self._column_exists(s, "users", "username"),
-            )
-            add(
-                "users",
-                "password_hash",
-                "column",
-                self._column_exists(s, "users", "password_hash"),
-            )
-            add(
-                "users",
-                "cpf_hash",
-                "column",
-                self._column_exists(s, "users", "cpf_hash"),
-            )
-            add(
-                "users",
-                "password_reset_token_hash",
-                "column",
-                self._column_exists(s, "users", "password_reset_token_hash"),
-            )
-            add(
-                "users",
-                "password_reset_expires_at",
-                "column",
-                self._column_exists(s, "users", "password_reset_expires_at"),
-            )
-            add(
-                "users",
-                "unique_user_username",
-                "constraint",
-                self._constraint_exists(s, "users", "unique_user_username"),
-            )
-            add(
-                "users",
                 "unique_user_email",
                 "constraint",
                 self._constraint_exists(s, "users", "unique_user_email"),
-            )
-            add(
-                "users",
-                "unique_user_external_id",
-                "constraint",
-                self._constraint_exists(s, "users", "unique_user_external_id"),
-            )
-            add(
-                "users",
-                "unique_user_cpf_hash",
-                "constraint",
-                self._constraint_exists(s, "users", "unique_user_cpf_hash"),
             )
             add(
                 "pending_actions",
@@ -406,8 +435,392 @@ class DBMigrationService:
                     "index",
                     self._index_exists(s, "data_governance_records", idx),
                 )
+            for column in (
+                "message_id",
+                "claimed_by",
+                "claim_token",
+                "claimed_at",
+                "lease_until",
+            ):
+                add(
+                    "outbox_events",
+                    column,
+                    "column",
+                    self._column_exists(s, "outbox_events", column),
+                )
+            add(
+                "outbox_events",
+                "uq_outbox_message_id",
+                "index",
+                self._index_exists(s, "outbox_events", "uq_outbox_message_id"),
+            )
+            add(
+                "outbox_events",
+                "idx_outbox_status_lease",
+                "index",
+                self._index_exists(s, "outbox_events", "idx_outbox_status_lease"),
+            )
             ok = all(c["exists"] for c in checks)
             return {"status": "ok" if ok else "missing", "checks": checks}
+        finally:
+            s.close()
+
+    def _count_experiment_owner_orphans(self, s: Session) -> int | None:
+        if not self._table_exists(s, "experiments"):
+            return None
+        if not self._column_exists(s, "experiments", "owner_user_id"):
+            return None
+        try:
+            row = s.execute(
+                text("SELECT COUNT(*) FROM experiments WHERE owner_user_id IS NULL")
+            ).first()
+            if not row:
+                return 0
+            return int(row[0] or 0)
+        except Exception:
+            return None
+
+    def _count_duplicate_profiles(self, s: Session) -> int | None:
+        if not self._table_exists(s, "profiles"):
+            return None
+        try:
+            row = s.execute(
+                text(
+                    "SELECT COUNT(*) FROM (SELECT user_id FROM profiles "
+                    "GROUP BY user_id HAVING COUNT(*) > 1) duplicates"
+                )
+            ).first()
+            if not row:
+                return 0
+            return int(row[0] or 0)
+        except Exception:
+            return None
+
+    def _unresolved_auth_migration_quarantine(self, s: Session) -> dict[str, Any]:
+        if not self._table_exists(s, "auth_migration_quarantine"):
+            return {"total": 0, "by_resource_type": {}}
+        try:
+            rows = s.execute(
+                text(
+                    "SELECT resource_type, COUNT(*) AS total "
+                    "FROM auth_migration_quarantine "
+                    "WHERE resolved_at IS NULL "
+                    "GROUP BY resource_type "
+                    "ORDER BY resource_type"
+                )
+            ).fetchall()
+        except Exception:
+            return {"total": 0, "by_resource_type": {}}
+
+        by_resource_type: dict[str, int] = {}
+        total = 0
+        for row in rows or []:
+            resource_type = str(row[0] or "").strip()
+            count = int(row[1] or 0)
+            if not resource_type:
+                continue
+            by_resource_type[resource_type] = count
+            total += count
+        return {"total": total, "by_resource_type": by_resource_type}
+
+    def _constraint_readiness_snapshot(self, s: Session) -> dict[str, Any]:
+        pending_actions_null_rows = self._count_null_pending_action_user_ids(s)
+        auth_owner_orphans = self._count_experiment_owner_orphans(s)
+        duplicate_profiles = self._count_duplicate_profiles(s)
+        unresolved_auth_quarantine = self._unresolved_auth_migration_quarantine(s)
+
+        blockers: list[str] = []
+        if pending_actions_null_rows and pending_actions_null_rows > 0:
+            blockers.append(
+                f"pending_actions.user_id ainda possui {pending_actions_null_rows} registros sem owner"
+            )
+        if auth_owner_orphans and auth_owner_orphans > 0:
+            blockers.append(
+                f"experiments.owner_user_id ainda possui {auth_owner_orphans} registros sem backfill"
+            )
+        if duplicate_profiles and duplicate_profiles > 0:
+            blockers.append(
+                f"profiles ainda possui {duplicate_profiles} usuarios com perfis duplicados"
+            )
+        if unresolved_auth_quarantine["total"] > 0:
+            blockers.append(
+                "auth_migration_quarantine ainda possui registros pendentes: "
+                + ", ".join(
+                    f"{key}={value}"
+                    for key, value in sorted(
+                        unresolved_auth_quarantine["by_resource_type"].items()
+                    )
+                )
+            )
+
+        return {
+            "ready_for_constraints": not blockers,
+            "blockers": blockers,
+            "pending_actions_user_id_null_rows": pending_actions_null_rows,
+            "auth_owner_orphans": auth_owner_orphans,
+            "duplicate_profiles": duplicate_profiles,
+            "auth_migration_quarantine": unresolved_auth_quarantine,
+        }
+
+    def _prepare_postgres_auth_constraint_data(
+        self, s: Session, applied: list[str]
+    ) -> dict[str, Any]:
+        auth_owner_orphans: int | None = None
+        duplicate_profiles: int | None = None
+
+        s.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS auth_migration_quarantine (
+                    resource_type VARCHAR(64) NOT NULL,
+                    resource_id VARCHAR(255) NOT NULL,
+                    reason VARCHAR(255) NOT NULL,
+                    detected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    resolved_at TIMESTAMP NULL,
+                    PRIMARY KEY (resource_type, resource_id)
+                )
+                """
+            )
+        )
+        applied.append("auth_migration_quarantine.table")
+
+        if self._table_exists(s, "experiments") and not self._column_exists(
+            s, "experiments", "owner_user_id"
+        ):
+            s.execute(text("ALTER TABLE experiments ADD COLUMN owner_user_id INTEGER NULL"))
+            applied.append("experiments.owner_user_id")
+
+        if self._table_exists(s, "experiments") and self._column_exists(
+            s, "experiments", "owner_user_id"
+        ):
+            s.execute(
+                text(
+                    """
+                    UPDATE experiments e
+                    SET owner_user_id = e.user_id::INTEGER
+                    FROM users u
+                    WHERE e.owner_user_id IS NULL
+                      AND e.user_id ~ '^[0-9]+$'
+                      AND u.id = e.user_id::INTEGER
+                    """
+                )
+            )
+            auth_owner_orphans = self._count_experiment_owner_orphans(s)
+            s.execute(
+                text(
+                    """
+                    INSERT INTO auth_migration_quarantine(resource_type, resource_id, reason)
+                    SELECT 'experiment', id::TEXT, 'owner_user_id could not be backfilled'
+                    FROM experiments WHERE owner_user_id IS NULL
+                    ON CONFLICT (resource_type, resource_id) DO UPDATE
+                    SET reason = EXCLUDED.reason, detected_at = CURRENT_TIMESTAMP,
+                        resolved_at = NULL
+                    """
+                )
+            )
+            s.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_experiment_owner_status "
+                    "ON experiments (owner_user_id, status)"
+                )
+            )
+            applied.append("experiments.owner_backfill")
+            applied.append("experiments.owner_orphans_quarantined")
+            if auth_owner_orphans == 0:
+                s.execute(
+                    text(
+                        "UPDATE auth_migration_quarantine SET resolved_at = CURRENT_TIMESTAMP "
+                        "WHERE resource_type = 'experiment' AND resolved_at IS NULL"
+                    )
+                )
+
+        if self._table_exists(s, "profiles"):
+            duplicate_profiles = self._count_duplicate_profiles(s)
+            s.execute(
+                text(
+                    """
+                    INSERT INTO auth_migration_quarantine(resource_type, resource_id, reason)
+                    SELECT 'profile', user_id::TEXT, 'multiple profiles for one user'
+                    FROM profiles GROUP BY user_id HAVING COUNT(*) > 1
+                    ON CONFLICT (resource_type, resource_id) DO UPDATE
+                    SET reason = EXCLUDED.reason, detected_at = CURRENT_TIMESTAMP,
+                        resolved_at = NULL
+                    """
+                )
+            )
+            applied.append("profiles.duplicate_scan")
+            if duplicate_profiles == 0:
+                s.execute(
+                    text(
+                        "UPDATE auth_migration_quarantine SET resolved_at = CURRENT_TIMESTAMP "
+                        "WHERE resource_type = 'profile' AND resolved_at IS NULL"
+                    )
+                )
+
+        return {
+            "auth_owner_orphans": auth_owner_orphans,
+            "duplicate_profiles": duplicate_profiles,
+        }
+
+    def prepare_constraint_data(self) -> dict[str, Any]:
+        s = self._get_session()
+        applied: list[str] = []
+        try:
+            dialect = self._dialect_name(s)
+            auth_owner_orphans: int | None = None
+            duplicate_profiles: int | None = None
+
+            if not self._column_exists(s, "pending_actions", "user_id"):
+                self._execute_ddl(
+                    s,
+                    "ALTER TABLE pending_actions ADD COLUMN user_id VARCHAR(128) NULL",
+                    "pending_actions.user_id",
+                    applied,
+                )
+            if not self._index_exists(s, "pending_actions", "idx_pending_actions_status_user"):
+                self._execute_ddl(
+                    s,
+                    "CREATE INDEX idx_pending_actions_status_user ON pending_actions (status, user_id)",
+                    "pending_actions.idx_pending_actions_status_user",
+                    applied,
+                )
+            self._backfill_pending_action_user_ids(s, applied)
+
+            if dialect in ("postgresql", "postgres"):
+                postgres_prep = self._prepare_postgres_auth_constraint_data(s, applied)
+                auth_owner_orphans = postgres_prep["auth_owner_orphans"]
+                duplicate_profiles = postgres_prep["duplicate_profiles"]
+
+            commit = getattr(s, "commit", None)
+            if callable(commit):
+                commit()
+
+            snapshot = self._constraint_readiness_snapshot(s)
+            return {
+                "status": "prepared",
+                "changes": applied,
+                "auth_owner_orphans": (
+                    auth_owner_orphans
+                    if auth_owner_orphans is not None
+                    else snapshot["auth_owner_orphans"]
+                ),
+                "duplicate_profiles": (
+                    duplicate_profiles
+                    if duplicate_profiles is not None
+                    else snapshot["duplicate_profiles"]
+                ),
+                **snapshot,
+            }
+        except Exception as e:
+            logger.error("DB prepare constraint data failed", exc_info=e)
+            rollback = getattr(s, "rollback", None)
+            if callable(rollback):
+                rollback()
+            snapshot = self._constraint_readiness_snapshot(s)
+            return {
+                "status": "error",
+                "detail": "Internal error during constraint preparation",
+                "changes": applied,
+                **snapshot,
+            }
+        finally:
+            s.close()
+
+    def validate_constraint_readiness(self) -> dict[str, Any]:
+        s = self._get_session()
+        try:
+            snapshot = self._constraint_readiness_snapshot(s)
+            return {
+                "status": "ready" if snapshot["ready_for_constraints"] else "blocked",
+                **snapshot,
+            }
+        finally:
+            s.close()
+
+    def apply_prepared_constraints(self) -> dict[str, Any]:
+        s = self._get_session()
+        applied: list[str] = []
+        pending_actions_user_id_not_null_enforced = False
+        try:
+            snapshot = self._constraint_readiness_snapshot(s)
+            if not snapshot["ready_for_constraints"]:
+                return {
+                    "status": "blocked",
+                    "changes": applied,
+                    "pending_actions_user_id_not_null_enforced": False,
+                    **snapshot,
+                }
+
+            dialect = self._dialect_name(s)
+            if self._column_exists(s, "pending_actions", "user_id") and self._column_nullable(
+                s, "pending_actions", "user_id"
+            ) is not False:
+                not_null_sql = self._pending_action_user_id_not_null_sql(dialect=dialect)
+                if not_null_sql:
+                    self._execute_ddl(
+                        s,
+                        not_null_sql,
+                        "pending_actions.user_id_not_null",
+                        applied,
+                    )
+                    pending_actions_user_id_not_null_enforced = True
+
+            if dialect in ("postgresql", "postgres"):
+                if self._table_exists(s, "experiments") and self._column_exists(
+                    s, "experiments", "owner_user_id"
+                ):
+                    if not self._constraint_exists(s, "experiments", "fk_experiments_owner_user"):
+                        s.execute(
+                            text(
+                                "ALTER TABLE experiments ADD CONSTRAINT "
+                                "fk_experiments_owner_user FOREIGN KEY (owner_user_id) "
+                                "REFERENCES users(id) ON DELETE RESTRICT"
+                            )
+                        )
+                        applied.append("experiments.owner_user_fk")
+                    if self._column_nullable(s, "experiments", "owner_user_id") is not False:
+                        s.execute(
+                            text(
+                                "ALTER TABLE experiments ALTER COLUMN owner_user_id SET NOT NULL"
+                            )
+                        )
+                        applied.append("experiments.owner_user_not_null")
+
+                if self._table_exists(s, "profiles") and not self._index_exists(
+                    s, "profiles", "unique_profile_user"
+                ):
+                    s.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS unique_profile_user "
+                            "ON profiles (user_id)"
+                        )
+                    )
+                    applied.append("profiles.unique_user")
+
+            commit = getattr(s, "commit", None)
+            if callable(commit):
+                commit()
+
+            snapshot = self._constraint_readiness_snapshot(s)
+            return {
+                "status": "applied",
+                "changes": applied,
+                "pending_actions_user_id_not_null_enforced": pending_actions_user_id_not_null_enforced,
+                **snapshot,
+            }
+        except Exception as e:
+            logger.error("DB apply prepared constraints failed", exc_info=e)
+            rollback = getattr(s, "rollback", None)
+            if callable(rollback):
+                rollback()
+            snapshot = self._constraint_readiness_snapshot(s)
+            return {
+                "status": "error",
+                "detail": "Internal error during deferred constraint application",
+                "changes": applied,
+                "pending_actions_user_id_not_null_enforced": pending_actions_user_id_not_null_enforced,
+                **snapshot,
+            }
         finally:
             s.close()
 
@@ -417,49 +830,223 @@ class DBMigrationService:
         pending_actions_null_rows: int | None = None
         pending_actions_user_id_not_null_enforced = False
         pending_actions_user_id_not_null_blocked = False
+        auth_owner_orphans: int | None = None
+        duplicate_profiles: int | None = None
         try:
             dialect = self._dialect_name(s)
             consent_table = Consent.__tablename__
+            self._prepare_outbox_lease_schema(s, dialect=dialect, applied=applied)
+            if dialect in ("postgresql", "postgres"):
+                # One additive transaction: a failed identity/ownership backfill leaves the
+                # pre-existing schema usable and never deletes or selects duplicate records.
+                try:
+                    s.execute(
+                        text(
+                            """
+                            CREATE TABLE IF NOT EXISTS external_identities (
+                                id SERIAL PRIMARY KEY,
+                                issuer VARCHAR(512) NOT NULL,
+                                subject VARCHAR(255) NOT NULL,
+                                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                email_at_link VARCHAR(255) NULL,
+                                email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                CONSTRAINT unique_external_identity UNIQUE (issuer, subject)
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_external_identity_user
+                                ON external_identities (user_id);
+                            CREATE TABLE IF NOT EXISTS external_identity_events (
+                                id SERIAL PRIMARY KEY,
+                                identity_id INTEGER NOT NULL REFERENCES external_identities(id) ON DELETE CASCADE,
+                                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                event_type VARCHAR(50) NOT NULL,
+                                admin_group_authorized BOOLEAN NOT NULL DEFAULT FALSE,
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_external_identity_event_user
+                                ON external_identity_events (user_id, created_at);
+                            CREATE TABLE IF NOT EXISTS service_principals (
+                                id SERIAL PRIMARY KEY,
+                                issuer VARCHAR(512) NOT NULL,
+                                subject VARCHAR(255) NOT NULL,
+                                client_id VARCHAR(255) NOT NULL,
+                                display_name VARCHAR(255) NULL,
+                                status VARCHAR(20) NOT NULL DEFAULT 'active',
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                CONSTRAINT unique_service_principal_subject UNIQUE (issuer, subject),
+                                CONSTRAINT unique_service_principal_client UNIQUE (issuer, client_id)
+                            );
+                            CREATE TABLE IF NOT EXISTS service_principal_scopes (
+                                principal_id INTEGER NOT NULL REFERENCES service_principals(id) ON DELETE CASCADE,
+                                scope VARCHAR(100) NOT NULL,
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                PRIMARY KEY (principal_id, scope)
+                            );
+                            CREATE TABLE IF NOT EXISTS feedback_entries (
+                                id VARCHAR(36) PRIMARY KEY,
+                                owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                                conversation_id VARCHAR(100) NOT NULL,
+                                message_id VARCHAR(100) NULL,
+                                rating VARCHAR(20) NOT NULL,
+                                feedback_type VARCHAR(20) NOT NULL,
+                                comment TEXT NULL,
+                                context_json JSONB NULL,
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_feedback_owner_created
+                                ON feedback_entries (owner_user_id, created_at);
+                            CREATE INDEX IF NOT EXISTS idx_feedback_owner_conversation
+                                ON feedback_entries (owner_user_id, conversation_id, created_at);
+                            CREATE TABLE IF NOT EXISTS admin_delegations (
+                                id VARCHAR(36) PRIMARY KEY,
+                                human_issuer VARCHAR(512) NOT NULL,
+                                human_subject VARCHAR(255) NOT NULL,
+                                service_client_id VARCHAR(255) NOT NULL,
+                                operation_id VARCHAR(255) NOT NULL,
+                                resource_id VARCHAR(255) NULL,
+                                result_status INTEGER NULL,
+                                trace_id VARCHAR(64) NOT NULL,
+                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                            );
+                            CREATE INDEX IF NOT EXISTS idx_admin_delegation_trace
+                                ON admin_delegations (trace_id, created_at);
+                            CREATE TABLE IF NOT EXISTS auth_migration_quarantine (
+                                resource_type VARCHAR(64) NOT NULL,
+                                resource_id VARCHAR(255) NOT NULL,
+                                reason VARCHAR(255) NOT NULL,
+                                detected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                resolved_at TIMESTAMP NULL,
+                                PRIMARY KEY (resource_type, resource_id)
+                            )
+                            """
+                        )
+                    )
+                    applied.extend(
+                        [
+                            "external_identities.table",
+                            "service_principals.tables",
+                            "feedback_entries.table",
+                            "admin_delegations.table",
+                            "auth_migration_quarantine.table",
+                        ]
+                    )
+                    if self._table_exists(s, "experiments") and not self._column_exists(
+                        s, "experiments", "owner_user_id"
+                    ):
+                        s.execute(text("ALTER TABLE experiments ADD COLUMN owner_user_id INTEGER NULL"))
+                        applied.append("experiments.owner_user_id")
+                    if self._table_exists(s, "experiments"):
+                        s.execute(
+                            text(
+                                """
+                                UPDATE experiments e
+                                SET owner_user_id = e.user_id::INTEGER
+                                FROM users u
+                                WHERE e.owner_user_id IS NULL
+                                  AND e.user_id ~ '^[0-9]+$'
+                                  AND u.id = e.user_id::INTEGER
+                                """
+                            )
+                        )
+                        owner_result = s.execute(
+                            text("SELECT COUNT(*) FROM experiments WHERE owner_user_id IS NULL")
+                        )
+                        auth_owner_orphans = int(
+                            getattr(owner_result, "scalar", lambda: 0)() or 0
+                        )
+                        s.execute(
+                            text(
+                                """
+                                INSERT INTO auth_migration_quarantine(resource_type, resource_id, reason)
+                                SELECT 'experiment', id::TEXT, 'owner_user_id could not be backfilled'
+                                FROM experiments WHERE owner_user_id IS NULL
+                                ON CONFLICT (resource_type, resource_id) DO UPDATE
+                                SET reason = EXCLUDED.reason, detected_at = CURRENT_TIMESTAMP,
+                                    resolved_at = NULL
+                                """
+                            )
+                        )
+                        s.execute(
+                            text(
+                                "CREATE INDEX IF NOT EXISTS idx_experiment_owner_status "
+                                "ON experiments (owner_user_id, status)"
+                            )
+                        )
+                        if auth_owner_orphans == 0:
+                            s.execute(
+                                text(
+                                    "UPDATE auth_migration_quarantine SET resolved_at = CURRENT_TIMESTAMP "
+                                    "WHERE resource_type = 'experiment' AND resolved_at IS NULL"
+                                )
+                            )
+                            if not self._constraint_exists(
+                                s, "experiments", "fk_experiments_owner_user"
+                            ):
+                                s.execute(
+                                    text(
+                                        "ALTER TABLE experiments ADD CONSTRAINT "
+                                        "fk_experiments_owner_user FOREIGN KEY (owner_user_id) "
+                                        "REFERENCES users(id) ON DELETE RESTRICT"
+                                    )
+                                )
+                                applied.append("experiments.owner_user_fk")
+                            s.execute(
+                                text(
+                                    "ALTER TABLE experiments ALTER COLUMN owner_user_id SET NOT NULL"
+                                )
+                            )
+                            applied.append("experiments.owner_user_not_null")
+                    if self._table_exists(s, "profiles"):
+                        duplicate_result = s.execute(
+                            text(
+                                "SELECT COUNT(*) FROM (SELECT user_id FROM profiles "
+                                "GROUP BY user_id HAVING COUNT(*) > 1) duplicates"
+                            )
+                        )
+                        duplicate_profiles = int(
+                            getattr(duplicate_result, "scalar", lambda: 0)() or 0
+                        )
+                        s.execute(
+                            text(
+                                """
+                                INSERT INTO auth_migration_quarantine(resource_type, resource_id, reason)
+                                SELECT 'profile', user_id::TEXT, 'multiple profiles for one user'
+                                FROM profiles GROUP BY user_id HAVING COUNT(*) > 1
+                                ON CONFLICT (resource_type, resource_id) DO UPDATE
+                                SET reason = EXCLUDED.reason, detected_at = CURRENT_TIMESTAMP,
+                                    resolved_at = NULL
+                                """
+                            )
+                        )
+                        if duplicate_profiles == 0:
+                            s.execute(
+                                text(
+                                    "UPDATE auth_migration_quarantine SET resolved_at = CURRENT_TIMESTAMP "
+                                    "WHERE resource_type = 'profile' AND resolved_at IS NULL"
+                                )
+                            )
+                            s.execute(
+                                text(
+                                    "CREATE UNIQUE INDEX IF NOT EXISTS unique_profile_user "
+                                    "ON profiles (user_id)"
+                                )
+                            )
+                            applied.append("profiles.unique_user")
+                    commit = getattr(s, "commit", None)
+                    if callable(commit):
+                        commit()
+                except Exception:
+                    rollback = getattr(s, "rollback", None)
+                    if callable(rollback):
+                        rollback()
+                    raise
             if not self._index_exists(s, "users", "idx_user_lookup"):
                 self._execute_ddl(
                     s,
-                    "CREATE INDEX idx_user_lookup ON users (email, external_id)",
+                    "CREATE INDEX idx_user_lookup ON users (email)",
                     "users.idx_user_lookup",
-                    applied,
-                )
-            if not self._column_exists(s, "users", "username"):
-                self._execute_ddl(
-                    s,
-                    "ALTER TABLE users ADD COLUMN username VARCHAR(50) NULL",
-                    "users.username",
-                    applied,
-                )
-            if not self._column_exists(s, "users", "password_hash"):
-                self._execute_ddl(
-                    s,
-                    "ALTER TABLE users ADD COLUMN password_hash TEXT NULL",
-                    "users.password_hash",
-                    applied,
-                )
-            if not self._column_exists(s, "users", "cpf_hash"):
-                self._execute_ddl(
-                    s,
-                    "ALTER TABLE users ADD COLUMN cpf_hash VARCHAR(128) NULL",
-                    "users.cpf_hash",
-                    applied,
-                )
-            if not self._column_exists(s, "users", "password_reset_token_hash"):
-                self._execute_ddl(
-                    s,
-                    "ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(128) NULL",
-                    "users.password_reset_token_hash",
-                    applied,
-                )
-            if not self._column_exists(s, "users", "password_reset_expires_at"):
-                self._execute_ddl(
-                    s,
-                    "ALTER TABLE users ADD COLUMN password_reset_expires_at TIMESTAMP NULL",
-                    "users.password_reset_expires_at",
                     applied,
                 )
             if not self._constraint_exists(s, "users", "unique_user_email"):
@@ -472,42 +1059,6 @@ class DBMigrationService:
                         columns_csv="email",
                     ),
                     "users.unique_user_email",
-                    applied,
-                )
-            if not self._constraint_exists(s, "users", "unique_user_username"):
-                self._execute_ddl(
-                    s,
-                    self._unique_constraint_sql(
-                        dialect=dialect,
-                        table="users",
-                        constraint="unique_user_username",
-                        columns_csv="username",
-                    ),
-                    "users.unique_user_username",
-                    applied,
-                )
-            if not self._constraint_exists(s, "users", "unique_user_external_id"):
-                self._execute_ddl(
-                    s,
-                    self._unique_constraint_sql(
-                        dialect=dialect,
-                        table="users",
-                        constraint="unique_user_external_id",
-                        columns_csv="external_id",
-                    ),
-                    "users.unique_user_external_id",
-                    applied,
-                )
-            if not self._constraint_exists(s, "users", "unique_user_cpf_hash"):
-                self._execute_ddl(
-                    s,
-                    self._unique_constraint_sql(
-                        dialect=dialect,
-                        table="users",
-                        constraint="unique_user_cpf_hash",
-                        columns_csv="cpf_hash",
-                    ),
-                    "users.unique_user_cpf_hash",
                     applied,
                 )
             if not self._column_exists(s, "pending_actions", "simulation_summary_json"):
@@ -899,6 +1450,8 @@ class DBMigrationService:
                 "pending_actions_user_id_null_rows": pending_actions_null_rows,
                 "pending_actions_user_id_not_null_enforced": pending_actions_user_id_not_null_enforced,
                 "pending_actions_user_id_not_null_blocked": pending_actions_user_id_not_null_blocked,
+                "auth_owner_orphans": auth_owner_orphans,
+                "duplicate_profiles": duplicate_profiles,
             }
         except Exception as e:
             logger.error("DB migration failed", exc_info=e)
@@ -909,6 +1462,8 @@ class DBMigrationService:
                 "pending_actions_user_id_null_rows": pending_actions_null_rows,
                 "pending_actions_user_id_not_null_enforced": pending_actions_user_id_not_null_enforced,
                 "pending_actions_user_id_not_null_blocked": pending_actions_user_id_not_null_blocked,
+                "auth_owner_orphans": auth_owner_orphans,
+                "duplicate_profiles": duplicate_profiles,
             }
         finally:
             s.close()

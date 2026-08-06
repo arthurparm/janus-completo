@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.request_guard import require_service_actor
 from app.planes.knowledge import KnowledgeFacade
 
 from .deps import get_knowledge_facade
@@ -35,7 +35,7 @@ async def build_experimental_index(
 ):
     result = await knowledge.build_experimental_index(
         domain=payload.domain,
-        user_id=require_admin_actor(request),
+        user_id=require_service_actor(request),
         knowledge_space_id=payload.knowledge_space_id,
         doc_id=payload.doc_id,
         rebuild_full=payload.rebuild_full,
