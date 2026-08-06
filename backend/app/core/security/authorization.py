@@ -15,19 +15,16 @@ class AuthorizationService:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
         return actor
 
-    def require_admin(self, *, actor: ActorContext | None) -> ActorContext:
+    def require_human_admin(self, *, actor: ActorContext | None) -> ActorContext:
         resolved = self.require_authenticated(actor=actor)
-        if resolved.actor_type is ActorType.SYSTEM or not resolved.has_role(self.admin_role):
+        if resolved.actor_type is not ActorType.HUMAN or not resolved.has_role(self.admin_role):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
         return resolved
 
-    def require_owner_or_admin(
-        self, *, actor: ActorContext | None, resource_owner: str | int
-    ) -> ActorContext:
-        resolved = self.require_authenticated(actor=actor).bind_resource_owner(resource_owner)
-        if resolved.actor_id != resolved.resource_owner and not resolved.has_role(self.admin_role):
+    def require_service(self, *, actor: ActorContext | None) -> ActorContext:
+        resolved = self.require_authenticated(actor=actor)
+        if resolved.actor_type is not ActorType.SERVICE:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
         return resolved
-
 
 authorization_service = AuthorizationService()

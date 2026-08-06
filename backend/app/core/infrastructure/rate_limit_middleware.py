@@ -10,6 +10,7 @@ from app.config import settings
 from app.core.infrastructure.auth import get_actor_user_id
 from app.core.infrastructure.redis_manager import redis_manager
 from app.core.security.chat_unlimited import is_chat_unlimited_request
+from app.core.security.route_policy import resolve_endpoint_policy
 
 try:
     from prometheus_client import Counter
@@ -78,7 +79,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _should_use_local_fallback(self, path: str) -> bool:
         return (
-            path.startswith("/api/v1/chat")
+            path == "/api/v1/auth/oidc-config"
+            or path.startswith("/api/v1/chat")
             or path.startswith("/api/v1/documents/upload")
             or path.startswith("/api/v1/documents/status/")
             or path.startswith("/api/v1/documents/list")
@@ -142,7 +144,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Health check bypass
         path = request.url.path
-        if path.startswith("/metrics") or path in ("/healthz", "/livez", "/readyz"):
+        if resolve_endpoint_policy(request) is None:
+            return await call_next(request)
+        if path.startswith("/metrics") or path in {
+            "/healthz/public",
+            "/healthz/user",
+            "/healthz/control-plane",
+            "/livez",
+            "/readyz",
+        }:
             return await call_next(request)
         if path.startswith("/api/v1/chat") and is_chat_unlimited_request(request):
             return await call_next(request)

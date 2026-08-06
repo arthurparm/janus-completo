@@ -28,20 +28,18 @@ def require_authenticated_actor_id(request: Request) -> str:
     return require_authenticated_actor(request).actor_id
 
 
-def require_admin_actor(request: Request) -> str:
-    return require_admin_actor_context(request).actor_id
-
-
-def require_admin_actor_context(request: Request) -> ActorContext:
+def require_human_admin_actor_context(request: Request) -> ActorContext:
     require_api_key(request)
-    return authorization_service.require_admin(actor=get_request_actor_context(request))
+    return authorization_service.require_human_admin(actor=get_request_actor_context(request))
 
 
-def require_same_user_or_admin(request: Request, target_user_id: str | int) -> str:
+def require_service_actor_context(request: Request) -> ActorContext:
     require_api_key(request)
-    return authorization_service.require_owner_or_admin(
-        actor=get_request_actor_context(request), resource_owner=target_user_id
-    ).actor_id
+    return authorization_service.require_service(actor=get_request_actor_context(request))
+
+
+def require_service_actor(request: Request) -> str:
+    return require_service_actor_context(request).actor_id
 
 
 def resolve_user_scope_id(request: Request | None, explicit_user_id: str | None = None) -> str | None:

@@ -3,7 +3,7 @@ import structlog
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.request_guard import require_service_actor
 from app.services.config_service import ConfigService, get_config_service
 
 router = APIRouter(tags=["Admin"])
@@ -34,9 +34,9 @@ async def update_config(
     request: Request,
     service: ConfigService = Depends(get_config_service)
 ):
-    require_admin_actor(request)
+    require_service_actor(request)
     await service.update_config(config_request.updates)
-    
+
     return ConfigUpdateResponse(
         message="Configuração atualizada e propagada com sucesso.",
         updated_keys=list(config_request.updates.keys())

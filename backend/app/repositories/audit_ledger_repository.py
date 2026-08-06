@@ -6,12 +6,11 @@ import json
 from typing import Any
 
 import structlog
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
 from app.config import settings
 from app.db import db
 from app.models.audit_ledger_models import AuditLedgerEvent
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 logger = structlog.get_logger(__name__)
 
@@ -34,10 +33,6 @@ def _get_hmac_key() -> bytes:
             return key.get_secret_value().encode("utf-8")  # type: ignore[attr-defined]
         except Exception:
             return str(key).encode("utf-8")
-    if str(getattr(settings, "ENVIRONMENT", "") or "").lower() != "production":
-        legacy = getattr(settings, "AUTH_JWT_SECRET", None)
-        if legacy:
-            return str(legacy).encode("utf-8")
     raise RuntimeError("AUDIT_LEDGER_HMAC_KEY is not configured.")
 
 

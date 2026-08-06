@@ -9,6 +9,8 @@ import msgpack
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 try:
@@ -42,7 +44,11 @@ from app.core.middleware.security_headers import SecurityHeadersMiddleware
 from app.core.monitoring import get_health_monitor
 from app.core.security.autonomy_guard import validate_autonomous_evolution_disabled
 from app.core.security.containment_middleware import SecurityContainmentMiddleware
-from app.core.security.route_policy import validate_route_policy
+from app.core.security.route_policy import (
+    ApiProfile,
+    configure_profile_routes,
+    validate_route_policy,
+)
 from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
 
 # Determine log path
@@ -91,8 +97,14 @@ def cancel_tracked_orchestrator_workers(raw_workers: Any) -> int:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.route_policy_matrix = validate_route_policy(app)
+    validate_route_policy(app)
     validate_autonomous_evolution_disabled(app)
+
+    profile = ApiProfile(settings.JANUS_API_PROFILE)
+    if profile is ApiProfile.PUBLIC or settings.JANUS_SKIP_EXTERNAL_STARTUP:
+        logger.info("external_startup_skipped", api_profile=profile.value)
+        yield
+        return
 
     # 0.5 Validate critical secrets in production before bootstrapping services.
     from app.core.security.secret_validator import validate_production_secrets
@@ -143,17 +155,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("autonomy_admin_service_init_failed", error=str(e), exc_info=e)
 
-    # 2.5 Ensure system user (optional)
-    try:
-        from app.services.system_user_service import ensure_system_user
-
-        system_user_id = ensure_system_user()
-        app.state.system_user_id = system_user_id
-        if system_user_id:
-            logger.info("System user ready.", user_id=system_user_id)
-    except Exception as e:
-        logger.error("Failed to ensure system user.", exc_info=e)
-
     # 3. Initialize Rate Limits
     from app.core.llm.rate_limiter import configure_rate_limits_from_settings
 
@@ -168,7 +169,10 @@ async def lifespan(app: FastAPI):
     pass
 
     # 4.5 Start orchestrator-managed workers (queue consumers) if enabled.
-    if getattr(settings, "START_ORCHESTRATOR_WORKERS_ON_STARTUP", False):
+    if (
+        profile in {ApiProfile.CONTROL_PLANE, ApiProfile.ALL_TEST}
+        and getattr(settings, "START_ORCHESTRATOR_WORKERS_ON_STARTUP", False)
+    ):
         try:
             current = getattr(app.state, "orchestrator_workers", []) or []
             if not current:
@@ -227,7 +231,7 @@ from app.core.monitoring import auto_healer_metrics as _auto_healer_metrics  # n
 
 # --- Configuração da Aplicação ---
 if PROMETHEUS_INSTRUMENTATOR_AVAILABLE:
-    Instrumentator().instrument(app).expose(app)
+    Instrumentator().instrument(app)
 else:
     logger.warning(
         "prometheus_instrumentator_unavailable",
@@ -270,11 +274,6 @@ async def msgpack_content_negotiation(request: Request, call_next):
     return response
 
 
-@app.get("/", include_in_schema=False)
-def read_root():
-    return {"message": f"Welcome to {settings.APP_NAME}. Docs available at /docs"}
-
-
 def _get_dependency_health() -> dict[str, Any]:
     try:
         kernel = Kernel.get_instance()
@@ -312,16 +311,47 @@ def _get_dependency_health() -> dict[str, Any]:
         }
 
 
-@app.get("/healthz", tags=["System"], summary="Health (basic)")
-def healthz():
+@app.get(
+    "/healthz/public",
+    tags=["System"],
+    summary="Public liveness",
+    operation_id="get_public_liveness",
+)
+def healthz_public():
+    return {"status": "ok", "profile": "public"}
+
+
+@app.get(
+    "/healthz/user",
+    tags=["System"],
+    summary="User API liveness",
+    operation_id="get_user_liveness",
+)
+def healthz_user():
     deps = _get_dependency_health()
     return {
         "status": "ok",
+        "profile": "user",
         "dependencies": deps,
     }
 
 
-@app.get("/health", tags=["System"], summary="Health (detailed)")
+@app.get(
+    "/healthz/control-plane",
+    tags=["System"],
+    summary="Control-plane liveness",
+    operation_id="get_control_plane_liveness",
+)
+def healthz_control_plane():
+    return {"status": "ok", "profile": "control-plane"}
+
+
+@app.get(
+    "/health",
+    tags=["System"],
+    summary="Health (detailed)",
+    operation_id="get_control_plane_health",
+)
 def health():
     build_ref = str(os.getenv("JANUS_BUILD_REF") or "").strip() or None
     deps = _get_dependency_health()
@@ -385,6 +415,17 @@ def health():
     return health_info
 
 
+@app.get(
+    "/metrics",
+    tags=["System"],
+    operation_id="get_prometheus_metrics",
+)
+def metrics() -> PlainTextResponse:
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 try:
     if getattr(settings, "SERVE_STATIC_FILES", False):
         app.mount(
@@ -410,3 +451,92 @@ try:
             return response
 except Exception:
     pass
+
+
+app.state.api_profile = ApiProfile(settings.JANUS_API_PROFILE)
+app.state.route_policy_matrix = configure_profile_routes(app, app.state.api_profile)
+
+
+def _profile_openapi() -> dict[str, Any]:
+    if app.openapi_schema is not None:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schemes = schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    schemes["OIDCUser"] = {
+        "type": "openIdConnect",
+        "openIdConnectUrl": settings.OIDC_ISSUER.rstrip("/")
+        + "/.well-known/openid-configuration",
+    }
+    control_scopes = sorted(
+        {
+            scope
+            for policy in app.state.route_policy_matrix
+            if policy.profile is ApiProfile.CONTROL_PLANE
+            for scope in policy.scopes
+        }
+    )
+    schemes["OIDCService"] = {
+        "type": "oauth2",
+        "flows": {
+            "clientCredentials": {
+                "tokenUrl": settings.OIDC_SERVICE_TOKEN_URL or "https://idp.invalid/token",
+                "scopes": {scope: scope for scope in control_scopes},
+            }
+        },
+    }
+    admin_action = (
+        schema.get("paths", {})
+        .get("/api/v1/admin-actions", {})
+        .get("post")
+    )
+    if admin_action is not None:
+        delegable = sorted(
+            policy.operation_id
+            for policy in app.state.route_policy_matrix
+            if policy.profile is ApiProfile.CONTROL_PLANE and policy.human_delegable
+        )
+        variants = [
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["operation_id"],
+                "properties": {
+                    "operation_id": {"type": "string", "const": operation_id},
+                    "path_params": {
+                        "type": "object",
+                        "additionalProperties": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+                        "default": {},
+                    },
+                    "query_params": {
+                        "type": "object",
+                        "additionalProperties": True,
+                        "default": {},
+                    },
+                    "payload": {"type": "object", "default": {}},
+                },
+            }
+            for operation_id in delegable
+        ]
+        admin_action["requestBody"] = {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "oneOf": variants,
+                        "discriminator": {"propertyName": "operation_id"},
+                    }
+                }
+            },
+        }
+        admin_action["x-janus-delegable-operation-ids"] = delegable
+    schema["x-janus-api-profile"] = app.state.api_profile.value
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _profile_openapi  # type: ignore[method-assign]

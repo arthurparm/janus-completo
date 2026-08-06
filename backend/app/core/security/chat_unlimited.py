@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from fastapi import Request
-
 from app.config import settings
 from app.core.infrastructure.auth import get_actor_user_id
 from app.repositories.user_repository import UserRepository
+from fastapi import Request
 
 
 def _normalize_identifier(value: str | int | None) -> str:
@@ -32,12 +31,6 @@ def is_chat_unlimited_user(user_id: str | int | None) -> bool:
         numeric_user_id = int(str(user_id).strip())
     except Exception:
         return False
-
-    try:
-        if user_repo.is_admin(numeric_user_id):
-            return True
-    except Exception:
-        pass
 
     try:
         user = user_repo.get_user(numeric_user_id)

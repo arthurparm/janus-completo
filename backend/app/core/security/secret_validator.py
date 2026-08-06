@@ -16,15 +16,6 @@ INSECURE_DEFAULTS: dict[str, set[str]] = {
     "NEO4J_PASSWORD": {"password", "change_me_neo4j_password", "__required__"},
     "POSTGRES_PASSWORD": {"janus_pass", "change_me_postgres_password", "__required__"},
     "RABBITMQ_PASSWORD": {"janus_pass", "change_me_rabbitmq_password", "__required__"},
-    "AUTH_JWT_SECRET": {
-        "",
-        "none",
-        "null",
-        "changeme",
-        "change_me",
-        "dev_secret_change_me",
-        "janus_dev_secret",
-    },
     "AUDIT_LEDGER_HMAC_KEY": {
         "",
         "none",

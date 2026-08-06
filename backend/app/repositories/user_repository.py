@@ -1,10 +1,26 @@
-from typing import Any
-
-from sqlalchemy import and_
-from sqlalchemy.orm import Session
+from typing import Any, cast
 
 from app.db import db
-from app.models.user_models import Consent, OAuthToken, Profile, Role, User, UserRole
+from app.models.user_models import (
+    Consent,
+    ExternalIdentity,
+    ExternalIdentityEvent,
+    OAuthToken,
+    Profile,
+    ServicePrincipal,
+    User,
+)
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+
+class IdentityLinkRequiredError(RuntimeError):
+    """An existing account needs an explicit, separately authorized link flow."""
+
+
+class InactivePrincipalError(RuntimeError):
+    """The resolved local account or service principal is inactive."""
 
 
 class UserRepository:
@@ -32,10 +48,160 @@ class UserRepository:
             if not self._session:
                 s.close()
 
-    def get_by_external_id(self, external_id: str) -> User | None:
+    def update_display_name(self, user_id: int, display_name: str | None) -> User | None:
         s = self._get_session()
         try:
-            return s.query(User).filter(User.external_id == external_id).first()
+            user = s.query(User).filter(User.id == user_id).first()
+            if user is None:
+                return None
+            user.display_name = display_name
+            s.commit()
+            s.refresh(user)
+            return user
+        finally:
+            if not self._session:
+                s.close()
+
+    def resolve_or_provision_external_identity(
+        self,
+        *,
+        issuer: str,
+        subject: str,
+        email: str | None,
+        email_verified: bool,
+        display_name: str | None,
+        admin_group_authorized: bool = False,
+    ) -> tuple[User, bool]:
+        """Atomically resolve or JIT-provision by the only trusted key: (issuer, subject)."""
+        normalized_issuer = issuer.strip().rstrip("/")
+        normalized_subject = subject.strip()
+        if not normalized_issuer or not normalized_subject:
+            raise ValueError("issuer and subject are required")
+        s = self._get_session()
+        try:
+            identity = (
+                s.query(ExternalIdentity)
+                .filter(
+                    ExternalIdentity.issuer == normalized_issuer,
+                    ExternalIdentity.subject == normalized_subject,
+                )
+                .first()
+            )
+            if identity is not None:
+                user = s.query(User).filter(User.id == identity.user_id).first()
+                if user is None or str(user.status).lower() != "active":
+                    raise InactivePrincipalError("inactive user")
+                identity.last_seen_at = __import__("datetime").datetime.utcnow()
+                s.commit()
+                return user, False
+
+            # Email is informative only. It must never silently link an existing account.
+            if email and s.query(User).filter(User.email == email).first() is not None:
+                raise IdentityLinkRequiredError("explicit account linking is required")
+
+            user = User(
+                email=email if email_verified else None,
+                display_name=display_name,
+                status="active",
+            )
+            s.add(user)
+            s.flush()
+            identity = ExternalIdentity(
+                issuer=normalized_issuer,
+                subject=normalized_subject,
+                user_id=user.id,
+                email_at_link=email,
+                email_verified=email_verified,
+            )
+            s.add(identity)
+            s.flush()
+            s.add(
+                ExternalIdentityEvent(
+                    identity_id=identity.id,
+                    user_id=user.id,
+                    event_type="jit_provisioned",
+                    admin_group_authorized=admin_group_authorized,
+                )
+            )
+            s.commit()
+            s.refresh(user)
+            return user, True
+        except IntegrityError:
+            # Concurrent first logins converge on the database uniqueness constraint.
+            s.rollback()
+            identity = (
+                s.query(ExternalIdentity)
+                .filter(
+                    ExternalIdentity.issuer == normalized_issuer,
+                    ExternalIdentity.subject == normalized_subject,
+                )
+                .first()
+            )
+            if identity is None:
+                raise
+            user = s.query(User).filter(User.id == identity.user_id).first()
+            if user is None or str(user.status).lower() != "active":
+                raise InactivePrincipalError("inactive user")
+            return user, False
+        finally:
+            if not self._session:
+                s.close()
+
+    def get_active_service_principal(
+        self, *, issuer: str, subject: str, client_id: str
+    ) -> tuple[ServicePrincipal, set[str]] | None:
+        s = self._get_session()
+        try:
+            principal = (
+                s.query(ServicePrincipal)
+                .filter(
+                    ServicePrincipal.issuer == issuer.strip().rstrip("/"),
+                    ServicePrincipal.subject == subject,
+                    ServicePrincipal.client_id == client_id,
+                )
+                .first()
+            )
+            if principal is None:
+                return None
+            if str(principal.status).lower() != "active":
+                raise InactivePrincipalError("inactive service principal")
+            return principal, {str(item.scope) for item in principal.scopes}
+        finally:
+            if not self._session:
+                s.close()
+
+    def has_active_admin_delegation(
+        self,
+        *,
+        delegation_id: str,
+        human_subject: str,
+        service_client_id: str,
+        operation_id: str,
+        trace_id: str,
+    ) -> bool:
+        s = self._get_session()
+        try:
+            row = s.execute(
+                text(
+                    """
+                    SELECT 1 FROM admin_delegations
+                    WHERE id = :delegation_id
+                      AND human_subject = :human_subject
+                      AND service_client_id = :service_client_id
+                      AND operation_id = :operation_id
+                      AND trace_id = :trace_id
+                      AND result_status IS NULL
+                    """
+                ),
+                {
+                    "delegation_id": delegation_id,
+                    "human_subject": human_subject,
+                    "service_client_id": service_client_id,
+                    "operation_id": operation_id,
+                    "trace_id": trace_id,
+                },
+            ).first()
+            return row is not None
         finally:
             if not self._session:
                 s.close()
@@ -44,20 +210,12 @@ class UserRepository:
         self,
         email: str | None,
         display_name: str | None,
-        external_id: str | None = None,
-        username: str | None = None,
-        password_hash: str | None = None,
-        cpf_hash: str | None = None,
     ) -> User:
         s = self._get_session()
         try:
             u = User(
                 email=email,
                 display_name=display_name,
-                external_id=external_id,
-                username=username,
-                password_hash=password_hash,
-                cpf_hash=cpf_hash,
             )
             s.add(u)
             s.commit()
@@ -66,155 +224,6 @@ class UserRepository:
         finally:
             if not self._session:
                 s.close()
-
-    def get_by_username(self, username: str) -> User | None:
-        s = self._get_session()
-        try:
-            return s.query(User).filter(User.username == username).first()
-        finally:
-            if not self._session:
-                s.close()
-
-    def get_by_cpf_hash(self, cpf_hash: str) -> User | None:
-        s = self._get_session()
-        try:
-            return s.query(User).filter(User.cpf_hash == cpf_hash).first()
-        finally:
-            if not self._session:
-                s.close()
-
-    def set_external_id(self, user_id: int, external_id: str) -> bool:
-        s = self._get_session()
-        try:
-            u = s.query(User).filter(User.id == user_id).first()
-            if not u:
-                return False
-            u.external_id = external_id
-            s.commit()
-            return True
-        finally:
-            if not self._session:
-                s.close()
-
-    def set_password_hash(self, user_id: int, password_hash: str | None) -> bool:
-        s = self._get_session()
-        try:
-            u = s.query(User).filter(User.id == user_id).first()
-            if not u:
-                return False
-            u.password_hash = password_hash
-            s.commit()
-            return True
-        finally:
-            if not self._session:
-                s.close()
-
-    def set_cpf_hash(self, user_id: int, cpf_hash: str | None) -> bool:
-        s = self._get_session()
-        try:
-            u = s.query(User).filter(User.id == user_id).first()
-            if not u:
-                return False
-            u.cpf_hash = cpf_hash
-            s.commit()
-            return True
-        finally:
-            if not self._session:
-                s.close()
-
-    def set_reset_token(
-        self, user_id: int, token_hash: str | None, expires_at: Any | None = None
-    ) -> bool:
-        s = self._get_session()
-        try:
-            u = s.query(User).filter(User.id == user_id).first()
-            if not u:
-                return False
-            u.password_reset_token_hash = token_hash
-            u.password_reset_expires_at = expires_at
-            s.commit()
-            return True
-        finally:
-            if not self._session:
-                s.close()
-
-    def get_by_reset_token(self, token_hash: str) -> User | None:
-        s = self._get_session()
-        try:
-            return s.query(User).filter(User.password_reset_token_hash == token_hash).first()
-        finally:
-            if not self._session:
-                s.close()
-
-    def assign_role(self, user_id: int, role_name: str) -> bool:
-        s = self._get_session()
-        try:
-            r = s.query(Role).filter(Role.name == role_name).first()
-            if r is None:
-                r = Role(name=role_name)
-                s.add(r)
-                s.commit()
-                s.refresh(r)
-            ur = UserRole(user_id=user_id, role_id=r.id)
-            s.add(ur)
-            s.commit()
-            return True
-        finally:
-            if not self._session:
-                s.close()
-
-    def is_admin(self, user_id: int) -> bool:
-        s = self._get_session()
-        try:
-            q = (
-                s.query(UserRole)
-                .join(Role, UserRole.role_id == Role.id)
-                .filter(and_(UserRole.user_id == user_id, Role.name == "ADMIN"))
-            )
-            return q.first() is not None
-        finally:
-            if not self._session:
-                s.close()
-
-    def has_role(self, user_id: int, role_name: str) -> bool:
-        s = self._get_session()
-        try:
-            q = (
-                s.query(UserRole)
-                .join(Role, UserRole.role_id == Role.id)
-                .filter(and_(UserRole.user_id == user_id, Role.name == role_name))
-            )
-            return q.first() is not None
-        finally:
-            if not self._session:
-                s.close()
-
-    def has_any_admin(self) -> bool:
-        s = self._get_session()
-        try:
-            q = (
-                s.query(UserRole)
-                .join(Role, UserRole.role_id == Role.id)
-                .filter(Role.name == "ADMIN")
-            )
-            return q.first() is not None
-        finally:
-            if not self._session:
-                s.close()
-
-    def list_roles(self, user_id: int) -> list[str]:
-        s = self._get_session()
-        try:
-            q = (
-                s.query(Role.name)
-                .join(UserRole, UserRole.role_id == Role.id)
-                .filter(UserRole.user_id == user_id)
-            )
-            return [row[0] for row in q.all()]
-        finally:
-            if not self._session:
-                s.close()
-
 
 class ProfileRepository:
     def __init__(self, session: Session | None = None):
@@ -293,7 +302,7 @@ class ConsentRepository:
     def list_consents(self, user_id: int) -> list[Consent]:
         s = self._get_session()
         try:
-            return s.query(Consent).filter(Consent.user_id == user_id).all()
+            return cast(list[Consent], s.query(Consent).filter(Consent.user_id == user_id).all())
         finally:
             if not self._session:
                 s.close()
@@ -334,7 +343,7 @@ class ConsentRepository:
                 try:
                     from datetime import datetime
 
-                    return c.expires_at > datetime.utcnow()
+                    return bool(c.expires_at > datetime.utcnow())
                 except Exception:
                     return False
             return True

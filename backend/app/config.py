@@ -1,10 +1,8 @@
 import json
 from typing import Annotated, Any
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-
-from app.core.security.cpf import is_valid_cpf, normalize_cpf
 
 _LOCALHOST_ORIGINS = [
     "http://localhost:4200",
@@ -12,6 +10,31 @@ _LOCALHOST_ORIGINS = [
     "http://localhost:4300",
     "http://127.0.0.1:4300",
 ]
+
+CURRENT_RUNTIME_MODELS = frozenset(
+    {
+        "gpt-5.6-luna",
+        "gemini-3.6-flash",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "grok-4.5",
+        "poolside/laguna-s-2.1:free",
+        "cohere/north-mini-code:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "google/gemma-4-31b-it:free",
+        "openai/gpt-oss-20b:free",
+        "gpt-oss:20b",
+        "qwen3.5:9b",
+        "ministral-3:14b",
+    }
+)
+
+
+def require_current_runtime_model(model_name: str) -> str:
+    normalized = str(model_name or "").strip()
+    if normalized not in CURRENT_RUNTIME_MODELS:
+        raise ValueError(f"runtime model is outside the current allowlist: {normalized}")
+    return normalized
 
 
 class AppSettings(BaseSettings):
@@ -29,10 +52,12 @@ class AppSettings(BaseSettings):
 
     # Feature flags / modos de execução
     DRY_RUN: bool = False
-    PUBLIC_API_MINIMAL: bool = False  # Expor apenas chat/autonomy quando True
+    JANUS_API_PROFILE: str = "all-test"
+    JANUS_SKIP_EXTERNAL_STARTUP: bool = False
     AUTO_INDEX_ON_STARTUP: bool = True  # Indexar automaticamente se o grafo estiver vazio
     INIT_MAS_AGENTS_ON_STARTUP: bool = True  # Inicializar agentes do MAS no startup
     START_ORCHESTRATOR_WORKERS_ON_STARTUP: bool = True  # Iniciar workers de fila no boot do API
+    OUTBOX_LEASE_SECONDS: int = Field(default=300, ge=30, le=3600)
     ENABLE_GOOGLE_PRODUCTIVITY_WORKER: bool = False  # Mantem worker opcional em modo disabled por padrao
 
     # CORS
@@ -197,22 +222,24 @@ class AppSettings(BaseSettings):
 
     # LLM Providers
     OPENAI_API_KEY: SecretStr | None = None
-    OPENAI_MODEL_NAME: str = "gpt-4o"
-    OPENAI_MODELS: list[str] = ["gpt-4o"]
+    OPENAI_MODEL_NAME: str = "gpt-5.6-luna"
+    OPENAI_MODELS: list[str] = ["gpt-5.6-luna"]
     OPENAI_HTTP_MAX_CONNECTIONS: int = 100
     OPENAI_HTTP_MAX_KEEPALIVE: int = 20
     OPENAI_HTTP_TIMEOUT_SECONDS: float = 60.0
     GEMINI_API_KEY: SecretStr | None = None
-    GEMINI_MODEL_NAME: str = "gemini-2.5-flash"
-    GEMINI_MODELS: list[str] = ["gemini-2.5-flash"]
+    GEMINI_MODEL_NAME: str = "gemini-3.6-flash"
+    GEMINI_MODELS: list[str] = ["gemini-3.6-flash"]
+    OLLAMA_ENABLED: bool = True
     OLLAMA_HOST: str = "http://ollama:11434"
     OLLAMA_ORCHESTRATOR_MODEL: str = "gpt-oss:20b"
-    OLLAMA_CODER_MODEL: str = "deepseek-coder:6.7b"
+    OLLAMA_CODER_MODEL: str = "qwen3.5:9b"
     OLLAMA_CURATOR_MODEL: str = "ministral-3:14b"
+    OLLAMA_VISION_MODEL: str = "qwen3.5:9b"
     DEEPSEEK_API_KEY: SecretStr | None = None
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
-    DEEPSEEK_MODEL_NAME: str = "deepseek-chat"
-    DEEPSEEK_MODELS: list[str] = ["deepseek-chat", "deepseek-reasoner"]
+    DEEPSEEK_MODEL_NAME: str = "deepseek-v4-flash"
+    DEEPSEEK_MODELS: list[str] = ["deepseek-v4-flash", "deepseek-v4-pro"]
     DEEPSEEK_TEMPERATURE: float = 0.0
     DEEPSEEK_TEMPERATURE_BY_ROLE: dict[str, float] = Field(
         default_factory=lambda: {
@@ -230,24 +257,27 @@ class AppSettings(BaseSettings):
     )
     XAI_API_KEY: SecretStr | None = None
     XAI_BASE_URL: str = "https://api.x.ai/v1"
-    XAI_MODEL_NAME: str = "grok-4-1-fast-reasoning"
-    XAI_MODELS: list[str] = [
-        "grok-4-1-fast-reasoning",
-        "grok-4",
-        "grok-3",
-    ]
+    XAI_MODEL_NAME: str = "grok-4.5"
+    XAI_MODELS: list[str] = ["grok-4.5"]
     OPENROUTER_API_KEY: SecretStr | None = None
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
-    OPENROUTER_MODEL_NAME: str = "deepseek/deepseek-r1-0528:free"
+    OPENROUTER_FREE_MODELS_ENABLED: bool = False
+    OPENROUTER_REASONING_ENABLED: bool = True
+    OPENROUTER_MODEL_NAME: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     EMBEDDINGS_OPENROUTER_MODEL_NAME: str = "qwen/qwen3-embedding-8b"
     OPENROUTER_MODELS: list[str] = [
-        "deepseek/deepseek-r1-0528:free",
-        "qwen/qwen3-coder:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemini-2.0-flash-exp:free",
-        "meta-llama/llama-3.1-405b-instruct:free",
-        "tngtech/deepseek-r1t-chimera:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "poolside/laguna-s-2.1:free",
+        "cohere/north-mini-code:free",
+        "google/gemma-4-31b-it:free",
+        "openai/gpt-oss-20b:free",
     ]
+    EMBEDDINGS_DEFAULT_PROVIDER: str = "local"
+    EMBEDDINGS_LOCAL_MODEL_NAME: str = (
+        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    )
+    EMBEDDINGS_OPENAI_MODEL_NAME: str = "text-embedding-3-small"
+    EMBEDDINGS_OLLAMA_MODEL_NAME: str = "nomic-embed-text"
 
     # P4 — Orçamentação e Preços por Provedor
     # Orçamentos mensais (USD) por provedor
@@ -298,17 +328,17 @@ class AppSettings(BaseSettings):
 
     # Preço por 1k tokens (USD) por provedor
     # Valores padrão conservadores para evitar fallback indevido por teto de custo.
-    OPENAI_COST_PER_1K_INPUT_USD: float = 0.005
-    OPENAI_COST_PER_1K_OUTPUT_USD: float = 0.015
-    GEMINI_COST_PER_1K_INPUT_USD: float = 0.0005
-    GEMINI_COST_PER_1K_OUTPUT_USD: float = 0.0015
+    OPENAI_COST_PER_1K_INPUT_USD: float = 0.0002
+    OPENAI_COST_PER_1K_OUTPUT_USD: float = 0.0012
+    GEMINI_COST_PER_1K_INPUT_USD: float = 0.0015
+    GEMINI_COST_PER_1K_OUTPUT_USD: float = 0.0075
     OLLAMA_COST_PER_1K_INPUT_USD: float = 0.0
     OLLAMA_COST_PER_1K_OUTPUT_USD: float = 0.0
-    DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00028
-    DEEPSEEK_COST_PER_1K_OUTPUT_USD: float = 0.00042
-    DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.000028
-    XAI_COST_PER_1K_INPUT_USD: float = 0.00020
-    XAI_COST_PER_1K_OUTPUT_USD: float = 0.00050
+    DEEPSEEK_COST_PER_1K_INPUT_USD: float = 0.00014
+    DEEPSEEK_COST_PER_1K_OUTPUT_USD: float = 0.00028
+    DEEPSEEK_COST_PER_1K_CACHE_READ_USD: float = 0.0000028
+    XAI_COST_PER_1K_INPUT_USD: float = 0.002
+    XAI_COST_PER_1K_OUTPUT_USD: float = 0.006
     OPENROUTER_COST_PER_1K_INPUT_USD: float = 0.0
     OPENROUTER_COST_PER_1K_OUTPUT_USD: float = 0.0
     # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
@@ -322,68 +352,76 @@ class AppSettings(BaseSettings):
     # Estratégia padrão: prioriza provedores cloud compatíveis com o roteador atual.
     LLM_CLOUD_MODEL_CANDIDATES: dict[str, list[str]] = {
         "orchestrator": [
-            "deepseek:deepseek-chat",
-            "xai:grok-4-1-fast-reasoning",
-            "openai:gpt-5-mini",
+            "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+            "deepseek:deepseek-v4-flash",
+            "xai:grok-4.5",
+            "openai:gpt-5.6-luna",
         ],
         "code_generator": [
-            "deepseek:deepseek-reasoner",
-            "openai:gpt-5-mini",
-            "xai:grok-4-1-fast-reasoning",
+            "openrouter:poolside/laguna-s-2.1:free",
+            "openrouter:cohere/north-mini-code:free",
+            "deepseek:deepseek-v4-pro",
+            "openai:gpt-5.6-luna",
+            "xai:grok-4.5",
         ],
         "knowledge_curator": [
-            "deepseek:deepseek-chat",
-            "openai:gpt-5-mini",
-            "xai:grok-4-1-fast-reasoning",
-        ]
+            "openrouter:google/gemma-4-31b-it:free",
+            "deepseek:deepseek-v4-flash",
+            "openai:gpt-5.6-luna",
+            "xai:grok-4.5",
+        ],
+        "security_auditor": [
+            "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+            "openai:gpt-5.6-luna",
+            "xai:grok-4.5",
+        ],
+        "reasoner": [
+            "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+            "deepseek:deepseek-v4-pro",
+            "xai:grok-4.5",
+        ],
     }
 
     # Tabelas de preço por modelo (se ausente, usa preço default do provedor)
     OPENAI_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "gpt-4o": {"input_per_1k_usd": 0.005, "output_per_1k_usd": 0.015},
-        "gpt-5-mini": {"input_per_1k_usd": 0.00025, "output_per_1k_usd": 0.002},
+        "gpt-5.6-luna": {"input_per_1k_usd": 0.0002, "output_per_1k_usd": 0.0012},
     }
     GEMINI_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "gemini-2.5-flash": {"input_per_1k_usd": 0.0005, "output_per_1k_usd": 0.0015},
+        "gemini-3.6-flash": {"input_per_1k_usd": 0.0015, "output_per_1k_usd": 0.0075},
     }
     DEEPSEEK_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "deepseek-chat": {
-            "input_per_1k_usd": 0.00028,
-            "output_per_1k_usd": 0.00042,
-            "cache_read_per_1k_usd": 0.000028,
+        "deepseek-v4-flash": {
+            "input_per_1k_usd": 0.00014,
+            "output_per_1k_usd": 0.00028,
+            "cache_read_per_1k_usd": 0.0000028,
         },
-        "deepseek-reasoner": {
-            "input_per_1k_usd": 0.00028,
-            "output_per_1k_usd": 0.00042,
-            "cache_read_per_1k_usd": 0.000028,
+        "deepseek-v4-pro": {
+            "input_per_1k_usd": 0.000435,
+            "output_per_1k_usd": 0.00087,
+            "cache_read_per_1k_usd": 0.000003625,
         },
     }
     XAI_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "grok-4.1-fast-reasoning": {
-            "input_per_1k_usd": 0.00020,
-            "output_per_1k_usd": 0.00050,
-        },
-        "grok-4.1-fast": {
-            "input_per_1k_usd": 0.00020,
-            "output_per_1k_usd": 0.00050,
-        },
-        "grok-4-1-fast-reasoning": {
-            "input_per_1k_usd": 0.00020,
-            "output_per_1k_usd": 0.00050,
-        },
-        "grok-4": {
-            "input_per_1k_usd": 0.00030,
-            "output_per_1k_usd": 0.00070,
-        },
-        "grok-3": {
-            "input_per_1k_usd": 0.00025,
-            "output_per_1k_usd": 0.00060,
+        "grok-4.5": {
+            "input_per_1k_usd": 0.002,
+            "output_per_1k_usd": 0.006,
         },
     }
     OPENROUTER_MODEL_PRICING: dict[str, dict[str, float]] = {
-        "deepseek/deepseek-r1-0528:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
-        "qwen/qwen3-coder:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
-        "meta-llama/llama-3.3-70b-instruct:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
+        "nvidia/nemotron-3-ultra-550b-a55b:free": {
+            "input_per_1k_usd": 0.0,
+            "output_per_1k_usd": 0.0,
+        },
+        "poolside/laguna-s-2.1:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
+        "cohere/north-mini-code:free": {
+            "input_per_1k_usd": 0.0,
+            "output_per_1k_usd": 0.0,
+        },
+        "google/gemma-4-31b-it:free": {
+            "input_per_1k_usd": 0.0,
+            "output_per_1k_usd": 0.0,
+        },
+        "openai/gpt-oss-20b:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
     }
 
     # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)
@@ -404,29 +442,35 @@ class AppSettings(BaseSettings):
     NEO4J_DEFAULT_TIMEOUT_SECONDS: int = 30
     RATE_LIMIT_PER_KEY_PER_MIN: int = 300
 
-    AUTH_JWT_SECRET: str | None = None
-    AUTH_JWT_KEY_ID: str = "primary"
-    AUTH_JWT_ISSUER: str = "janus-api"
-    AUTH_JWT_AUDIENCE: str = "janus-clients"
-    AUTH_JWT_EXPIRES_SECONDS: int = 3600
-    AUTH_REFRESH_EXPIRES_SECONDS: int = 30 * 24 * 60 * 60
+    OIDC_ISSUER: str = "https://idp.invalid"
+    OIDC_JWKS_URL: str = "https://idp.invalid/.well-known/jwks.json"
+    OIDC_AUTHORIZATION_ENDPOINT: str = "https://idp.invalid/authorize"
+    OIDC_PUBLIC_CLIENT_ID: str = "janus-spa"
+    OIDC_PUBLIC_SCOPES: Annotated[list[str], NoDecode] = ["openid", "profile", "email"]
+    OIDC_USER_AUDIENCE: str = "janus-user-api"
+    OIDC_SERVICE_ISSUER: str = "https://idp.invalid"
+    OIDC_SERVICE_JWKS_URL: str = "https://idp.invalid/.well-known/jwks.json"
+    OIDC_SERVICE_AUDIENCE: str = "janus-control-plane"
+    OIDC_ADMIN_GROUP: str = ""
+    OIDC_GROUPS_CLAIM: str = "groups"
+    OIDC_CLOCK_SKEW_SECONDS: int = 30
+    OIDC_USER_MAX_TTL_SECONDS: int = 3600
+    OIDC_SERVICE_MAX_TTL_SECONDS: int = 900
+    OIDC_JWKS_CACHE_SECONDS: int = 300
+    OIDC_SERVICE_PRINCIPALS: dict[str, list[str]] = Field(default_factory=dict)
+    OIDC_SERVICE_TOKEN_URL: str = ""
+    ADMIN_FACADE_CLIENT_ID: str = "janus-admin-facade"
+    ADMIN_FACADE_CLIENT_SECRET: SecretStr | None = None
+    CONTROL_PLANE_BASE_URL: str = "http://janus-control-plane:8000"
+    INTERNAL_ACTOR_PRIVATE_KEY_PATH: str | None = None
+    INTERNAL_ACTOR_PUBLIC_KEY_PATH: str | None = None
+    INTERNAL_ACTOR_KEY_ID: str = "janus-internal-1"
+    INTERNAL_ACTOR_ISSUER: str = "janus-internal"
     ACTOR_CONTEXT_ENVELOPE_TTL_SECONDS: int = 60
     SECURITY_ALERT_WEBHOOK_URL: str = ""
     SECURITY_ALERT_WEBHOOK_HMAC_KEY: str = ""
     SECURITY_ALERT_ALLOWED_HOSTS: Annotated[list[str], NoDecode] = []
-    AUTH_RESET_TOKEN_TTL_SECONDS: int = 3600
-    AUTH_RESET_RETURN_TOKEN: bool = False
-    AUTH_ADMIN_CPF_ALLOWLIST: Annotated[list[str], NoDecode] = []
-    SUPABASE_JWT_SECRET: str = ""
     CHAT_UNLIMITED_USERS: Annotated[list[str], NoDecode] = []
-    AUTH_RATE_LIMIT_ENABLED: bool = True
-    AUTH_RATE_LIMITS: dict[str, dict[str, int]] = {
-        "auth.token": {"max_attempts": 20, "window_seconds": 60},
-        "auth.local_login": {"max_attempts": 10, "window_seconds": 60},
-        "auth.local_request_reset": {"max_attempts": 5, "window_seconds": 60},
-        "auth.local_reset": {"max_attempts": 10, "window_seconds": 60},
-        "auth.local_refresh": {"max_attempts": 30, "window_seconds": 60},
-    }
     AI_INTENT_ROUTING_ENABLED: bool = True
     AI_INTENT_RISK_ESCALATION_ENABLED: bool = True
     AI_INTENT_ROUTING_MIN_CONFIDENCE: float = 0.72
@@ -449,11 +493,6 @@ class AppSettings(BaseSettings):
     AI_DOC_ENRICHMENT_MAX_TEXT_CHARS: int = 12000
     AI_DOC_ENRICHMENT_MAX_ENTITIES_PER_TYPE: int = 8
     AI_DOC_ENRICHMENT_SUMMARY_MAX_CHARS: int = 280
-    SYSTEM_USER_EMAIL: str | None = None
-    SYSTEM_USER_USERNAME: str | None = None
-    SYSTEM_USER_DISPLAY_NAME: str | None = "Janus"
-    SYSTEM_USER_PASSWORD: SecretStr | None = None
-    SYSTEM_USER_ROLE: str = "SYSTEM"
 
     # RabbitMQ
     RABBITMQ_HOST: str = "rabbitmq"
@@ -690,28 +729,96 @@ class AppSettings(BaseSettings):
             return [str(x).strip().lower() for x in v if str(x).strip()]
         return []
 
-    @field_validator("AUTH_ADMIN_CPF_ALLOWLIST", mode="before")
-    def _parse_auth_admin_cpf_allowlist(cls, v: Any):
-        items: list[str] = []
-        if isinstance(v, str):
-            s = v.strip()
-            if not s:
-                return []
-            if s.startswith("["):
-                try:
-                    arr = json.loads(s)
-                    items = [str(x).strip() for x in arr if str(x).strip()]
-                except Exception:
-                    items = [x.strip() for x in s.split(",") if x.strip()]
-            else:
-                items = [x.strip() for x in s.split(",") if x.strip()]
-        elif isinstance(v, list):
-            items = [str(x).strip() for x in v if str(x).strip()]
-        else:
-            return []
+    @field_validator("JANUS_API_PROFILE")
+    @classmethod
+    def _validate_api_profile(cls, value: str) -> str:
+        normalized = str(value).strip().lower()
+        if normalized not in {"public", "user", "control-plane", "all-test"}:
+            raise ValueError("JANUS_API_PROFILE must be public, user, control-plane, or all-test")
+        return normalized
 
-        normalized = [normalize_cpf(item) for item in items]
-        return [cpf for cpf in normalized if is_valid_cpf(cpf)]
+    @field_validator("OIDC_PUBLIC_SCOPES", mode="before")
+    @classmethod
+    def _parse_oidc_scopes(cls, value: Any) -> list[str]:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return []
+            if value.startswith("["):
+                return [str(item).strip() for item in json.loads(value) if str(item).strip()]
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return [str(item).strip() for item in (value or []) if str(item).strip()]
+
+    @field_validator("OIDC_CLOCK_SKEW_SECONDS")
+    @classmethod
+    def _validate_oidc_clock_skew(cls, value: int) -> int:
+        if int(value) != 30:
+            raise ValueError("OIDC_CLOCK_SKEW_SECONDS is fixed at 30 seconds")
+        return 30
+
+    @model_validator(mode="after")
+    def _validate_deployed_identity_configuration(self):
+        deployed = self.ENVIRONMENT.strip().lower() in {"production", "staging", "homologation"}
+        if deployed and self.JANUS_API_PROFILE == "all-test":
+            raise ValueError("JANUS_API_PROFILE=all-test is restricted to local tests")
+        if deployed and not self.OIDC_ADMIN_GROUP.strip():
+            raise ValueError("OIDC_ADMIN_GROUP is required in deployed environments")
+        for name, url in (
+            ("OIDC_ISSUER", self.OIDC_ISSUER),
+            ("OIDC_JWKS_URL", self.OIDC_JWKS_URL),
+            ("OIDC_AUTHORIZATION_ENDPOINT", self.OIDC_AUTHORIZATION_ENDPOINT),
+            ("OIDC_SERVICE_ISSUER", self.OIDC_SERVICE_ISSUER),
+            ("OIDC_SERVICE_JWKS_URL", self.OIDC_SERVICE_JWKS_URL),
+        ):
+            if deployed and not str(url).lower().startswith("https://"):
+                raise ValueError(f"{name} must use HTTPS in deployed environments")
+            if deployed and ".invalid" in str(url).lower():
+                raise ValueError(f"{name} must not use a placeholder host")
+        if not self.OIDC_USER_AUDIENCE.strip() or not self.OIDC_SERVICE_AUDIENCE.strip():
+            raise ValueError("OIDC audiences must be non-empty")
+        if self.OIDC_USER_AUDIENCE == self.OIDC_SERVICE_AUDIENCE:
+            raise ValueError("user and service OIDC audiences must be distinct")
+        if not 30 < int(self.OIDC_USER_MAX_TTL_SECONDS) <= 3600:
+            raise ValueError("OIDC_USER_MAX_TTL_SECONDS must be between 31 and 3600")
+        if not 30 < int(self.OIDC_SERVICE_MAX_TTL_SECONDS) <= 900:
+            raise ValueError("OIDC_SERVICE_MAX_TTL_SECONDS must be between 31 and 900")
+        if not 30 <= int(self.OIDC_JWKS_CACHE_SECONDS) <= 3600:
+            raise ValueError("OIDC_JWKS_CACHE_SECONDS must be between 30 and 3600")
+        if deployed and self.JANUS_API_PROFILE == "public":
+            if not self.OIDC_PUBLIC_CLIENT_ID.strip() or "openid" not in self.OIDC_PUBLIC_SCOPES:
+                raise ValueError("public profile requires an OIDC client and openid scope")
+        if deployed and self.JANUS_API_PROFILE == "user":
+            if not self.OIDC_SERVICE_TOKEN_URL.lower().startswith("https://"):
+                raise ValueError("user profile requires an HTTPS OIDC service token URL")
+            if self.ADMIN_FACADE_CLIENT_SECRET is None:
+                raise ValueError("user profile requires ADMIN_FACADE_CLIENT_SECRET")
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_current_runtime_model_allowlist(self):
+        configured_models = {
+            self.OPENAI_MODEL_NAME,
+            *self.OPENAI_MODELS,
+            self.GEMINI_MODEL_NAME,
+            *self.GEMINI_MODELS,
+            self.DEEPSEEK_MODEL_NAME,
+            *self.DEEPSEEK_MODELS,
+            self.XAI_MODEL_NAME,
+            *self.XAI_MODELS,
+            self.OPENROUTER_MODEL_NAME,
+            *self.OPENROUTER_MODELS,
+            self.OLLAMA_ORCHESTRATOR_MODEL,
+            self.OLLAMA_CODER_MODEL,
+            self.OLLAMA_CURATOR_MODEL,
+            self.OLLAMA_VISION_MODEL,
+        }
+        unsupported = sorted(configured_models - CURRENT_RUNTIME_MODELS)
+        if unsupported:
+            raise ValueError(
+                "runtime models are outside the current allowlist: "
+                + ", ".join(unsupported)
+            )
+        return self
 
     @field_validator(
         "CHAT_UNLIMITED_USERS",
@@ -741,7 +848,12 @@ class AppSettings(BaseSettings):
     # ======= Validadores para variáveis de ambiente complexas =======
 
     @field_validator(
-        "OPENAI_MODELS", "GEMINI_MODELS", "DEEPSEEK_MODELS", "XAI_MODELS", mode="before"
+        "OPENAI_MODELS",
+        "GEMINI_MODELS",
+        "DEEPSEEK_MODELS",
+        "XAI_MODELS",
+        "OPENROUTER_MODELS",
+        mode="before",
     )
     def _parse_models_list(cls, v: Any):
         # Aceita JSON array ou lista separada por vírgulas

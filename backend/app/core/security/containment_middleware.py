@@ -8,8 +8,8 @@ from typing import Any
 
 from app.config import settings
 from app.core.infrastructure.auth import get_actor_context
-from app.core.security.actor_context import CURRENT_ACTOR_CONTEXT, ActorContext
-from app.core.security.route_policy import AccessLevel, classify_operation
+from app.core.security.actor_context import CURRENT_ACTOR_CONTEXT, ActorContext, ActorType
+from app.core.security.route_policy import PrincipalType, resolve_endpoint_policy
 from app.core.security.security_audit import record_security_denial
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -23,9 +23,14 @@ _FORBIDDEN_IDENTITY_KEYS = frozenset(
         "authuserid",
         "requesterid",
         "principalid",
+        "ownerid",
+        "identity",
+        "subject",
     }
 )
-_FORBIDDEN_HEADERS = frozenset({"x-user-id", "x-actor-user-id", "x-project-id"})
+_FORBIDDEN_HEADERS = frozenset(
+    {"x-user-id", "x-actor-user-id", "x-project-id", "x-owner-id", "x-identity", "x-subject"}
+)
 _MULTIPART_NAME = re.compile(rb'name="([^"]+)"', re.IGNORECASE)
 
 
@@ -74,7 +79,8 @@ class SecurityContainmentMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         payload: dict[str, Any] = {"detail": detail, "trace_id": trace_id}
         if error_code:
             payload["code"] = error_code
-        return JSONResponse(payload, status_code=status_code)
+        headers = {"WWW-Authenticate": 'Bearer realm="janus"'} if status_code == 401 else None
+        return JSONResponse(payload, status_code=status_code, headers=headers)
 
     async def _reject_client_identity(self, request: Request) -> bool:
         if any(name.lower() in _FORBIDDEN_HEADERS for name in request.headers.keys()):
@@ -107,16 +113,6 @@ class SecurityContainmentMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
             or request.headers.get("X-Request-ID")
             or uuid.uuid4().hex
         )
-        if await self._reject_client_identity(request):
-            return await self._blocked(
-                request,
-                actor=None,
-                status_code=400,
-                reason="client_identity_field_forbidden",
-                detail="Client-supplied identity fields are forbidden",
-                error_code="CLIENT_IDENTITY_FIELD_FORBIDDEN",
-            )
-
         path = request.url.path
         environment = str(settings.ENVIRONMENT).strip().lower()
         if path in {"/docs", "/redoc", "/openapi.json"}:
@@ -132,12 +128,28 @@ class SecurityContainmentMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        access = classify_operation(request.method, path)
+        policy = resolve_endpoint_policy(request)
+        if policy is None:
+            return await call_next(request)
+
+        if await self._reject_client_identity(request):
+            return await self._blocked(
+                request,
+                actor=None,
+                status_code=400,
+                reason="client_identity_field_forbidden",
+                detail="Client-supplied identity fields are forbidden",
+                error_code="CLIENT_IDENTITY_FIELD_FORBIDDEN",
+            )
+
+        request.state.endpoint_policy = policy
         actor = get_actor_context(request)
         request.state.actor_context = actor
         token = CURRENT_ACTOR_CONTEXT.set(actor)
         try:
-            if access is not AccessLevel.PUBLIC and actor is None:
+            if PrincipalType.ANONYMOUS in policy.principals:
+                return await call_next(request)
+            if actor is None:
                 return await self._blocked(
                     request,
                     actor=None,
@@ -145,12 +157,25 @@ class SecurityContainmentMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
                     reason="authentication_required",
                     detail="Authentication required",
                 )
-            if access is AccessLevel.ADMIN and actor is not None and not actor.has_role("ADMIN"):
+            expected_type = (
+                ActorType.HUMAN
+                if PrincipalType.USER in policy.principals
+                else ActorType.SERVICE
+            )
+            if actor.actor_type is not expected_type:
                 return await self._blocked(
                     request,
                     actor=actor,
                     status_code=403,
-                    reason="administrative_role_required",
+                    reason="principal_type_not_allowed",
+                    detail="Forbidden",
+                )
+            if expected_type is ActorType.SERVICE and not actor.has_scopes(policy.scopes):
+                return await self._blocked(
+                    request,
+                    actor=actor,
+                    status_code=403,
+                    reason="service_scope_required",
                     detail="Forbidden",
                 )
             return await call_next(request)

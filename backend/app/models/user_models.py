@@ -19,14 +19,8 @@ from app.models.config_models import Base
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    external_id = Column(String(100), nullable=True)
-    username = Column(String(50), nullable=True)
     email = Column(String(255), nullable=True)
     display_name = Column(String(100), nullable=True)
-    password_hash = Column(Text, nullable=True)
-    cpf_hash = Column(String(128), nullable=True)
-    password_reset_token_hash = Column(String(128), nullable=True)
-    password_reset_expires_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(
@@ -34,12 +28,12 @@ class User(Base):
     )
     profiles = relationship("Profile", back_populates="user")
     roles = relationship("UserRole", back_populates="user")
+    external_identities = relationship(
+        "ExternalIdentity", back_populates="user", cascade="all, delete-orphan"
+    )
     __table_args__ = (
-        Index("idx_user_lookup", "email", "external_id"),
+        Index("idx_user_lookup", "email"),
         UniqueConstraint("email", name="unique_user_email"),
-        UniqueConstraint("username", name="unique_user_username"),
-        UniqueConstraint("external_id", name="unique_user_external_id"),
-        UniqueConstraint("cpf_hash", name="unique_user_cpf_hash"),
     )
 
 
@@ -55,7 +49,68 @@ class Profile(Base):
         DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
     )
     user = relationship("User", back_populates="profiles")
-    __table_args__ = (Index("idx_profile_user", "user_id"),)
+    __table_args__ = (UniqueConstraint("user_id", name="unique_profile_user"),)
+
+
+class ExternalIdentity(Base):
+    __tablename__ = "external_identities"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    issuer = Column(String(512), nullable=False)
+    subject = Column(String(255), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    email_at_link = Column(String(255), nullable=True)
+    email_verified = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
+    last_seen_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
+    user = relationship("User", back_populates="external_identities")
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="unique_external_identity"),
+        Index("idx_external_identity_user", "user_id"),
+    )
+
+
+class ExternalIdentityEvent(Base):
+    __tablename__ = "external_identity_events"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    identity_id = Column(
+        Integer, ForeignKey("external_identities.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String(50), nullable=False)
+    admin_group_authorized = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
+    __table_args__ = (Index("idx_external_identity_event_user", "user_id", "created_at"),)
+
+
+class ServicePrincipal(Base):
+    __tablename__ = "service_principals"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    issuer = Column(String(512), nullable=False)
+    subject = Column(String(255), nullable=False)
+    client_id = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=True)
+    status = Column(String(20), nullable=False, default="active")
+    created_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
+    updated_at = Column(
+        DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp()
+    )
+    scopes = relationship(
+        "ServicePrincipalScope", back_populates="principal", cascade="all, delete-orphan"
+    )
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="unique_service_principal_subject"),
+        UniqueConstraint("issuer", "client_id", name="unique_service_principal_client"),
+    )
+
+
+class ServicePrincipalScope(Base):
+    __tablename__ = "service_principal_scopes"
+    principal_id = Column(
+        Integer, ForeignKey("service_principals.id", ondelete="CASCADE"), primary_key=True
+    )
+    scope = Column(String(100), primary_key=True)
+    created_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
+    principal = relationship("ServicePrincipal", back_populates="scopes")
 
 
 class Role(Base):
