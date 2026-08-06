@@ -50,10 +50,10 @@ class VisionAnalyzer:
 
         Args:
             screen_capture: Screen capture service (uses singleton if None)
-            model: Multimodal model to use (defaults to OLLAMA_VISION_MODEL)
+            model: Cloud multimodal model (defaults to OPENAI_MODEL_NAME)
         """
         self.screen_capture = screen_capture or get_screen_capture()
-        self.model = model or settings.OLLAMA_VISION_MODEL
+        self.model = model or settings.OPENAI_MODEL_NAME
         self._enabled = self.screen_capture.is_available()
 
         logger.info("VisionAnalyzer initialized", model=self.model)
@@ -173,34 +173,38 @@ class VisionAnalyzer:
         """
         Send image to multimodal LLM for analysis.
 
-        Uses the configured Ollama multimodal model directly.
+        Uses the configured OpenAI cloud model directly.
         """
         try:
-            # Use the explicitly configured Ollama vision model.
-            from app.core.llm.factory import create_ollama_client
+            from langchain_openai import ChatOpenAI
 
-            client = await create_ollama_client(model=self.model)
+            api_key = (
+                settings.OPENAI_API_KEY.get_secret_value()
+                if settings.OPENAI_API_KEY is not None
+                else None
+            )
+            if not api_key:
+                raise RuntimeError("OPENAI_API_KEY is required for cloud vision analysis")
+            client = ChatOpenAI(model=self.model, api_key=api_key)
 
-            if client:
-                # Ollama vision format
-                response = await client.ainvoke(
-                    [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{capture.image_b64}"
-                                    },
+            response = await client.ainvoke(
+                [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{capture.image_b64}"
                                 },
-                            ],
-                        }
-                    ]
-                )
+                            },
+                        ],
+                    }
+                ]
+            )
 
-                return response.content if hasattr(response, "content") else str(response)
+            return response.content if hasattr(response, "content") else str(response)
 
         except ImportError:
             pass

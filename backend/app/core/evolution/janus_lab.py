@@ -335,15 +335,22 @@ class JanusLabManager:
             "DISABLE_WORKERS": "true",
             "DISABLE_SCHEDULER": "true",
             "DISABLE_MEMORY_WRITES": "true",  # Read-only memory
-            # Use Ollama for LLM (local, no API costs)
-            "LLM_DEFAULT_PROVIDER": "ollama",
-            "OLLAMA_BASE_URL": "http://janus_ollama:11434",
-            "OLLAMA_ORCHESTRATOR_MODEL": "gpt-oss:20b",
+            # Experiments inherit no local-model path. Cloud credentials must be
+            # explicitly injected by the caller when an experiment needs LLM access.
+            "OLLAMA_ENABLED": "false",
+            "EMBEDDINGS_DEFAULT_PROVIDER": "openai",
+            "EMBEDDINGS_LOCAL_ENABLED": "false",
+            "RAG_RERANK_BACKEND": "heuristic",
         }
 
         # Apply custom overrides
         if custom_env:
             env.update(custom_env)
+
+        # Cloud-only is a runtime safety boundary, not a caller override.
+        env["OLLAMA_ENABLED"] = "false"
+        env["EMBEDDINGS_LOCAL_ENABLED"] = "false"
+        env["RAG_RERANK_BACKEND"] = "heuristic"
 
         return env
 
