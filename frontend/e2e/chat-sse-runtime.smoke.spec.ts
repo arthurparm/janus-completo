@@ -1,10 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 
-type RegisterResponse = {
-  token: string
-}
-
 type ChatStartResponse = {
   conversation_id: string
 }
@@ -37,6 +33,7 @@ type RuntimePreflight = {
 }
 
 const RUN_REAL_CHAT_E2E = process.env.JANUS_RUN_REAL_CHAT_E2E === 'true'
+const OIDC_ACCESS_TOKEN = (process.env.JANUS_USER_ACCESS_TOKEN || '').trim()
 const MAX_LIGHT_CHAT_MS = Number(process.env.JANUS_LIGHT_CHAT_E2E_MAX_MS || 35_000)
 const TEST_TIMEOUT_MS = Math.max(60_000, MAX_LIGHT_CHAT_MS + 15_000)
 
@@ -127,22 +124,6 @@ function parseSseEvents(raw: string): SseEvent[] {
     })
 }
 
-async function registerUser(request: APIRequestContext): Promise<RegisterResponse> {
-  const suffix = Date.now().toString()
-  const response = await request.post('/api/v1/auth/local/register', {
-    data: {
-      username: `pw_sse_${suffix}`,
-      full_name: 'Playwright SSE Runtime',
-      email: `qa.sse.${suffix}@example.com`,
-      password: 'Zeta#Safe49P',
-      terms: true,
-    },
-  })
-
-  expect(response.status()).toBe(200)
-  return response.json() as Promise<RegisterResponse>
-}
-
 async function startConversation(
   request: APIRequestContext,
   token: string,
@@ -163,6 +144,7 @@ test.describe('Runtime chat SSE smoke', () => {
       !RUN_REAL_CHAT_E2E,
       'Defina JANUS_RUN_REAL_CHAT_E2E=true para executar smoke real com backend/Ollama.',
     )
+    test.skip(!OIDC_ACCESS_TOKEN, 'Defina JANUS_USER_ACCESS_TOKEN com um access token OIDC válido.')
 
     const runtimePreflight = await expectRuntimeAvailable(request)
     expect(runtimePreflight.http_status).toBe(200)
@@ -171,12 +153,11 @@ test.describe('Runtime chat SSE smoke', () => {
     expect(runtimePreflight.degraded_dependency_count).toBe(0)
     expect(runtimePreflight.degraded_dependencies).toEqual([])
 
-    const user = await registerUser(request)
-    const conversation = await startConversation(request, user.token)
+    const conversation = await startConversation(request, OIDC_ACCESS_TOKEN)
 
     const start = Date.now()
     const response = await request.post(`/api/v1/chat/stream/${conversation.conversation_id}`, {
-      headers: { Authorization: `Bearer ${user.token}` },
+      headers: { Authorization: `Bearer ${OIDC_ACCESS_TOKEN}` },
       data: {
         message: 'Ola',
         role: 'orchestrator',

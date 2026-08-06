@@ -1,43 +1,10 @@
 {
   "fixtures": [
     {
-      "operation_id": "local_register_api_v1_auth_local_register_post",
-      "scenario_name": "bootstrap_local_register",
-      "order": 10,
-      "json_body": {
-        "email": "{{runtime.unique}}@example.com",
-        "password": "JanusE2E123!",
-        "username": "user_{{runtime.unique}}",
-        "full_name": "Janus E2E Runner",
-        "terms": true
-      },
-      "expected_statuses": [200, 409, 422],
-      "extract": {
-        "auth.local.user_id": "user.id"
-      },
-      "destructive": false,
-      "notes": "Creates local user used by subsequent bootstrap/login scenarios."
-    },
-    {
-      "operation_id": "local_login_api_v1_auth_local_login_post",
-      "scenario_name": "bootstrap_local_login",
-      "order": 20,
-      "json_body": {
-        "email": "{{runtime.unique}}@example.com",
-        "password": "JanusE2E123!"
-      },
-      "expected_statuses": [200, 401, 422],
-      "extract": {
-        "auth.local.access_token": "access_token",
-        "auth.local.user_id": "user.id"
-      }
-    },
-    {
       "operation_id": "start_chat_api_v1_chat_start_post",
       "scenario_name": "bootstrap_chat_start",
       "order": 40,
       "json_body": {
-        "user_id": "{{auth.local.user_id}}",
         "project_id": "e2e-project",
         "title": "E2E Chat Session"
       },
@@ -105,7 +72,7 @@
         "outcome": "success",
         "retries": 0,
         "provider": "deepseek",
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "timestamp": 1730000000.0
       },
       "expected_statuses": [200, 422]

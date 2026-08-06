@@ -30,24 +30,23 @@
 @queue_name = janus.knowledge.consolidation
 @queue_name_missing = default
 
-@s1_email = sprint1@example.com
 @s1_user_id = 1
-@s1_token = 
+@s1_token = {{token}}
 
 
 ############################################
 # 0) Preflight de autenticacao
 ############################################
-# @name auth_local_me_preflight
-GET {{host}}{{api_v1_prefix}}/auth/local/me
+# @name users_me_preflight
+GET {{host}}{{api_v1_prefix}}/users/me
 Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
 
 > {%
-client.test("Preflight auth/local/me: 200 e JSON", function() {
-  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+client.test("Preflight users/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token OIDC valido (users/me != 200)");
   client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
 });
 try {
@@ -58,14 +57,8 @@ try {
 ############################################
 # Indice de endpoints cobertos nesta sprint
 ############################################
-# - [Auth] POST /api/v1/auth/firebase/exchange
-# - [Auth] POST /api/v1/auth/local/login
-# - [Auth] GET /api/v1/auth/local/me
-# - [Auth] POST /api/v1/auth/local/register
-# - [Auth] POST /api/v1/auth/local/request-reset
-# - [Auth] POST /api/v1/auth/local/reset
-# - [Auth] POST /api/v1/auth/supabase/exchange
-# - [Auth] POST /api/v1/auth/token
+# - [Auth] GET /api/v1/auth/oidc-config (perfil public)
+# - [Users] GET /api/v1/users/me (perfil user)
 # - [Consents] GET /api/v1/consents/
 # - [Consents] POST /api/v1/consents/
 # - [Consents] POST /api/v1/consents/{consent_id}/revoke
@@ -79,67 +72,17 @@ try {
 # - [Users] POST /api/v1/users/{user_id}/roles
 
 ############################################
-# 1) Auth local: registro, login e self-profile
+# 1) Identidade OIDC provisionada JIT e self-profile
 ############################################
-# @name s1_local_register
-POST {{host}}{{api_v1_prefix}}/auth/local/register
-Content-Type: application/json
-X-Request-ID: {{correlation_id}}
-User-Agent: Janus-HTTP-Test/{{client_version}}
-Authorization: Bearer {{token}}
-
-{
-  "email": "sprint1_{{$timestamp}}@example.com",
-  "password": "StrongPass123!",
-  "username": "sprint1_{{$timestamp}}",
-  "full_name": "Sprint One",
-  "terms": true
-}
-
-> {%
-client.test("local/register: 200 ou 409", function() {
-  client.assert([200,409].includes(response.status));
-});
-if (response.status === 200) {
-  const b = response.body.json();
-  client.global.set("s1_token", b.token);
-  client.global.set("s1_user_id", String(b.user.id));
-  if (b.user.email) client.global.set("s1_email", b.user.email);
-}
-%}
-
-###
-# @name s1_local_login
-POST {{host}}{{api_v1_prefix}}/auth/local/login
-Content-Type: application/json
-X-Request-ID: {{correlation_id}}
-User-Agent: Janus-HTTP-Test/{{client_version}}
-Authorization: Bearer {{token}}
-
-{
-  "email": "{{s1_email}}",
-  "password": "StrongPass123!"
-}
-
-> {%
-client.test("local/login: 200", function() { client.assert(response.status === 200); });
-const b = response.body.json();
-client.global.set("s1_token", b.token);
-client.global.set("s1_user_id", String(b.user.id));
-client.global.set("user_id_int", String(b.user.id));
-client.global.set("user_id_str", String(b.user.id));
-%}
-
-###
-# @name s1_local_me_with_user_token
-GET {{host}}{{api_v1_prefix}}/auth/local/me
+# @name s1_users_me_with_oidc_token
+GET {{host}}{{api_v1_prefix}}/users/me
 Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{s1_token}}
 
 > {%
-client.test("local/me com token da sprint: 200", function() { client.assert(response.status === 200); });
+client.test("users/me com token OIDC: 200", function() { client.assert(response.status === 200); });
 const b = response.body.json();
 client.global.set("s1_user_id", String(b.id));
 client.global.set("user_id_int", String(b.id));
@@ -273,19 +216,13 @@ Authorization: Bearer {{s1_token}}
 ############################################
 # 3) Edge cases (minimo 2)
 ############################################
-# @name s1_login_invalid
-POST {{host}}{{api_v1_prefix}}/auth/local/login
-Content-Type: application/json
+# @name s1_users_me_anonymous
+GET {{host}}{{api_v1_prefix}}/users/me
+Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
-Authorization: Bearer {{token}}
 
-{
-  "email": "naoexiste@example.com",
-  "password": "StrongPass123!"
-}
-
-> {% client.test("login invalido: 401", function() { client.assert(response.status === 401); }); %}
+> {% client.test("users/me anonimo: 401", function() { client.assert(response.status === 401); }); %}
 
 ###
 # @name s1_revoke_invalid_scope

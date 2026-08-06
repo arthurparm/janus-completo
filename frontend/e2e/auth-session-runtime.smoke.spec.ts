@@ -13,101 +13,24 @@ const CONSOLE_WARNING_ALLOWLIST: RegExp[] = []
 const CONSOLE_ERROR_ALLOWLIST: RegExp[] = []
 const MAX_CHAT_RESPONSE_MS = Number(process.env.JANUS_CHAT_RUNTIME_E2E_MAX_MS || 60_000)
 const TEST_TIMEOUT_MS = Math.max(180_000, MAX_CHAT_RESPONSE_MS + 90_000)
+const OIDC_ACCESS_TOKEN = (process.env.JANUS_USER_ACCESS_TOKEN || '').trim()
 
 function isAllowlisted(patterns: RegExp[], text: string): boolean {
   return patterns.some((pattern) => pattern.test(text))
-}
-
-function cpfCheckDigit(digits: string): number {
-  let total = 0
-  for (let i = 0; i < digits.length; i += 1) {
-    total += Number(digits[i]) * (digits.length + 1 - i)
-  }
-  const digit = (total * 10) % 11
-  return digit === 10 ? 0 : digit
-}
-
-function makeCpf(seed: string): string {
-  const numericSeed = seed.replace(/\D/g, '').padEnd(9, '7').slice(0, 9)
-  const base = new Set(numericSeed).size === 1 ? '864209753' : numericSeed
-  const d10 = cpfCheckDigit(base)
-  const d11 = cpfCheckDigit(`${base}${d10}`)
-  return `${base}${d10}${d11}`
-}
-
-async function clearBrowserSession(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-  })
-}
-
-async function registerSyntheticUser(page: Page, user: {
-  username: string
-  fullName: string
-  cpf: string
-  phone: string
-  email: string
-  password: string
-}): Promise<void> {
-  await page.goto('/registro')
-  await page.getByPlaceholder('seu_usuario').fill(user.username)
-  await page.getByPlaceholder('Nome completo').fill(user.fullName)
-  await page.getByPlaceholder('000.000.000-00').fill(user.cpf)
-  await page.getByPlaceholder('(11) 90000-0000').fill(user.phone)
-  await page.getByPlaceholder('voce@janus.ai').fill(user.email)
-  await page.getByPlaceholder('********').fill(user.password)
-  await page.locator('input[type="checkbox"]').check({ force: true })
-
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/v1/auth/local/register') &&
-      response.request().method() === 'POST',
-    { timeout: 30_000 },
-  )
-  await page.locator('button[type="submit"]').click()
-  const response = await responsePromise
-
-  expect(response.status()).toBe(200)
-  await expect(page.getByText('Cadastro realizado. Voce ja pode acessar.')).toBeVisible()
-  await expect.poll(() => page.evaluate(() => Boolean(localStorage.getItem('JANUS_AUTH_TOKEN')))).toBe(true)
-}
-
-async function loginSyntheticUser(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/login')
-  await page.getByPlaceholder('voce@janus.ai').fill(email)
-  await page.getByPlaceholder('********').fill(password)
-  await page.locator('input[type="checkbox"]').first().check({ force: true })
-
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/v1/auth/local/login') &&
-      response.request().method() === 'POST',
-    { timeout: 30_000 },
-  )
-  await page.locator('button[type="submit"]').click()
-  const response = await responsePromise
-
-  expect(response.status()).toBe(200)
-  await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByText(/O que vamos criar, analisar ou explorar hoje/i)).toBeVisible({
-    timeout: 30_000,
-  })
-  await expect.poll(() => page.evaluate(() => Boolean(localStorage.getItem('JANUS_AUTH_TOKEN')))).toBe(true)
 }
 
 async function expectAuthenticatedRoute(page: Page, path: string, expectedText: RegExp): Promise<void> {
   await page.goto(path)
   await expect(page).not.toHaveURL(/\/login/i)
   await expect(page.getByText(expectedText).first()).toBeVisible({ timeout: 30_000 })
-  await expect.poll(() => page.evaluate(() => Boolean(localStorage.getItem('JANUS_AUTH_TOKEN')))).toBe(true)
+  await expect.poll(() => page.evaluate(() => Boolean(sessionStorage.getItem('JANUS_AUTH_TOKEN')))).toBe(true)
 }
 
 async function readConversationHistory(page: Page, conversationId: string): Promise<{
   messages?: Array<{ role?: string; text?: string; delivery_status?: string; provider?: string; model?: string }>
 }> {
   return page.evaluate(async (id) => {
-    const token = localStorage.getItem('JANUS_AUTH_TOKEN')
+    const token = sessionStorage.getItem('JANUS_AUTH_TOKEN')
     const response = await fetch(`/api/v1/chat/${id}/history/paginated?limit=80`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -118,19 +41,12 @@ async function readConversationHistory(page: Page, conversationId: string): Prom
   }, conversationId)
 }
 
-test.describe.serial('Runtime auth session smoke', () => {
-  test('registra, restaura sessao e confirma chat real persistido', async ({ page }, testInfo) => {
+test.describe.serial('Runtime OIDC session smoke', () => {
+  test('restaura sessao OIDC e confirma chat real persistido', async ({ page }, testInfo) => {
     test.setTimeout(TEST_TIMEOUT_MS)
+    test.skip(!OIDC_ACCESS_TOKEN, 'Defina JANUS_USER_ACCESS_TOKEN com um access token OIDC válido.')
 
     const suffix = Date.now().toString().slice(-8)
-    const user = {
-      username: `pw_e2e_${suffix}`,
-      fullName: 'Playwright Frontend',
-      cpf: makeCpf(suffix),
-      phone: '11966665555',
-      email: `qa.playwright.${suffix}@example.com`,
-      password: 'Zeta#Safe49P',
-    }
     const apiEvents: ApiEvent[] = []
     const consoleFailures: string[] = []
     let chatConversationId: string | null = null
@@ -165,16 +81,17 @@ test.describe.serial('Runtime auth session smoke', () => {
       }
     })
 
-    await registerSyntheticUser(page, user)
-    await clearBrowserSession(page)
-    await loginSyntheticUser(page, user.email, user.password)
+    await page.addInitScript((token) => {
+      sessionStorage.setItem('JANUS_AUTH_TOKEN', token)
+    }, OIDC_ACCESS_TOKEN)
+    await page.goto('/')
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page).not.toHaveURL(/\/login/i)
     await expect(page.getByText(/O que vamos criar, analisar ou explorar hoje/i)).toBeVisible({
       timeout: 30_000,
     })
-    await expect.poll(() => page.evaluate(() => Boolean(localStorage.getItem('JANUS_AUTH_TOKEN')))).toBe(true)
+    await expect.poll(() => page.evaluate(() => Boolean(sessionStorage.getItem('JANUS_AUTH_TOKEN')))).toBe(true)
 
     await expectAuthenticatedRoute(page, '/conversations', /Converse com o Janus/i)
     await expectAuthenticatedRoute(page, '/tools', /Visibilidade de Ferramentas/i)

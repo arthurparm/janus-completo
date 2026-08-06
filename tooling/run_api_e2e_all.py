@@ -23,15 +23,16 @@ from typing import Any, Iterable
 import requests
 from qa_request_support import (
     DockerLogCorrelator,
-    bootstrap_local_auth,
     classify_gate,
     classify_http_status,
     generate_request_id,
     isoformat_utc,
-    save_json as save_json_shared,
+    load_oidc_test_auth,
     utc_now,
 )
-
+from qa_request_support import (
+    save_json as save_json_shared,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURES = ROOT / "tooling" / "api_e2e_fixtures.json"
@@ -194,7 +195,7 @@ def sample_string(name: str, schema: dict[str, Any], ctx: ContextStore) -> str:
     if lower_name in {"provider"}:
         return "deepseek"
     if lower_name in {"model"}:
-        return "deepseek-chat"
+        return "deepseek-v4-flash"
     if lower_name in {"outcome"}:
         return "success"
     if lower_name in {"role"}:
@@ -297,7 +298,7 @@ def path_param_sample(name: str, schema: dict[str, Any], ctx: ContextStore) -> A
 def query_param_sample(name: str, schema: dict[str, Any], ctx: ContextStore) -> Any:
     lname = name.lower()
     if lname == "user_id":
-        return ctx.get("auth.local.user_id", "seed-admin")
+        return ctx.get("auth.oidc.user_id", "seed-admin")
     if lname == "project_id":
         return "e2e-project"
     if lname == "limit":
@@ -399,15 +400,6 @@ def extract_json_path(payload: Any, path: str) -> Any:
 def infer_context_from_response(endpoint: Endpoint, body: Any, ctx: ContextStore) -> None:
     if not isinstance(body, dict):
         return
-    if endpoint.operation_id == "local_login_api_v1_auth_local_login_post":
-        token = body.get("access_token") or body.get("token")
-        if token:
-            ctx.set("auth.local.access_token", token)
-    if endpoint.operation_id == "local_register_api_v1_auth_local_register_post":
-        for k in ("user_id", "id"):
-            if k in body and isinstance(body[k], (str, int)):
-                ctx.set("auth.local.user_id", str(body[k]))
-                break
     if endpoint.operation_id == "start_chat_api_v1_chat_start_post":
         conv = body.get("conversation_id") or body.get("id")
         if conv:
@@ -467,7 +459,7 @@ def build_request(
         headers.update({str(k): str(v) for k, v in fixture["headers"].items()})
 
     # Default bearer token after login (unless auth endpoints)
-    token = ctx.get("auth.local.access_token")
+    token = ctx.get("auth.oidc.access_token")
     if allow_auto_auth and token and "authorization" not in {k.lower() for k in headers}:
         if not endpoint.path.startswith("/api/v1/auth/"):
             headers["Authorization"] = f"Bearer {token}"
@@ -614,13 +606,13 @@ def _run_phase(
     request_id_seq_start: int = 0,
 ) -> tuple[dict[str, Any], int]:
     ctx = ContextStore()
-    ctx.set("auth.local.user_id", args.seed_user_id)
+    ctx.set("auth.oidc.user_id", args.seed_user_id)
     allow_auto_auth = phase != "unauth"
     if boot and boot.get("ok"):
         if boot.get("token"):
-            ctx.set("auth.local.access_token", boot["token"])
+            ctx.set("auth.oidc.access_token", boot["token"])
         if boot.get("user_id"):
-            ctx.set("auth.local.user_id", boot["user_id"])
+                ctx.set("auth.oidc.user_id", boot["user_id"])
 
     session = requests.Session()
     openapi = fetch_openapi(args.openapi_url, args.timeout)
@@ -892,7 +884,7 @@ def _run_phase(
         "failures": failures,
         "failures_reportable": reportable_failures,
         "log_evidence": log_evidence_rows,
-        "bootstrap_auth": boot,
+        "oidc_auth": boot,
         "context_keys": sorted(_flatten_keys(ctx.data)),
     }
     return report, seq
@@ -951,7 +943,7 @@ def main() -> int:
     )
     ap.add_argument("--progress-every", type=int, default=25)
     ap.add_argument("--fail-on-429", action="store_true", help="Return non-zero if any request required a 429 retry.")
-    ap.add_argument("--auth-mode", choices=["none", "bootstrap", "dual"], default="dual")
+    ap.add_argument("--auth-mode", choices=["none", "oidc", "dual"], default="dual")
     ap.add_argument("--with-log-correlation", action="store_true")
     ap.add_argument("--log-service", default="janus-api")
     ap.add_argument("--log-container", default="janus_api")
@@ -980,13 +972,9 @@ def main() -> int:
         phase_report, seq = _run_phase(args, phase="unauth", boot=None, request_id_seq_start=seq)
         reports_by_phase["unauth"] = phase_report
 
-    if args.auth_mode in {"bootstrap", "dual"}:
-        boot = bootstrap_local_auth(
-            base_url=args.base_url,
-            timeout=min(args.timeout, 20.0),
-            request_id_prefix=f"{args.request_id_prefix}-bootstrap",
-        )
-        if args.auth_mode == "bootstrap":
+    if args.auth_mode in {"oidc", "dual"}:
+        boot = load_oidc_test_auth(user_id=args.seed_user_id)
+        if args.auth_mode == "oidc":
             phase_report, seq = _run_phase(args, phase="auth", boot=boot, request_id_seq_start=seq)
             reports_by_phase["auth"] = phase_report
         else:
@@ -1000,8 +988,8 @@ def main() -> int:
                     "failures": [],
                     "failures_reportable": [],
                     "log_evidence": [],
-                    "bootstrap_auth": boot,
-                    "status": "blocked_bootstrap_auth",
+                    "oidc_auth": boot,
+                    "status": "blocked_oidc_auth",
                 }
             reports_by_phase["auth"] = phase_report
 
@@ -1060,7 +1048,7 @@ def main() -> int:
         "failures": merged_failures,
         "failures_reportable": merged_reportable,
         "log_evidence": merged_logs,
-        "bootstrap_auth": redacted_boot,
+        "oidc_auth": redacted_boot,
     }
 
     dual_dir = Path(args.dual_output_dir)

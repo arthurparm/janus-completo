@@ -1,30 +1,14 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { authenticateWithOidcToken, requireOidcAccessTokenOrSkip } from './support/auth'
 
-const E2E_USER_EMAIL = process.env.E2E_USER_EMAIL || ''
-const E2E_USER_PASSWORD = process.env.E2E_USER_PASSWORD || process.env.TEST_PASSWORD || ''
 const MAX_PENDING_ATTEMPTS = 2
 
 const CONSOLE_ERROR_WHITELIST = [
-  /\/api\/v1\/auth\/local\/me/i,
   /Failed to load resource: the server responded with a status of 401/i,
 ]
 
 function isWhitelistedConsoleError(text: string): boolean {
   return CONSOLE_ERROR_WHITELIST.some((pattern) => pattern.test(text))
-}
-
-async function login(page: Page): Promise<void> {
-  await page.goto('/login')
-  await page.getByRole('textbox', { name: /Email de acesso/i }).fill(E2E_USER_EMAIL)
-  await page.getByRole('textbox', { name: /Senha de acesso/i }).fill(E2E_USER_PASSWORD)
-  const loginResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/auth/local/login') && response.request().method() === 'POST',
-    { timeout: 30_000 },
-  )
-  await page.getByRole('button', { name: /ENTRAR NO JANUS/i }).click()
-  const loginResponse = await loginResponsePromise
-  expect(loginResponse.status()).toBe(200)
 }
 
 async function openFreshConversation(page: Page): Promise<void> {
@@ -86,10 +70,7 @@ async function waitForPendingCardWithRetry(page: Page, prompt: string): Promise<
 test.describe.serial('Admin chat real smoke', () => {
   test('executa fluxo real de stream + aprovar + rejeitar pendencias', async ({ page }) => {
     test.setTimeout(180_000)
-    test.skip(
-      !E2E_USER_EMAIL || !E2E_USER_PASSWORD,
-      'Defina E2E_USER_EMAIL e E2E_USER_PASSWORD para executar smoke real.',
-    )
+    const accessToken = requireOidcAccessTokenOrSkip()
 
     const nonWhitelistedConsoleErrors: string[] = []
     let sseRequestCount = 0
@@ -119,7 +100,7 @@ test.describe.serial('Admin chat real smoke', () => {
       nonWhitelistedConsoleErrors.push(text)
     })
 
-    await login(page)
+    await authenticateWithOidcToken(page, accessToken)
     await openFreshConversation(page)
 
     await setStreamingMode(page, true)

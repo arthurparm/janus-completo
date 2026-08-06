@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
-import requests
-
 
 ERROR_PATTERNS = ("\"level\":\"error\"", " ERROR ", "Traceback", "Exception", "ERROR:")
 ENV_BLOCK_HINTS = (
@@ -182,96 +180,23 @@ class DockerLogCorrelator:
         )
 
 
-def bootstrap_local_auth(
-    *,
-    base_url: str,
-    timeout: float = 20.0,
-    session: requests.Session | None = None,
-    request_id_prefix: str = "qa-bootstrap",
+def load_oidc_test_auth(
+    *, access_token: str | None = None, user_id: str | None = None
 ) -> dict[str, Any]:
-    sess = session or requests.Session()
-    suffix = uuid.uuid4().hex[:10]
-    email = f"qa_{suffix}@example.com"
-    password = "JanusE2E123!"
-    username = f"qa_{suffix}"
-
-    reg_req_id = f"{request_id_prefix}-register-{suffix}"
-    login_req_id = f"{request_id_prefix}-login-{suffix}"
-    headers = {"Content-Type": "application/json", "X-Request-ID": reg_req_id, "User-Agent": "Janus-QA-Runner/1.0"}
-    register_resp = sess.post(
-        base_url.rstrip("/") + "/api/v1/auth/local/register",
-        headers=headers,
-        json={
-            "email": email,
-            "password": password,
-            "username": username,
-            "full_name": "Janus QA Runner",
-            "terms": True,
-        },
-        timeout=timeout,
-    )
-    reg_body = _safe_json(register_resp)
-    if register_resp.status_code not in {200, 201, 409, 422}:
-        return {
-            "ok": False,
-            "stage": "register",
-            "status_code": register_resp.status_code,
-            "body": reg_body,
-        }
-
-    headers["X-Request-ID"] = login_req_id
-    login_resp = sess.post(
-        base_url.rstrip("/") + "/api/v1/auth/local/login",
-        headers=headers,
-        json={"email": email, "password": password},
-        timeout=timeout,
-    )
-    login_body = _safe_json(login_resp)
-    if login_resp.status_code not in {200, 201}:
-        return {
-            "ok": False,
-            "stage": "login",
-            "status_code": login_resp.status_code,
-            "body": login_body,
-            "register_status_code": register_resp.status_code,
-        }
-
-    token = None
-    user_id = None
-    if isinstance(login_body, dict):
-        token = login_body.get("token") or login_body.get("access_token")
-        user = login_body.get("user") if isinstance(login_body.get("user"), dict) else {}
-        user_id = user.get("id") or login_body.get("user_id")
+    token = (access_token or os.getenv("JANUS_USER_ACCESS_TOKEN") or "").strip()
+    resolved_user_id = (user_id or os.getenv("JANUS_USER_ID") or "").strip()
     if not token:
         return {
             "ok": False,
-            "stage": "login_parse",
-            "status_code": login_resp.status_code,
-            "body": login_body,
+            "stage": "oidc_token_required",
+            "message": "Set JANUS_USER_ACCESS_TOKEN to a valid external OIDC access token.",
         }
     return {
         "ok": True,
-        "email": email,
-        "username": username,
         "token": token,
-        "user_id": str(user_id) if user_id is not None else None,
-        "register_status_code": register_resp.status_code,
-        "login_status_code": login_resp.status_code,
-        "register_body": reg_body if isinstance(reg_body, dict) else None,
-        "login_body": login_body if isinstance(login_body, dict) else None,
-        "request_ids": {"register": reg_req_id, "login": login_req_id},
+        "user_id": resolved_user_id or None,
+        "source": "external_oidc",
     }
-
-
-def _safe_json(resp: requests.Response) -> Any:
-    try:
-        return resp.json()
-    except Exception:
-        text = resp.text
-        if len(text) > 1000:
-            text = text[:1000]
-        return {"_raw_text": text}
-
 
 def _redact_sensitive(payload: Any) -> Any:
     sensitive_key_fragments = (

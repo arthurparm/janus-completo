@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { loginWithE2ECredentials, requireE2ECredentialsOrSkip } from './support/auth'
+import { authenticateWithOidcToken, requireOidcAccessTokenOrSkip } from './support/auth'
 
 type FixtureConversation = {
   conversation_id: string
@@ -77,10 +77,10 @@ test.describe('Demo Agentic Flow', () => {
     }
 
     await page.addInitScript(() => {
-      localStorage.setItem('JANUS_AUTH_TOKEN', 'mock-token')
+      sessionStorage.setItem('JANUS_AUTH_TOKEN', 'mock-token')
     })
 
-    await page.route('**/api/v1/auth/local/me', async (route) => {
+    await page.route('**/api/v1/users/me', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -268,8 +268,8 @@ test.describe('Demo Agentic Flow', () => {
   test('fluxo real da demo (opcional, backend real)', async ({ page }) => {
     test.skip(process.env.E2E_DEMO_REAL !== '1', 'Set E2E_DEMO_REAL=1 para rodar com backend real')
 
-    const credentials = requireE2ECredentialsOrSkip()
-    await loginWithE2ECredentials(page, credentials)
+    const accessToken = requireOidcAccessTokenOrSkip()
+    await authenticateWithOidcToken(page, accessToken)
     await page.goto('/conversations')
     await page.waitForTimeout(1000)
 
@@ -280,10 +280,10 @@ test.describe('Demo Agentic Flow', () => {
 
   test('renderiza fixture de historico markdown sem artefatos', async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('JANUS_AUTH_TOKEN', 'mock-token')
+      sessionStorage.setItem('JANUS_AUTH_TOKEN', 'mock-token')
     })
 
-    await page.route('**/api/v1/auth/local/me', async (route) => {
+    await page.route('**/api/v1/users/me', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

@@ -11,20 +11,18 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-
 from qa_request_support import (
     DockerLogCorrelator,
     _redact_sensitive,
-    bootstrap_local_auth,
     classify_gate,
     classify_http_status,
     generate_request_id,
     isoformat_utc,
+    load_oidc_test_auth,
     sanitize_headers,
     save_json,
     utc_now,
 )
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SPRINT_DIR = ROOT / "backend" / "http" / "sprint"
@@ -397,10 +395,10 @@ def execute_request(
         return row, evidence_row
 
 
-def _redact_bootstrap_auth(boot: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not isinstance(boot, dict):
-        return boot
-    redacted = _redact_sensitive(boot)
+def _redact_oidc_auth(oidc_auth: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(oidc_auth, dict):
+        return oidc_auth
+    redacted = _redact_sensitive(oidc_auth)
     return redacted if isinstance(redacted, dict) else {"_redacted": True}
 
 
@@ -412,7 +410,7 @@ def main() -> int:
     ap.add_argument("--phase", choices=["unauth", "auth"], required=True)
     ap.add_argument("--token", default="")
     ap.add_argument("--user-id", default="")
-    ap.add_argument("--bootstrap-auth", action="store_true")
+    ap.add_argument("--oidc-env-auth", action="store_true")
     ap.add_argument("--timeout", type=float, default=30.0)
     ap.add_argument("--request-id-prefix", default="qa-sprint")
     ap.add_argument("--with-log-correlation", action="store_true")
@@ -434,13 +432,13 @@ def main() -> int:
     boot = None
     token = args.token.strip()
     user_id = args.user_id.strip()
-    if args.phase == "auth" and not token and args.bootstrap_auth:
-        boot = bootstrap_local_auth(base_url=args.base_url, timeout=min(args.timeout, 20.0), request_id_prefix=f"{args.request_id_prefix}-bootstrap")
+    if args.phase == "auth" and not token and args.oidc_env_auth:
+        boot = load_oidc_test_auth(user_id=user_id)
         if boot.get("ok"):
             token = str(boot.get("token") or "")
             user_id = str(boot.get("user_id") or "")
         else:
-            print(f"[warn] auth bootstrap failed: {_redact_bootstrap_auth(boot)}", flush=True)
+            print(f"[warn] OIDC auth unavailable: {_redact_oidc_auth(boot)}", flush=True)
 
     correlator = None
     if args.with_log_correlation:
@@ -515,7 +513,7 @@ def main() -> int:
             "summary": sprint_summary,
             "results": sprint_rows,
             "log_evidence": sprint_log_rows,
-            "bootstrap_auth": boot if args.phase == "auth" else None,
+            "oidc_auth": boot if args.phase == "auth" else None,
         }
         per_sprint_reports[sprint_file.name] = sprint_report
         save_json(Path(args.report_dir) / f"{sprint_file.stem}.{args.phase}.json", sprint_report)
@@ -546,8 +544,8 @@ def main() -> int:
         "failures_reportable": failures_reportable,
         "log_evidence": log_rows,
         "sprints": per_sprint_reports,
-        "bootstrap_auth": _redact_bootstrap_auth(boot),
-        "status": "blocked_bootstrap_auth" if (args.phase == "auth" and args.bootstrap_auth and (boot and not boot.get("ok"))) else "ok",
+        "oidc_auth": _redact_oidc_auth(boot),
+        "status": "blocked_oidc_auth" if (args.phase == "auth" and args.oidc_env_auth and (boot and not boot.get("ok"))) else "ok",
     }
     save_json(args.report_json, aggregate)
     print(f"[summary:{args.phase}] requests={len(all_rows)} failures_reportable={len(failures_reportable)}", flush=True)

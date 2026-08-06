@@ -12,20 +12,15 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import os
 import statistics
 import subprocess
-import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib import error, request
-
-sys.path.append(str(Path(__file__).resolve().parents[1] / "backend"))
-
-from app.core.infrastructure.auth import create_token
-
 
 DEFAULT_SLO = {
     "load_error_rate_max_percent": 5.0,
@@ -113,8 +108,7 @@ def _safe_call(
         )
 
 
-def _auth_headers(user_id: int) -> dict[str, str]:
-    token = create_token(int(user_id), expires_in=3600)
+def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -180,11 +174,10 @@ def _summarize(results: list[RequestResult]) -> dict[str, Any]:
     }
 
 
-def _user_flow(base_url: str, idx: int, timeout: float) -> list[RequestResult]:
+def _user_flow(base_url: str, idx: int, timeout: float, access_token: str) -> list[RequestResult]:
     results: list[RequestResult] = []
-    actor_id = 9000 + idx
     project_id = "qa-async"
-    headers = _auth_headers(actor_id)
+    headers = _auth_headers(access_token)
 
     start_payload = {"persona": "default", "project_id": project_id}
     start = _safe_call(
@@ -266,11 +259,11 @@ def _user_flow(base_url: str, idx: int, timeout: float) -> list[RequestResult]:
     return results
 
 
-def run_concurrent_load(base_url: str, users: int, timeout: float) -> dict[str, Any]:
+def run_concurrent_load(base_url: str, users: int, timeout: float, access_token: str) -> dict[str, Any]:
     started = time.perf_counter()
     all_results: list[RequestResult] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, users)) as pool:
-        futures = [pool.submit(_user_flow, base_url, idx, timeout) for idx in range(users)]
+        futures = [pool.submit(_user_flow, base_url, idx, timeout, access_token) for idx in range(users)]
         for fut in concurrent.futures.as_completed(futures):
             all_results.extend(fut.result())
 
@@ -306,11 +299,13 @@ def _wait_service_healthy(container_name: str, timeout_s: float) -> bool:
     return False
 
 
-def run_chaos(base_url: str, chaos_timeout_s: float, postgres_container: str) -> dict[str, Any]:
+def run_chaos(
+    base_url: str, chaos_timeout_s: float, postgres_container: str, access_token: str
+) -> dict[str, Any]:
     started = time.perf_counter()
     events: list[dict[str, Any]] = []
     checks: dict[str, bool] = {}
-    headers = _auth_headers(9099)
+    headers = _auth_headers(access_token)
 
     def _record(label: str, status: int, body: Any):
         events.append({"label": label, "status": status, "body": body})
@@ -418,19 +413,32 @@ def main() -> int:
     parser.add_argument("--chaos-timeout", type=float, default=90.0, help="Recovery timeout in seconds.")
     parser.add_argument("--postgres-container", default="janus_postgres")
     parser.add_argument(
+        "--access-token",
+        default=os.getenv("JANUS_USER_ACCESS_TOKEN", ""),
+        help="Validated OIDC user access token; defaults to JANUS_USER_ACCESS_TOKEN.",
+    )
+    parser.add_argument(
         "--report-path",
         default="outputs/qa/async_ops_validation_report.json",
         help="Output JSON report path.",
     )
     args = parser.parse_args()
+    access_token = args.access_token.strip()
+    if not access_token:
+        parser.error("--access-token or JANUS_USER_ACCESS_TOKEN is required")
 
     report_path = Path(args.report_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     started_at = datetime.now(UTC).isoformat()
-    load_summary = run_concurrent_load(args.base_url, users=args.users, timeout=args.timeout)
+    load_summary = run_concurrent_load(
+        args.base_url, users=args.users, timeout=args.timeout, access_token=access_token
+    )
     chaos_summary = run_chaos(
-        args.base_url, chaos_timeout_s=args.chaos_timeout, postgres_container=args.postgres_container
+        args.base_url,
+        chaos_timeout_s=args.chaos_timeout,
+        postgres_container=args.postgres_container,
+        access_token=access_token,
     )
     slo_eval = evaluate_slo(load_summary, chaos_summary, DEFAULT_SLO)
 

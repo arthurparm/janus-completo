@@ -34,16 +34,16 @@
 ############################################
 # 0) Preflight de autenticacao
 ############################################
-# @name auth_local_me_preflight
-GET {{host}}{{api_v1_prefix}}/auth/local/me
+# @name users_me_preflight
+GET {{host}}{{api_v1_prefix}}/users/me
 Accept: application/json
 X-Request-ID: {{correlation_id}}
 User-Agent: Janus-HTTP-Test/{{client_version}}
 Authorization: Bearer {{token}}
 
 > {%
-client.test("Preflight auth/local/me: 200 e JSON", function() {
-  client.assert(response.status === 200, "Forneca @token valido (auth/local/me != 200)");
+client.test("Preflight users/me: 200 e JSON", function() {
+  client.assert(response.status === 200, "Forneca @token OIDC valido (users/me != 200)");
   client.assert((response.headers["content-type"] || "").toLowerCase().includes("application/json"));
 });
 try {
@@ -193,7 +193,7 @@ Authorization: Bearer {{token}}
 #
 # {
 #   "name": "arm-a",
-#   "model_spec": "openai:gpt-4o-mini"
+#   "model_spec": "openai:gpt-5.6-luna"
 # }
 #
 # > {%
