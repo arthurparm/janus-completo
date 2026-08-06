@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -69,6 +71,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -87,6 +91,7 @@ jobs:
             structlog \
             sqlalchemy \
             psycopg2-binary \
+            psycopg[binary] \
             qdrant-client \
             prometheus-client \
             prometheus-fastapi-instrumentator \
@@ -102,13 +107,21 @@ jobs:
             redis \
             neo4j \
             langchain-google-genai \
-            neo4j-graphrag
+            neo4j-graphrag \
+            PyJWT \
+            cryptography \
+            httpx \
+            python-multipart \
+            pydantic-ai-slim \
+            openapi-spec-validator
 
       - name: Run critical suite
         env:
           PYTHONPATH: backend
         run: |
           pytest -q \
+            qa/test_auth_profiles_contract.py \
+            qa/test_resource_ownership_contract.py \
             qa/test_api_visibility_endpoints.py \
             qa/test_tool_executor_policy_guards.py \
             qa/test_chat_agent_loop_content_safety.py \
@@ -119,6 +132,53 @@ jobs:
             qa/test_db_migration_service_contract.py \
             qa/test_knowledge_code_query_contract.py \
             qa/test_third_party_registry_enforced.py
+
+      - name: Validate executable API profiles and OpenAPI snapshots
+        env:
+          PYTHONPATH: backend
+          JANUS_SKIP_EXTERNAL_STARTUP: "true"
+        run: |
+          mkdir -p outputs/qa
+          python tooling/generate_security_openapi.py --check
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            baseline="origin/${{ github.base_ref }}"
+          else
+            baseline="HEAD^"
+          fi
+          set +e
+          python tooling/generate_security_openapi.py --check --git-ref "$baseline" \
+            2>&1 | tee outputs/qa/openapi-security-diff.txt
+          diff_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$diff_status" -eq 0 ]; then
+            printf 'PASS: no security regression against %s\n' "$baseline" \
+              >> outputs/qa/openapi-security-diff.txt
+          fi
+          exit "$diff_status"
+
+      - name: Validate Docker auth profiles in PC2 to PC1 order
+        run: python tooling/validate_auth_docker.py
+
+      - name: Upload Docker authentication evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: auth-docker-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            outputs/qa/auth_docker_validation.json
+            outputs/qa/auth_docker_validation.log
+
+      - name: Upload immutable API security artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: api-security-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            documentation/openapi/current/*.openapi.json
+            documentation/openapi/current/endpoint-policy-matrix.json
+            outputs/qa/openapi-security-diff.txt
 
       - name: Run MR-013 offline evaluation gate
         run: |

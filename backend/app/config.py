@@ -134,7 +134,7 @@ class AppSettings(BaseSettings):
     MEMORY_PII_REDACT: bool = True
     AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS: int = 600
     AUTONOMY_SELF_STUDY_RUN_DEADLINE_LOCAL: str | None = None
-    AUTONOMY_SELF_STUDY_LOCAL_ONLY: bool = True
+    AUTONOMY_SELF_STUDY_LOCAL_ONLY: bool = False
 
     # Raciocínio
     REASONING_MAX_ITERATIONS: int = 3
@@ -228,9 +228,10 @@ class AppSettings(BaseSettings):
     OPENAI_HTTP_MAX_KEEPALIVE: int = 20
     OPENAI_HTTP_TIMEOUT_SECONDS: float = 60.0
     GEMINI_API_KEY: SecretStr | None = None
+    GEMINI_ENABLED: bool = False
     GEMINI_MODEL_NAME: str = "gemini-3.6-flash"
     GEMINI_MODELS: list[str] = ["gemini-3.6-flash"]
-    OLLAMA_ENABLED: bool = True
+    OLLAMA_ENABLED: bool = False
     OLLAMA_HOST: str = "http://ollama:11434"
     OLLAMA_ORCHESTRATOR_MODEL: str = "gpt-oss:20b"
     OLLAMA_CODER_MODEL: str = "qwen3.5:9b"
@@ -272,7 +273,9 @@ class AppSettings(BaseSettings):
         "google/gemma-4-31b-it:free",
         "openai/gpt-oss-20b:free",
     ]
-    EMBEDDINGS_DEFAULT_PROVIDER: str = "local"
+    EMBEDDINGS_DEFAULT_PROVIDER: str = "openai"
+    EMBEDDINGS_LOCAL_ENABLED: bool = False
+    EMBEDDINGS_FAIL_CLOSED: bool = True
     EMBEDDINGS_LOCAL_MODEL_NAME: str = (
         "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     )
@@ -301,7 +304,7 @@ class AppSettings(BaseSettings):
     # Re-Ranking: Use LLM to re-rank retrieved chunks
     RAG_RERANK_ENABLED: bool = True
     RAG_RERANK_TOP_K: int = 5
-    RAG_RERANK_BACKEND: str = "cross_encoder"  # cross_encoder | heuristic
+    RAG_RERANK_BACKEND: str = "heuristic"  # cross_encoder | heuristic
     RAG_RERANK_CROSS_ENCODER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     RAG_RERANK_CROSS_ENCODER_WEIGHT: float = 0.75
     RAG_RERANK_BASE_SCORE_WEIGHT: float = 0.25
@@ -796,6 +799,26 @@ class AppSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_current_runtime_model_allowlist(self):
+        embeddings_provider = self.EMBEDDINGS_DEFAULT_PROVIDER.strip().lower()
+        if embeddings_provider not in {"openai", "openrouter", "local", "ollama"}:
+            raise ValueError(
+                "EMBEDDINGS_DEFAULT_PROVIDER must be openai, openrouter, local, or ollama"
+            )
+        if embeddings_provider == "local" and not self.EMBEDDINGS_LOCAL_ENABLED:
+            raise ValueError(
+                "local embeddings require EMBEDDINGS_LOCAL_ENABLED=true"
+            )
+        if embeddings_provider == "ollama" and not self.OLLAMA_ENABLED:
+            raise ValueError("Ollama embeddings require OLLAMA_ENABLED=true")
+
+        rerank_backend = self.RAG_RERANK_BACKEND.strip().lower()
+        if rerank_backend not in {"heuristic", "cross_encoder"}:
+            raise ValueError("RAG_RERANK_BACKEND must be heuristic or cross_encoder")
+        if rerank_backend == "cross_encoder" and not self.EMBEDDINGS_LOCAL_ENABLED:
+            raise ValueError(
+                "cross-encoder reranking requires EMBEDDINGS_LOCAL_ENABLED=true"
+            )
+
         configured_models = {
             self.OPENAI_MODEL_NAME,
             *self.OPENAI_MODELS,

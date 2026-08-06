@@ -11,21 +11,19 @@ jobs:
     name: Frontend E2E Real Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    env:
-      E2E_ADMIN_CPF: "52998224725"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Validate required secrets
         env:
-          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          JANUS_USER_ACCESS_TOKEN: ${{ secrets.JANUS_USER_ACCESS_TOKEN }}
+          OIDC_USER_ISSUER: ${{ secrets.OIDC_USER_ISSUER }}
+          OIDC_USER_JWKS_URL: ${{ secrets.OIDC_USER_JWKS_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ] || [ -z "$OPENAI_API_KEY" ]; then
-            echo "Missing required secrets: E2E_USER_EMAIL / E2E_USER_PASSWORD / OPENAI_API_KEY"
+          if [ -z "$JANUS_USER_ACCESS_TOKEN" ] || [ -z "$OIDC_USER_ISSUER" ] || [ -z "$OIDC_USER_JWKS_URL" ] || [ -z "$OPENAI_API_KEY" ]; then
+            echo "Missing required secrets: JANUS_USER_ACCESS_TOKEN / OIDC_USER_ISSUER / OIDC_USER_JWKS_URL / OPENAI_API_KEY"
             exit 1
           fi
 
@@ -39,11 +37,15 @@ jobs:
       - name: Build CI env file for pc1 stack
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OIDC_USER_ISSUER: ${{ secrets.OIDC_USER_ISSUER }}
+          OIDC_USER_JWKS_URL: ${{ secrets.OIDC_USER_JWKS_URL }}
         run: |
           cat > .env.e2e.ci <<EOF
           ENVIRONMENT=development
-          AUTH_JWT_SECRET=jwt_ci_e2e_frontend_real_20260304
-          AUTH_ADMIN_CPF_ALLOWLIST=${E2E_ADMIN_CPF}
+          JANUS_API_PROFILE=user
+          OIDC_USER_ISSUER=${OIDC_USER_ISSUER}
+          OIDC_USER_JWKS_URL=${OIDC_USER_JWKS_URL}
+          OIDC_USER_AUDIENCE=janus-user-api
           CORS_ALLOW_ORIGINS=["http://localhost:4300"]
           FRONTEND_PORT=4300
 
@@ -97,13 +99,14 @@ jobs:
       - name: Wait for API and frontend health
         run: |
           for i in {1..120}; do
-            if curl -sf http://localhost:8000/health >/dev/null; then
+            status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/healthz/user)
+            if [ "$status" = "401" ]; then
               echo "API is healthy"
               break
             fi
             sleep 2
           done
-          curl -sf http://localhost:8000/health >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/healthz/user)" = "401"
 
           for i in {1..120}; do
             if curl -sf http://localhost:4300/ >/dev/null; then
@@ -113,49 +116,6 @@ jobs:
             sleep 2
           done
           curl -sf http://localhost:4300/ >/dev/null
-
-      - name: Seed dedicated admin E2E account (idempotent)
-        env:
-          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import urllib.request
-          import urllib.error
-
-          email = os.environ["E2E_USER_EMAIL"].strip().lower()
-          password = os.environ["E2E_USER_PASSWORD"]
-          cpf = os.environ.get("E2E_ADMIN_CPF", "52998224725")
-          username = ("admin_e2e_" + email.split("@")[0].replace(".", "_"))[:48]
-
-          payload = {
-              "email": email,
-              "password": password,
-              "username": username,
-              "full_name": "Admin E2E",
-              "cpf": cpf,
-              "terms": True,
-          }
-          req = urllib.request.Request(
-              "http://localhost:8000/api/v1/auth/local/register",
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-          try:
-              with urllib.request.urlopen(req, timeout=30) as resp:
-                  body = resp.read().decode("utf-8", "ignore")
-                  print("register status:", resp.status)
-                  print("register body:", body[:400])
-          except urllib.error.HTTPError as err:
-              body = err.read().decode("utf-8", "ignore")
-              if err.code == 409:
-                  print("account already exists; continuing")
-              else:
-                  raise RuntimeError(f"register failed: {err.code} body={body[:400]}")
-          PY
 
       - name: Install frontend dependencies
         run: npm ci
@@ -168,8 +128,7 @@ jobs:
       - name: Run real admin smoke
         env:
           E2E_BASE_URL: http://localhost:4300
-          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          JANUS_USER_ACCESS_TOKEN: ${{ secrets.JANUS_USER_ACCESS_TOKEN }}
         run: |
           npx playwright test e2e/admin-chat-real.smoke.spec.ts --project=chromium
         working-directory: frontend
@@ -177,6 +136,7 @@ jobs:
       - name: Run authenticated chat runtime smoke
         env:
           E2E_BASE_URL: http://localhost:4300
+          JANUS_USER_ACCESS_TOKEN: ${{ secrets.JANUS_USER_ACCESS_TOKEN }}
           JANUS_CHAT_RUNTIME_E2E_MAX_MS: "60000"
         run: npm run e2e:chat-runtime
         working-directory: frontend
@@ -184,6 +144,7 @@ jobs:
       - name: Run real chat SSE smoke
         env:
           E2E_BASE_URL: http://localhost:4300
+          JANUS_USER_ACCESS_TOKEN: ${{ secrets.JANUS_USER_ACCESS_TOKEN }}
           JANUS_RUN_REAL_CHAT_E2E: "true"
           JANUS_LIGHT_CHAT_E2E_MAX_MS: "60000"
         run: npm run e2e:chat-sse

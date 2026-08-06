@@ -43,9 +43,12 @@ except Exception:
     _EMB_LAT = _NoopH()  # type: ignore
     _EMB_MODEL_LOADED = _NoopG()  # type: ignore
 
-try:
-    from sentence_transformers import SentenceTransformer  # type: ignore
-except Exception:
+if bool(getattr(settings, "EMBEDDINGS_LOCAL_ENABLED", False)):
+    try:
+        from sentence_transformers import SentenceTransformer  # type: ignore
+    except Exception:
+        SentenceTransformer = None  # type: ignore
+else:
     SentenceTransformer = None  # type: ignore
 
 try:
@@ -63,7 +66,7 @@ _DEFAULT_OPENAI_MODEL = getattr(settings, "EMBEDDINGS_OPENAI_MODEL_NAME", "text-
 _DEFAULT_OPENROUTER_MODEL = getattr(settings, "EMBEDDINGS_OPENROUTER_MODEL_NAME", "qwen/qwen3-embedding-8b")
 _DEFAULT_OLLAMA_MODEL = getattr(settings, "EMBEDDINGS_OLLAMA_MODEL_NAME", "nomic-embed-text")
 _TARGET_VECTOR_SIZE = int(getattr(settings, "MEMORY_VECTOR_SIZE", 1536))
-_PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "local")  # "local" | "openai" | "openrouter"
+_PROVIDER_PREF = getattr(settings, "EMBEDDINGS_DEFAULT_PROVIDER", "openai")
 _CACHE_TTL = int(getattr(settings, "MEMORY_SHORT_TTL_SECONDS", 600))
 _CACHE_MAX = int(getattr(settings, "MEMORY_SHORT_MAX_ITEMS", 512))
 
@@ -277,6 +280,28 @@ def _emb_ollama(texts: list[str]) -> list[list[float]]:
     return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
 
 
+def _provider_order() -> list[str]:
+    """Return only embedding providers enabled by runtime policy."""
+    preferred = str(_PROVIDER_PREF or "openai").strip().lower()
+    available = ["openai", "openrouter"]
+    if bool(getattr(settings, "OLLAMA_ENABLED", False)):
+        available.append("ollama")
+    if bool(getattr(settings, "EMBEDDINGS_LOCAL_ENABLED", False)):
+        available.append("local")
+    if preferred not in available:
+        raise RuntimeError(
+            f"Embedding provider '{preferred}' is disabled by runtime policy."
+        )
+    return [preferred, *(provider for provider in available if provider != preferred)]
+
+
+def _handle_all_providers_failed(*, batch_size: int) -> list[list[float]]:
+    if bool(getattr(settings, "EMBEDDINGS_FAIL_CLOSED", True)):
+        raise RuntimeError("All enabled cloud embedding providers failed.")
+    logger.error("All embedding providers failed; returning null vectors.")
+    return [[0.0] * _TARGET_VECTOR_SIZE for _ in range(batch_size)]
+
+
 def embed_text(text: str) -> list[float]:
     """
     Retorna embedding para um único texto, com fallback automático.
@@ -290,14 +315,7 @@ def embed_text(text: str) -> list[float]:
     if cached is not None:
         return cached
 
-    pref = (_PROVIDER_PREF or "local").lower()
-    providers = [pref]
-    
-    # Ordem de fallback
-    available = ["ollama", "local", "openrouter", "openai"]
-    for p in available:
-        if p != pref:
-            providers.append(p)
+    providers = _provider_order()
 
     for p in providers:
         try:
@@ -330,8 +348,7 @@ def embed_text(text: str) -> list[float]:
                 pass
             continue
 
-    logger.error("Todos provedores de embeddings falharam; usando vetor nulo.")
-    null_vec = [0.0] * _TARGET_VECTOR_SIZE
+    null_vec = _handle_all_providers_failed(batch_size=1)[0]
     _cache.put(key, null_vec)
     try:
         _EMB_REQ.labels("none", "error").inc()
@@ -346,14 +363,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
     # Estratégia simples: tentar provider preferido, com fallback; sem cache por-item para lote
-    pref = (_PROVIDER_PREF or "local").lower()
-    providers = [pref]
-    
-    # Ordem de fallback
-    available = ["ollama", "local", "openrouter", "openai"]
-    for p in available:
-        if p != pref:
-            providers.append(p)
+    providers = _provider_order()
 
     for p in providers:
         try:
@@ -385,13 +395,12 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 pass
             continue
 
-    logger.error("Batch embeddings: todos provedores falharam; retornando vetores nulos.")
     try:
         _EMB_REQ.labels("none", "error").inc()
         _EMB_LAT.labels("none", "error").observe(0.0)
     except Exception:
         pass
-    return [[0.0] * _TARGET_VECTOR_SIZE for _ in texts]
+    return _handle_all_providers_failed(batch_size=len(texts))
 
 
 async def aembed_text(text: str) -> list[float]:

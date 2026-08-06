@@ -1,4 +1,7 @@
 * @janus-core-maintainers
 
 /documentation/compliance/ @janus-security-governance
+/documentation/openapi/ @janus-security-governance
+/backend/app/core/security/ @janus-security-governance
+/backend/app/core/infrastructure/auth.py @janus-security-governance
 
