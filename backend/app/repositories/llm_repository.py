@@ -5,7 +5,14 @@ from typing import Any
 import structlog
 from app.config import settings
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
-from app.core.llm.factory import _validate_gemini_key, _validate_openai_key, warm_llm_pool
+from app.core.llm.factory import (
+    _validate_deepseek_key,
+    _validate_gemini_key,
+    _validate_openai_key,
+    _validate_openrouter_key,
+    _validate_xai_key,
+    warm_llm_pool,
+)
 from app.core.llm.response_cache import entries as rc_entries
 from app.core.llm.response_cache import get as rc_get
 from app.core.llm.response_cache import invalidate as rc_invalidate
@@ -408,12 +415,17 @@ class LLMRepository:
         # Recupera chaves (podem ser SecretStr) e valida
         openai_key = getattr(settings.OPENAI_API_KEY, "get_secret_value", lambda: None)()
         gemini_key = getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
+        deepseek_key = getattr(settings.DEEPSEEK_API_KEY, "get_secret_value", lambda: None)()
+        xai_key = getattr(settings.XAI_API_KEY, "get_secret_value", lambda: None)()
+        openrouter_key = getattr(
+            settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None
+        )()
 
         providers = [
             {
                 "provider": "ollama",
                 "name": "Ollama",
-                "enabled": True,
+                "enabled": settings.OLLAMA_ENABLED,
                 "host": settings.OLLAMA_HOST,
                 "models": {
                     "orchestrator": settings.OLLAMA_ORCHESTRATOR_MODEL,
@@ -432,6 +444,25 @@ class LLMRepository:
                 "name": "Google Gemini",
                 "enabled": _validate_gemini_key(gemini_key),
                 "model_default": settings.GEMINI_MODEL_NAME,
+            },
+            {
+                "provider": "deepseek",
+                "name": "DeepSeek",
+                "enabled": _validate_deepseek_key(deepseek_key),
+                "model_default": settings.DEEPSEEK_MODEL_NAME,
+            },
+            {
+                "provider": "xai",
+                "name": "xAI",
+                "enabled": _validate_xai_key(xai_key),
+                "model_default": settings.XAI_MODEL_NAME,
+            },
+            {
+                "provider": "openrouter",
+                "name": "OpenRouter",
+                "enabled": bool(settings.OPENROUTER_FREE_MODELS_ENABLED)
+                and _validate_openrouter_key(openrouter_key),
+                "model_default": settings.OPENROUTER_MODEL_NAME,
             },
         ]
 

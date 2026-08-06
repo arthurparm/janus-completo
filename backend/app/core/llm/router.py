@@ -7,7 +7,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from prometheus_client import Counter, Gauge
 
-from app.config import settings
+from app.config import require_current_runtime_model, settings
 
 from .factory import (
     _get_openai_http_client,
@@ -15,6 +15,7 @@ from .factory import (
     _validate_deepseek_key,
     _validate_gemini_key,
     _validate_openai_key,
+    _validate_openrouter_key,
     _validate_xai_key,
     create_ollama_llm,
 )
@@ -104,6 +105,7 @@ MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset(
         "o3-mini",
         "o3-mini-2025-01-31",
         "gpt-5",
+        "gpt-5.6",
     }
 )
 
@@ -114,6 +116,26 @@ def _model_supports_temperature(model_name: str) -> bool:
         if model_lower == no_temp_model or model_lower.startswith(f"{no_temp_model}-"):
             return False
     return True
+
+
+def _gemini_model_supports_sampling(model_name: str) -> bool:
+    model_lower = (model_name or "").strip().lower()
+    return not (
+        model_lower.startswith("gemini-3.6-")
+        or model_lower.startswith("gemini-3.5-flash-lite")
+    )
+
+
+def _create_gemini_model(model: str, temperature: float = 0) -> ChatGoogleGenerativeAI:
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "google_api_key": (
+            getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)() or None
+        ),
+    }
+    if _gemini_model_supports_sampling(model):
+        kwargs["temperature"] = temperature
+    return ChatGoogleGenerativeAI(**kwargs)
 
 
 def _normalize_provider_key(provider: str | None) -> str | None:
@@ -129,6 +151,7 @@ def _normalize_provider_key(provider: str | None) -> str | None:
         "ollama": "ollama",
         "openai": "openai",
         "deepseek": "deepseek",
+        "openrouter": "openrouter",
     }
     return aliases.get(key, key)
 
@@ -149,6 +172,14 @@ def _coerce_int(value: Any) -> int | None:
         return int(value)
     except Exception:
         return None
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _create_openai_model(
@@ -183,6 +214,9 @@ class RouterSelection:
     temperature_override: float | None = None
     max_tokens_override: int | None = None
     ollama_kwargs_override: dict[str, Any] = field(default_factory=dict)
+    strict_provider: bool = False
+    disable_failover: bool = False
+    reasoning_override: dict[str, Any] | None = None
 
     @property
     def pool_allowed(self) -> bool:
@@ -190,6 +224,7 @@ class RouterSelection:
             self.temperature_override is None
             and self.max_tokens_override is None
             and not self.ollama_kwargs_override
+            and self.reasoning_override is None
         )
 
 
@@ -238,6 +273,12 @@ class LLMFactory:
             return float(self.selection.temperature_override)
         return 0.0
 
+    @property
+    def openrouter_reasoning(self) -> dict[str, Any]:
+        if self.selection.reasoning_override is not None:
+            return self.selection.reasoning_override
+        return {"enabled": bool(settings.OPENROUTER_REASONING_ENABLED)}
+
     def resolve_model_name(self, provider_key: str) -> str:
         if provider_key == "ollama":
             return self.selection.explicit_model or self.local_model_name
@@ -249,6 +290,8 @@ class LLMFactory:
             return self.selection.explicit_model or settings.DEEPSEEK_MODEL_NAME
         if provider_key == "xai":
             return self.selection.explicit_model or settings.XAI_MODEL_NAME
+        if provider_key == "openrouter":
+            return self.selection.explicit_model or settings.OPENROUTER_MODEL_NAME
         raise RuntimeError(f"Unsupported provider override: {provider_key}")
 
     def get_pooled(self, provider_key: str, model_name: str) -> BaseChatModel | None:
@@ -262,9 +305,9 @@ class LLMFactory:
 
     def cloud_catalog(self) -> list[dict[str, Any]]:
         if self.selection.priority == ModelPriority.HIGH_QUALITY:
-            provider_order = ["xAI", "OpenAI", "Google Gemini", "DeepSeek"]
+            provider_order = ["OpenRouter", "xAI", "OpenAI", "Google Gemini", "DeepSeek"]
         else:
-            provider_order = ["DeepSeek", "Google Gemini", "xAI", "OpenAI"]
+            provider_order = ["OpenRouter", "DeepSeek", "Google Gemini", "xAI", "OpenAI"]
 
         cloud_providers = {
             "DeepSeek": {
@@ -298,13 +341,9 @@ class LLMFactory:
                 "enabled": _validate_gemini_key(
                     getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
                 ),
-                "initializer_factory": lambda model: ChatGoogleGenerativeAI(
-                    model=model,
+                "initializer_factory": lambda model: _create_gemini_model(
+                    model,
                     temperature=self.default_temperature,
-                    google_api_key=(
-                        getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
-                        or None
-                    ),
                 ),
                 "models": (
                     settings.GEMINI_MODELS
@@ -351,6 +390,29 @@ class LLMFactory:
                     if getattr(settings, "XAI_MODELS", None)
                     else [settings.XAI_MODEL_NAME]
                 ),
+            },
+            "OpenRouter": {
+                "name": "OpenRouter Free",
+                "provider_key": "openrouter",
+                "enabled": bool(settings.OPENROUTER_FREE_MODELS_ENABLED)
+                and _validate_openrouter_key(
+                    getattr(settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None)()
+                ),
+                "initializer_factory": lambda model: _create_openai_compatible_chat(
+                    model=model,
+                    temperature=self.default_temperature,
+                    api_key=getattr(
+                        settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None
+                    )(),
+                    base_url=settings.OPENROUTER_BASE_URL,
+                    max_tokens=self.selection.max_tokens_override,
+                    default_headers={
+                        "HTTP-Referer": "https://janus.ai",
+                        "X-Title": "Janus Agent",
+                    },
+                    extra_body={"reasoning": self.openrouter_reasoning},
+                ),
+                "models": settings.OPENROUTER_MODELS,
             },
         }
         return [cloud_providers[name] for name in provider_order if name in cloud_providers]
@@ -399,14 +461,17 @@ class CandidateFilter:
         if not _circuit_closed(provider_key) or not await _budget_allows(provider_key):
             raise RuntimeError(f"{provider_key} provider unavailable.")
 
-    def _role_candidates_map(self) -> dict[str, set[str]]:
+    def _role_candidates_map(self) -> dict[str, list[str]]:
         role_key = self.selection.role.value
         raw_role_candidates = getattr(settings, "LLM_CLOUD_MODEL_CANDIDATES", {}).get(role_key, [])
-        role_candidates_map: dict[str, set[str]] = {}
+        role_candidates_map: dict[str, list[str]] = {}
         for spec in raw_role_candidates:
             try:
                 provider_key, model_name = spec.split(":", 1)
-                role_candidates_map.setdefault(provider_key.strip(), set()).add(model_name.strip())
+                provider_models = role_candidates_map.setdefault(provider_key.strip(), [])
+                normalized_model = model_name.strip()
+                if normalized_model not in provider_models:
+                    provider_models.append(normalized_model)
             except Exception:
                 logger.warning(
                     "log_warning",
@@ -618,11 +683,16 @@ def _build_selection(
             if "provider" in config:
                 selection.explicit_provider = _normalize_provider_key(config.get("provider"))
             if "model" in config and config.get("model") is not None:
-                selection.explicit_model = str(config.get("model"))
+                selection.explicit_model = require_current_runtime_model(str(config.get("model")))
             if "temperature" in config:
                 selection.temperature_override = _coerce_float(config.get("temperature"))
             if "max_tokens" in config:
                 selection.max_tokens_override = _coerce_int(config.get("max_tokens"))
+            selection.strict_provider = _coerce_bool(config.get("strict_provider", False))
+            selection.disable_failover = _coerce_bool(config.get("disable_failover", False))
+            reasoning_config = config.get("reasoning")
+            if isinstance(reasoning_config, dict):
+                selection.reasoning_override = dict(reasoning_config)
 
             for key in ("num_ctx", "context", "context_window", "context_tokens"):
                 if key in config:
@@ -663,6 +733,11 @@ async def _apply_budget_guardrail(selection: RouterSelection) -> RouterSelection
     if selection.priority in (ModelPriority.LOCAL_ONLY, ModelPriority.HIGH_QUALITY):
         return selection
     if await is_total_budget_threshold_exceeded():
+        if not settings.OLLAMA_ENABLED:
+            logger.warning(
+                "Budget guardrail reached while Ollama is disabled; retaining cloud routing."
+            )
+            return selection
         logger.warning(
             "log_warning",
             message=(
@@ -671,6 +746,19 @@ async def _apply_budget_guardrail(selection: RouterSelection) -> RouterSelection
             ),
         )
         selection.priority = ModelPriority.LOCAL_ONLY
+    return selection
+
+
+def _apply_runtime_provider_policy(selection: RouterSelection) -> RouterSelection:
+    if settings.OLLAMA_ENABLED:
+        return selection
+    if "ollama" not in selection.exclude_providers:
+        selection.exclude_providers.append("ollama")
+    if selection.explicit_provider == "ollama":
+        raise RuntimeError("Ollama is disabled by runtime policy.")
+    if selection.priority is ModelPriority.LOCAL_ONLY:
+        selection.priority = ModelPriority.FAST_AND_CHEAP
+        logger.info("Cloud-only runtime converted LOCAL_ONLY routing to FAST_AND_CHEAP.")
     return selection
 
 
@@ -697,6 +785,7 @@ async def get_llm(
     """Obtém uma instância de LLM preservando overrides, pooling e fallback existentes."""
 
     selection = _build_selection(role, priority, cache_key, exclude_providers, config)
+    selection = _apply_runtime_provider_policy(selection)
     selection = await _apply_budget_guardrail(selection)
     factory = LLMFactory(selection)
     candidate_filter = CandidateFilter(selection, factory)
@@ -710,6 +799,10 @@ async def get_llm(
             selection.explicit_provider != "ollama"
             and selection.priority == ModelPriority.LOCAL_ONLY
         ):
+            if selection.strict_provider or selection.disable_failover:
+                raise RuntimeError(
+                    "Strict cloud provider override cannot use LOCAL_ONLY priority."
+                )
             logger.warning(
                 "Explicit provider override ignored due to LOCAL_ONLY priority.",
                 extra={"provider": selection.explicit_provider},
@@ -731,6 +824,8 @@ async def get_llm(
                     factory,
                 )
             except Exception:
+                if selection.strict_provider or selection.disable_failover:
+                    raise
                 logger.warning(
                     "Explicit LLM override failed; falling back to selection.",
                     exc_info=True,

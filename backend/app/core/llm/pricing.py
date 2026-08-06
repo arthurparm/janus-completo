@@ -43,6 +43,7 @@ _provider_stats: dict[str, ProviderStats] = {
     "ollama": ProviderStats(),
     "deepseek": ProviderStats(),
     "xai": ProviderStats(),
+    "openrouter": ProviderStats(),
 }
 
 _model_stats: dict[str, dict[str, ModelStats]] = {
@@ -51,6 +52,7 @@ _model_stats: dict[str, dict[str, ModelStats]] = {
     "ollama": {},
     "deepseek": {},
     "xai": {},
+    "openrouter": {},
 }
 
 # Pricing por provedor (valores padrão via settings; Ollama ~ 0)
@@ -76,6 +78,10 @@ _provider_pricing: dict[str, ProviderPricing] = {
         input_per_1k_usd=settings.XAI_COST_PER_1K_INPUT_USD,
         output_per_1k_usd=settings.XAI_COST_PER_1K_OUTPUT_USD,
     ),
+    "openrouter": ProviderPricing(
+        input_per_1k_usd=settings.OPENROUTER_COST_PER_1K_INPUT_USD,
+        output_per_1k_usd=settings.OPENROUTER_COST_PER_1K_OUTPUT_USD,
+    ),
 }
 
 # Orçamentos mensais por provedor
@@ -85,6 +91,7 @@ _provider_budgets_usd: dict[str, float] = {
     "ollama": settings.OLLAMA_MONTHLY_BUDGET_USD,
     "deepseek": settings.DEEPSEEK_MONTHLY_BUDGET_USD,
     "xai": settings.XAI_MONTHLY_BUDGET_USD,
+    "openrouter": settings.OPENROUTER_MONTHLY_BUDGET_USD,
 }
 
 # Rastreamento de gastos acumulados
@@ -94,6 +101,7 @@ _provider_spend_usd: dict[str, float] = {
     "ollama": 0.0,
     "deepseek": 0.0,
     "xai": 0.0,
+    "openrouter": 0.0,
 }
 
 # Fatores de penalização por modelo (>=1.0). Quanto maior, menos preferido.
@@ -103,6 +111,7 @@ _model_penalty_factors: dict[str, dict[str, float]] = {
     "ollama": {},
     "deepseek": {},
     "xai": {},
+    "openrouter": {},
 }
 
 # EMA dinâmica de expected_k por papel (ktokens). Inicializa a partir das configurações.
@@ -177,7 +186,7 @@ async def is_total_budget_threshold_exceeded() -> bool:
     Used for Dynamic Budget Guardrails.
     """
     # Only consider cloud providers with positive budgets
-    cloud_providers = ["openai", "google_gemini", "deepseek", "xai"]
+    cloud_providers = ["openai", "google_gemini", "deepseek", "xai", "openrouter"]
 
     total_budget = sum(_provider_budgets_usd.get(p, 0.0) for p in cloud_providers)
 
@@ -257,6 +266,17 @@ def _get_model_pricing(provider: str, model_name: str) -> ProviderPricing:
                 )
             return ProviderPricing(
                 settings.XAI_COST_PER_1K_INPUT_USD, settings.XAI_COST_PER_1K_OUTPUT_USD
+            )
+        if provider == "openrouter":
+            mp = settings.OPENROUTER_MODEL_PRICING.get(model_name)
+            if mp:
+                return ProviderPricing(
+                    mp.get("input_per_1k_usd", settings.OPENROUTER_COST_PER_1K_INPUT_USD),
+                    mp.get("output_per_1k_usd", settings.OPENROUTER_COST_PER_1K_OUTPUT_USD),
+                )
+            return ProviderPricing(
+                settings.OPENROUTER_COST_PER_1K_INPUT_USD,
+                settings.OPENROUTER_COST_PER_1K_OUTPUT_USD,
             )
         # ollama
         return ProviderPricing(

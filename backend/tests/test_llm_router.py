@@ -20,7 +20,7 @@ def mock_settings():
         mock.LLM_CLOUD_MODEL_CANDIDATES = {}
         # Defaults
         mock.OLLAMA_HOST = "http://localhost:11434"
-        mock.OLLAMA_ORCHESTRATOR_MODEL = "llama3"
+        mock.OLLAMA_ORCHESTRATOR_MODEL = "gpt-oss:20b"
         yield mock
 
 @pytest.fixture
@@ -46,7 +46,7 @@ async def test_get_llm_local_only(mock_settings, mock_pool):
                 role=ModelRole.ORCHESTRATOR, priority=ModelPriority.LOCAL_ONLY
             )
             assert llm == mock_instance
-            mock_create.assert_called_once_with("llama3", temperature=None, model_kwargs={})
+            mock_create.assert_called_once_with("gpt-oss:20b", temperature=None, model_kwargs={})
 
 @pytest.mark.asyncio
 async def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool, mock_pricing):
@@ -77,10 +77,10 @@ async def test_get_llm_fast_and_cheap_selects_cheapest(mock_settings, mock_pool,
                 MockGemini.return_value = MagicMock(name="gemini_llm")
 
                 # Mock settings for models
-                mock_settings.GEMINI_MODELS = ["gemini-pro"]
-                mock_settings.GEMINI_MODEL_NAME = "gemini-pro"
-                mock_settings.OPENAI_MODELS = ["gpt-4"]
-                mock_settings.OPENAI_MODEL_NAME = "gpt-4"
+                mock_settings.GEMINI_MODELS = ["gemini-3.6-flash"]
+                mock_settings.GEMINI_MODEL_NAME = "gemini-3.6-flash"
+                mock_settings.OPENAI_MODELS = ["gpt-5.6-luna"]
+                mock_settings.OPENAI_MODEL_NAME = "gpt-5.6-luna"
 
                 # Execute
                 llm = await get_llm(

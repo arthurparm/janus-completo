@@ -210,7 +210,7 @@ async def get_budget_summary():
 
     from app.core.llm import pricing
 
-    providers = ["openai", "google_gemini", "deepseek", "ollama"]
+    providers = ["openai", "google_gemini", "deepseek", "xai", "openrouter", "ollama"]
 
     provider_data = []
     total_spent = 0.0

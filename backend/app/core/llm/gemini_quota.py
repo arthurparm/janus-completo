@@ -150,8 +150,8 @@ class GeminiQuotaFetcher:
         if target_model:
             models_to_update.append(target_model)
         else:
-            # Apply to common Gemini models if it's a general quota
-            models_to_update = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"]
+            # Apply only to the executable model allowlist when quota metadata is generic.
+            models_to_update = list(settings.GEMINI_MODELS)
 
         rate_limiter = get_rate_limiter()
         provider = "google_gemini"

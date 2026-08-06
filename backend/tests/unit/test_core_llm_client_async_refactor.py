@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.core.llm import response_cache
 from app.core.llm.client import LLMClient
 from app.core.llm.types import ModelRole, ProviderPricing
@@ -18,6 +17,7 @@ class _MockSettings:
     LLM_RETRY_INITIAL_BACKOFF_SECONDS = 0.01
     LLM_RETRY_MAX_BACKOFF_SECONDS = 0.01
     LLM_FALLBACK_ENABLED = False
+    OLLAMA_ENABLED = False
     IDENTITY_ENFORCEMENT_ENABLED = False
     AGENT_IDENTITY_NAME = "Janus"
     APP_NAME = "Janus"
@@ -82,3 +82,11 @@ async def test_asend_prefere_ainvoke_e_reutiliza_cache():
 def test_llm_client_nao_exporta_mais_send():
     client = _build_client(MagicMock())
     assert not hasattr(client, "send")
+
+
+@pytest.mark.asyncio
+async def test_cloud_only_runtime_bloqueia_fallback_ollama():
+    client = _build_client(MagicMock())
+
+    with pytest.raises(RuntimeError, match="disabled by runtime policy"):
+        await client._invoke_with_fallback("ping")

@@ -1,9 +1,36 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app.core.llm.router import get_llm
+from app.core.llm.router import RouterSelection, _apply_runtime_provider_policy, get_llm
 from app.core.llm.types import ModelPriority, ModelRole, ProviderPricing
+
+
+def test_cloud_only_runtime_converte_local_only_em_fast_and_cheap():
+    selection = RouterSelection(
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.LOCAL_ONLY,
+    )
+    mock_settings = __import__("app.core.llm.router", fromlist=["settings"]).settings
+
+    with patch.object(mock_settings, "OLLAMA_ENABLED", False):
+        result = _apply_runtime_provider_policy(selection)
+
+    assert result.priority is ModelPriority.FAST_AND_CHEAP
+    assert "ollama" in result.exclude_providers
+
+
+def test_cloud_only_runtime_rejeita_override_explicito_ollama():
+    selection = RouterSelection(
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.HIGH_QUALITY,
+        explicit_provider="ollama",
+    )
+    mock_settings = __import__("app.core.llm.router", fromlist=["settings"]).settings
+
+    with patch.object(mock_settings, "OLLAMA_ENABLED", False), pytest.raises(
+        RuntimeError, match="Ollama is disabled"
+    ):
+        _apply_runtime_provider_policy(selection)
 
 
 @pytest.mark.asyncio
@@ -17,7 +44,7 @@ async def test_get_llm_local_only_mantem_ollama_como_caminho_primario():
         patch.object(
             __import__("app.core.llm.router", fromlist=["settings"]).settings,
             "OLLAMA_ORCHESTRATOR_MODEL",
-            "llama3",
+            "gpt-oss:20b",
         ),
     ):
         llm = await get_llm(
@@ -46,10 +73,10 @@ async def test_get_llm_fast_and_cheap_escolhe_candidato_mais_barato_disponivel()
         patch("app.core.llm.router.ChatGoogleGenerativeAI", return_value=gemini_llm),
         patch("app.core.llm.router._create_openai_model", return_value=openai_llm),
         patch("app.core.llm.router._get_model_pricing") as mock_pricing,
-        patch.object(mock_settings, "GEMINI_MODELS", ["gemini-2.5-flash"]),
-        patch.object(mock_settings, "GEMINI_MODEL_NAME", "gemini-2.5-flash"),
-        patch.object(mock_settings, "OPENAI_MODELS", ["gpt-4o"]),
-        patch.object(mock_settings, "OPENAI_MODEL_NAME", "gpt-4o"),
+        patch.object(mock_settings, "GEMINI_MODELS", ["gemini-3.6-flash"]),
+        patch.object(mock_settings, "GEMINI_MODEL_NAME", "gemini-3.6-flash"),
+        patch.object(mock_settings, "OPENAI_MODELS", ["gpt-5.6-luna"]),
+        patch.object(mock_settings, "OPENAI_MODEL_NAME", "gpt-5.6-luna"),
         patch.object(mock_settings, "LLM_CLOUD_MODEL_CANDIDATES", {}),
         patch.object(mock_settings, "LLM_ECONOMY_POLICY", "balanced"),
         patch.object(mock_settings, "LLM_EXPLORATION_PERCENT", 0.0),

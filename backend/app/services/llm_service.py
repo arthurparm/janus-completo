@@ -4,9 +4,9 @@ import structlog
 from fastapi import Request
 
 from app.config import settings
+from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.task_policy import infer_llm_task_profile, resolve_llm_task_policy
-from app.core.infrastructure.prompt_loader import get_formatted_prompt
 from app.core.monitoring.health_monitor import check_llm_router_health
 from app.services.prompt_service import PromptService
 
@@ -136,6 +136,7 @@ class LLMService:
                 "strict_provider",
                 "disable_failover",
                 "disable_response_cache",
+                "reasoning",
                 "num_ctx",
                 "num_thread",
                 "num_batch",

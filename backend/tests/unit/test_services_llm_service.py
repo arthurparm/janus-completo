@@ -18,7 +18,7 @@ class _FakeRepo:
                 **kwargs,
             }
         )
-        return {"response": "ok", "provider": "ollama", "model": "qwen2.5:14b"}
+        return {"response": "ok", "provider": "ollama", "model": "ministral-3:14b"}
 
 
 def test_invoke_llm_preserves_strict_ollama_policy_overrides():
@@ -33,7 +33,7 @@ def test_invoke_llm_preserves_strict_ollama_policy_overrides():
             timeout_seconds=30,
             policy_overrides={
                 "provider": "ollama",
-                "model": "qwen2.5:14b",
+                "model": "ministral-3:14b",
                 "strict_provider": True,
                 "disable_failover": True,
                 "disable_response_cache": True,
@@ -44,7 +44,7 @@ def test_invoke_llm_preserves_strict_ollama_policy_overrides():
     assert len(repo.calls) == 1
     call = repo.calls[0]
     assert call["llm_config"]["provider"] == "ollama"
-    assert call["llm_config"]["model"] == "qwen2.5:14b"
+    assert call["llm_config"]["model"] == "ministral-3:14b"
     assert call["llm_config"]["strict_provider"] is True
     assert call["llm_config"]["disable_failover"] is True
     assert call["llm_config"]["disable_response_cache"] is True

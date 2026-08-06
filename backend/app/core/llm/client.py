@@ -197,6 +197,8 @@ class LLMClient:
                 break
 
     async def _invoke_with_fallback(self, prompt: str) -> str:
+        if not getattr(self.settings, "OLLAMA_ENABLED", True):
+            raise RuntimeError("Ollama fallback is disabled by runtime policy.")
         if not _OLLAMA_AVAILABLE or ChatOllama is None:
             logger.warning("Fallback Ollama requested but langchain_ollama is not installed.")
             raise RuntimeError("langchain_ollama is not installed.")
@@ -205,7 +207,7 @@ class LLMClient:
         fallback_model = getattr(
             self.settings,
             "OLLAMA_ORCHESTRATOR_MODEL",
-            getattr(self.settings, "OLLAMA_MODEL", "llama3"),
+            getattr(self.settings, "OLLAMA_MODEL", "gpt-oss:20b"),
         )
 
         mk: dict[str, Any] = {}
@@ -397,6 +399,7 @@ class LLMClient:
                 self.provider != "ollama"
                 and not isinstance(e, ValueError)
                 and getattr(self.settings, "LLM_FALLBACK_ENABLED", True)
+                and getattr(self.settings, "OLLAMA_ENABLED", True)
             )
             if should_fallback:
                 try:

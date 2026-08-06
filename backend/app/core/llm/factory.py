@@ -1,13 +1,13 @@
-import structlog
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
 
 import httpx
+import structlog
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from app.config import settings
+from app.config import require_current_runtime_model, settings
 from app.core.security.egress_policy import enforce_worker_http_egress
 
 from .resilience import LLM_POOL_WARMS, _add_to_pool, _get_from_pool, _pool_key
@@ -55,7 +55,16 @@ _llm_executors: dict[str, ThreadPoolExecutor] = {}
 
 # OpenAI-compatible models that only support default temperature.
 _MODELS_WITHOUT_TEMPERATURE_SUPPORT = frozenset(
-    {"o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o3-mini-2025-01-31", "gpt-5"}
+    {
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o3",
+        "o3-mini",
+        "o3-mini-2025-01-31",
+        "gpt-5",
+        "gpt-5.6",
+    }
 )
 
 
@@ -65,6 +74,14 @@ def _model_supports_temperature(model_name: str) -> bool:
         if model_lower == no_temp_model or model_lower.startswith(f"{no_temp_model}-"):
             return False
     return True
+
+
+def _gemini_model_supports_sampling(model_name: str) -> bool:
+    model_lower = (model_name or "").strip().lower()
+    return not (
+        model_lower.startswith("gemini-3.6-")
+        or model_lower.startswith("gemini-3.5-flash-lite")
+    )
 
 
 def _get_executor(provider_key: str) -> ThreadPoolExecutor:
@@ -257,7 +274,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
         try:
             provider, model = spec.split(":", 1)
             provider = provider.strip()
-            model = model.strip()
+            model = require_current_runtime_model(model)
             if _get_from_pool(provider, model):
                 continue
             if provider == "ollama":
@@ -292,13 +309,15 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                     getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)()
                 ):
                     continue
-                llm = ChatGoogleGenerativeAI(
-                    model=model,
-                    temperature=0,
-                    google_api_key=(
+                kwargs: dict[str, Any] = {
+                    "model": model,
+                    "google_api_key": (
                         getattr(settings.GEMINI_API_KEY, "get_secret_value", lambda: None)() or None
                     ),
-                )
+                }
+                if _gemini_model_supports_sampling(model):
+                    kwargs["temperature"] = 0
+                llm = ChatGoogleGenerativeAI(**kwargs)
                 _add_to_pool("google_gemini", model, llm)
             elif provider == "deepseek":
                 _require_langchain_openai()
@@ -317,7 +336,7 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                 _add_to_pool("deepseek", model, llm)
             elif provider == "openrouter":
                 _require_langchain_openai()
-                if not _validate_openrouter_key(
+                if not bool(settings.OPENROUTER_FREE_MODELS_ENABLED) or not _validate_openrouter_key(
                     getattr(settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None)()
                 ):
                     continue
@@ -330,6 +349,11 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                     default_headers={
                         "HTTP-Referer": "https://janus.ai",  # Required by OpenRouter
                         "X-Title": "Janus Agent",  # Optional
+                    },
+                    extra_body={
+                        "reasoning": {
+                            "enabled": bool(settings.OPENROUTER_REASONING_ENABLED)
+                        }
                     },
                 )
                 _add_to_pool("openrouter", model, llm)

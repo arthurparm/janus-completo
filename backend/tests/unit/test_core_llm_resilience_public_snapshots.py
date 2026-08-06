@@ -11,12 +11,12 @@ def test_llm_pool_snapshot_and_summary_are_serializable_and_defensive(monkeypatc
         resilience,
         "_llm_pool",
         {
-            "openai:gpt-4o-mini": [
+            "openai:gpt-5.6-luna": [
                 CachedLLM(
                     instance=object(),
                     created_at=created_at,
                     provider="openai",
-                    model="gpt-4o-mini",
+                    model="gpt-5.6-luna",
                     consecutive_failures=2,
                 )
             ]
@@ -27,10 +27,10 @@ def test_llm_pool_snapshot_and_summary_are_serializable_and_defensive(monkeypatc
     summary = resilience.get_llm_pool_summary()
 
     assert summary == {"pool_keys": 1, "pool_total_instances": 1}
-    assert "openai:gpt-4o-mini" in snapshot
-    item = snapshot["openai:gpt-4o-mini"][0]
+    assert "openai:gpt-5.6-luna" in snapshot
+    item = snapshot["openai:gpt-5.6-luna"][0]
     assert item["provider"] == "openai"
-    assert item["model"] == "gpt-4o-mini"
+    assert item["model"] == "gpt-5.6-luna"
     assert item["consecutive_failures"] == 2
     assert item["created_at"] == created_at.isoformat()
     assert "instance" not in item
