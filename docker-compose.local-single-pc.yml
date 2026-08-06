@@ -1,0 +1,116 @@
+services:
+  janus-api:
+    mem_limit: 2560m
+    cpus: "3.0"
+    environment:
+      ENVIRONMENT: development
+      GEMINI_API_KEY: ""
+      START_ORCHESTRATOR_WORKERS_ON_STARTUP: "false"
+      AUTO_INDEX_ON_STARTUP: "false"
+      INIT_MAS_AGENTS_ON_STARTUP: "false"
+      SSL_CERT_FILE: /run/secrets/janus/tls/combined-ca.pem
+      INTERNAL_ACTOR_PRIVATE_KEY_PATH: /run/secrets/janus/internal/private.pem
+      INTERNAL_ACTOR_PUBLIC_KEY_PATH: /run/secrets/janus/internal/public.pem
+    depends_on:
+      security-alert-sink:
+        condition: service_started
+    volumes:
+      - auth-oidc-fixture:/fixture:ro
+      - janus-internal-keys:/run/secrets/janus/internal:ro
+      - ./.secrets/tls:/run/secrets/janus/tls:ro
+    networks:
+      - janus-pc1-net
+      - janus-auth-net
+
+  janus-public-api:
+    mem_limit: 1536m
+    cpus: "1.0"
+    environment:
+      ENVIRONMENT: development
+      GEMINI_API_KEY: ""
+      SSL_CERT_FILE: /run/secrets/janus/tls/combined-ca.pem
+    volumes:
+      - auth-oidc-fixture:/fixture:ro
+      - ./.secrets/tls:/run/secrets/janus/tls:ro
+    networks:
+      - janus-pc1-net
+      - janus-auth-net
+
+  janus-control-plane:
+    mem_limit: 2560m
+    cpus: "3.0"
+    environment:
+      ENVIRONMENT: development
+      GEMINI_API_KEY: ""
+      START_ORCHESTRATOR_WORKERS_ON_STARTUP: "false"
+      AUTO_INDEX_ON_STARTUP: "false"
+      INIT_MAS_AGENTS_ON_STARTUP: "false"
+      SSL_CERT_FILE: /run/secrets/janus/tls/combined-ca.pem
+      INTERNAL_ACTOR_PRIVATE_KEY_PATH: /run/secrets/janus/internal/private.pem
+      INTERNAL_ACTOR_PUBLIC_KEY_PATH: /run/secrets/janus/internal/public.pem
+    depends_on:
+      security-alert-sink:
+        condition: service_started
+    volumes:
+      - auth-oidc-fixture:/fixture:ro
+      - janus-internal-keys:/run/secrets/janus/internal:ro
+      - ./.secrets/tls:/run/secrets/janus/tls:ro
+    networks:
+      - janus-pc1-net
+      - janus-auth-net
+
+  janus-frontend:
+    mem_limit: 768m
+    cpus: "1.5"
+
+  postgres:
+    mem_limit: 1g
+    cpus: "1.5"
+
+  redis:
+    mem_limit: 256m
+    cpus: "0.5"
+
+  rabbitmq:
+    mem_limit: 512m
+    cpus: "1.0"
+
+  security-alert-sink:
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:-arthurparaiso}/janus-api:${VERSION:-0.5.44}
+    container_name: janus_security_alert_sink_local
+    mem_limit: 256m
+    cpus: "0.5"
+    command:
+      - uvicorn
+      - security_alert_sink:app
+      - --app-dir
+      - /qa
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    volumes:
+      - ./qa/docker:/qa:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - janus-pc1-net
+
+networks:
+  janus-auth-net:
+    external: true
+    name: janus-auth-validation_default
+
+volumes:
+  janus-internal-keys:
+    external: true
+    name: janus-local-internal-keys
+
+  auth-oidc-fixture:
+    external: true
+    name: janus-auth-validation_auth-oidc-fixture

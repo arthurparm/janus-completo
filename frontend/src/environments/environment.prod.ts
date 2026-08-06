@@ -14,15 +14,5 @@ export const environment = {
   apiUrl: tailscaleApiUrl,
   serviceWorker: {
     enabled: env['JANUS_SERVICE_WORKER_ENABLED'] === 'true',
-  },
-  firebase: {
-    apiKey: env['JANUS_FIREBASE_API_KEY'] || '',
-    authDomain: env['JANUS_FIREBASE_AUTH_DOMAIN'] || '',
-    projectId: env['JANUS_FIREBASE_PROJECT_ID'] || '',
-    storageBucket: env['JANUS_FIREBASE_STORAGE_BUCKET'] || '',
-    messagingSenderId: env['JANUS_FIREBASE_MESSAGING_SENDER_ID'] || '',
-    appId: env['JANUS_FIREBASE_APP_ID'] || '',
-    measurementId: env['JANUS_FIREBASE_MEASUREMENT_ID'] || '',
-    databaseURL: env['JANUS_FIREBASE_DATABASE_URL'] || '',
   }
 };

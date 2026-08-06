@@ -190,7 +190,7 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
-      - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-deepseek-coder:6.7b}
+      - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-qwen3.5:9b}
       - OLLAMA_CURATOR_MODEL=${OLLAMA_CURATOR_MODEL:-ministral-3:14b}
       - OLLAMA_AUTO_PULL_MODELS=${OLLAMA_AUTO_PULL_MODELS:-true}
     

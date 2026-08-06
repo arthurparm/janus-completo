@@ -16,12 +16,26 @@ services:
     init: true
     ports:
       - "8000:8000"
+    env_file:
+      - .env.pc1
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      - JANUS_API_PROFILE=user
       - JANUS_BUILD_REF=${JANUS_BUILD_REF:-local-dev}
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in .env.pc1}
       - AUDIT_LEDGER_HMAC_KEY=${AUDIT_LEDGER_HMAC_KEY:?Set AUDIT_LEDGER_HMAC_KEY in .env.pc1}
-      - AUTH_ADMIN_CPF_ALLOWLIST=${AUTH_ADMIN_CPF_ALLOWLIST:-}
+      - OIDC_ISSUER=${OIDC_ISSUER:?Set OIDC_ISSUER in .env.pc1}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?Set OIDC_JWKS_URL in .env.pc1}
+      - OIDC_AUTHORIZATION_ENDPOINT=${OIDC_AUTHORIZATION_ENDPOINT:?Set OIDC_AUTHORIZATION_ENDPOINT in .env.pc1}
+      - OIDC_PUBLIC_CLIENT_ID=${OIDC_PUBLIC_CLIENT_ID:?Set OIDC_PUBLIC_CLIENT_ID in .env.pc1}
+      - OIDC_USER_AUDIENCE=${OIDC_USER_AUDIENCE:-janus-user-api}
+      - OIDC_SERVICE_ISSUER=${OIDC_SERVICE_ISSUER:?Set OIDC_SERVICE_ISSUER in .env.pc1}
+      - OIDC_SERVICE_JWKS_URL=${OIDC_SERVICE_JWKS_URL:?Set OIDC_SERVICE_JWKS_URL in .env.pc1}
+      - OIDC_SERVICE_AUDIENCE=${OIDC_SERVICE_AUDIENCE:-janus-control-plane}
+      - OIDC_ADMIN_GROUP=${OIDC_ADMIN_GROUP:?Set OIDC_ADMIN_GROUP in .env.pc1}
+      - OIDC_SERVICE_TOKEN_URL=${OIDC_SERVICE_TOKEN_URL:?Set OIDC_SERVICE_TOKEN_URL in .env.pc1}
+      - ADMIN_FACADE_CLIENT_ID=${ADMIN_FACADE_CLIENT_ID:-janus-admin-facade}
+      - ADMIN_FACADE_CLIENT_SECRET=${ADMIN_FACADE_CLIENT_SECRET:?Set ADMIN_FACADE_CLIENT_SECRET in .env.pc1}
+      - CONTROL_PLANE_BASE_URL=http://janus-control-plane:8000
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-["http://localhost:4300","http://127.0.0.1:4300"]}
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
@@ -45,19 +59,31 @@ services:
       - QDRANT_API_KEY=${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env.pc1}
       - OLLAMA_HOST=${OLLAMA_HOST:?Set OLLAMA_HOST in .env.pc1 (http://<PC2_TAILSCALE_IP>:11434)}
       - OLLAMA_ORCHESTRATOR_MODEL=${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}
-      - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-deepseek-coder:6.7b}
+      - OLLAMA_CODER_MODEL=${OLLAMA_CODER_MODEL:-qwen3.5:9b}
       - OLLAMA_CURATOR_MODEL=${OLLAMA_CURATOR_MODEL:-ministral-3:14b}
+      - OLLAMA_VISION_MODEL=${OLLAMA_VISION_MODEL:-qwen3.5:9b}
       - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-120m}
       - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-4096}
       - CHAT_UNLIMITED_USERS=${CHAT_UNLIMITED_USERS:-}
       - TOOL_EGRESS_ALLOW_HOSTS=${TOOL_EGRESS_ALLOW_HOSTS:-}
       - WORKER_EGRESS_ALLOW_HOSTS=${WORKER_EGRESS_ALLOW_HOSTS:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - XAI_API_KEY=${XAI_API_KEY:-}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4-mini}
-      - DEEPSEEK_MODEL_NAME=${DEEPSEEK_MODEL_NAME:-deepseek-chat}
-      - XAI_MODEL_NAME=${XAI_MODEL_NAME:-grok-4-1-fast-reasoning}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-5.6-luna}
+      - OPENAI_MODELS=${OPENAI_MODELS:-["gpt-5.6-luna"]}
+      - GEMINI_MODEL_NAME=${GEMINI_MODEL_NAME:-gemini-3.6-flash}
+      - GEMINI_MODELS=${GEMINI_MODELS:-["gemini-3.6-flash"]}
+      - DEEPSEEK_MODEL_NAME=${DEEPSEEK_MODEL_NAME:-deepseek-v4-flash}
+      - DEEPSEEK_MODELS=${DEEPSEEK_MODELS:-["deepseek-v4-flash","deepseek-v4-pro"]}
+      - XAI_MODEL_NAME=${XAI_MODEL_NAME:-grok-4.5}
+      - XAI_MODELS=${XAI_MODELS:-["grok-4.5"]}
+      - OPENROUTER_FREE_MODELS_ENABLED=${OPENROUTER_FREE_MODELS_ENABLED:-false}
+      - OPENROUTER_REASONING_ENABLED=${OPENROUTER_REASONING_ENABLED:-true}
+      - OPENROUTER_MODEL_NAME=${OPENROUTER_MODEL_NAME:-nvidia/nemotron-3-ultra-550b-a55b:free}
+      - OPENROUTER_MODELS=${OPENROUTER_MODELS:-["nvidia/nemotron-3-ultra-550b-a55b:free","poolside/laguna-s-2.1:free","cohere/north-mini-code:free","google/gemma-4-31b-it:free","openai/gpt-oss-20b:free"]}
       - START_ORCHESTRATOR_WORKERS_ON_STARTUP=${START_ORCHESTRATOR_WORKERS_ON_STARTUP:-true}
       - AUTO_INDEX_ON_STARTUP=${AUTO_INDEX_ON_STARTUP:-true}
       - INIT_MAS_AGENTS_ON_STARTUP=${INIT_MAS_AGENTS_ON_STARTUP:-false}
@@ -83,7 +109,7 @@ services:
     mem_limit: 4g
     cpus: "4.0"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "test \"$$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8000/healthz/user)\" = 401"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -93,6 +119,72 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - janus-pc1-net
+
+  janus-public-api:
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:-arthurparaiso}/janus-api:${VERSION:-0.5.44}
+    container_name: janus_public_api_pc1
+    platform: linux/amd64
+    init: true
+    ports:
+      - "${PUBLIC_API_PORT:-8001}:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - JANUS_API_PROFILE=public
+      - OIDC_ISSUER=${OIDC_ISSUER:?Set OIDC_ISSUER in .env.pc1}
+      - OIDC_JWKS_URL=${OIDC_JWKS_URL:?Set OIDC_JWKS_URL in .env.pc1}
+      - OIDC_AUTHORIZATION_ENDPOINT=${OIDC_AUTHORIZATION_ENDPOINT:?Set OIDC_AUTHORIZATION_ENDPOINT in .env.pc1}
+      - OIDC_PUBLIC_CLIENT_ID=${OIDC_PUBLIC_CLIENT_ID:?Set OIDC_PUBLIC_CLIENT_ID in .env.pc1}
+      - OIDC_USER_AUDIENCE=${OIDC_USER_AUDIENCE:-janus-user-api}
+      - OIDC_SERVICE_ISSUER=${OIDC_SERVICE_ISSUER:?Set OIDC_SERVICE_ISSUER in .env.pc1}
+      - OIDC_SERVICE_JWKS_URL=${OIDC_SERVICE_JWKS_URL:?Set OIDC_SERVICE_JWKS_URL in .env.pc1}
+      - OIDC_ADMIN_GROUP=${OIDC_ADMIN_GROUP:?Set OIDC_ADMIN_GROUP in .env.pc1}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz/public"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - janus-pc1-net
+
+  janus-control-plane:
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:-arthurparaiso}/janus-api:${VERSION:-0.5.44}
+    container_name: janus_control_plane_pc1
+    platform: linux/amd64
+    init: true
+    ports:
+      - "127.0.0.1:${CONTROL_PLANE_PORT:-8002}:8000"
+    env_file:
+      - .env.pc1
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - JANUS_API_PROFILE=control-plane
+      - OIDC_ADMIN_GROUP=${OIDC_ADMIN_GROUP:?Set OIDC_ADMIN_GROUP in .env.pc1}
+      - CONTROL_PLANE_BASE_URL=http://janus-control-plane:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/scripts:/app/scripts:ro
+      - ./.secrets/qdrant:/run/secrets/janus/qdrant:ro
+      - ./.secrets/internal:/run/secrets/janus/internal:ro
+      - janus_app_data:/app/data
+      - janus_workspace:/app/workspace
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8000/healthz/control-plane)\" = 401"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 50s
     networks:
       - janus-pc1-net
 
@@ -111,6 +203,8 @@ services:
       - "${FRONTEND_PORT:-4300}:4300"
     depends_on:
       janus-api:
+        condition: service_healthy
+      janus-public-api:
         condition: service_healthy
     environment:
       - JANUS_API_URL=${JANUS_API_URL:-http://janus-api:8000}

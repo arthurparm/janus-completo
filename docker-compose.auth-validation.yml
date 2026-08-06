@@ -1,0 +1,154 @@
+name: janus-auth-validation
+
+x-janus-auth-environment: &janus-auth-environment
+  PYTHONPATH: /app
+  ENVIRONMENT: staging
+  JANUS_SKIP_EXTERNAL_STARTUP: "true"
+  POSTGRES_HOST: auth-postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: janus_auth
+  POSTGRES_USER: janus_auth
+  POSTGRES_PASSWORD: integration-postgres-credential
+  OIDC_ISSUER: https://idp.test:8443
+  OIDC_JWKS_URL: https://idp.test:8443/.well-known/jwks.json
+  OIDC_AUTHORIZATION_ENDPOINT: https://idp.test:8443/authorize
+  OIDC_PUBLIC_CLIENT_ID: janus-spa
+  OIDC_PUBLIC_SCOPES: '["openid","profile","email"]'
+  OIDC_USER_AUDIENCE: janus-user-api
+  OIDC_SERVICE_ISSUER: https://idp.test:8443
+  OIDC_SERVICE_JWKS_URL: https://idp.test:8443/.well-known/jwks.json
+  OIDC_SERVICE_AUDIENCE: janus-control-plane
+  OIDC_SERVICE_TOKEN_URL: https://idp.test:8443/token
+  OIDC_ADMIN_GROUP: janus-administrators
+  OIDC_SERVICE_PRINCIPALS: '{"janus-admin-facade":["identity:admin","ops:read","ops:execute","deployment:write","workers:manage","governance:write","autonomy:admin","evaluation:ingest","observability:read","tools:admin"],"janus-worker":["ops:read"]}'
+  ADMIN_FACADE_CLIENT_ID: janus-admin-facade
+  ADMIN_FACADE_CLIENT_SECRET: integration-facade-credential
+  CONTROL_PLANE_BASE_URL: http://auth-control:8000
+  SSL_CERT_FILE: /fixture/ca.pem
+  REDIS_ENABLED: "false"
+  RATE_LIMIT_FAIL_CLOSED: "false"
+
+services:
+  auth-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: janus_auth
+      POSTGRES_USER: janus_auth
+      POSTGRES_PASSWORD: integration-postgres-credential
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U janus_auth -d janus_auth"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+
+  auth-fixture-init:
+    image: janus-api-auth-hardening:local
+    user: "0:0"
+    command: ["python", "/qa/generate_oidc_fixture.py"]
+    environment:
+      OIDC_FIXTURE_DIR: /fixture
+    volumes:
+      - ./qa/docker:/qa:ro
+      - auth-oidc-fixture:/fixture
+
+  auth-idp:
+    image: janus-api-auth-hardening:local
+    command:
+      - uvicorn
+      - mock_oidc:app
+      - --app-dir
+      - /qa
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8443"
+      - --ssl-keyfile
+      - /fixture/server-key.pem
+      - --ssl-certfile
+      - /fixture/server-cert.pem
+    environment:
+      OIDC_FIXTURE_DIR: /fixture
+      OIDC_TEST_ISSUER: https://idp.test:8443
+      OIDC_TEST_FACADE_SECRET: integration-facade-credential
+      OIDC_TEST_WORKER_SECRET: integration-worker-credential
+    depends_on:
+      auth-fixture-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--cacert", "/fixture/ca.pem", "https://localhost:8443/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:18443:8443"
+    volumes:
+      - ./qa/docker:/qa:ro
+      - auth-oidc-fixture:/fixture:ro
+    networks:
+      default:
+        aliases:
+          - idp.test
+
+  auth-schema:
+    image: janus-api-auth-hardening:local
+    command: ["python", "/qa/init_auth_db.py"]
+    environment:
+      <<: *janus-auth-environment
+      JANUS_API_PROFILE: control-plane
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+    volumes:
+      - ./qa/docker:/qa:ro
+      - auth-oidc-fixture:/fixture:ro
+
+  auth-public:
+    image: janus-api-auth-hardening:local
+    environment:
+      <<: *janus-auth-environment
+      JANUS_API_PROFILE: public
+    depends_on:
+      auth-idp:
+        condition: service_healthy
+      auth-schema:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:18001:8000"
+    volumes:
+      - auth-oidc-fixture:/fixture:ro
+
+  auth-user:
+    image: janus-api-auth-hardening:local
+    environment:
+      <<: *janus-auth-environment
+      JANUS_API_PROFILE: user
+    depends_on:
+      auth-idp:
+        condition: service_healthy
+      auth-schema:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:18000:8000"
+    volumes:
+      - auth-oidc-fixture:/fixture:ro
+
+  auth-control:
+    image: janus-api-auth-hardening:local
+    environment:
+      <<: *janus-auth-environment
+      JANUS_API_PROFILE: control-plane
+    depends_on:
+      auth-idp:
+        condition: service_healthy
+      auth-schema:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:18002:8000"
+    volumes:
+      - auth-oidc-fixture:/fixture:ro
+
+volumes:
+  auth-postgres-data:
+  auth-oidc-fixture:

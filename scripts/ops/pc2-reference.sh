@@ -114,7 +114,7 @@ Recommended Model Sizes:
 
 Loading Strategy:
   • Maximum 2 models loaded simultaneously
-  • Example: gpt-oss:20b (11GB) + deepseek-coder:6.7b (4GB) = 15GB
+  • Example: gpt-oss:20b (14GB) + qwen3.5:9b (6.6GB) = 20.6GB
   • Keep-alive: 30 minutes (auto-unload after 30min idle)
 
 

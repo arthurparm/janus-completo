@@ -120,6 +120,6 @@ USER janus
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD case "$JANUS_API_PROFILE" in public) path=/healthz/public; expected=200 ;; user) path=/healthz/user; expected=401 ;; *) path=/healthz/control-plane; expected=401 ;; esac; status=$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:8000$path"); [ "$status" = "$expected" ]
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

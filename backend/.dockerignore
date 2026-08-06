@@ -12,7 +12,6 @@ __pycache__/
 docs/
 scripts/
 tests/
-poetry.lock
 Dockerfile
 docker-compose*.yml
 .DS_Store

@@ -22,9 +22,9 @@ fi
 
 echo "Pulling required models..."
 
-ORCH_MODEL="${OLLAMA_ORCHESTRATOR_MODEL:-qwen2.5:14b}"
-CODER_MODEL="${OLLAMA_CODER_MODEL:-qwen2.5-coder:14b}"
-CURATOR_MODEL="${OLLAMA_CURATOR_MODEL:-qwen2.5:14b}"
+ORCH_MODEL="${OLLAMA_ORCHESTRATOR_MODEL:-gpt-oss:20b}"
+CODER_MODEL="${OLLAMA_CODER_MODEL:-qwen3.5:9b}"
+CURATOR_MODEL="${OLLAMA_CURATOR_MODEL:-ministral-3:14b}"
 
 pull_if_missing() {
     model="$1"

@@ -1,0 +1,4 @@
+services:
+  auth-idp:
+    mem_limit: 512m
+    cpus: "0.5"

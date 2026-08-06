@@ -1,4 +1,11 @@
 {
+  "/public-api": {
+    "target": "http://janus-public-api:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": { "^/public-api": "" },
+    "logLevel": "debug"
+  },
   "/api": {
     "target": "http://janus-api:8000",
     "secure": false,
