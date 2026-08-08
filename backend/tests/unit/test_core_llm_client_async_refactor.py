@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.core.llm import response_cache
-from app.core.llm.client import LLMClient
+from app.core.llm.client import LLMClient, get_llm_client
 from app.core.llm.types import ModelRole, ProviderPricing
 
 
@@ -37,7 +37,7 @@ def clean_cache():
     response_cache.invalidate()
 
 
-def _build_client(mock_base: MagicMock) -> LLMClient:
+def _build_client(mock_base: MagicMock, *, response_cache_enabled: bool = True) -> LLMClient:
     return LLMClient(
         base=mock_base,
         provider="mock",
@@ -45,6 +45,7 @@ def _build_client(mock_base: MagicMock) -> LLMClient:
         role=ModelRole.ORCHESTRATOR,
         cache_key="orchestrator_fast_and_cheap",
         config=_MockSettings(),
+        response_cache_enabled=response_cache_enabled,
     )
 
 
@@ -78,6 +79,56 @@ async def test_asend_prefere_ainvoke_e_reutiliza_cache():
     mock_base.ainvoke.assert_awaited_once()
     mock_base.invoke.assert_not_called()
     rate_limiter.register_usage.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_strict_client_bypasses_read_and_write_response_cache():
+    response_cache.put(
+        prompt="ping",
+        role="orchestrator",
+        priority="fast_and_cheap",
+        response="wrong provider cache",
+        provider="openai",
+        model="gpt-5.6-luna",
+    )
+    mock_base = MagicMock()
+    mock_base.ainvoke = AsyncMock(return_value=SimpleNamespace(content="strict provider response"))
+    client = _build_client(mock_base, response_cache_enabled=False)
+
+    with (
+        patch("app.core.llm.client._get_model_pricing", return_value=ProviderPricing(0.0, 0.0)),
+        patch("app.core.llm.client._budget_remaining", AsyncMock(return_value=float("inf"))),
+        patch(
+            "app.core.llm.client._tenant_budget_remaining",
+            AsyncMock(return_value=float("inf")),
+        ),
+        patch(
+            "app.core.llm.client._objective_budget_remaining",
+            AsyncMock(return_value=float("inf")),
+        ),
+        patch("app.core.llm.client.get_timeout_recommendation", return_value=30.0),
+        patch("app.core.llm.client.get_rate_limiter", return_value=MagicMock()),
+    ):
+        result = await client.asend("ping")
+
+    assert result == "strict provider response"
+    mock_base.ainvoke.assert_awaited_once()
+    cached = response_cache.get("ping", "orchestrator", "fast_and_cheap")
+    assert cached is not None
+    assert cached["response"] == "wrong provider cache"
+
+
+@pytest.mark.asyncio
+async def test_get_llm_client_disables_cache_for_strict_provider():
+    mock_base = MagicMock()
+    with (
+        patch("app.core.llm.client.get_llm", AsyncMock(return_value=mock_base)),
+        patch("app.core.llm.client._infer_provider", return_value="xai"),
+        patch("app.core.llm.client._infer_model_name", return_value="grok-4.5"),
+    ):
+        client = await get_llm_client(config={"strict_provider": True})
+
+    assert client.response_cache_enabled is False
 
 def test_llm_client_nao_exporta_mais_send():
     client = _build_client(MagicMock())

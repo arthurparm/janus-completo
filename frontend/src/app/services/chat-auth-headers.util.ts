@@ -3,6 +3,7 @@ import { getStoredAuthToken } from './auth.utils'
 export interface ChatStreamAuthHeadersOptions {
   projectId?: string | null
   requestId?: string
+  lastEventId?: number
   traceparent?: string
   tracestate?: string
 }
@@ -36,6 +37,12 @@ export function buildChatStreamAuthHeaders(
   const headers = new Headers()
   const requestId = options.requestId || generateRequestId()
   headers.set('X-Request-ID', requestId)
+  if (options.requestId) {
+    headers.set('Idempotency-Key', options.requestId)
+  }
+  if (typeof options.lastEventId === 'number' && options.lastEventId >= 0) {
+    headers.set('Last-Event-ID', String(options.lastEventId))
+  }
   headers.set('traceparent', options.traceparent || generateTraceparent())
   if (options.tracestate) {
     headers.set('tracestate', options.tracestate)

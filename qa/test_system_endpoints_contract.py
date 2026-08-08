@@ -1,14 +1,35 @@
 import pytest
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
 from httpx import ASGITransport, AsyncClient
+
+SERVICE_HEADERS = {"Authorization": "Bearer test-system-service"}
 
 
 @pytest.fixture
-def async_client():
+def async_client(monkeypatch):
     from app.main import app
     from app.services.knowledge_service import get_knowledge_service
     from app.services.llm_service import get_llm_service
     from app.services.observability_service import get_observability_service
     from app.services.optimization_service import get_optimization_service
+
+    def service_actor_for_request(request):
+        if request.headers.get("Authorization") != SERVICE_HEADERS["Authorization"]:
+            return None
+        return ActorContext.authenticated(
+            actor_id="janus-system-tests",
+            actor_type=ActorType.SERVICE,
+            roles=("SERVICE",),
+            auth_method=AuthMethod.CLIENT_CREDENTIALS,
+            trace_id="test-system-service",
+            client_id="janus-system-tests",
+            scopes=("ops:read", "ops:execute"),
+        )
+
+    monkeypatch.setattr(
+        "app.core.security.containment_middleware.get_actor_context",
+        service_actor_for_request,
+    )
 
     class DummyObservabilityService:
         async def get_multi_agent_system_health(self):
@@ -48,20 +69,18 @@ def async_client():
         def cancelled(self):
             return False
 
-    # Mock user repository
-    from app.repositories.user_repository import UserRepository
-    original_is_admin = UserRepository.is_admin
-    UserRepository.is_admin = lambda self, uid: str(uid) == "99"
-
     # We also need to set orchestrator_workers for overview
     app.state.orchestrator_workers = [
         {"name": "worker_1", "task": RunningTask(), "tasks_processed": 10}
     ]
 
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    client = AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=SERVICE_HEADERS,
+    )
     yield client
 
-    UserRepository.is_admin = original_is_admin
     app.dependency_overrides.clear()
 
 
@@ -346,13 +365,9 @@ class TestSystemEndpointsContract:
         pass
 
     async def test_get_user_status_success(self, async_client):
-        # In main.py the middleware sets request.state.actor_user_id.
-        # But we can override the actor ID using our middleware mock if we want.
-        # Or we can just use the X-Actor-User-Id header if our middleware respects it.
         resp = await async_client.get("/api/v1/system/status/user", headers={"X-Actor-User-Id": "1"})
-        # It may return 401 if our middleware doesn't respect it in this test setup
-        # Wait, the middleware is always active, let's see what it returns
-        assert resp.status_code in [200, 401, 403, 500]
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "CLIENT_IDENTITY_FIELD_FORBIDDEN"
 
     async def test_validate_db_schema(self, async_client):
         # Requires mocking db_migration_service

@@ -1,8 +1,4 @@
-import os
-import sys
 from types import SimpleNamespace
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 import app.services.db_migration_service as migration_module
 from app.services.db_migration_service import DBMigrationService
@@ -59,6 +55,8 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
     assert any("CREATE INDEX idx_privacy_consent_user_scope ON user_privacy_consents (user_id, scope)" in q for q in fake.executed_sql)
     assert any("CREATE TABLE IF NOT EXISTS audit_ledger_events" in q for q in fake.executed_sql)
     assert any("CREATE TABLE IF NOT EXISTS data_governance_records" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE chat_stream_runs" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE chat_stream_events" in q for q in fake.executed_sql)
     assert all("audit_events" not in q for q in fake.executed_sql)
 
 
@@ -103,6 +101,11 @@ def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
     assert result["status"] == "ok"
     assert ("user_privacy_consents", "unique_user_privacy_scope_consent") in constraint_calls
     assert ("user_privacy_consents", "idx_privacy_consent_user_scope") in index_calls
+    assert (
+        "chat_stream_runs",
+        "uq_chat_stream_owner_session_request",
+    ) in constraint_calls
+    assert ("chat_stream_events", "idx_chat_stream_event_cursor") in index_calls
 
 
 def test_migrate_schema_promotes_pending_actions_user_id_not_null_when_residue_zero(monkeypatch):
@@ -183,3 +186,24 @@ def test_outbox_lease_migration_is_additive_and_reclaims_legacy_processing(monke
     assert "CREATE UNIQUE INDEX uq_outbox_message_id" in sql
     assert "CREATE INDEX idx_outbox_status_lease" in sql
     assert "ALTER TABLE outbox_events ALTER COLUMN message_id SET NOT NULL" in sql
+
+
+def test_chat_stream_ledger_migration_is_owner_scoped_and_cursor_indexed(monkeypatch):
+    svc = DBMigrationService()
+    fake = _FakeSession("postgresql")
+    applied: list[str] = []
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args: False)
+    monkeypatch.setattr(svc, "_index_exists", lambda *_args: False)
+
+    svc._prepare_chat_stream_ledger_schema(
+        fake,
+        dialect="postgresql",
+        applied=applied,
+    )
+
+    sql = "\n".join(fake.executed_sql)
+    assert "owner_user_id INTEGER NOT NULL REFERENCES users(id)" in sql
+    assert "session_id INTEGER NOT NULL REFERENCES sessions(id)" in sql
+    assert "UNIQUE (owner_user_id, session_id, request_id)" in sql
+    assert "UNIQUE (run_id, sequence)" in sql
+    assert "CREATE INDEX idx_chat_stream_event_cursor" in sql

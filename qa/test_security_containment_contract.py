@@ -118,6 +118,9 @@ def test_middleware_default_deny_and_client_identity_rejection(monkeypatch):
     client = TestClient(app)
     assert client.get("/health").status_code == 200
     assert client.post("/api/v1/items", json={"name": "safe"}).status_code == 401
+    assert client.post("/api/v1/items", json={"subject": "business subject"}).status_code == 401
+    assert client.post("/api/v1/items", json={"sub": "forged-oidc-subject"}).status_code == 400
+    assert client.post("/api/v1/items", json={"subject_id": "forged-subject"}).status_code == 400
     response = client.post("/api/v1/items", json={"nested": {"UsEr_Id": "99"}})
     assert response.status_code == 400
     assert response.json()["code"] == "CLIENT_IDENTITY_FIELD_FORBIDDEN"

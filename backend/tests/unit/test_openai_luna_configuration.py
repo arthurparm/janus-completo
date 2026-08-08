@@ -20,6 +20,12 @@ def test_all_runtime_model_defaults_are_current_and_explicit() -> None:
 
     assert settings.OPENAI_MODEL_NAME == "gpt-5.6-luna"
     assert settings.OPENAI_MODELS == ["gpt-5.6-luna"]
+    assert settings.OLLAMA_ENABLED is False
+    assert settings.GEMINI_ENABLED is False
+    assert settings.EMBEDDINGS_DEFAULT_PROVIDER == "openai"
+    assert settings.EMBEDDINGS_LOCAL_ENABLED is False
+    assert settings.EMBEDDINGS_FAIL_CLOSED is True
+    assert settings.RAG_RERANK_BACKEND == "heuristic"
     assert settings.XAI_MODEL_NAME == "grok-4.5"
     assert settings.XAI_MODELS == ["grok-4.5"]
     assert settings.GEMINI_MODEL_NAME == "gemini-3.6-flash"
@@ -28,10 +34,10 @@ def test_all_runtime_model_defaults_are_current_and_explicit() -> None:
     assert settings.DEEPSEEK_MODELS == ["deepseek-v4-flash", "deepseek-v4-pro"]
     assert settings.OPENROUTER_FREE_MODELS_ENABLED is False
     assert settings.OPENROUTER_REASONING_ENABLED is True
-    assert settings.OPENROUTER_MODEL_NAME == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert settings.OPENROUTER_MODEL_NAME == "poolside/laguna-s-2.1:free"
     assert settings.OPENROUTER_MODELS == [
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
         "poolside/laguna-s-2.1:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
         "cohere/north-mini-code:free",
         "google/gemma-4-31b-it:free",
         "openai/gpt-oss-20b:free",
@@ -66,14 +72,14 @@ def test_all_runtime_model_defaults_are_current_and_explicit() -> None:
         assert all("grok-4-1" not in candidate for candidate in candidates)
 
     assert settings.LLM_CLOUD_MODEL_CANDIDATES["orchestrator"][0] == (
-        "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free"
+        "openrouter:poolside/laguna-s-2.1:free"
     )
     assert settings.LLM_CLOUD_MODEL_CANDIDATES["code_generator"][:2] == [
         "openrouter:poolside/laguna-s-2.1:free",
-        "openrouter:cohere/north-mini-code:free",
+        "deepseek:deepseek-v4-pro",
     ]
     assert settings.LLM_CLOUD_MODEL_CANDIDATES["knowledge_curator"][0] == (
-        "openrouter:google/gemma-4-31b-it:free"
+        "openrouter:poolside/laguna-s-2.1:free"
     )
 
     assert MODEL_PRICING["gemini-3.6-flash"] == {
@@ -154,10 +160,41 @@ def test_openrouter_free_catalog_requires_explicit_enablement() -> None:
             item for item in factory.cloud_catalog() if item["provider_key"] == "openrouter"
         )
         assert descriptor["enabled"] is True
-        assert descriptor["models"][0] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+        assert descriptor["models"][0] == "poolside/laguna-s-2.1:free"
         assert factory.resolve_model_name("openrouter") == (
-            "nvidia/nemotron-3-ultra-550b-a55b:free"
+            "poolside/laguna-s-2.1:free"
         )
+
+
+def test_gemini_catalog_is_disabled_even_when_a_key_is_present() -> None:
+    selection = RouterSelection(
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.FAST_AND_CHEAP,
+    )
+    factory = LLMFactory(selection)
+
+    with (
+        patch("app.core.llm.router._validate_gemini_key", return_value=True),
+        patch("app.core.llm.router.settings.GEMINI_ENABLED", False),
+    ):
+        descriptor = next(
+            item for item in factory.cloud_catalog() if item["provider_key"] == "google_gemini"
+        )
+
+    assert descriptor["enabled"] is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"EMBEDDINGS_DEFAULT_PROVIDER": "local"},
+        {"EMBEDDINGS_DEFAULT_PROVIDER": "ollama"},
+        {"RAG_RERANK_BACKEND": "cross_encoder"},
+    ],
+)
+def test_local_model_runtime_requires_explicit_opt_in(overrides: dict[str, object]) -> None:
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(ValidationError):
+        AppSettings(_env_file=None, **overrides)
 
 
 def test_role_candidate_priority_is_deterministic() -> None:
@@ -169,10 +206,7 @@ def test_role_candidate_priority_is_deterministic() -> None:
 
     candidates = CandidateFilter(selection, factory)._role_candidates_map()
 
-    assert candidates["openrouter"] == [
-        "poolside/laguna-s-2.1:free",
-        "cohere/north-mini-code:free",
-    ]
+    assert candidates["openrouter"] == ["poolside/laguna-s-2.1:free"]
 
 
 def test_openrouter_reasoning_override_disables_pool_reuse() -> None:

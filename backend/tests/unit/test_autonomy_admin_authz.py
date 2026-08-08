@@ -1,15 +1,15 @@
 from app.api.v1.endpoints.autonomy_admin import router as autonomy_admin_router
-from app.core.security.request_guard import require_admin_actor
+from app.core.security.request_guard import require_service_actor
 from app.services.autonomy_admin_service import get_autonomy_admin_service
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.testclient import TestClient
 
 
-def _make_admin_guard(admin_ids: set[int]):
+def _make_service_guard(service_ids: set[str]):
     def _guard(request: Request) -> str:
-        actor = getattr(request.state, "actor_user_id", None)
-        if actor and int(actor) in admin_ids:
-            return actor
+        actor = request.headers.get("X-Test-Service-Id")
+        if actor and actor in service_ids:
+            return str(actor)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return _guard
 
@@ -47,35 +47,28 @@ class _AdminServiceStub:
         return {"answer": "ok", "citations": [], "self_memory": []}
 
 
-def _build_client(monkeypatch, admin_ids: set[int] | None = None) -> TestClient:
-    admin_ids = admin_ids or set()
+def _build_client(monkeypatch, service_ids: set[str] | None = None) -> TestClient:
+    service_ids = service_ids or set()
     app = FastAPI()
     app.include_router(autonomy_admin_router, prefix="/api/v1/autonomy/admin")
     app.dependency_overrides[get_autonomy_admin_service] = lambda: _AdminServiceStub()
 
-    app.dependency_overrides[require_admin_actor] = _make_admin_guard(admin_ids)
-
-    @app.middleware("http")
-    async def _inject_actor(request: Request, call_next):
-        actor = request.headers.get("X-Actor-User-Id")
-        if actor:
-            request.state.actor_user_id = actor
-        return await call_next(request)
+    app.dependency_overrides[require_service_actor] = _make_service_guard(service_ids)
 
     return TestClient(app)
 
 
 def test_autonomy_admin_requires_api_key(monkeypatch):
-    client = _build_client(monkeypatch, admin_ids={1})
+    client = _build_client(monkeypatch, service_ids={"janus-admin-facade"})
     resp = client.post("/api/v1/autonomy/admin/backlog/sync")
-    assert resp.status_code in [200, 401, 403, 500]
+    assert resp.status_code == 403
 
 
 def test_autonomy_admin_allows_admin(monkeypatch):
-    client = _build_client(monkeypatch, admin_ids={10})
+    client = _build_client(monkeypatch, service_ids={"janus-admin-facade"})
     resp = client.post(
         "/api/v1/autonomy/admin/backlog/sync",
-        headers={"X-Actor-User-Id": "10"},
+        headers={"X-Test-Service-Id": "janus-admin-facade"},
     )
     assert resp.status_code == 200
     assert resp.json()["created"] == 0

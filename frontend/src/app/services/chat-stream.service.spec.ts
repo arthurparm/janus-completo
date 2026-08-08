@@ -92,6 +92,7 @@ describe('ChatStreamService', () => {
     expect(headers.get('Authorization')).toContain('Bearer ')
     expect(headers.get('Accept')).toBe('text/event-stream')
     expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('Idempotency-Key')).toBe(headers.get('X-Request-ID'))
   })
 
   it('refaz retry com o mesmo payload estruturado sem query string', async () => {
@@ -131,5 +132,66 @@ describe('ChatStreamService', () => {
         priority: 'fast_and_cheap',
       })
     }
+    const firstHeaders = firstCall[1].headers as Headers
+    const secondHeaders = secondCall[1].headers as Headers
+    expect(firstHeaders.get('Idempotency-Key')).toBeTruthy()
+    expect(secondHeaders.get('Idempotency-Key')).toBe(
+      firstHeaders.get('Idempotency-Key'),
+    )
+  })
+
+  it('retoma o retry a partir do ultimo id SSE persistido', async () => {
+    vi.useFakeTimers()
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(9))
+    let call = 0
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
+      call += 1
+      if (call === 1) {
+        const chunk = encoder.encode('id: 7\nevent: token\ndata: {"text":"parte"}\n\n')
+        return {
+          ok: true,
+          body: {
+            getReader: () => ({
+              read: vi.fn()
+                .mockResolvedValueOnce({ value: chunk, done: false })
+                .mockRejectedValueOnce(new Error('connection lost')),
+            }),
+          },
+        } as unknown as Response
+      }
+      return {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: vi.fn().mockResolvedValueOnce({
+              value: encoder.encode(
+                'id: 8\nevent: done\ndata: {"conversation_id":"conv-cursor"}\n\n',
+              ),
+              done: false,
+            }).mockResolvedValueOnce({ value: undefined, done: true }),
+          }),
+        },
+      } as unknown as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const service = TestBed.inject(ChatStreamService)
+    service.start({
+      conversationId: 'conv-cursor',
+      text: 'continuar',
+      role: 'orchestrator',
+      priority: 'fast_and_cheap',
+    })
+
+    await vi.runAllTimersAsync()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const firstHeaders = (fetchMock.mock.calls[0][1] as RequestInit).headers as Headers
+    const secondHeaders = (fetchMock.mock.calls[1][1] as RequestInit).headers as Headers
+    expect(secondHeaders.get('Idempotency-Key')).toBe(
+      firstHeaders.get('Idempotency-Key'),
+    )
+    expect(secondHeaders.get('Last-Event-ID')).toBe('7')
   })
 })

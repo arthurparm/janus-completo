@@ -50,4 +50,15 @@ describe('buildChatStreamAuthHeaders', () => {
     expect(headers.get('Authorization')).toBe(`Bearer ${fakeToken}`)
     expect(headers.get('X-User-Id')).toBeNull()
   })
+
+  it('separa rastreio de idempotencia e envia cursor apenas na retomada', () => {
+    const headers = buildChatStreamAuthHeaders({
+      requestId: 'request-idempotent-0001',
+      lastEventId: 17,
+    })
+
+    expect(headers.get('X-Request-ID')).toBe('request-idempotent-0001')
+    expect(headers.get('Idempotency-Key')).toBe('request-idempotent-0001')
+    expect(headers.get('Last-Event-ID')).toBe('17')
+  })
 })

@@ -164,6 +164,7 @@ class LLMRepository:
                                 user_id=user_id,
                                 project_id=project_id,
                                 objective_id=objective_id,
+                                response_cache_enabled=not disable_response_cache,
                             )
                     finally:
                         if not abr._session:
@@ -220,20 +221,21 @@ class LLMRepository:
             enriched = await client.send_enriched(prompt, timeout_s=timeout_seconds)
 
             # Armazena no cache de resposta
-            try:
-                rc_put(
-                    prompt,
-                    role.value,
-                    priority.value,
-                    enriched.get("response", ""),
-                    client.provider,
-                    client.model,
-                    input_tokens=enriched.get("input_tokens"),
-                    output_tokens=enriched.get("output_tokens"),
-                    cost_usd=enriched.get("cost_usd"),
-                )
-            except Exception:
-                pass
+            if not disable_response_cache:
+                try:
+                    rc_put(
+                        prompt,
+                        role.value,
+                        priority.value,
+                        enriched.get("response", ""),
+                        client.provider,
+                        client.model,
+                        input_tokens=enriched.get("input_tokens"),
+                        output_tokens=enriched.get("output_tokens"),
+                        cost_usd=enriched.get("cost_usd"),
+                    )
+                except Exception:
+                    pass
             try:
                 from app.repositories.observability_repository import record_audit_event_direct
 
@@ -314,20 +316,21 @@ class LLMRepository:
                                 span_fb.set_attribute("janus.trace_id", tid)
                     except Exception:
                         pass
-                try:
-                    rc_put(
-                        prompt,
-                        role.value,
-                        priority.value,
-                        enriched_fb.get("response", ""),
-                        client_fb.provider,
-                        client_fb.model,
-                        input_tokens=enriched_fb.get("input_tokens"),
-                        output_tokens=enriched_fb.get("output_tokens"),
-                        cost_usd=enriched_fb.get("cost_usd"),
-                    )
-                except Exception:
-                    pass
+                if not disable_response_cache:
+                    try:
+                        rc_put(
+                            prompt,
+                            role.value,
+                            priority.value,
+                            enriched_fb.get("response", ""),
+                            client_fb.provider,
+                            client_fb.model,
+                            input_tokens=enriched_fb.get("input_tokens"),
+                            output_tokens=enriched_fb.get("output_tokens"),
+                            cost_usd=enriched_fb.get("cost_usd"),
+                        )
+                    except Exception:
+                        pass
                 return enriched_fb
             except Exception as e2:
                 logger.error(
@@ -427,27 +430,10 @@ class LLMRepository:
 
         providers = [
             {
-                "provider": "ollama",
-                "name": "Ollama",
-                "enabled": settings.OLLAMA_ENABLED,
-                "host": settings.OLLAMA_HOST,
-                "models": {
-                    "orchestrator": settings.OLLAMA_ORCHESTRATOR_MODEL,
-                    "code_generator": settings.OLLAMA_CODER_MODEL,
-                    "knowledge_curator": settings.OLLAMA_CURATOR_MODEL,
-                },
-            },
-            {
                 "provider": "openai",
                 "name": "OpenAI",
                 "enabled": _validate_openai_key(openai_key),
                 "model_default": settings.OPENAI_MODEL_NAME,
-            },
-            {
-                "provider": "google_gemini",
-                "name": "Google Gemini",
-                "enabled": _validate_gemini_key(gemini_key),
-                "model_default": settings.GEMINI_MODEL_NAME,
             },
             {
                 "provider": "deepseek",
@@ -469,6 +455,30 @@ class LLMRepository:
                 "model_default": settings.OPENROUTER_MODEL_NAME,
             },
         ]
+
+        if settings.GEMINI_ENABLED:
+            providers.append(
+                {
+                    "provider": "google_gemini",
+                    "name": "Google Gemini",
+                    "enabled": _validate_gemini_key(gemini_key),
+                    "model_default": settings.GEMINI_MODEL_NAME,
+                }
+            )
+        if settings.OLLAMA_ENABLED:
+            providers.append(
+                {
+                    "provider": "ollama",
+                    "name": "Ollama",
+                    "enabled": True,
+                    "host": settings.OLLAMA_HOST,
+                    "models": {
+                        "orchestrator": settings.OLLAMA_ORCHESTRATOR_MODEL,
+                        "code_generator": settings.OLLAMA_CODER_MODEL,
+                        "knowledge_curator": settings.OLLAMA_CURATOR_MODEL,
+                    },
+                }
+            )
 
         return providers
 

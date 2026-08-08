@@ -36,6 +36,7 @@ def test_cloud_only_runtime_rejeita_override_explicito_ollama():
 @pytest.mark.asyncio
 async def test_get_llm_local_only_mantem_ollama_como_caminho_primario():
     mock_llm = MagicMock(name="ollama_llm")
+    mock_settings = __import__("app.core.llm.router", fromlist=["settings"]).settings
 
     with (
         patch("app.core.llm.router._get_from_pool", return_value=None),
@@ -46,6 +47,7 @@ async def test_get_llm_local_only_mantem_ollama_como_caminho_primario():
             "OLLAMA_ORCHESTRATOR_MODEL",
             "gpt-oss:20b",
         ),
+        patch.object(mock_settings, "OLLAMA_ENABLED", True),
     ):
         llm = await get_llm(
             role=ModelRole.ORCHESTRATOR,
@@ -73,15 +75,19 @@ async def test_get_llm_fast_and_cheap_escolhe_candidato_mais_barato_disponivel()
         patch("app.core.llm.router.ChatGoogleGenerativeAI", return_value=gemini_llm),
         patch("app.core.llm.router._create_openai_model", return_value=openai_llm),
         patch("app.core.llm.router._get_model_pricing") as mock_pricing,
-        patch.object(mock_settings, "GEMINI_MODELS", ["gemini-3.6-flash"]),
-        patch.object(mock_settings, "GEMINI_MODEL_NAME", "gemini-3.6-flash"),
-        patch.object(mock_settings, "OPENAI_MODELS", ["gpt-5.6-luna"]),
-        patch.object(mock_settings, "OPENAI_MODEL_NAME", "gpt-5.6-luna"),
-        patch.object(mock_settings, "LLM_CLOUD_MODEL_CANDIDATES", {}),
-        patch.object(mock_settings, "LLM_ECONOMY_POLICY", "balanced"),
-        patch.object(mock_settings, "LLM_EXPLORATION_PERCENT", 0.0),
-        patch.object(mock_settings, "LLM_MAX_COST_PER_REQUEST_USD", {"orchestrator": 1.0}),
-        patch.object(mock_settings, "LLM_EXPECTED_KTOKENS_BY_ROLE", {"orchestrator": 1.0}),
+        patch.multiple(
+            mock_settings,
+            GEMINI_MODELS=["gemini-3.6-flash"],
+            GEMINI_MODEL_NAME="gemini-3.6-flash",
+            GEMINI_ENABLED=True,
+            OPENAI_MODELS=["gpt-5.6-luna"],
+            OPENAI_MODEL_NAME="gpt-5.6-luna",
+            LLM_CLOUD_MODEL_CANDIDATES={},
+            LLM_ECONOMY_POLICY="balanced",
+            LLM_EXPLORATION_PERCENT=0.0,
+            LLM_MAX_COST_PER_REQUEST_USD={"orchestrator": 1.0},
+            LLM_EXPECTED_KTOKENS_BY_ROLE={"orchestrator": 1.0},
+        ),
     ):
         mock_pricing.side_effect = lambda provider, model: (
             ProviderPricing(1.0, 1.0)

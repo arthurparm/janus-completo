@@ -1,18 +1,21 @@
-import os
-import sys
 from types import SimpleNamespace
-
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.chat import router as chat_router
 from app.config import settings
 from app.core.exceptions.chat_exceptions import ChatServiceError
 from app.core.security.actor_context import ActorContext, AuthMethod
+from app.repositories.chat_stream_repository import (
+    ChatStreamIdempotencyConflict,
+    ChatStreamRunState,
+)
 from app.services.chat_service import get_chat_service
+from app.services.chat_stream_run_service import (
+    ChatStreamAttachment,
+    get_chat_stream_run_service,
+)
 from app.services.memory_service import get_memory_service
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 
 from qa.auth_test_support import decode_test_actor_id, issue_test_actor_token
 
@@ -123,17 +126,80 @@ class _DummyMemoryService:
 
 def _auth_headers(user_id: int | str) -> dict[str, str]:
     token = issue_test_actor_token(user_id)
-    return {"Authorization": f"Bearer {token}"}
+    return {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": f"chat-contract-request-{user_id}",
+    }
+
+
+class _DummyChatStreamRunService:
+    def __init__(self):
+        self.records = {}
+        self.producer_calls = 0
+
+    async def begin_or_attach(
+        self,
+        *,
+        owner_user_id,
+        session_id,
+        request_id,
+        request_fingerprint,
+        producer_factory,
+    ):
+        key = (owner_user_id, session_id, request_id)
+        existing = self.records.get(key)
+        if existing is not None:
+            if existing["fingerprint"] != request_fingerprint:
+                raise ChatStreamIdempotencyConflict("fingerprint mismatch")
+            return ChatStreamAttachment(
+                run=existing["run"],
+                created=False,
+                producer_started=False,
+            )
+
+        self.producer_calls += 1
+        chunks = [chunk async for chunk in producer_factory()]
+        run = ChatStreamRunState(
+            id=f"run-{len(self.records) + 1}",
+            owner_user_id=owner_user_id,
+            session_id=1,
+            request_id=request_id,
+            request_fingerprint=request_fingerprint,
+            status="completed",
+            last_event_sequence=len(chunks),
+            lease_until=None,
+            error_code=None,
+        )
+        self.records[key] = {
+            "fingerprint": request_fingerprint,
+            "chunks": chunks,
+            "run": run,
+        }
+        return ChatStreamAttachment(run=run, created=True, producer_started=True)
+
+    async def stream_events(self, *, run_id, owner_user_id, after_sequence=0):
+        record = next(
+            value
+            for (owner, _session, _request), value in self.records.items()
+            if owner == owner_user_id and value["run"].id == run_id
+        )
+        for sequence, chunk in enumerate(record["chunks"], start=1):
+            if sequence > after_sequence:
+                yield f"id: {sequence}\n{chunk}"
 
 
 def _build_client(
     chat_service: _DummyChatService,
     memory_service: _DummyMemoryService | None = None,
     study_jobs=None,
+    stream_run_service: _DummyChatStreamRunService | None = None,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(chat_router, prefix="/api/v1/chat")
     app.dependency_overrides[get_chat_service] = lambda: chat_service
+    app.dependency_overrides[get_chat_stream_run_service] = (
+        lambda: stream_run_service or _DummyChatStreamRunService()
+    )
     app.dependency_overrides[get_memory_service] = lambda: memory_service or _DummyMemoryService()
     if study_jobs is not None:
         app.state.chat_study_job_service = study_jobs
@@ -552,6 +618,67 @@ def test_chat_stream_contract_headers_events_and_actor_fallback_user():
     assert "event: done" in resp.text
     assert svc.last_stream_conversation_id == "conv-1"
     assert svc.last_stream_user_id == "77"
+
+
+def test_chat_stream_requires_explicit_idempotency_key_after_authentication():
+    svc = _DummyChatService()
+    client = _build_client(svc)
+    token = issue_test_actor_token(77)
+
+    resp = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "CHAT_IDEMPOTENCY_KEY_INVALID"
+
+
+def test_chat_stream_retry_replays_one_run_without_second_execution():
+    svc = _DummyChatService()
+    run_service = _DummyChatStreamRunService()
+    client = _build_client(svc, stream_run_service=run_service)
+    headers = _auth_headers(77)
+    payload = {"message": "hello", "role": "orchestrator", "priority": "fast_and_cheap"}
+
+    first = client.post("/api/v1/chat/stream/conv-1", json=payload, headers=headers)
+    retry = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json=payload,
+        headers={**headers, "Last-Event-ID": "1"},
+    )
+
+    assert first.status_code == 200
+    assert retry.status_code == 200
+    assert run_service.producer_calls == 1
+    assert first.headers["x-chat-stream-run-id"] == retry.headers["x-chat-stream-run-id"]
+    assert "id: 1" in first.text
+    assert "id: 1" not in retry.text
+    assert "id: 2" in retry.text
+
+
+def test_chat_stream_rejects_idempotency_key_payload_conflict():
+    svc = _DummyChatService()
+    run_service = _DummyChatStreamRunService()
+    client = _build_client(svc, stream_run_service=run_service)
+    headers = _auth_headers(77)
+
+    first = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "first", "role": "orchestrator", "priority": "fast_and_cheap"},
+        headers=headers,
+    )
+    conflict = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "changed", "role": "orchestrator", "priority": "fast_and_cheap"},
+        headers=headers,
+    )
+
+    assert first.status_code == 200
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "CHAT_IDEMPOTENCY_CONFLICT"
+    assert run_service.producer_calls == 1
 
 
 def test_chat_stream_requires_bearer_auth_for_existing_conversation():

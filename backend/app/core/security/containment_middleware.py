@@ -25,7 +25,8 @@ _FORBIDDEN_IDENTITY_KEYS = frozenset(
         "principalid",
         "ownerid",
         "identity",
-        "subject",
+        "sub",
+        "subjectid",
     }
 )
 _FORBIDDEN_HEADERS = frozenset(

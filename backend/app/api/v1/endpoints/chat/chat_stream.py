@@ -4,11 +4,22 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from app.core.llm import ModelPriority, ModelRole
+from app.repositories.chat_stream_repository import (
+    ChatStreamIdempotencyConflict,
+    ChatStreamRepositoryError,
+)
 from app.services.chat.chat_contracts import chat_http_error_detail
 from app.services.chat_service import (
     ChatService,
     ConversationNotFoundError,
     get_chat_service,
+)
+from app.services.chat_stream_run_service import (
+    ChatStreamRunService,
+    InvalidChatStreamIdempotencyKey,
+    chat_stream_request_fingerprint,
+    get_chat_stream_run_service,
+    validate_chat_stream_idempotency_key,
 )
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.trace_service import TraceService, get_trace_service
@@ -26,10 +37,32 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-@router.post("/stream/{conversation_id}", summary="Streaming de resposta via SSE")
+@router.post(
+    "/stream/{conversation_id}",
+    summary="Streaming de resposta via SSE",
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "Idempotency-Key",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string", "minLength": 16, "maxLength": 128},
+                "description": "Opaque key identifying one logical chat command.",
+            },
+            {
+                "name": "Last-Event-ID",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "integer", "minimum": 0},
+                "description": "Last persisted SSE sequence received by this subscriber.",
+            },
+        ]
+    },
+)
 async def stream_message(
     conversation_id: str,
     service: ChatService = Depends(get_chat_service),
+    run_service: ChatStreamRunService = Depends(get_chat_stream_run_service),
     http: Request = None,
 ):
     ensure_origin_allowed(http)
@@ -50,6 +83,53 @@ async def stream_message(
                 category="auth",
                 retryable=False,
                 http_status=status.HTTP_401_UNAUTHORIZED,
+            ),
+        )
+
+    try:
+        owner_user_id = int(str(user_id))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=chat_http_error_detail(
+                code="CHAT_IDENTITY_INVALID",
+                message="Authentication required",
+                category="auth",
+                retryable=False,
+                http_status=status.HTTP_401_UNAUTHORIZED,
+            ),
+        )
+
+    try:
+        idempotency_key = validate_chat_stream_idempotency_key(
+            http.headers.get("Idempotency-Key")
+        )
+    except InvalidChatStreamIdempotencyKey as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=chat_http_error_detail(
+                code="CHAT_IDEMPOTENCY_KEY_INVALID",
+                message=str(exc),
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ),
+        )
+
+    raw_last_event_id = str(http.headers.get("Last-Event-ID") or "").strip()
+    try:
+        last_event_id = int(raw_last_event_id) if raw_last_event_id else 0
+        if last_event_id < 0:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=chat_http_error_detail(
+                code="CHAT_LAST_EVENT_ID_INVALID",
+                message="Last-Event-ID must be a non-negative integer",
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_400_BAD_REQUEST,
             ),
         )
 
@@ -173,19 +253,86 @@ async def stream_message(
             channel="chat_stream",
             user_id=user_id,
         )
-        gen = service.stream_message(
+        fingerprint = chat_stream_request_fingerprint(
             conversation_id=conversation_id,
-            message=message,
-            role=role_enum,
-            priority=priority_enum,
-            timeout_seconds=timeout_seconds,
-            user_id=user_id,
-            project_id=project_id,
-            knowledge_space_id=knowledge_space_id,
-            identity_source=identity_ctx.identity_source,
-            requested_role=role,
-            routing_decision=routing_decision,
-            route_applied=route_applied,
+            payload=payload.model_dump(mode="json"),
+        )
+
+        def producer_factory():
+            return service.stream_message(
+                conversation_id=conversation_id,
+                message=message,
+                role=role_enum,
+                priority=priority_enum,
+                timeout_seconds=timeout_seconds,
+                user_id=user_id,
+                project_id=project_id,
+                knowledge_space_id=knowledge_space_id,
+                identity_source=identity_ctx.identity_source,
+                requested_role=role,
+                routing_decision=routing_decision,
+                route_applied=route_applied,
+            )
+
+        try:
+            attachment = await run_service.begin_or_attach(
+                owner_user_id=owner_user_id,
+                session_id=conversation_id,
+                request_id=idempotency_key,
+                request_fingerprint=fingerprint,
+                producer_factory=producer_factory,
+            )
+        except ChatStreamIdempotencyConflict:
+            await release_sse_slot(slot_user, channel="chat_stream")
+            slot_user = None
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=chat_http_error_detail(
+                    code="CHAT_IDEMPOTENCY_CONFLICT",
+                    message="Idempotency key was already used with a different request",
+                    category="conflict",
+                    retryable=False,
+                    http_status=status.HTTP_409_CONFLICT,
+                ),
+            )
+        except ChatStreamRepositoryError as exc:
+            await release_sse_slot(slot_user, channel="chat_stream")
+            slot_user = None
+            logger.error(
+                "chat_stream_ledger_unavailable",
+                error_type=type(exc).__name__,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=chat_http_error_detail(
+                    code="CHAT_STREAM_LEDGER_UNAVAILABLE",
+                    message="Chat stream temporarily unavailable",
+                    category="availability",
+                    retryable=True,
+                    http_status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                ),
+            )
+        except Exception as exc:
+            await release_sse_slot(slot_user, channel="chat_stream")
+            slot_user = None
+            logger.error(
+                "chat_stream_ledger_unavailable",
+                error_type=type(exc).__name__,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=chat_http_error_detail(
+                    code="CHAT_STREAM_LEDGER_UNAVAILABLE",
+                    message="Chat stream temporarily unavailable",
+                    category="availability",
+                    retryable=True,
+                    http_status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                ),
+            )
+        gen = run_service.stream_events(
+            run_id=attachment.run.id,
+            owner_user_id=owner_user_id,
+            after_sequence=last_event_id,
         )
     except ConversationNotFoundError:
         raise HTTPException(
@@ -204,6 +351,8 @@ async def stream_message(
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
+        "Idempotency-Key": idempotency_key,
+        "X-Chat-Stream-Run-ID": attachment.run.id,
     }
 
     async def guarded_gen():

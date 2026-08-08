@@ -12,7 +12,6 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
-from app.config import settings
 from app.core.agents.utils import parse_json_lenient
 from app.core.embeddings.embedding_manager import aembed_text, aembed_texts
 from app.core.governance.data_classification import classify_text, default_retention_decision

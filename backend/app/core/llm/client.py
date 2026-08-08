@@ -74,6 +74,7 @@ class LLMClient:
         objective_id: str | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         config: Any = None,
+        response_cache_enabled: bool = True,
     ):
         self.base = base
         self.provider = provider
@@ -85,6 +86,7 @@ class LLMClient:
         self.objective_id = objective_id
         self.settings = config if config is not None else settings
         self.circuit_breaker = circuit_breaker
+        self.response_cache_enabled = response_cache_enabled
         self._last_provider = provider
         self._last_model = model
 
@@ -249,7 +251,11 @@ class LLMClient:
 
     async def _execute_async(self, prompt: str, timeout_s: int | None = None) -> str:
         priority_val = self._cache_priority()
-        cached_entry = response_cache.get(prompt, self.role.value, priority_val)
+        cached_entry = (
+            response_cache.get(prompt, self.role.value, priority_val)
+            if self.response_cache_enabled
+            else None
+        )
         if cached_entry:
             logger.info("log_info", message=f"LLM Cache HIT for {self.provider}/{self.model}")
             self._last_provider = str(cached_entry.get("provider", self.provider))
@@ -350,17 +356,18 @@ class LLMClient:
                     + (output_tokens / 1000.0) * pricing.output_per_1k_usd
                 )
 
-                response_cache.put(
-                    prompt=prompt,
-                    role=self.role.value,
-                    priority=priority_val,
-                    response=sanitized_text,
-                    provider=self.provider,
-                    model=self.model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    cost_usd=cost,
-                )
+                if self.response_cache_enabled:
+                    response_cache.put(
+                        prompt=prompt,
+                        role=self.role.value,
+                        priority=priority_val,
+                        response=sanitized_text,
+                        provider=self.provider,
+                        model=self.model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost_usd=cost,
+                    )
 
                 tokens_in_est = input_tokens
                 tokens_out_est = output_tokens
@@ -456,6 +463,8 @@ async def get_llm_client(
     )
     provider = _infer_provider(llm)
     model_name = _infer_model_name(llm)
+    strict_provider = bool((config or {}).get("strict_provider"))
+    disable_response_cache = bool((config or {}).get("disable_response_cache"))
     return LLMClient(
         llm,
         provider,
@@ -465,4 +474,5 @@ async def get_llm_client(
         user_id=user_id,
         project_id=project_id,
         objective_id=objective_id,
+        response_cache_enabled=not (strict_provider or disable_response_cache),
     )

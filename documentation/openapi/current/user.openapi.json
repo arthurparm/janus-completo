@@ -11807,6 +11807,27 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Opaque key identifying one logical chat command.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 16,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last persisted SSE sequence received by this subscriber.",
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
           }
         ],
         "responses": {

@@ -128,15 +128,10 @@ wait_healthy() {
 echo "[pc2-up] Waiting for container health..."
 wait_healthy "janus_neo4j" "${TIMEOUT_SECONDS}" || { echo "neo4j health timeout"; exit 1; }
 wait_healthy "janus_qdrant" "${TIMEOUT_SECONDS}" || { echo "qdrant health timeout"; exit 1; }
-wait_healthy "janus_ollama" "${TIMEOUT_SECONDS}" || { echo "ollama health timeout"; exit 1; }
 
 echo "[pc2-up] Running smoke checks..."
 wait_http "http://localhost:6333/collections" "${TIMEOUT_SECONDS}" || {
   echo "qdrant http check failed"
-  exit 1
-}
-wait_http "http://localhost:11434/api/tags" "${TIMEOUT_SECONDS}" || {
-  echo "ollama http check failed"
   exit 1
 }
 

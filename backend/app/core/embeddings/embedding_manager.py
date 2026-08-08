@@ -1,11 +1,10 @@
 import hashlib
-import structlog
 import time
 from collections import OrderedDict
 from typing import Any
 
 import numpy as np
-
+import structlog
 from app.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -103,6 +102,7 @@ _local_model: Any = None
 _local_model_failed: bool = False
 _openai_embedder: Any = None
 _openrouter_embedder: Any = None
+_ollama_embedder: Any = None
 
 
 def _load_local_model() -> SentenceTransformer:
@@ -180,7 +180,7 @@ def _load_openrouter_embedder() -> OpenAIEmbeddings:
         return _openrouter_embedder
     if OpenAIEmbeddings is None:
         raise RuntimeError("langchain_openai não está disponível para embeddings")
-    
+
     try:
         or_key = (
             settings.OPENROUTER_API_KEY.get_secret_value()
@@ -189,15 +189,15 @@ def _load_openrouter_embedder() -> OpenAIEmbeddings:
         )
     except Exception:
         or_key = None
-        
+
     if not or_key:
         raise RuntimeError("OPENROUTER_API_KEY não configurada para embeddings OpenRouter")
-        
+
     model_name = _DEFAULT_OPENROUTER_MODEL
     logger.info("log_info", message=f"Inicializando OpenRouterEmbeddings com modelo: {model_name}")
     # OpenRouter usa interface compatível com OpenAI
     _openrouter_embedder = OpenAIEmbeddings(
-        model=model_name, 
+        model=model_name,
         api_key=or_key,
         base_url=settings.OPENROUTER_BASE_URL,
         check_embedding_ctx_length=False # Evita verificações específicas da OpenAI
@@ -272,6 +272,21 @@ def _emb_openrouter(texts: list[str]) -> list[list[float]]:
     embedder = _load_openrouter_embedder()
     vectors = embedder.embed_documents(texts)
     return _normalize_vectors(vectors, _TARGET_VECTOR_SIZE)
+
+
+def _load_ollama_embedder() -> Any:
+    global _ollama_embedder
+    if not bool(getattr(settings, "OLLAMA_ENABLED", False)):
+        raise RuntimeError("Ollama embeddings are disabled by runtime policy.")
+    if _ollama_embedder is not None:
+        return _ollama_embedder
+    from langchain_ollama import OllamaEmbeddings
+
+    _ollama_embedder = OllamaEmbeddings(
+        model=_DEFAULT_OLLAMA_MODEL,
+        base_url=settings.OLLAMA_HOST,
+    )
+    return _ollama_embedder
 
 
 def _emb_ollama(texts: list[str]) -> list[list[float]]:

@@ -251,10 +251,10 @@ VALUES ('cypher_generation', '1.0',
 INSERT INTO agent_configurations (agent_name, agent_role, llm_provider, llm_model, prompt_id, max_retries,
                                   timeout_seconds, temperature, max_tokens, is_active, priority_level, cost_budget_usd,
                                   performance_threshold, created_by)
-VALUES ('Orchestrator', 'ORCHESTRATOR', 'ollama', 'gpt-oss:20b', (SELECT id
+VALUES ('Orchestrator', 'ORCHESTRATOR', 'openai', 'gpt-5.6-luna', (SELECT id
                                                                   FROM prompts
                                                                   WHERE prompt_name = 'react_agent'
                                                                     AND is_active = TRUE LIMIT 1), 3, 60, 0.7, 4096, TRUE, 'HIGH', 0.02, 0.8, 'system'),
-('CodeGenerator', 'CODE_GENERATOR', 'ollama', 'qwen3.5:9b', (SELECT id FROM prompts WHERE prompt_name = 'react_agent' AND is_active = TRUE LIMIT 1), 3, 90, 0.3, 8192, TRUE, 'HIGH', 0.05, 0.8, 'system'),
-('KnowledgeCurator', 'KNOWLEDGE_CURATOR', 'ollama', 'ministral-3:14b', (SELECT id FROM prompts WHERE prompt_name = 'cypher_generation' AND is_active = TRUE LIMIT 1), 2, 45, 0.5, 2048, TRUE, 'MEDIUM', 0.01, 0.8, 'system'),
-('MetaAgent', 'META_AGENT', 'ollama', 'gpt-oss:20b', (SELECT id FROM prompts WHERE prompt_name = 'meta_agent_supervisor' AND is_active = TRUE LIMIT 1), 2, 180, 0.6, 4096, TRUE, 'CRITICAL', 0.03, 0.9, 'system');
+('CodeGenerator', 'CODE_GENERATOR', 'openai', 'gpt-5.6-luna', (SELECT id FROM prompts WHERE prompt_name = 'react_agent' AND is_active = TRUE LIMIT 1), 3, 90, 0.3, 8192, TRUE, 'HIGH', 0.05, 0.8, 'system'),
+('KnowledgeCurator', 'KNOWLEDGE_CURATOR', 'openai', 'gpt-5.6-luna', (SELECT id FROM prompts WHERE prompt_name = 'cypher_generation' AND is_active = TRUE LIMIT 1), 2, 45, 0.5, 2048, TRUE, 'MEDIUM', 0.01, 0.8, 'system'),
+('MetaAgent', 'META_AGENT', 'openai', 'gpt-5.6-luna', (SELECT id FROM prompts WHERE prompt_name = 'meta_agent_supervisor' AND is_active = TRUE LIMIT 1), 2, 180, 0.6, 4096, TRUE, 'CRITICAL', 0.03, 0.9, 'system');

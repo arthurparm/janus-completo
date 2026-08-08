@@ -4,7 +4,6 @@ services:
     cpus: "3.0"
     environment:
       ENVIRONMENT: development
-      GEMINI_API_KEY: ""
       START_ORCHESTRATOR_WORKERS_ON_STARTUP: "false"
       AUTO_INDEX_ON_STARTUP: "false"
       INIT_MAS_AGENTS_ON_STARTUP: "false"
@@ -27,7 +26,6 @@ services:
     cpus: "1.0"
     environment:
       ENVIRONMENT: development
-      GEMINI_API_KEY: ""
       SSL_CERT_FILE: /run/secrets/janus/tls/combined-ca.pem
     volumes:
       - auth-oidc-fixture:/fixture:ro
@@ -41,7 +39,6 @@ services:
     cpus: "3.0"
     environment:
       ENVIRONMENT: development
-      GEMINI_API_KEY: ""
       START_ORCHESTRATOR_WORKERS_ON_STARTUP: "false"
       AUTO_INDEX_ON_STARTUP: "false"
       INIT_MAS_AGENTS_ON_STARTUP: "false"

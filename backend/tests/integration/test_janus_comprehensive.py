@@ -206,9 +206,8 @@ class TestMemoryCore:
         """Test storing and searching memories."""
         # Skip if Qdrant is not available
         try:
-            from app.core.memory.memory_types import MemoryType
-
             from app.core.memory.memory_core import MemoryCore
+            from app.core.memory.memory_types import MemoryType
         except ImportError:
             pytest.skip("MemoryCore not available")
 
@@ -916,18 +915,14 @@ class TestUnifiedTools:
 # ============================================================================
 
 class TestFaultyTools:
-    """Tests for intentionally faulty tools used in Reflexion training."""
+    """Regression guard for intentionally faulty production tools."""
 
     def test_faulty_tools_exist(self):
-        """Test faulty tools list exists."""
-        from app.core.tools.faulty_tools import faulty_tools, get_faulty_tools
+        """The retired training module must not be importable in production."""
+        import importlib.util
 
-        tools = get_faulty_tools()
+        assert importlib.util.find_spec("app.core.tools.faulty_tools") is None
 
-        assert len(tools) > 0
-        assert len(faulty_tools) > 0
-
-        print(f"✓ {len(tools)} faulty tools available for Reflexion training")
 
 # ============================================================================
 # TEST 28: Schemas and Models

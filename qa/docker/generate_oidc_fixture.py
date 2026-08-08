@@ -45,7 +45,7 @@ def main() -> None:
         .public_key(ca_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=1))
+        .not_valid_after(now + timedelta(days=30))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .sign(ca_key, hashes.SHA256())
     )
@@ -59,7 +59,7 @@ def main() -> None:
         .public_key(server_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=1))
+        .not_valid_after(now + timedelta(days=30))
         .add_extension(
             x509.SubjectAlternativeName(
                 [

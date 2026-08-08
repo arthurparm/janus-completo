@@ -1,4 +1,5 @@
 import pytest
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
 from httpx import ASGITransport, AsyncClient
 
 from qa.auth_test_support import actor_from_test_request, issue_test_actor_token
@@ -9,18 +10,32 @@ def _auth_headers(user_id: int) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+SERVICE_HEADERS = {"Authorization": "Bearer test-service"}
+
+
 @pytest.fixture
 def async_client(monkeypatch):
     from app.main import app
+
+    def actor_for_request(request):
+        if request.headers.get("Authorization") == "Bearer test-service":
+            return ActorContext.authenticated(
+                actor_id="janus-observability",
+                actor_type=ActorType.SERVICE,
+                roles=("SERVICE",),
+                auth_method=AuthMethod.CLIENT_CREDENTIALS,
+                trace_id="test-service",
+                client_id="janus-observability",
+                scopes=("observability:read",),
+            )
+        return actor_from_test_request(request)
+
     monkeypatch.setattr(
         "app.core.security.containment_middleware.get_actor_context",
-        actor_from_test_request,
+        actor_for_request,
     )
-    from app.repositories.user_repository import UserRepository
     from app.services.observability_service import get_observability_service
 
-    original_is_admin = UserRepository.is_admin
-    original_has_role = UserRepository.has_role
     original_override = app.dependency_overrides.get(get_observability_service)
 
     class DummyObservabilityService:
@@ -47,15 +62,11 @@ def async_client(monkeypatch):
                 ],
             }
 
-    UserRepository.is_admin = lambda self, uid: str(uid) == "99"
-    UserRepository.has_role = lambda self, uid, role_name: False
     app.dependency_overrides[get_observability_service] = lambda: DummyObservabilityService()
 
     client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     yield client
 
-    UserRepository.is_admin = original_is_admin
-    UserRepository.has_role = original_has_role
     if original_override is None:
         app.dependency_overrides.pop(get_observability_service, None)
     else:
@@ -75,10 +86,10 @@ class TestObservabilityPendingActionsLegacyResidueContract:
         )
         assert resp.status_code == 403
 
-    async def test_returns_admin_summary_payload(self, async_client):
+    async def test_returns_service_summary_payload(self, async_client):
         resp = await async_client.get(
             "/api/v1/observability/pending-actions/legacy-residue?limit=5",
-            headers=_auth_headers(99),
+            headers=SERVICE_HEADERS,
         )
         assert resp.status_code == 200
         payload = resp.json()

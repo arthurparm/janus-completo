@@ -4,8 +4,10 @@ import pytest
 from app.config import settings
 from app.core.infrastructure.auth import get_actor_user_id
 from app.core.security.actor_context import ActorContext
-from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
-from app.repositories import user_repository
+from app.core.security.request_guard import (
+    require_authenticated_actor_id,
+    require_human_admin_actor_context,
+)
 from fastapi import HTTPException
 
 
@@ -27,22 +29,13 @@ class _Req:
 
 def test_admin_config_requires_authenticated_actor():
     with pytest.raises(HTTPException) as exc:
-        require_admin_actor(_Req(actor_user_id=None))
+        require_human_admin_actor_context(_Req(actor_user_id=None))
     assert exc.value.status_code == 401
 
 
-def test_admin_config_blocks_non_admin(monkeypatch):
-    def fake_is_admin(self, user_id: int) -> bool:
-        return False
-
-    def fake_has_role(self, user_id: int, role_name: str) -> bool:
-        return False
-
-    monkeypatch.setattr(user_repository.UserRepository, "has_role", fake_has_role)
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", fake_is_admin)
-
+def test_admin_config_blocks_non_admin():
     with pytest.raises(HTTPException) as exc:
-        require_admin_actor(_Req(actor_user_id=42))
+        require_human_admin_actor_context(_Req(actor_user_id=42))
     assert exc.value.status_code == 403
 
 

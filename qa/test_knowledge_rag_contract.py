@@ -133,6 +133,9 @@ def async_client(monkeypatch):
                 return {"doc_id": "doc123", "status": "processed", "chunks": 5, "created_at": "2023-01-01"}
             def delete_document(self, *args, **kwargs):
                 return True
+
+            def delete_manifest(self, *args, **kwargs):
+                return True
         _manifest_repo = MockRepo()
         async def ingest_url(self, *args, **kwargs):
             return {"doc_id": "doc123", "chunks": 5, "status": "processed", "message": "ok"}
@@ -146,6 +149,9 @@ def async_client(monkeypatch):
             return {"status": "processed", "doc_id": doc_id, "chunks": 5, "created_at": "2023-01-01"}
         async def delete_document(self, doc_id, **kwargs):
             return True
+
+        def cleanup_staged_file(self, storage_path):
+            return None
 
     class DummyLearningService:
         async def trigger_harvesting(self, **kwargs):
@@ -259,31 +265,20 @@ class TestKnowledgeRAGContract:
         assert resp.status_code == 400
 
     async def test_documents_list(self, async_client):
-        try:
-            resp = await async_client.get("/api/v1/documents/list")
-            assert resp.status_code in [200, 500]
-        except Exception:
-            pass
+        resp = await async_client.get("/api/v1/documents/list")
+        assert resp.status_code == 200
 
     async def test_documents_search(self, async_client):
-        # endpoint uses qdrant directly, so we just expect 500 or ConnectionError due to no DB
-        try:
-            resp = await async_client.get("/api/v1/documents/search?query=test")
-            assert resp.status_code in [200, 500]
-        except Exception:
-            pass
+        resp = await async_client.get("/api/v1/documents/search?query=test")
+        assert resp.status_code == 200
 
     async def test_documents_status(self, async_client):
         resp = await async_client.get("/api/v1/documents/status/doc123")
         assert resp.status_code == 200
 
     async def test_documents_delete(self, async_client):
-        # endpoint uses qdrant directly
-        try:
-            resp = await async_client.delete("/api/v1/documents/doc123")
-            assert resp.status_code in [200, 500]
-        except Exception:
-            pass
+        resp = await async_client.delete("/api/v1/documents/doc123")
+        assert resp.status_code == 200
 
     # --- Learning ---
     async def test_learning_dataset_preview(self, async_client):

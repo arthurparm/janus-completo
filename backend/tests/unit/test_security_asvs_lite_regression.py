@@ -1,20 +1,23 @@
 import pytest
-
-from app.core.security.url_safety import SafeHttpTarget
-from app.core.tools.agent_tools import browse_url
+from app.config import settings
 from app.core.infrastructure.windows_agent_client import WindowsAgentClient
+from app.core.security import egress_policy
+from app.core.security.url_safety import SafeHttpTarget
 
 
-def test_asvs_lite_browse_url_blocks_when_egress_policy_blocks(monkeypatch):
-    monkeypatch.setattr(
-        "app.core.tools.agent_tools.enforce_tool_http_egress",
-        lambda *_args, **_kwargs: None,
+def test_asvs_lite_tool_egress_blocks_when_allowlist_is_empty(monkeypatch):
+    monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", [])
+    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+
+    assert (
+        egress_policy.enforce_tool_http_egress(
+            "https://example.com/a", tool="search_web"
+        )
+        is None
     )
 
-    assert "política de egress/SSRF" in browse_url("https://example.com/a")
 
-
-def test_asvs_lite_browse_url_uses_safe_fetch_url_and_host_header(monkeypatch):
+def test_asvs_lite_tool_egress_returns_only_resolved_safe_target(monkeypatch):
     target = SafeHttpTarget(
         scheme="https",
         original_host="example.com",
@@ -23,43 +26,17 @@ def test_asvs_lite_browse_url_uses_safe_fetch_url_and_host_header(monkeypatch):
         path_with_query="/a",
         fetch_url="https://93.184.216.34/a",
     )
-    monkeypatch.setattr(
-        "app.core.tools.agent_tools.enforce_tool_http_egress",
-        lambda *_args, **_kwargs: target,
+    monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", ["example.com"])
+    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+    monkeypatch.setattr(egress_policy, "is_allowlisted_host", lambda *_: True)
+    monkeypatch.setattr(egress_policy, "resolve_safe_http_target", lambda *_: target)
+
+    result = egress_policy.enforce_tool_http_egress(
+        "https://example.com/a", tool="search_web"
     )
-
-    captured: dict[str, object] = {}
-
-    class DummyResponse:
-        def __init__(self):
-            self.content = b"<html><body>Hello</body></html>"
-            self.encoding = "utf-8"
-
-        def raise_for_status(self):
-            return None
-
-    class DummyClient:
-        def __init__(self, *args, **kwargs):
-            captured["timeout"] = kwargs.get("timeout")
-            captured["follow_redirects"] = kwargs.get("follow_redirects")
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def get(self, url, headers=None):
-            captured["url"] = url
-            captured["headers"] = headers or {}
-            return DummyResponse()
-
-    monkeypatch.setattr("app.core.tools.agent_tools.httpx.Client", DummyClient)
-
-    result = browse_url("https://example.com/a")
-    assert "Hello" in result
-    assert captured.get("url") == target.fetch_url
-    assert (captured.get("headers") or {}).get("Host") == target.original_host
+    assert result == target
+    assert result.fetch_url == "https://93.184.216.34/a"
+    assert result.original_host == "example.com"
 
 
 @pytest.mark.asyncio

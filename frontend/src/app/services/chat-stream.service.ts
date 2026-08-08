@@ -67,6 +67,7 @@ export interface StartParams {
 interface ParsedSseEvent {
   event: string
   data: string
+  id?: number
 }
 
 interface StreamRequestPayload {
@@ -83,6 +84,7 @@ interface LastStreamRequest {
   body: StreamRequestPayload
   projectId?: string
   requestId: string
+  lastEventId?: number
 }
 
 @Injectable({ providedIn: 'root' })
@@ -180,7 +182,11 @@ export class ChatStreamService {
     const url = `${API_BASE_URL}/v1/chat/stream/${encodeURIComponent(request.conversationId)}`
     this.logger.debug('[ChatStreamService] Abrindo fetch-SSE', { url, seq })
     try {
-      const headers = buildChatStreamAuthHeaders({ projectId: request.projectId, requestId: request.requestId })
+      const headers = buildChatStreamAuthHeaders({
+        projectId: request.projectId,
+        requestId: request.requestId,
+        lastEventId: request.lastEventId,
+      })
       headers.set('Accept', 'text/event-stream')
       headers.set('Content-Type', 'application/json')
 
@@ -234,6 +240,9 @@ export class ChatStreamService {
         const parsed = this.extractEvents(buffer)
         buffer = parsed.remaining
         for (const evt of parsed.events) {
+          if (typeof evt.id === 'number') {
+            request.lastEventId = Math.max(request.lastEventId ?? 0, evt.id)
+          }
           this.dispatchSseEvent(evt.event, evt.data)
           if (seq !== this.streamSeq || controller.signal.aborted) return
         }
@@ -242,6 +251,9 @@ export class ChatStreamService {
       buffer += decoder.decode()
       const trailing = this.extractEvents(buffer, true)
       for (const evt of trailing.events) {
+        if (typeof evt.id === 'number') {
+          request.lastEventId = Math.max(request.lastEventId ?? 0, evt.id)
+        }
         this.dispatchSseEvent(evt.event, evt.data)
       }
 
@@ -319,6 +331,7 @@ export class ChatStreamService {
   private parseSseBlock(block: string): ParsedSseEvent | null {
     const lines = block.split('\n')
     let event = 'message'
+    let id: number | undefined
     const dataLines: string[] = []
 
     for (const rawLine of lines) {
@@ -329,13 +342,20 @@ export class ChatStreamService {
         event = line.slice('event:'.length).trim() || 'message'
         continue
       }
+      if (line.startsWith('id:')) {
+        const parsedId = Number.parseInt(line.slice('id:'.length).trim(), 10)
+        if (Number.isSafeInteger(parsedId) && parsedId >= 0) {
+          id = parsedId
+        }
+        continue
+      }
       if (line.startsWith('data:')) {
         dataLines.push(line.slice('data:'.length).trimStart())
       }
     }
 
     if (event === 'message' && dataLines.length === 0) return null
-    return { event, data: dataLines.join('\n') }
+    return { event, data: dataLines.join('\n'), id }
   }
 
   private async safeReadErrorBody(response: Response): Promise<string> {

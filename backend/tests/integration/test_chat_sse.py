@@ -9,7 +9,10 @@ def _auth_headers() -> dict[str, str]:
     token = str(os.getenv("JANUS_USER_ACCESS_TOKEN") or "").strip()
     if not token:
         pytest.skip("JANUS_USER_ACCESS_TOKEN is required for OIDC integration tests")
-    return {"Authorization": f"Bearer {token}"}
+    return {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": "integration-chat-stream-0001",
+    }
 
 
 @pytest.fixture(scope="module")

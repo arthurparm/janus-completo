@@ -185,6 +185,91 @@ class DBMigrationService:
                     applied,
                 )
 
+    def _prepare_chat_stream_ledger_schema(
+        self, s: Session, *, dialect: str, applied: list[str]
+    ) -> None:
+        if dialect not in ("postgresql", "postgres"):
+            return
+        if not self._table_exists(s, "chat_stream_runs"):
+            self._execute_ddl(
+                s,
+                """
+                CREATE TABLE chat_stream_runs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    request_id VARCHAR(128) NOT NULL,
+                    request_fingerprint VARCHAR(64) NOT NULL,
+                    status VARCHAR(24) NOT NULL DEFAULT 'pending',
+                    producer_token VARCHAR(64) NULL,
+                    lease_until TIMESTAMP NULL,
+                    last_event_sequence INTEGER NOT NULL DEFAULT 0,
+                    error_code VARCHAR(64) NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    CONSTRAINT uq_chat_stream_owner_session_request
+                        UNIQUE (owner_user_id, session_id, request_id)
+                )
+                """,
+                "chat_stream_runs.table",
+                applied,
+            )
+        if not self._table_exists(s, "chat_stream_events"):
+            self._execute_ddl(
+                s,
+                """
+                CREATE TABLE chat_stream_events (
+                    id SERIAL PRIMARY KEY,
+                    run_id VARCHAR(36) NOT NULL
+                        REFERENCES chat_stream_runs(id) ON DELETE CASCADE,
+                    sequence INTEGER NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_chat_stream_event_sequence UNIQUE (run_id, sequence)
+                )
+                """,
+                "chat_stream_events.table",
+                applied,
+            )
+        for table, index_name, sql in (
+            (
+                "chat_stream_runs",
+                "idx_chat_stream_run_status_lease",
+                "CREATE INDEX idx_chat_stream_run_status_lease "
+                "ON chat_stream_runs (status, lease_until)",
+            ),
+            (
+                "chat_stream_runs",
+                "idx_chat_stream_run_owner_created",
+                "CREATE INDEX idx_chat_stream_run_owner_created "
+                "ON chat_stream_runs (owner_user_id, created_at)",
+            ),
+            (
+                "chat_stream_events",
+                "idx_chat_stream_event_cursor",
+                "CREATE INDEX idx_chat_stream_event_cursor "
+                "ON chat_stream_events (run_id, sequence)",
+            ),
+        ):
+            if not self._index_exists(s, table, index_name):
+                self._execute_ddl(s, sql, f"{table}.{index_name}", applied)
+
+    def _migrate_seeded_agent_configs_to_cloud(self, s: Session, applied: list[str]) -> None:
+        if not self._table_exists(s, "agent_configurations"):
+            return
+        result = s.execute(
+            text(
+                "UPDATE agent_configurations "
+                "SET llm_provider = 'openai', llm_model = 'gpt-5.6-luna' "
+                "WHERE created_by = 'system' AND llm_provider IN ('ollama', 'local')"
+            )
+        )
+        if int(getattr(result, "rowcount", 0) or 0) > 0:
+            s.commit()
+            applied.append("agent_configurations.system_cloud_only")
+
     def _count_null_pending_action_user_ids(self, s: Session) -> int | None:
         if not self._table_exists(s, "pending_actions"):
             return None
@@ -305,6 +390,36 @@ class DBMigrationService:
                 "idx_message_session_ts",
                 "index",
                 self._index_exists(s, "messages", "idx_message_session_ts"),
+            )
+            add(
+                "chat_stream_runs",
+                "uq_chat_stream_owner_session_request",
+                "constraint",
+                self._constraint_exists(
+                    s,
+                    "chat_stream_runs",
+                    "uq_chat_stream_owner_session_request",
+                ),
+            )
+            add(
+                "chat_stream_runs",
+                "idx_chat_stream_run_status_lease",
+                "index",
+                self._index_exists(
+                    s,
+                    "chat_stream_runs",
+                    "idx_chat_stream_run_status_lease",
+                ),
+            )
+            add(
+                "chat_stream_events",
+                "idx_chat_stream_event_cursor",
+                "index",
+                self._index_exists(
+                    s,
+                    "chat_stream_events",
+                    "idx_chat_stream_event_cursor",
+                ),
             )
             for column in (
                 "knowledge_space_id",
@@ -836,6 +951,8 @@ class DBMigrationService:
             dialect = self._dialect_name(s)
             consent_table = Consent.__tablename__
             self._prepare_outbox_lease_schema(s, dialect=dialect, applied=applied)
+            self._prepare_chat_stream_ledger_schema(s, dialect=dialect, applied=applied)
+            self._migrate_seeded_agent_configs_to_cloud(s, applied)
             if dialect in ("postgresql", "postgres"):
                 # One additive transaction: a failed identity/ownership backfill leaves the
                 # pre-existing schema usable and never deletes or selects duplicate records.

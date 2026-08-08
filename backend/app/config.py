@@ -264,11 +264,11 @@ class AppSettings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_FREE_MODELS_ENABLED: bool = False
     OPENROUTER_REASONING_ENABLED: bool = True
-    OPENROUTER_MODEL_NAME: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    OPENROUTER_MODEL_NAME: str = "poolside/laguna-s-2.1:free"
     EMBEDDINGS_OPENROUTER_MODEL_NAME: str = "qwen/qwen3-embedding-8b"
     OPENROUTER_MODELS: list[str] = [
-        "nvidia/nemotron-3-ultra-550b-a55b:free",
         "poolside/laguna-s-2.1:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
         "cohere/north-mini-code:free",
         "google/gemma-4-31b-it:free",
         "openai/gpt-oss-20b:free",
@@ -355,33 +355,33 @@ class AppSettings(BaseSettings):
     # Estratégia padrão: prioriza provedores cloud compatíveis com o roteador atual.
     LLM_CLOUD_MODEL_CANDIDATES: dict[str, list[str]] = {
         "orchestrator": [
-            "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
+            "openrouter:poolside/laguna-s-2.1:free",
             "deepseek:deepseek-v4-flash",
             "xai:grok-4.5",
             "openai:gpt-5.6-luna",
         ],
         "code_generator": [
             "openrouter:poolside/laguna-s-2.1:free",
-            "openrouter:cohere/north-mini-code:free",
             "deepseek:deepseek-v4-pro",
             "openai:gpt-5.6-luna",
             "xai:grok-4.5",
         ],
         "knowledge_curator": [
-            "openrouter:google/gemma-4-31b-it:free",
+            "openrouter:poolside/laguna-s-2.1:free",
             "deepseek:deepseek-v4-flash",
             "openai:gpt-5.6-luna",
             "xai:grok-4.5",
         ],
         "security_auditor": [
-            "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
             "openai:gpt-5.6-luna",
             "xai:grok-4.5",
+            "openrouter:poolside/laguna-s-2.1:free",
         ],
         "reasoner": [
-            "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free",
             "deepseek:deepseek-v4-pro",
             "xai:grok-4.5",
+            "openai:gpt-5.6-luna",
+            "openrouter:poolside/laguna-s-2.1:free",
         ],
     }
 
@@ -656,6 +656,10 @@ class AppSettings(BaseSettings):
     CHAT_SSE_MAX_AGENT_EVENT_STREAMS_PER_USER: int = 2
     CHAT_SSE_MAX_CONNECTIONS_PER_USER: int = 4
     CHAT_SSE_MAX_GLOBAL_CONNECTIONS: int = 250
+    CHAT_STREAM_RUN_LEASE_SECONDS: int = 300
+    CHAT_STREAM_RUN_RETENTION_HOURS: int = 24
+    CHAT_STREAM_EVENT_POLL_INTERVAL_MS: int = 200
+    CHAT_STREAM_SUBSCRIBER_HEARTBEAT_SECONDS: int = 15
     CHAT_TOOL_RISK_PROFILE: str = "balanced"
     CHAT_TOOL_AUTO_CONFIRM: bool = False
     CHAT_TOOL_ALLOWLIST: list[str] = Field(default_factory=list)

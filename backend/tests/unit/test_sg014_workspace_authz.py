@@ -1,9 +1,8 @@
+from app.api.v1.endpoints.workspace import router as workspace_router
+from app.core.security.request_guard import require_service_actor
+from app.services.collaboration_service import get_collaboration_service
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.testclient import TestClient
-
-from app.api.v1.endpoints.workspace import router as workspace_router
-from app.core.security.request_guard import require_admin_actor, require_authenticated_actor_id
-from app.services.collaboration_service import get_collaboration_service
 
 
 class _CollabStub:
@@ -23,38 +22,26 @@ class _CollabStub:
         return None
 
 
-def _make_auth_guard():
+def _make_service_guard(service_ids: set[str]):
     def _guard(request: Request) -> str:
-        actor = getattr(request.state, "actor_user_id", None)
-        if actor:
+        actor = request.headers.get("X-Test-Service-Id")
+        if actor and actor in service_ids:
             return str(actor)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    return _guard
-
-
-def _make_admin_guard(admin_ids: set[int]):
-    def _guard(request: Request) -> str:
-        actor = getattr(request.state, "actor_user_id", None)
-        if actor and int(actor) in admin_ids:
-            return str(actor)
+        if not actor:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return _guard
 
 
-def _build_client(monkeypatch, admin_ids: set[int] | None = None) -> TestClient:
-    admin_ids = admin_ids or set()
+def _build_client(monkeypatch, service_ids: set[str] | None = None) -> TestClient:
+    service_ids = service_ids or set()
     app = FastAPI()
     app.include_router(workspace_router, prefix="/api/v1")
     app.dependency_overrides[get_collaboration_service] = lambda: _CollabStub()
-    app.dependency_overrides[require_authenticated_actor_id] = _make_auth_guard()
-    app.dependency_overrides[require_admin_actor] = _make_admin_guard(admin_ids)
-
-    @app.middleware("http")
-    async def _inject_actor(request: Request, call_next):
-        actor = request.headers.get("X-Actor-User-Id")
-        if actor:
-            request.state.actor_user_id = actor
-        return await call_next(request)
+    app.dependency_overrides[require_service_actor] = _make_service_guard(service_ids)
 
     return TestClient(app)
 
@@ -69,28 +56,28 @@ def test_workspace_requires_authenticated_actor(monkeypatch):
 
 
 def test_workspace_add_artifact_allows_authenticated_actor(monkeypatch):
-    client = _build_client(monkeypatch)
+    client = _build_client(monkeypatch, service_ids={"janus-worker"})
     response = client.post(
         "/api/v1/collaboration/workspace/artifacts/add",
         json={"key": "a", "value": {"v": 1}, "author": "x"},
-        headers={"X-Actor-User-Id": "10"},
+        headers={"X-Test-Service-Id": "janus-worker"},
     )
     assert response.status_code == 200
 
 
 def test_workspace_shutdown_requires_admin(monkeypatch):
-    client = _build_client(monkeypatch, admin_ids={99})
+    client = _build_client(monkeypatch, service_ids={"janus-admin-facade"})
     response = client.post(
         "/api/v1/collaboration/system/shutdown",
-        headers={"X-Actor-User-Id": "10"},
+        headers={"X-Test-Service-Id": "janus-worker"},
     )
     assert response.status_code == 403
 
 
 def test_workspace_shutdown_allows_admin(monkeypatch):
-    client = _build_client(monkeypatch, admin_ids={10})
+    client = _build_client(monkeypatch, service_ids={"janus-admin-facade"})
     response = client.post(
         "/api/v1/collaboration/system/shutdown",
-        headers={"X-Actor-User-Id": "10"},
+        headers={"X-Test-Service-Id": "janus-admin-facade"},
     )
     assert response.status_code == 200

@@ -1,9 +1,6 @@
 import asyncio
 import os
-import sys
 from types import SimpleNamespace
-
-sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 import app.services.knowledge_space_service as knowledge_space_module
 from app.services.knowledge_space_service import KnowledgeSpaceService
@@ -1167,7 +1164,7 @@ def test_enrich_sections_with_llm_returns_original_sections_on_timeout():
     assert result == sections
 
 
-def test_enrich_sections_with_llm_forces_ollama_only_policy():
+def test_enrich_sections_with_llm_forces_cloud_only_policy():
     captured = {}
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 
@@ -1199,14 +1196,15 @@ def test_enrich_sections_with_llm_forces_ollama_only_policy():
     )
 
     assert result[0]["canonical_summary"] == "Resumo fiel"
-    assert captured["priority"].value == "local_only"
-    assert captured["policy_overrides"]["provider"] == "ollama"
-    assert captured["policy_overrides"]["strict_provider"] is True
-    assert captured["policy_overrides"]["disable_failover"] is True
+    assert captured["priority"].value == "fast_and_cheap"
+    assert captured["policy_overrides"]["exclude_providers"] == [
+        "ollama",
+        "google_gemini",
+    ]
     assert captured["policy_overrides"]["disable_response_cache"] is True
 
 
-def test_render_operational_answer_uses_ollama_only_and_returns_llm_response():
+def test_render_operational_answer_uses_cloud_only_and_returns_llm_response():
     captured = {}
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 
@@ -1248,10 +1246,11 @@ def test_render_operational_answer_uses_ollama_only_and_returns_llm_response():
     )
 
     assert result == "Ficha final baseada nas evidências."
-    assert captured["priority"].value == "local_only"
-    assert captured["policy_overrides"]["provider"] == "ollama"
-    assert captured["policy_overrides"]["strict_provider"] is True
-    assert captured["policy_overrides"]["disable_failover"] is True
+    assert captured["priority"].value == "fast_and_cheap"
+    assert captured["policy_overrides"]["exclude_providers"] == [
+        "ollama",
+        "google_gemini",
+    ]
     assert captured["policy_overrides"]["disable_response_cache"] is True
 
 
@@ -1756,7 +1755,7 @@ def test_render_operational_answer_falls_back_when_llm_response_is_low_informati
     assert "Decisões pendentes do usuário:" in result
 
 
-def test_plan_operational_support_uses_ollama_and_distinguishes_decisions_from_gaps():
+def test_plan_operational_support_uses_cloud_and_distinguishes_decisions_from_gaps():
     captured = {}
     service = KnowledgeSpaceService(llm_service=SimpleNamespace())
 
@@ -1803,10 +1802,11 @@ def test_plan_operational_support_uses_ollama_and_distinguishes_decisions_from_g
     assert [step["label"] for step in result["steps"]] == ["atributos", "opcoes extras"]
     assert result["user_decisions"] == ["Escolher raça e classe entre as opções válidas."]
     assert result["source_gaps"] == ["Nenhuma lacuna documental forte detectada."]
-    assert captured["priority"].value == "local_only"
-    assert captured["policy_overrides"]["provider"] == "ollama"
-    assert captured["policy_overrides"]["strict_provider"] is True
-    assert captured["policy_overrides"]["disable_failover"] is True
+    assert captured["priority"].value == "fast_and_cheap"
+    assert captured["policy_overrides"]["exclude_providers"] == [
+        "ollama",
+        "google_gemini",
+    ]
     assert captured["policy_overrides"]["disable_response_cache"] is True
 
 
@@ -2101,7 +2101,7 @@ def test_query_space_uses_extended_timeout_for_task_execution_queries():
     os.environ["KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS"] = "0.01"
     os.environ["KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS"] = "0.2"
     try:
-        result = asyncio.run(
+        asyncio.run(
             service.query_space(
                 knowledge_space_id="ks-1",
                 question="Crie uma ficha completa usando as regras do livro.",
