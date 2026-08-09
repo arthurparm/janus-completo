@@ -1,0 +1,177 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 1,
+    "llm_requests": [
+      {
+        "complexity": "low",
+        "policy_overrides": {
+          "priority": "fast_and_cheap",
+          "role": "orchestrator",
+          "timeout_seconds": 12
+        },
+        "priority": "fast_and_cheap",
+        "project_id": "project-1",
+        "role": "orchestrator",
+        "task_type": "general_task",
+        "timeout_seconds": 12,
+        "user_id": "user-1"
+      }
+    ],
+    "outbox_enqueue_count": 0,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "connection_attempts": 1,
+    "event_sequence_by_attempt": [
+      [
+        "start",
+        "protocol",
+        "ack",
+        "cognitive_status",
+        "heartbeat",
+        "cognitive_status",
+        "token",
+        "partial",
+        "cognitive_status",
+        "done"
+      ]
+    ],
+    "trace": [
+      "repo.get_conversation",
+      "sse.event:start",
+      "sse.event:protocol",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "sse.event:ack",
+      "sse.event:cognitive_status",
+      "grounding.no_result",
+      "repo.get_recent_messages:20",
+      "prompt.build",
+      "llm.select_provider",
+      "llm.invoke",
+      "sse.event:heartbeat",
+      "sse.event:cognitive_status",
+      "sse.event:token",
+      "sse.event:partial",
+      "repo.add_message:assistant",
+      "sse.event:cognitive_status",
+      "sse.event:done"
+    ]
+  },
+  "output": {
+    "agent_state": {
+      "reason": "requires_confirmation",
+      "requires_confirmation": true,
+      "state": "waiting_confirmation"
+    },
+    "citation_status": {
+      "count": 0,
+      "mode": "required",
+      "reason": "no_retrievable_sources",
+      "status": "missing_required"
+    },
+    "citations": [],
+    "confirmation": {
+      "approve_endpoint": "/api/v1/pending_actions/action/77/approve",
+      "pending_action_id": 77,
+      "reason": "requires_confirmation",
+      "reject_endpoint": "/api/v1/pending_actions/action/77/reject",
+      "required": true,
+      "source": "pending_actions_sql"
+    },
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": "knowledge_space_pending",
+    "provider": "janus",
+    "response": "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. Isso pode demorar um pouco, mas não vou estudar o código do Janus para responder sobre esse conteúdo.",
+    "understanding": {
+      "confidence": 0.6,
+      "confirmation": {
+        "approve_endpoint": "/api/v1/pending_actions/action/77/approve",
+        "pending_action_id": 77,
+        "reason": "requires_confirmation",
+        "reject_endpoint": "/api/v1/pending_actions/action/77/reject",
+        "required": true,
+        "source": "pending_actions_sql"
+      },
+      "confirmation_reason": "requires_confirmation",
+      "intent": "general",
+      "requires_confirmation": true,
+      "risk": {
+        "level": "medium",
+        "requires_confirmation": true,
+        "source": "heuristic",
+        "summary": "Ação requer confirmação antes de prosseguir."
+      },
+      "summary": "Explique a funcao critica no codigo."
+    }
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": {
+        "reason": "requires_confirmation",
+        "requires_confirmation": true,
+        "state": "waiting_confirmation"
+      },
+      "citation_status": {
+        "count": 0,
+        "mode": "required",
+        "reason": "no_retrievable_sources",
+        "status": "missing_required"
+      },
+      "citations": [],
+      "confirmation": {
+        "approve_endpoint": "/api/v1/pending_actions/action/77/approve",
+        "pending_action_id": 77,
+        "reason": "requires_confirmation",
+        "reject_endpoint": "/api/v1/pending_actions/action/77/reject",
+        "required": true,
+        "source": "pending_actions_sql"
+      },
+      "delivery_status": "completed",
+      "failure_classification": null,
+      "model": "knowledge_space_pending",
+      "provider": "janus",
+      "text": "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. Isso pode demorar um pouco, mas não vou estudar o código do Janus para responder sobre esse conteúdo.",
+      "understanding": {
+        "confidence": 0.6,
+        "confirmation": {
+          "approve_endpoint": "/api/v1/pending_actions/action/77/approve",
+          "pending_action_id": 77,
+          "reason": "requires_confirmation",
+          "reject_endpoint": "/api/v1/pending_actions/action/77/reject",
+          "required": true,
+          "source": "pending_actions_sql"
+        },
+        "confirmation_reason": "requires_confirmation",
+        "intent": "general",
+        "requires_confirmation": true,
+        "risk": {
+          "level": "medium",
+          "requires_confirmation": true,
+          "source": "heuristic",
+          "summary": "Ação requer confirmação antes de prosseguir."
+        },
+        "summary": "Explique a funcao critica no codigo."
+      }
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 0
+    }
+  },
+  "scenario": "missing_required_with_knowledge_space",
+  "schema_version": 1,
+  "terminal": {
+    "code": null,
+    "event": "done",
+    "http_status": null,
+    "kind": "sse"
+  },
+  "transport": "sse"
+}

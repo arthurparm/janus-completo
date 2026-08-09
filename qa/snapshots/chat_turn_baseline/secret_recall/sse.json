@@ -1,0 +1,84 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 0,
+    "llm_requests": [],
+    "outbox_enqueue_count": 0,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "connection_attempts": 1,
+    "event_sequence_by_attempt": [
+      [
+        "start",
+        "protocol",
+        "ack",
+        "cognitive_status",
+        "token",
+        "partial",
+        "done"
+      ]
+    ],
+    "trace": [
+      "repo.get_conversation",
+      "sse.event:start",
+      "sse.event:protocol",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "sse.event:ack",
+      "sse.event:cognitive_status",
+      "sse.event:token",
+      "sse.event:partial",
+      "repo.add_message:assistant",
+      "sse.event:done"
+    ]
+  },
+  "output": {
+    "agent_state": null,
+    "citation_status": {
+      "count": 0,
+      "mode": "optional",
+      "reason": "secret_authorized",
+      "status": "not_applicable"
+    },
+    "citations": [],
+    "confirmation": null,
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": "secret_memory",
+    "provider": "janus",
+    "response": "senha ficticia do wi-fi: Abc12345",
+    "understanding": null
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": null,
+      "citation_status": null,
+      "citations": null,
+      "confirmation": null,
+      "delivery_status": null,
+      "failure_classification": null,
+      "model": null,
+      "provider": null,
+      "text": "senha ficticia do wi-fi: Abc12345",
+      "understanding": null
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 0
+    }
+  },
+  "scenario": "secret_recall",
+  "schema_version": 1,
+  "terminal": {
+    "code": null,
+    "event": "done",
+    "http_status": null,
+    "kind": "sse"
+  },
+  "transport": "sse"
+}

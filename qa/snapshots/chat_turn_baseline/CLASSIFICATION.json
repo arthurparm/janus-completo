@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "scope": {
+    "adr_scenarios": 15,
+    "additional_scenarios": [
+      "conversation_access_denied"
+    ],
+    "transports": [
+      "rest",
+      "sse"
+    ]
+  },
+  "rules": {
+    "preserve": "The listed JSON paths are compatibility targets unless a later ADR amendment explicitly changes them.",
+    "correct": "The listed JSON paths reproduce a known bug or architectural divergence and may intentionally differ after the approved refactor.",
+    "unlisted": "Treat an unlisted difference as an unintentional regression until it is classified."
+  },
+  "scenarios": {
+    "light_chat": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.citations",
+          "output.citation_status",
+          "output.provider",
+          "output.model",
+          "terminal.status_code",
+          "execution.llm_invoke_count"
+        ],
+        "correct_paths": [
+          "execution.llm_requests[0].user_id",
+          "observations.trace[repo.get_recent_messages:60]",
+          "output.agent_state",
+          "output.delivery_status",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.citations",
+          "output.citation_status",
+          "output.provider",
+          "output.model",
+          "terminal.event",
+          "execution.llm_invoke_count"
+        ],
+        "correct_paths": [
+          "observations.trace[repo.get_recent_messages:20]",
+          "output.delivery_status",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "operational_non_light": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "execution.agent_loop_count",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "execution.agent_loop_requests[0].user_id",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "execution.llm_invoke_count",
+          "execution.agent_loop_count",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "discovery": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.agent_state",
+          "output.delivery_status",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.delivery_status",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "docs": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.citation_status",
+          "output.delivery_status",
+          "execution.study_job_create_count",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.citation_status",
+          "output.delivery_status",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "capabilities": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.agent_state",
+          "output.delivery_status",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.delivery_status",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "blocked_tool_creation": {
+      "rest": {
+        "disposition": "preserve",
+        "preserve_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "terminal.status_code",
+          "execution.llm_invoke_count",
+          "observations.trace[security_alert.emit]"
+        ],
+        "correct_paths": []
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
+          "execution.llm_invoke_count",
+          "observations.trace[security_alert.emit]"
+        ]
+      }
+    },
+    "indexed_document": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.citations",
+          "output.citation_status",
+          "output.provider",
+          "output.model",
+          "execution.llm_invoke_count",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.agent_state",
+          "output.delivery_status",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.citations",
+          "output.citation_status",
+          "output.provider",
+          "output.model",
+          "execution.llm_invoke_count",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.delivery_status",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "knowledge_space_pending": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.citation_status",
+          "output.delivery_status",
+          "output.failure_classification",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.confirmation",
+          "output.agent_state",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.citation_status",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.delivery_status",
+          "output.failure_classification",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "missing_required_with_knowledge_space": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.citation_status",
+          "output.delivery_status",
+          "output.failure_classification",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.confirmation",
+          "output.agent_state",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.citation_status",
+          "output.confirmation",
+          "output.agent_state",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.response",
+          "output.delivery_status",
+          "output.failure_classification",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "missing_required_without_knowledge_space": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.delivery_status",
+          "execution.study_job_create_count",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.citations",
+          "output.citation_status",
+          "output.agent_state",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.delivery_status",
+          "execution.blocking_study_count",
+          "observations.trace[study.return-before-sse-progress]",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "secret_recall": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.citations",
+          "output.citation_status",
+          "output.provider",
+          "output.model",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.agent_state",
+          "output.delivery_status",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.citations",
+          "output.citation_status",
+          "output.provider",
+          "output.model",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.understanding",
+          "output.agent_state",
+          "output.delivery_status",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "high_risk": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.confirmation",
+          "output.agent_state",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "execution.agent_loop_count",
+          "observations.trace[confirmation-after-agent_loop]",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "output.confirmation",
+          "output.agent_state",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "execution.llm_invoke_count",
+          "observations.trace[confirmation-after-llm]",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "provider_error": {
+      "rest": {
+        "disposition": "preserve",
+        "preserve_paths": [
+          "terminal.status_code",
+          "terminal.error",
+          "persistence.writes.add_message",
+          "execution.agent_loop_count"
+        ],
+        "correct_paths": []
+      },
+      "sse": {
+        "disposition": "preserve",
+        "preserve_paths": [
+          "terminal.event",
+          "terminal.code",
+          "persistence.writes.add_message",
+          "execution.llm_invoke_count"
+        ],
+        "correct_paths": []
+      }
+    },
+    "citation_timeout": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "terminal.status_code"
+        ],
+        "correct_paths": [
+          "output.citation_status",
+          "output.failure_classification",
+          "persistence.writes.update_message_payload"
+        ]
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "output.citations",
+          "output.citation_status",
+          "output.failure_classification",
+          "execution.outbox_enqueue_count"
+        ]
+      }
+    },
+    "sse_disconnect_resume": {
+      "rest": {
+        "disposition": "preserve",
+        "preserve_paths": [
+          "terminal.status_code",
+          "observations.transport_note"
+        ],
+        "correct_paths": []
+      },
+      "sse": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "output.response",
+          "terminal.event"
+        ],
+        "correct_paths": [
+          "observations.connection_attempts",
+          "execution.llm_invoke_count",
+          "persistence.writes.add_message"
+        ]
+      }
+    },
+    "conversation_access_denied": {
+      "rest": {
+        "disposition": "correct",
+        "preserve_paths": [
+          "terminal.status_code",
+          "persistence.writes.add_message",
+          "execution.llm_invoke_count",
+          "execution.agent_loop_count"
+        ],
+        "correct_paths": [
+          "observations.trace[service.resolve_active_knowledge_space_id-before-access-check]"
+        ]
+      },
+      "sse": {
+        "disposition": "preserve",
+        "preserve_paths": [
+          "terminal.event",
+          "terminal.code",
+          "terminal.http_status",
+          "persistence.writes.add_message",
+          "execution.llm_invoke_count",
+          "execution.agent_loop_count"
+        ],
+        "correct_paths": []
+      }
+    }
+  }
+}

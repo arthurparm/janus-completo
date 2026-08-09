@@ -1,0 +1,102 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 0,
+    "llm_requests": [],
+    "outbox_enqueue_count": 1,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "trace": [
+      "service.resolve_active_knowledge_space_id",
+      "service.send_message",
+      "repo.get_conversation",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "rag_index.schedule:user",
+      "security_alert.emit",
+      "repo.add_message:assistant",
+      "outbox.enqueue_consolidation",
+      "repo.get_last_assistant_message",
+      "repo.update_message_payload"
+    ]
+  },
+  "output": {
+    "agent_state": null,
+    "citation_status": {
+      "count": 0,
+      "mode": "optional",
+      "reason": null,
+      "status": "not_applicable"
+    },
+    "citations": [],
+    "confirmation": null,
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": "tool_creation",
+    "provider": "janus",
+    "response": "Tool creation and autonomous code evolution are permanently disabled.",
+    "understanding": {
+      "confidence": 0.84,
+      "confidence_band": "high",
+      "confirmation": null,
+      "confirmation_reason": null,
+      "intent": "action_request",
+      "low_confidence": false,
+      "requires_confirmation": false,
+      "risk": null,
+      "routing": null,
+      "signals": [
+        "crie",
+        "executa"
+      ],
+      "summary": "Crie uma ferramenta nova para executar tarefas."
+    }
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": null,
+      "citation_status": {
+        "count": 0,
+        "mode": "optional",
+        "reason": null,
+        "status": "not_applicable"
+      },
+      "citations": [],
+      "confirmation": null,
+      "delivery_status": "completed",
+      "failure_classification": null,
+      "model": "tool_creation",
+      "provider": "janus",
+      "text": "Tool creation and autonomous code evolution are permanently disabled.",
+      "understanding": {
+        "confidence": 0.84,
+        "confidence_band": "high",
+        "intent": "action_request",
+        "low_confidence": false,
+        "requires_confirmation": false,
+        "signals": [
+          "crie",
+          "executa"
+        ],
+        "summary": "Crie uma ferramenta nova para executar tarefas."
+      }
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 1
+    }
+  },
+  "scenario": "blocked_tool_creation",
+  "schema_version": 1,
+  "terminal": {
+    "error": null,
+    "kind": "http",
+    "status_code": 200
+  },
+  "transport": "rest"
+}

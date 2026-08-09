@@ -1,0 +1,192 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 1,
+    "llm_requests": [
+      {
+        "complexity": null,
+        "policy_overrides": null,
+        "priority": "fast_and_cheap",
+        "project_id": "project-1",
+        "role": "orchestrator",
+        "task_type": null,
+        "timeout_seconds": null,
+        "user_id": "user-1"
+      }
+    ],
+    "outbox_enqueue_count": 0,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "connection_attempts": 1,
+    "event_sequence_by_attempt": [
+      [
+        "start",
+        "protocol",
+        "ack",
+        "cognitive_status",
+        "heartbeat",
+        "token",
+        "partial",
+        "cognitive_status",
+        "done"
+      ]
+    ],
+    "trace": [
+      "repo.get_conversation",
+      "sse.event:start",
+      "sse.event:protocol",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "sse.event:ack",
+      "sse.event:cognitive_status",
+      "repo.get_recent_messages:20",
+      "prompt.build",
+      "llm.select_provider",
+      "llm.invoke",
+      "sse.event:heartbeat",
+      "sse.event:token",
+      "sse.event:partial",
+      "repo.add_message:assistant",
+      "sse.event:cognitive_status",
+      "sse.event:done"
+    ]
+  },
+  "output": {
+    "agent_state": {
+      "reason": "high_risk",
+      "requires_confirmation": true,
+      "state": "waiting_confirmation"
+    },
+    "citation_status": {
+      "count": 0,
+      "mode": "optional",
+      "reason": null,
+      "status": "not_applicable"
+    },
+    "citations": [],
+    "confirmation": {
+      "approve_endpoint": "/api/v1/pending_actions/action/4242/approve",
+      "pending_action_id": 4242,
+      "reason": "high_risk",
+      "reject_endpoint": "/api/v1/pending_actions/action/4242/reject",
+      "required": true,
+      "source": "pending_actions_sql"
+    },
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": "baseline-model",
+    "provider": "baseline-llm",
+    "response": "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\nllm response:high_risk",
+    "understanding": {
+      "confidence": 0.81,
+      "confirmation": {
+        "approve_endpoint": "/api/v1/pending_actions/action/4242/approve",
+        "pending_action_id": 4242,
+        "reason": "high_risk",
+        "reject_endpoint": "/api/v1/pending_actions/action/4242/reject",
+        "required": true,
+        "source": "pending_actions_sql"
+      },
+      "confirmation_reason": "high_risk",
+      "intent": "action_request",
+      "requires_confirmation": true,
+      "risk": {
+        "level": "high",
+        "requires_confirmation": true,
+        "source": "heuristic",
+        "summary": "Ação classificada como alto risco; confirmação obrigatória."
+      },
+      "routing": {
+        "confidence": 0.91,
+        "intent": "deployment",
+        "requested_role": "auto",
+        "risk_level": "high",
+        "route_applied": true,
+        "selected_role": "orchestrator"
+      },
+      "signals": [
+        "execute"
+      ],
+      "summary": "Execute o deploy em production agora."
+    }
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": {
+        "reason": "high_risk",
+        "requires_confirmation": true,
+        "state": "waiting_confirmation"
+      },
+      "citation_status": {
+        "count": 0,
+        "mode": "optional",
+        "reason": null,
+        "status": "not_applicable"
+      },
+      "citations": [],
+      "confirmation": {
+        "approve_endpoint": "/api/v1/pending_actions/action/4242/approve",
+        "pending_action_id": 4242,
+        "reason": "high_risk",
+        "reject_endpoint": "/api/v1/pending_actions/action/4242/reject",
+        "required": true,
+        "source": "pending_actions_sql"
+      },
+      "delivery_status": "completed",
+      "failure_classification": null,
+      "model": "baseline-model",
+      "provider": "baseline-llm",
+      "text": "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\nllm response:high_risk",
+      "understanding": {
+        "confidence": 0.81,
+        "confirmation": {
+          "approve_endpoint": "/api/v1/pending_actions/action/4242/approve",
+          "pending_action_id": 4242,
+          "reason": "high_risk",
+          "reject_endpoint": "/api/v1/pending_actions/action/4242/reject",
+          "required": true,
+          "source": "pending_actions_sql"
+        },
+        "confirmation_reason": "high_risk",
+        "intent": "action_request",
+        "requires_confirmation": true,
+        "risk": {
+          "level": "high",
+          "requires_confirmation": true,
+          "source": "heuristic",
+          "summary": "Ação classificada como alto risco; confirmação obrigatória."
+        },
+        "routing": {
+          "confidence": 0.91,
+          "intent": "deployment",
+          "requested_role": "auto",
+          "risk_level": "high",
+          "route_applied": true,
+          "selected_role": "orchestrator"
+        },
+        "signals": [
+          "execute"
+        ],
+        "summary": "Execute o deploy em production agora."
+      }
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 0
+    }
+  },
+  "scenario": "high_risk",
+  "schema_version": 1,
+  "terminal": {
+    "code": null,
+    "event": "done",
+    "http_status": null,
+    "kind": "sse"
+  },
+  "transport": "sse"
+}

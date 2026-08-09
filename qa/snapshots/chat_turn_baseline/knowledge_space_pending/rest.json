@@ -1,0 +1,89 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 0,
+    "llm_requests": [],
+    "outbox_enqueue_count": 1,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "trace": [
+      "service.resolve_active_knowledge_space_id",
+      "service.send_message",
+      "repo.get_conversation",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "rag_index.schedule:user",
+      "grounding.processing_result",
+      "repo.add_message:assistant",
+      "rag_index.schedule:assistant",
+      "outbox.enqueue_consolidation",
+      "repo.get_last_assistant_message",
+      "repo.update_message_payload"
+    ]
+  },
+  "output": {
+    "agent_state": null,
+    "citation_status": {
+      "count": 0,
+      "mode": "required",
+      "reason": "no_sources",
+      "status": "missing_required"
+    },
+    "citations": [],
+    "confirmation": null,
+    "delivery_status": "pending_knowledge_space",
+    "failure_classification": "knowledge_space_pending",
+    "model": "document_processing",
+    "provider": "janus",
+    "response": "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. Isso pode demorar um pouco, mas não vou recorrer ao código do Janus para responder sobre o livro.",
+    "understanding": {
+      "confidence": 0.72,
+      "confidence_band": "medium",
+      "confirmation": null,
+      "confirmation_reason": null,
+      "intent": "question",
+      "low_confidence": false,
+      "requires_confirmation": false,
+      "risk": null,
+      "routing": null,
+      "signals": null,
+      "summary": "Usuario fez uma pergunta para obter informacao ou orientacao."
+    }
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": null,
+      "citation_status": {
+        "count": 0,
+        "mode": "required",
+        "reason": "no_sources",
+        "status": "missing_required"
+      },
+      "citations": [],
+      "confirmation": null,
+      "delivery_status": "pending_knowledge_space",
+      "failure_classification": "knowledge_space_pending",
+      "model": "document_processing",
+      "provider": "janus",
+      "text": "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. Isso pode demorar um pouco, mas não vou recorrer ao código do Janus para responder sobre o livro.",
+      "understanding": null
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 1
+    }
+  },
+  "scenario": "knowledge_space_pending",
+  "schema_version": 1,
+  "terminal": {
+    "error": null,
+    "kind": "http",
+    "status_code": 200
+  },
+  "transport": "rest"
+}

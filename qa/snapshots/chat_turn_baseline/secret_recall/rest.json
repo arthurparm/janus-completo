@@ -1,0 +1,94 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 0,
+    "llm_requests": [],
+    "outbox_enqueue_count": 1,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "trace": [
+      "service.resolve_active_knowledge_space_id",
+      "service.send_message",
+      "repo.get_conversation",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "rag_index.schedule:user",
+      "repo.add_message:assistant",
+      "outbox.enqueue_consolidation",
+      "repo.get_last_assistant_message",
+      "repo.update_message_payload"
+    ]
+  },
+  "output": {
+    "agent_state": null,
+    "citation_status": {
+      "count": 0,
+      "mode": "optional",
+      "reason": "secret_authorized",
+      "status": "not_applicable"
+    },
+    "citations": [],
+    "confirmation": null,
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": "secret_memory",
+    "provider": "janus",
+    "response": "senha ficticia do wi-fi: Abc12345",
+    "understanding": {
+      "confidence": 0.72,
+      "confidence_band": "medium",
+      "confirmation": null,
+      "confirmation_reason": null,
+      "intent": "question",
+      "low_confidence": false,
+      "requires_confirmation": false,
+      "risk": null,
+      "routing": null,
+      "signals": null,
+      "summary": "Usuario fez uma pergunta sobre e a minha senha ficticia do Wi-Fi."
+    }
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": null,
+      "citation_status": {
+        "count": 0,
+        "mode": "optional",
+        "reason": "secret_authorized",
+        "status": "not_applicable"
+      },
+      "citations": [],
+      "confirmation": null,
+      "delivery_status": "completed",
+      "failure_classification": null,
+      "model": "secret_memory",
+      "provider": "janus",
+      "text": "senha ficticia do wi-fi: Abc12345",
+      "understanding": {
+        "confidence": 0.72,
+        "confidence_band": "medium",
+        "intent": "question",
+        "low_confidence": false,
+        "requires_confirmation": false,
+        "summary": "Usuario fez uma pergunta sobre e a minha senha ficticia do Wi-Fi."
+      }
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 1
+    }
+  },
+  "scenario": "secret_recall",
+  "schema_version": 1,
+  "terminal": {
+    "error": null,
+    "kind": "http",
+    "status_code": 200
+  },
+  "transport": "rest"
+}

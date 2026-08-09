@@ -1,0 +1,161 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 1,
+    "llm_invoke_count": 1,
+    "llm_requests": [
+      {
+        "complexity": "low",
+        "policy_overrides": {
+          "priority": "fast_and_cheap",
+          "role": "orchestrator",
+          "timeout_seconds": 12
+        },
+        "priority": "fast_and_cheap",
+        "project_id": "project-1",
+        "role": "orchestrator",
+        "task_type": "general_task",
+        "timeout_seconds": 12,
+        "user_id": "user-1"
+      }
+    ],
+    "outbox_enqueue_count": 0,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "connection_attempts": 1,
+    "event_sequence_by_attempt": [
+      [
+        "start",
+        "protocol",
+        "ack",
+        "cognitive_status",
+        "heartbeat",
+        "cognitive_status",
+        "cognitive_status",
+        "cognitive_status",
+        "token",
+        "partial",
+        "done"
+      ]
+    ],
+    "trace": [
+      "repo.get_conversation",
+      "sse.event:start",
+      "sse.event:protocol",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "sse.event:ack",
+      "sse.event:cognitive_status",
+      "repo.get_recent_messages:20",
+      "prompt.build",
+      "llm.select_provider",
+      "llm.invoke",
+      "sse.event:heartbeat",
+      "sse.event:cognitive_status",
+      "study.callback:25",
+      "study.callback:100",
+      "study.return",
+      "sse.event:cognitive_status",
+      "sse.event:cognitive_status",
+      "sse.event:token",
+      "sse.event:partial",
+      "repo.add_message:assistant",
+      "sse.event:done"
+    ]
+  },
+  "output": {
+    "agent_state": {
+      "requires_confirmation": false,
+      "state": "completed"
+    },
+    "citation_status": {
+      "count": 1,
+      "mode": "required",
+      "reason": null,
+      "status": "complete"
+    },
+    "citations": [
+      {
+        "doc_id": "doc-1",
+        "file_path": "manual.txt",
+        "id": "citation-1",
+        "line": 10,
+        "line_end": 12,
+        "line_start": 10,
+        "snippet": "O documento registra sinais neurologicos agudos.",
+        "source_type": "document",
+        "title": "manual.txt",
+        "type": "document"
+      }
+    ],
+    "confirmation": null,
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": "baseline-study-model",
+    "provider": "baseline-study",
+    "response": "study response with evidence",
+    "understanding": {
+      "confidence": 0.6,
+      "intent": "general",
+      "requires_confirmation": false,
+      "summary": "Explique a funcao ausente no codigo."
+    }
+  },
+  "persistence": {
+    "last_assistant": {
+      "agent_state": {
+        "requires_confirmation": false,
+        "state": "completed"
+      },
+      "citation_status": {
+        "count": 1,
+        "mode": "required",
+        "reason": null,
+        "status": "complete"
+      },
+      "citations": [
+        {
+          "doc_id": "doc-1",
+          "file_path": "manual.txt",
+          "id": "citation-1",
+          "line": 10,
+          "line_end": 12,
+          "line_start": 10,
+          "snippet": "O documento registra sinais neurologicos agudos.",
+          "source_type": "document",
+          "title": "manual.txt",
+          "type": "document"
+        }
+      ],
+      "confirmation": null,
+      "delivery_status": "completed",
+      "failure_classification": null,
+      "model": "baseline-study-model",
+      "provider": "baseline-study",
+      "text": "study response with evidence",
+      "understanding": {
+        "confidence": 0.6,
+        "intent": "general",
+        "requires_confirmation": false,
+        "summary": "Explique a funcao ausente no codigo."
+      }
+    },
+    "writes": {
+      "add_message": 2,
+      "update_message_payload": 0
+    }
+  },
+  "scenario": "missing_required_without_knowledge_space",
+  "schema_version": 1,
+  "terminal": {
+    "code": null,
+    "event": "done",
+    "http_status": null,
+    "kind": "sse"
+  },
+  "transport": "sse"
+}

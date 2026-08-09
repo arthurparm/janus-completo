@@ -1,0 +1,80 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 1,
+    "llm_requests": [
+      {
+        "complexity": null,
+        "policy_overrides": null,
+        "priority": "fast_and_cheap",
+        "project_id": "project-1",
+        "role": "orchestrator",
+        "task_type": null,
+        "timeout_seconds": null,
+        "user_id": "user-1"
+      }
+    ],
+    "outbox_enqueue_count": 0,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "connection_attempts": 1,
+    "event_sequence_by_attempt": [
+      [
+        "start",
+        "protocol",
+        "ack",
+        "cognitive_status",
+        "heartbeat",
+        "error"
+      ]
+    ],
+    "trace": [
+      "repo.get_conversation",
+      "sse.event:start",
+      "sse.event:protocol",
+      "repo.add_message:user",
+      "active_memory.schedule",
+      "sse.event:ack",
+      "sse.event:cognitive_status",
+      "repo.get_recent_messages:20",
+      "prompt.build",
+      "llm.select_provider",
+      "llm.invoke",
+      "sse.event:heartbeat",
+      "sse.event:error"
+    ]
+  },
+  "output": {
+    "agent_state": null,
+    "citation_status": null,
+    "citations": null,
+    "confirmation": null,
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": null,
+    "provider": null,
+    "response": null,
+    "understanding": null
+  },
+  "persistence": {
+    "last_assistant": null,
+    "writes": {
+      "add_message": 1,
+      "update_message_payload": 0
+    }
+  },
+  "scenario": "provider_error",
+  "schema_version": 1,
+  "terminal": {
+    "code": "CHAT_INVOCATION_ERROR",
+    "event": "error",
+    "http_status": null,
+    "kind": "sse"
+  },
+  "transport": "sse"
+}

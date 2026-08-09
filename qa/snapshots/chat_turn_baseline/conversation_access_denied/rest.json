@@ -1,0 +1,62 @@
+{
+  "baseline_commit": "aff4681741d77f09b1254d6eda0781d6aca0dc12",
+  "baseline_ref": "refs/heads/codex/chat-turn-baseline-aff4681",
+  "execution": {
+    "agent_loop_count": 0,
+    "agent_loop_requests": [],
+    "blocking_study_count": 0,
+    "llm_invoke_count": 0,
+    "llm_requests": [],
+    "outbox_enqueue_count": 0,
+    "study_job_create_count": 0
+  },
+  "observations": {
+    "trace": [
+      "service.resolve_active_knowledge_space_id",
+      "service.send_message",
+      "repo.get_conversation"
+    ]
+  },
+  "output": {
+    "agent_state": null,
+    "citation_status": null,
+    "citations": null,
+    "confirmation": null,
+    "delivery_status": null,
+    "failure_classification": null,
+    "model": null,
+    "provider": null,
+    "response": null,
+    "understanding": null
+  },
+  "persistence": {
+    "last_assistant": null,
+    "writes": {
+      "add_message": 0,
+      "update_message_payload": 0
+    }
+  },
+  "scenario": "conversation_access_denied",
+  "schema_version": 1,
+  "terminal": {
+    "error": {
+      "category": "authz",
+      "code": "CHAT_ACCESS_DENIED",
+      "details": {},
+      "error": {
+        "category": "authz",
+        "code": "CHAT_ACCESS_DENIED",
+        "details": {},
+        "http_status": 403,
+        "message": "Access denied",
+        "retryable": false
+      },
+      "http_status": 403,
+      "message": "Access denied",
+      "retryable": false
+    },
+    "kind": "http",
+    "status_code": 403
+  },
+  "transport": "rest"
+}
