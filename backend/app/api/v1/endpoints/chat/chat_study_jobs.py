@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.services.chat_service import ChatService, get_chat_service
@@ -30,9 +32,12 @@ async def get_study_job(
         )
 
     jobs = getattr(http.app.state, "chat_study_job_service", None)
+    if jobs is None and hasattr(service, "get_study_job_service"):
+        jobs = service.get_study_job_service()
+        http.app.state.chat_study_job_service = jobs
     if jobs is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study job not found")
-    job = jobs.get_job(job_id)
+    job = await asyncio.to_thread(jobs.get_job, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study job not found")
     if str(job.user_id or "") not in {"", str(user_id)}:

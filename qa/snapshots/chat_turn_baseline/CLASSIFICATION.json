@@ -17,6 +17,53 @@
     "correct": "The listed JSON paths reproduce a known bug or architectural divergence and may intentionally differ after the approved refactor.",
     "unlisted": "Treat an unlisted difference as an unintentional regression until it is classified."
   },
+  "approved_refactor_paths": [
+    "output.understanding.confidence_band",
+    "output.understanding.low_confidence",
+    "output.agent_state",
+    "output.delivery_status",
+    "persistence.last_assistant",
+    "persistence.writes.update_message_payload",
+    "execution.llm_requests",
+    "execution.agent_loop_requests",
+    "observations.trace"
+  ],
+  "approved_scenario_paths": {
+    "blocked_tool_creation": [
+      "observations.event_sequence_by_attempt"
+    ],
+    "high_risk": [
+      "output.response",
+      "output.provider",
+      "output.model",
+      "execution",
+      "observations.event_sequence_by_attempt"
+    ],
+    "knowledge_space_pending": [
+      "output.model"
+    ],
+    "missing_required_with_knowledge_space": [
+      "output.provider",
+      "output.model",
+      "output.understanding"
+    ],
+    "missing_required_without_knowledge_space": [
+      "output.response",
+      "output.citations",
+      "output.citation_status",
+      "output.provider",
+      "output.model",
+      "execution.study_job_create_count",
+      "observations.event_sequence_by_attempt"
+    ],
+    "provider_error": [
+      "execution.agent_loop_count",
+      "execution.llm_invoke_count"
+    ],
+    "sse_disconnect_resume": [
+      "execution.outbox_enqueue_count"
+    ]
+  },
   "scenarios": {
     "light_chat": {
       "rest": {

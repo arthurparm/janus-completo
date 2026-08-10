@@ -155,8 +155,14 @@ class _FakeConversationService(ConversationService):
     def __init__(self):
         self.validations = []
 
-    def validate_conversation_access(self, conversation_id, conv, project_id):
-        self.validations.append((conversation_id, project_id))
+    def validate_conversation_access(
+        self,
+        conversation_id,
+        conv,
+        user_id=None,
+        project_id=None,
+    ):
+        self.validations.append((conversation_id, user_id, project_id))
 
 
 class _FakeManifestRepo:

@@ -19,6 +19,7 @@ from app.services.chat.message_helpers import (
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
 from app.services.chat_event_publisher import ChatEventPublisher
+from app.services.chat_study_service import ChatStudyJobService, ChatStudyService
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
 from app.services.outbox_service import OutboxService
@@ -93,6 +94,14 @@ class ChatService:
             conversation_service=self._conversation_service,
             outbox_service=outbox_service,
         )
+        self._study_job_service = ChatStudyJobService(
+            study_service=ChatStudyService(
+                llm_service=llm_service,
+                knowledge_service=None,
+                autonomy_admin_service=None,
+            ),
+            chat_service=self,
+        )
         self._streaming_service = StreamingService(
             repo=repo,
             llm_service=llm_service,
@@ -101,7 +110,11 @@ class ChatService:
             rag_service=self._rag_service,
             conversation_service=self._conversation_service,
             message_orchestration_service=self._message_orchestration_service,
+            study_job_service=self._study_job_service,
         )
+
+    def get_study_job_service(self) -> ChatStudyJobService:
+        return self._study_job_service
 
     def _estimate_tokens(self, text: str) -> int:
         return estimate_tokens(self._prompt_service, text)
@@ -179,6 +192,10 @@ class ChatService:
         project_id: str | None = None,
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
+        requested_role: str | None = None,
+        routing_decision: Any | None = None,
+        route_applied: bool | None = None,
+        defer_finalization: bool = False,
     ) -> dict[str, Any]:
         return await self._message_orchestration_service.send_message(
             conversation_id=conversation_id,
@@ -190,6 +207,10 @@ class ChatService:
             project_id=project_id,
             knowledge_space_id=knowledge_space_id,
             identity_source=identity_source,
+            requested_role=requested_role,
+            routing_decision=routing_decision,
+            route_applied=route_applied,
+            defer_finalization=defer_finalization,
         )
 
     def resolve_active_knowledge_space_id(
@@ -312,6 +333,24 @@ class ChatService:
             patch=patch,
             user_id=user_id,
         )
+
+    async def resolve_authorized_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> str | None:
+        return await self._message_orchestration_service.resolve_authorized_knowledge_space_id(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            project_id=project_id,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
+
+    async def persist_finalized_turn(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._message_orchestration_service.persist_finalized_turn(**kwargs)
 
     async def stream_message(
         self,

@@ -153,6 +153,11 @@ async def test_initialize_default_jobs_registers_sg013_jobs(monkeypatch: pytest.
     assert purge_job.schedule_type == ScheduleType.INTERVAL
     assert purge_job.interval_seconds == 300
 
+    rest_cleanup_job = scheduler.get_job("chat_rest_run_cleanup")
+    assert rest_cleanup_job is not None
+    assert rest_cleanup_job.schedule_type == ScheduleType.INTERVAL
+    assert rest_cleanup_job.interval_seconds == 3600
+
 
 @pytest.mark.asyncio
 async def test_sg013_jobs_apply_retention_settings(monkeypatch: pytest.MonkeyPatch):

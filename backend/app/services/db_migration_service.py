@@ -256,6 +256,115 @@ class DBMigrationService:
             if not self._index_exists(s, table, index_name):
                 self._execute_ddl(s, sql, f"{table}.{index_name}", applied)
 
+    def _prepare_chat_study_schema(
+        self, s: Session, *, dialect: str, applied: list[str]
+    ) -> None:
+        if dialect not in ("postgresql", "postgres"):
+            return
+        if not self._table_exists(s, "chat_study_runs"):
+            self._execute_ddl(
+                s,
+                """
+                CREATE TABLE chat_study_runs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    owner_user_id VARCHAR(128) NOT NULL,
+                    conversation_id VARCHAR(128) NOT NULL,
+                    message_id VARCHAR(128) NOT NULL,
+                    question TEXT NOT NULL,
+                    request_fingerprint VARCHAR(64) NOT NULL,
+                    status VARCHAR(24) NOT NULL DEFAULT 'pending',
+                    progress INTEGER NOT NULL DEFAULT 0,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    worker_token VARCHAR(64) NULL,
+                    lease_until TIMESTAMP NULL,
+                    placeholder_message TEXT NULL,
+                    failure_classification VARCHAR(64) NULL,
+                    final_response_json JSONB NULL,
+                    error TEXT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP NULL,
+                    CONSTRAINT uq_chat_study_owner_conversation_message
+                        UNIQUE (owner_user_id, conversation_id, message_id)
+                )
+                """,
+                "chat_study_runs.table",
+                applied,
+            )
+        for column, sql_type in (
+            ("worker_token", "VARCHAR(64) NULL"),
+            ("lease_until", "TIMESTAMP NULL"),
+        ):
+            if not self._column_exists(s, "chat_study_runs", column):
+                self._execute_ddl(
+                    s,
+                    f"ALTER TABLE chat_study_runs ADD COLUMN {column} {sql_type}",
+                    f"chat_study_runs.{column}",
+                    applied,
+                )
+        if not self._index_exists(
+            s,
+            "chat_study_runs",
+            "idx_chat_study_status_lease",
+        ):
+            self._execute_ddl(
+                s,
+                "CREATE INDEX idx_chat_study_status_lease "
+                "ON chat_study_runs (status, lease_until)",
+                "chat_study_runs.idx_chat_study_status_lease",
+                applied,
+            )
+
+    def _prepare_chat_rest_idempotency_schema(
+        self, s: Session, *, dialect: str, applied: list[str]
+    ) -> None:
+        if dialect not in ("postgresql", "postgres"):
+            return
+        if not self._table_exists(s, "chat_rest_runs"):
+            self._execute_ddl(
+                s,
+                """
+                CREATE TABLE chat_rest_runs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    owner_user_id VARCHAR(128) NOT NULL,
+                    conversation_id VARCHAR(128) NOT NULL,
+                    request_id VARCHAR(128) NOT NULL,
+                    request_fingerprint VARCHAR(64) NOT NULL,
+                    status VARCHAR(24) NOT NULL DEFAULT 'pending',
+                    producer_token VARCHAR(64) NULL,
+                    lease_until TIMESTAMP NULL,
+                    result_json JSONB NULL,
+                    error_code VARCHAR(64) NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    CONSTRAINT uq_chat_rest_owner_conversation_request
+                        UNIQUE (owner_user_id, conversation_id, request_id)
+                )
+                """,
+                "chat_rest_runs.table",
+                applied,
+            )
+        for index_name, sql in (
+            (
+                "idx_chat_rest_status_lease",
+                "CREATE INDEX idx_chat_rest_status_lease "
+                "ON chat_rest_runs (status, lease_until)",
+            ),
+            (
+                "idx_chat_rest_owner_created",
+                "CREATE INDEX idx_chat_rest_owner_created "
+                "ON chat_rest_runs (owner_user_id, created_at)",
+            ),
+        ):
+            if not self._index_exists(s, "chat_rest_runs", index_name):
+                self._execute_ddl(
+                    s,
+                    sql,
+                    f"chat_rest_runs.{index_name}",
+                    applied,
+                )
     def _migrate_seeded_agent_configs_to_cloud(self, s: Session, applied: list[str]) -> None:
         if not self._table_exists(s, "agent_configurations"):
             return
@@ -952,6 +1061,12 @@ class DBMigrationService:
             consent_table = Consent.__tablename__
             self._prepare_outbox_lease_schema(s, dialect=dialect, applied=applied)
             self._prepare_chat_stream_ledger_schema(s, dialect=dialect, applied=applied)
+            self._prepare_chat_study_schema(s, dialect=dialect, applied=applied)
+            self._prepare_chat_rest_idempotency_schema(
+                s,
+                dialect=dialect,
+                applied=applied,
+            )
             self._migrate_seeded_agent_configs_to_cloud(s, applied)
             if dialect in ("postgresql", "postgres"):
                 # One additive transaction: a failed identity/ownership backfill leaves the

@@ -359,7 +359,11 @@ class CaptureStudyJobs:
     def create_job(self, **kwargs: Any) -> Any:
         self.trace.append("study_job.create")
         self.created += 1
-        return SimpleNamespace(job_id="study-job-1", status="queued")
+        return SimpleNamespace(
+            job_id="study-job-1",
+            status="queued",
+            placeholder_message=kwargs.get("placeholder_message"),
+        )
 
     async def run_job(self, **kwargs: Any) -> None:
         self.trace.append("study_job.run")
@@ -439,6 +443,22 @@ class CaptureFacade:
         self.trace.append("service.resolve_active_knowledge_space_id")
         return requested_knowledge_space_id
 
+    async def resolve_authorized_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> str | None:
+        self.trace.append("service.resolve_authorized_knowledge_space_id")
+        return await self.orchestration.resolve_authorized_knowledge_space_id(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            project_id=project_id,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
+
     async def send_message(self, **kwargs: Any) -> dict[str, Any]:
         self.trace.append("service.send_message")
         return cast(dict[str, Any], await self.orchestration.send_message(**kwargs))
@@ -465,6 +485,10 @@ class CaptureFacade:
             patch,
             user_id=user_id,
         )
+
+    async def persist_finalized_turn(self, **kwargs: Any) -> dict[str, Any]:
+        self.trace.append("service.persist_finalized_turn")
+        return await self.orchestration.persist_finalized_turn(**kwargs)
 
 
 class CaptureHttpRequest:
@@ -567,6 +591,7 @@ def _build_environment(scenario: Scenario) -> CaptureEnvironment:
         rag_service=None,
         conversation_service=conversation,
         message_orchestration_service=orchestration,
+        study_job_service=jobs,
     )
     facade = CaptureFacade(orchestration, repo, trace)
     return CaptureEnvironment(
@@ -686,12 +711,11 @@ def _patches(env: CaptureEnvironment) -> ExitStack:
         patch.object(
             streaming_module,
             "collect_chat_citations",
-            lambda **kwargs: _sse_citation_double(env.scenario, **kwargs),
+            lambda **kwargs: _rest_citation_double(env.scenario, **kwargs),
         )
     )
     CaptureStudyService.instances = []
     CaptureStudyService.shared_trace = env.trace
-    stack.enter_context(patch.object(streaming_module, "ChatStudyService", CaptureStudyService))
     return stack
 
 

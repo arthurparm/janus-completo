@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
+
+from app.core.embeddings.embedding_manager import aembed_text
+from app.db.vector_store import (
+    aget_or_create_collection,
+    build_user_docs_collection_name,
+    get_async_qdrant_client,
+)
 
 MANDATORY_CITATION_GUARD_TEXT = (
     "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
@@ -89,7 +99,9 @@ def build_citation_status(
     *,
     message: str,
     citations: list[dict[str, Any]],
-    retrieval_failed: bool = False) -> dict[str, Any]:
+    retrieval_failed: bool = False,
+    retrieval_failure_reason: str | None = None,
+) -> dict[str, Any]:
     required = requires_mandatory_citations(message)
     mode = "required" if required else "optional"
     if retrieval_failed:
@@ -97,7 +109,7 @@ def build_citation_status(
             "mode": mode,
             "status": "retrieval_failed",
             "count": len(citations),
-            "reason": "retrieval_error",
+            "reason": retrieval_failure_reason or "retrieval_error",
         }
     if citations:
         return {
@@ -118,6 +130,46 @@ def build_citation_status(
         "status": "not_applicable",
         "count": 0,
         "reason": None,
+    }
+
+
+def build_missing_citation_resolution(
+    *,
+    active_knowledge_space_id: str | None,
+    retrieval_reason: str | None = None,
+) -> dict[str, Any]:
+    if active_knowledge_space_id:
+        response = (
+            "Estou revisando o material vinculado a esta conversa para responder com "
+            "evidências rastreáveis. Isso pode demorar um pouco, mas não vou estudar "
+            "o código do Janus para responder sobre o material."
+        )
+        return {
+            "response": response,
+            "provider": "janus",
+            "model": "knowledge_space_pending",
+            "knowledge_space_id": active_knowledge_space_id,
+            "delivery_status": "pending_knowledge_space",
+            "study_notice": response,
+            "failure_classification": (
+                "infra_transient"
+                if retrieval_reason == "retrieval_error"
+                else "knowledge_space_pending"
+            ),
+        }
+    response = (
+        "Estou estudando a base para responder com seguranca. Isso pode demorar um "
+        "pouco porque preciso localizar evidencias rastreaveis."
+    )
+    return {
+        "response": response,
+        "provider": "janus",
+        "model": "study_pending",
+        "delivery_status": "pending_study",
+        "study_notice": response,
+        "failure_classification": (
+            "infra_transient" if retrieval_reason == "retrieval_error" else None
+        ),
     }
 
 
@@ -168,12 +220,6 @@ async def _query_document_citations(
     message: str,
     conversation_id: str | None,
     limit: int) -> list[dict[str, Any]]:
-    from app.core.embeddings.embedding_manager import aembed_text
-    from app.db.vector_store import (
-        aget_or_create_collection,
-        build_user_docs_collection_name,
-        get_async_qdrant_client,
-    )
     from qdrant_client import models
 
     client = get_async_qdrant_client()
@@ -202,11 +248,6 @@ async def _recent_document_citations(
     *,
     conversation_id: str | None,
     limit: int) -> list[dict[str, Any]]:
-    from app.db.vector_store import (
-        aget_or_create_collection,
-        build_user_docs_collection_name,
-        get_async_qdrant_client,
-    )
     from qdrant_client import models
 
     client = get_async_qdrant_client()
@@ -285,4 +326,49 @@ async def collect_chat_citations(
     return {
         "citations": merged,
         "retrieval_failed": bool(attempted_lookups and successful_lookups == 0 and not merged),
+    }
+
+
+def citation_collection_timeout_seconds() -> float:
+    return max(0.1, float(os.getenv("CHAT_CITATION_TIMEOUT_SECONDS", "3.0")))
+
+
+async def collect_chat_citations_with_deadline(
+    *,
+    message: str,
+    conversation_id: str | None,
+    memory_service: Any | None,
+    limit: int = 5,
+    timeout_seconds: float | None = None,
+    collector: Callable[..., Awaitable[dict[str, Any]]] = collect_chat_citations,
+) -> dict[str, Any]:
+    timeout = timeout_seconds or citation_collection_timeout_seconds()
+    try:
+        result = await asyncio.wait_for(
+            collector(
+                message=message,
+                conversation_id=conversation_id,
+                memory_service=memory_service,
+                limit=limit,
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        return {
+            "citations": [],
+            "retrieval_failed": True,
+            "failure_classification": "citation_timeout",
+            "retrieval_failure_reason": "retrieval_timeout",
+        }
+    except Exception:
+        return {
+            "citations": [],
+            "retrieval_failed": True,
+            "failure_classification": "citation_unavailable",
+            "retrieval_failure_reason": "retrieval_error",
+        }
+    return {
+        **result,
+        "failure_classification": None,
+        "retrieval_failure_reason": None,
     }

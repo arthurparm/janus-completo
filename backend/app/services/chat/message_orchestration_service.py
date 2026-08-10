@@ -29,6 +29,7 @@ from app.services.chat.chat_citation_service import (
     build_citation_status,
     collect_document_citations,
     references_uploaded_material,
+    requires_mandatory_citations,
 )
 from app.services.chat.conversation_service import ConversationService
 from app.services.chat.message_helpers import (
@@ -37,6 +38,18 @@ from app.services.chat.message_helpers import (
     estimate_tokens,
     is_explicit_tool_creation,
     split_ui,
+)
+from app.services.chat.turn_core import (
+    ChatTurnExecutor,
+    ChatTurnFinalizer,
+    ChatTurnPlanner,
+    TurnBusinessState,
+    TurnExecutionResult,
+    TurnPlan,
+    TurnPlanningSignals,
+    TurnRequest,
+    TurnResult,
+    TurnStrategy,
 )
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
@@ -80,6 +93,14 @@ class MessageOrchestrationService:
         self._conversation_service = conversation_service
         self._outbox_service = outbox_service
         self._manifest_repo = manifest_repo or DocumentManifestRepository()
+        self._turn_planner = ChatTurnPlanner()
+        self._turn_finalizer = ChatTurnFinalizer()
+        self._turn_executor = ChatTurnExecutor(
+            llm_service=llm_service,
+            agent_loop=agent_loop,
+            prompt_service=prompt_service,
+            tool_service=tool_service,
+        )
 
     def _should_use_light_chat(
         self,
@@ -93,6 +114,83 @@ class MessageOrchestrationService:
             return False
         max_chars = int(os.getenv("CHAT_LIGHT_MAX_MESSAGE_CHARS", "160"))
         return len((message or "").strip()) <= max_chars
+
+    def build_turn_plan(
+        self,
+        *,
+        request: TurnRequest,
+        understanding: dict[str, Any] | None,
+        routing_decision: Any | None = None,
+    ) -> TurnPlan:
+        light_chat_eligible = self._should_use_light_chat(
+            message=request.message,
+            role=request.role,
+            understanding=understanding,
+        )
+        signals = TurnPlanningSignals(
+            understanding=understanding,
+            light_chat_eligible=light_chat_eligible,
+            is_command=self._command_handler.is_command(request.message),
+            is_discovery=self._prompt_service.is_discovery_query(request.message),
+            is_docs=self._prompt_service.is_docs_query(request.message),
+            is_capabilities=self._prompt_service.is_capabilities_query(request.message),
+            is_tool_request=self._prompt_service.is_tool_request(request.message),
+            is_explicit_tool_creation=is_explicit_tool_creation(request.message),
+            citation_lookup_required=(
+                requires_mandatory_citations(request.message)
+                or references_uploaded_material(request.message)
+            ),
+            risk_level=(
+                str(getattr(routing_decision, "risk_level", "") or "") or None
+            ),
+        )
+        return self._turn_planner.plan(request, signals)
+
+    def execute_static_turn(
+        self,
+        *,
+        strategy: TurnStrategy,
+        role: ModelRole,
+    ) -> TurnExecutionResult:
+        return self._turn_executor.execute_static(strategy=strategy, role=role)
+
+    async def execute_dynamic_turn(
+        self,
+        *,
+        plan: TurnPlan,
+        request: TurnRequest,
+        prompt: str,
+        persona: str,
+    ) -> TurnExecutionResult:
+        return await self._turn_executor.execute_dynamic(
+            plan=plan,
+            request=request,
+            prompt=prompt,
+            persona=persona,
+        )
+
+    def finalize_turn(
+        self,
+        *,
+        execution: TurnExecutionResult,
+        understanding: dict[str, Any] | None,
+        pending_action_id: int | None = None,
+        confirmation_reason: str | None = None,
+        business_state: TurnBusinessState = TurnBusinessState.COMPLETED,
+        delivery_status: str | None = None,
+        failure_classification: str | None = None,
+        stream_phase: str | None = "completed",
+    ) -> TurnResult:
+        return self._turn_finalizer.finalize(
+            execution=execution,
+            understanding=understanding,
+            pending_action_id=pending_action_id,
+            confirmation_reason=confirmation_reason,
+            business_state=business_state,
+            delivery_status=delivery_status,
+            failure_classification=failure_classification,
+            stream_phase=stream_phase,
+        )
 
     def _schedule_rag_index_message(
         self,
@@ -519,6 +617,31 @@ class MessageOrchestrationService:
         return self._resolve_knowledge_space_id(
             manifests=manifests,
             requested_knowledge_space_id=requested_knowledge_space_id)
+
+    async def resolve_authorized_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> str | None:
+        try:
+            conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
+        except ChatRepositoryError as exc:
+            raise ConversationNotFoundError(str(exc)) from exc
+        self._validate_conversation_access(
+            conversation_id,
+            conv,
+            user_id=user_id,
+            project_id=project_id,
+        )
+        return await asyncio.to_thread(
+            self.resolve_active_knowledge_space_id,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            requested_knowledge_space_id=requested_knowledge_space_id,
+        )
 
     def _should_use_document_grounding(
         self,
@@ -1283,22 +1406,12 @@ class MessageOrchestrationService:
         user_id: str | None,
         project_id: str | None,
     ) -> None:
-        try:
-            self._conversation_service.validate_conversation_access(
-                conversation_id,
-                conv,
-                user_id=user_id,
-                project_id=project_id,
-            )
-        except TypeError as exc:
-            message = str(exc)
-            if "user_id" not in message and "positional" not in message:
-                raise
-            self._conversation_service.validate_conversation_access(
-                conversation_id,
-                conv,
-                project_id,
-            )
+        self._conversation_service.validate_conversation_access(
+            conversation_id,
+            conv,
+            user_id=user_id,
+            project_id=project_id,
+        )
 
     async def send_message(
         self,
@@ -1310,7 +1423,12 @@ class MessageOrchestrationService:
         user_id: str | None = None,
         project_id: str | None = None,
         knowledge_space_id: str | None = None,
-        identity_source: str = "unknown") -> dict[str, Any]:
+        identity_source: str = "unknown",
+        requested_role: str | None = None,
+        routing_decision: Any | None = None,
+        route_applied: bool | None = None,
+        defer_finalization: bool = False,
+    ) -> dict[str, Any]:
         try:
             conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
         except ChatRepositoryError as e:
@@ -1333,10 +1451,24 @@ class MessageOrchestrationService:
         if message and size_bytes > max_bytes:
             raise MessageTooLargeError(size_bytes, max_bytes)
         understanding = build_understanding_payload(message)
-        use_light_chat = self._should_use_light_chat(
+        turn_request = TurnRequest(
+            conversation_id=conversation_id,
             message=message,
             role=role,
-            understanding=understanding)
+            priority=priority,
+            timeout_seconds=timeout_seconds,
+            user_id=resolved_user_id,
+            project_id=project_id,
+            knowledge_space_id=knowledge_space_id,
+            identity_source=identity_source,
+            requested_role=requested_role,
+        )
+        turn_plan = self.build_turn_plan(
+            request=turn_request,
+            understanding=understanding,
+            routing_decision=routing_decision,
+        )
+        use_light_chat = turn_plan.dynamic_strategy is TurnStrategy.LIGHT_LLM
 
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
@@ -1352,6 +1484,69 @@ class MessageOrchestrationService:
             project_id=project_id,
             identity_source=identity_source)
 
+        immediate_strategies = {
+            TurnStrategy.HIGH_RISK_CONFIRMATION,
+            TurnStrategy.STATIC_DISCOVERY,
+            TurnStrategy.STATIC_DOCS,
+            TurnStrategy.STATIC_CAPABILITIES,
+            TurnStrategy.BLOCKED_TOOL_CREATION,
+        }
+        immediate_strategy = (
+            turn_plan.primary_strategy
+            if turn_plan.primary_strategy in immediate_strategies
+            else None
+        )
+        if immediate_strategy is not None:
+            start_t = _time.time()
+            execution = self.execute_static_turn(strategy=immediate_strategy, role=role)
+            assistant_text = execution.response
+            clean_text, ui = split_ui(assistant_text)
+            elapsed = max(0.0, _time.time() - start_t)
+            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
+            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
+            if not defer_finalization:
+                await asyncio.to_thread(
+                    self._repo.add_message,
+                    conversation_id,
+                    role="assistant",
+                    text=assistant_text,
+                )
+            CHAT_TOKENS_TOTAL.labels(direction="out").inc(
+                estimate_tokens(self._prompt_service, assistant_text)
+            )
+            try:
+                if self._rag_service:
+                    await self._rag_service.maybe_summarize(
+                        conversation_id,
+                        role=role,
+                        priority=priority,
+                        project_id=project_id,
+                    )
+            except Exception:
+                pass
+            result = execution.to_payload()
+            result["conversation_id"] = conversation_id
+            result["response"] = clean_text
+            result["delivery_status"] = (
+                "waiting_confirmation"
+                if immediate_strategy is TurnStrategy.HIGH_RISK_CONFIRMATION
+                else "completed"
+            )
+            if ui:
+                result["ui"] = ui
+            if not defer_finalization:
+                try:
+                    self.trigger_post_response_events(
+                        conversation_id=conversation_id,
+                        user_message=message,
+                        assistant_text=assistant_text,
+                        result=result,
+                        project_id=project_id,
+                    )
+                except Exception:
+                    pass
+            return _attach_understanding_typed(result, understanding)
+
         if self._command_handler.is_command(message):
             start_t = _time.time()
             assistant_text = await self._command_handler.handle_command(
@@ -1363,9 +1558,13 @@ class MessageOrchestrationService:
                 CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
                 CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
-                await asyncio.to_thread(
-                    self._repo.add_message, conversation_id, role="assistant", text=assistant_text
-                )
+                if not defer_finalization:
+                    await asyncio.to_thread(
+                        self._repo.add_message,
+                        conversation_id,
+                        role="assistant",
+                        text=assistant_text,
+                    )
                 out_tokens = estimate_tokens(self._prompt_service, assistant_text)
                 CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
@@ -1379,198 +1578,6 @@ class MessageOrchestrationService:
                 if ui:
                     result["ui"] = ui
                 return _attach_understanding_typed(result, understanding)
-
-        if self._prompt_service.is_discovery_query(message):
-            start_t = _time.time()
-            assistant_text = self._prompt_service.render_discovery_intro(self._tools)
-            clean_text, ui = split_ui(assistant_text)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
-
-            await asyncio.to_thread(
-                self._repo.add_message, conversation_id, role="assistant", text=assistant_text
-            )
-            out_tokens = estimate_tokens(self._prompt_service, assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            try:
-                if self._rag_service:
-                    await self._rag_service.maybe_summarize(
-                        conversation_id,
-                        role=role,
-                        priority=priority,
-                        project_id=project_id)
-            except Exception as e:
-                logger.warning("log_warning", message=f"Failed to trigger summary during discovery for {conversation_id}: {e}"
-                )
-
-            result = {
-                "response": clean_text,
-                "provider": "janus",
-                "model": "discovery",
-                "role": role.value,
-            }
-            if ui:
-                result["ui"] = ui
-
-            result_with_conv = dict(result)
-            result_with_conv["conversation_id"] = conversation_id
-            try:
-                self.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=result,
-                    project_id=project_id)
-            except Exception:
-                pass
-            return _attach_understanding_typed(result_with_conv, understanding)
-
-        if self._prompt_service.is_docs_query(message):
-            start_t = _time.time()
-            assistant_text = self._prompt_service.render_tools_documentation(self._tools)
-            clean_text, ui = split_ui(assistant_text)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
-
-            await asyncio.to_thread(
-                self._repo.add_message, conversation_id, role="assistant", text=assistant_text
-            )
-            out_tokens = estimate_tokens(self._prompt_service, assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            try:
-                if self._rag_service:
-                    await self._rag_service.maybe_summarize(
-                        conversation_id,
-                        role=role,
-                        priority=priority,
-                        project_id=project_id)
-            except Exception:
-                pass
-
-            result = {
-                "response": clean_text,
-                "provider": "janus",
-                "model": "tools_docs",
-                "role": role.value,
-            }
-            if ui:
-                result["ui"] = ui
-
-            result_with_conv = dict(result)
-            result_with_conv["conversation_id"] = conversation_id
-            try:
-                self.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=result,
-                    project_id=project_id)
-            except Exception:
-                pass
-            return _attach_understanding_typed(result_with_conv, understanding)
-
-        if self._prompt_service.is_capabilities_query(message):
-            start_t = _time.time()
-            assistant_text = self._prompt_service.render_local_capabilities(self._tools)
-            clean_text, ui = split_ui(assistant_text)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
-
-            await asyncio.to_thread(
-                self._repo.add_message, conversation_id, role="assistant", text=assistant_text
-            )
-            out_tokens = estimate_tokens(self._prompt_service, assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            try:
-                if self._rag_service:
-                    await self._rag_service.maybe_summarize(
-                        conversation_id,
-                        role=role,
-                        priority=priority,
-                        project_id=project_id)
-            except Exception:
-                pass
-
-            result = {
-                "response": clean_text,
-                "provider": "janus",
-                "model": "capabilities",
-                "role": role.value,
-            }
-            if ui:
-                result["ui"] = ui
-
-            result_with_conv = dict(result)
-            result_with_conv["conversation_id"] = conversation_id
-            try:
-                self.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=result,
-                    project_id=project_id)
-            except Exception:
-                pass
-            return _attach_understanding_typed(result_with_conv, understanding)
-
-        if self._prompt_service.is_tool_request(message) and is_explicit_tool_creation(message):
-            start_t = _time.time()
-            from app.core.security.security_alerts import emit_security_alert
-
-            emit_security_alert(
-                "autonomous_evolution_attempt_blocked",
-                {"capability": "chat_tool_creation"},
-            )
-            assistant_text = "Tool creation and autonomous code evolution are permanently disabled."
-
-            clean_text, ui = split_ui(assistant_text)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
-
-            await asyncio.to_thread(
-                self._repo.add_message, conversation_id, role="assistant", text=assistant_text
-            )
-            out_tokens = estimate_tokens(self._prompt_service, assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            try:
-                if self._rag_service:
-                    await self._rag_service.maybe_summarize(
-                        conversation_id,
-                        role=role,
-                        priority=priority,
-                        project_id=project_id)
-            except Exception:
-                pass
-
-            result = {
-                "response": clean_text,
-                "provider": "janus",
-                "model": "tool_creation",
-                "role": role.value,
-            }
-            if ui:
-                result["ui"] = ui
-
-            result_with_conv = dict(result)
-            result_with_conv["conversation_id"] = conversation_id
-            try:
-                self.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=result,
-                    project_id=project_id)
-            except Exception:
-                pass
-            return _attach_understanding_typed(result_with_conv, understanding)
 
         grounded_result = await self.generate_document_grounded_reply(
             conversation_id=conversation_id,
@@ -1589,12 +1596,13 @@ class MessageOrchestrationService:
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
 
-            await asyncio.to_thread(
-                self._repo.add_message,
-                conversation_id,
-                role="assistant",
-                text=assistant_text,
-                metadata={
+            if not defer_finalization:
+                await asyncio.to_thread(
+                    self._repo.add_message,
+                    conversation_id,
+                    role="assistant",
+                    text=assistant_text,
+                    metadata={
                     "knowledge_space_id": grounded_result.get("knowledge_space_id"),
                     "mode_used": grounded_result.get("mode_used"),
                     "base_used": grounded_result.get("base_used"),
@@ -1610,32 +1618,37 @@ class MessageOrchestrationService:
                     "citations": grounded_result.get("citations"),
                     "citation_status": grounded_result.get("citation_status"),
                     "provider": grounded_result.get("provider"),
-                    "model": grounded_result.get("model"),
-                })
+                        "model": grounded_result.get("model"),
+                    },
+                )
             out_tokens = estimate_tokens(self._prompt_service, assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-            self._schedule_rag_index_message(
-                text=clean_text or assistant_text,
-                conversation_id=conversation_id,
-                user_id=resolved_user_id,
-                role="assistant",
-                project_id=project_id,
-                identity_source=identity_source)
+            if not defer_finalization:
+                self._schedule_rag_index_message(
+                    text=clean_text or assistant_text,
+                    conversation_id=conversation_id,
+                    user_id=resolved_user_id,
+                    role="assistant",
+                    project_id=project_id,
+                    identity_source=identity_source,
+                )
 
             result_with_conv = dict(grounded_result)
             result_with_conv["conversation_id"] = conversation_id
             result_with_conv["response"] = clean_text
             if ui:
                 result_with_conv["ui"] = ui
-            try:
-                self.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=grounded_result,
-                    project_id=project_id)
-            except Exception:
-                pass
+            if not defer_finalization:
+                try:
+                    self.trigger_post_response_events(
+                        conversation_id=conversation_id,
+                        user_message=message,
+                        assistant_text=assistant_text,
+                        result=grounded_result,
+                        project_id=project_id,
+                    )
+                except Exception:
+                    pass
             return _attach_understanding_typed(result_with_conv, understanding)
 
         secret_result = await self.generate_secret_recall_reply(
@@ -1649,22 +1662,26 @@ class MessageOrchestrationService:
             conversation_id=conversation_id)
         if secret_result is not None:
             assistant_text = str(secret_result.get("response") or "")
-            await asyncio.to_thread(
-                self._repo.add_message,
-                conversation_id,
-                role="assistant",
-                text=assistant_text)
+            if not defer_finalization:
+                await asyncio.to_thread(
+                    self._repo.add_message,
+                    conversation_id,
+                    role="assistant",
+                    text=assistant_text,
+                )
             result_with_conv = dict(secret_result)
             result_with_conv["conversation_id"] = conversation_id
-            try:
-                self.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=secret_result,
-                    project_id=project_id)
-            except Exception:
-                pass
+            if not defer_finalization:
+                try:
+                    self.trigger_post_response_events(
+                        conversation_id=conversation_id,
+                        user_message=message,
+                        assistant_text=assistant_text,
+                        result=secret_result,
+                        project_id=project_id,
+                    )
+                except Exception:
+                    pass
             return _attach_understanding_typed(result_with_conv, understanding)
 
         persona = conv.get("persona") or "assistant"
@@ -1699,34 +1716,13 @@ class MessageOrchestrationService:
 
         try:
             start_t = _time.time()
-            if use_light_chat:
-                light_timeout_seconds = max(
-                    1,
-                    int(os.getenv("CHAT_LIGHT_TIMEOUT_SECONDS", str(timeout_seconds or 12))),
-                )
-                result = await self._llm.invoke_llm(
-                    prompt=prompt,
-                    role=role,
-                    priority=priority,
-                    timeout_seconds=light_timeout_seconds,
-                    task_type="general_task",
-                    complexity="low",
-                    policy_overrides={
-                        "role": role.value,
-                        "priority": priority.value,
-                        "timeout_seconds": light_timeout_seconds,
-                    },
-                    project_id=project_id)
-            else:
-                result = await self._agent_loop.run_loop(
-                    conversation_id=conversation_id,
-                    initial_prompt=prompt,
-                    persona=persona,
-                    message=message,
-                    role=role,
-                    priority=priority,
-                    timeout_seconds=timeout_seconds,
-                    project_id=project_id)
+            execution = await self.execute_dynamic_turn(
+                plan=turn_plan,
+                request=turn_request,
+                prompt=prompt,
+                persona=persona,
+            )
+            result = execution.to_payload()
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -1746,20 +1742,26 @@ class MessageOrchestrationService:
             user_id=resolved_user_id,
             conversation_id=conversation_id)
         clean_text, ui = split_ui(assistant_text)
-        await asyncio.to_thread(
-            self._repo.add_message, conversation_id, role="assistant", text=assistant_text
-        )
+        if not defer_finalization:
+            await asyncio.to_thread(
+                self._repo.add_message,
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+            )
         out_tokens = estimate_tokens(self._prompt_service, assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
         rag_text = clean_text or assistant_text
-        self._schedule_rag_index_message(
-            text=rag_text,
-            conversation_id=conversation_id,
-            user_id=resolved_user_id,
-            role="assistant",
-            project_id=project_id,
-            identity_source=identity_source)
+        if not defer_finalization:
+            self._schedule_rag_index_message(
+                text=rag_text,
+                conversation_id=conversation_id,
+                user_id=resolved_user_id,
+                role="assistant",
+                project_id=project_id,
+                identity_source=identity_source,
+            )
 
         try:
             provider = result.get("provider", "unknown")
@@ -1793,16 +1795,88 @@ class MessageOrchestrationService:
         result_with_conv["response"] = clean_text
         if ui:
             result_with_conv["ui"] = ui
-        try:
-            self.trigger_post_response_events(
-                conversation_id=conversation_id,
-                user_message=message,
-                assistant_text=assistant_text,
-                result=result,
-                project_id=project_id)
-        except Exception:
-            pass
+        if not defer_finalization:
+            try:
+                self.trigger_post_response_events(
+                    conversation_id=conversation_id,
+                    user_message=message,
+                    assistant_text=assistant_text,
+                    result=result,
+                    project_id=project_id,
+                )
+            except Exception:
+                pass
         return _attach_understanding_typed(result_with_conv, understanding)
+
+    async def persist_finalized_turn(
+        self,
+        *,
+        conversation_id: str,
+        user_message: str,
+        result: dict[str, Any],
+        user_id: str | None,
+        project_id: str | None,
+        identity_source: str,
+    ) -> dict[str, Any]:
+        conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
+        self._validate_conversation_access(
+            conversation_id,
+            conv,
+            user_id=user_id,
+            project_id=project_id,
+        )
+        metadata_keys = (
+            "knowledge_space_id",
+            "mode_used",
+            "base_used",
+            "answer_strategy",
+            "estimated_wait_seconds",
+            "estimated_wait_range_seconds",
+            "processing_profile",
+            "processing_notice",
+            "evidence_count",
+            "source_roles_used",
+            "source_scope",
+            "gaps_or_conflicts",
+            "citations",
+            "citation_status",
+            "ui",
+            "understanding",
+            "confirmation",
+            "agent_state",
+            "delivery_status",
+            "failure_classification",
+            "provider",
+            "model",
+        )
+        metadata = {key: result.get(key) for key in metadata_keys}
+        assistant_text = str(result.get("response") or "")
+        saved = cast(
+            dict[str, Any],
+            await asyncio.to_thread(
+                self._repo.add_message,
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+                metadata=metadata,
+            ),
+        )
+        self._schedule_rag_index_message(
+            text=assistant_text,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role="assistant",
+            project_id=project_id,
+            identity_source=identity_source,
+        )
+        self.trigger_post_response_events(
+            conversation_id=conversation_id,
+            user_message=user_message,
+            assistant_text=assistant_text,
+            result=result,
+            project_id=project_id,
+        )
+        return saved
 
     def trigger_post_response_events(
         self,

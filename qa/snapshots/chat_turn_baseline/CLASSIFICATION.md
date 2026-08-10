@@ -23,4 +23,10 @@ The 15 ADR scenarios are captured for REST and SSE. `conversation_access_denied`
 | sse_disconnect_resume | Preserve | Correct | REST is not applicable. Preserve SSE done/replay contract, but correct duplicate direct-service LLM execution and writes by retaining the ledger adapter. |
 | conversation_access_denied | Correct | Preserve | Preserve 403/no-writes/no-model-execution; correct REST knowledge-space resolution occurring before conversation authorization. |
 
-“Correct” means the snapshot intentionally reproduces at least one known bug. It is not permission to change every field: only the `correct_paths` in `CLASSIFICATION.json` may differ intentionally; every `preserve_path`, and every unlisted path, remains protected.
+"Correct" means the snapshot intentionally reproduces at least one known bug. It is not permission to change every field: only the `correct_paths` in `CLASSIFICATION.json` may differ intentionally; every `preserve_path`, and every unlisted path, remains protected.
+
+## Approved refactor acceptance
+
+The Item 1 comparator now accepts only the explicit `approved_refactor_paths`, the scenario-specific `approved_scenario_paths`, and the original per-transport `correct_paths`. All unlisted changes remain regressions. The approved cross-cutting corrections are the shared finalizer metadata, the atomic assistant write, the typed planner/executor request shape, and diagnostic trace movement caused by the shared core.
+
+After Items 2-13, the normalized REST and SSE domain result is equal in every scenario except `sse_disconnect_resume`. That remaining write-count difference is transport-specific: the direct `StreamingService` harness cannot exercise the endpoint's durable SSE ledger, while the ledger replay contract is covered independently by the stream idempotency tests. It is not treated as domain parity evidence.

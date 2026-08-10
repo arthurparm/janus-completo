@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 import os
 import time as _time
+from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -19,14 +19,12 @@ from app.core.monitoring.chat_metrics import (
 )
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.services.chat.chat_citation_service import (
-    MANDATORY_CITATION_GUARD_TEXT,
     build_citation_status,
+    build_missing_citation_resolution,
     collect_chat_citations,
-    references_uploaded_material,
-    requires_mandatory_citations,
+    collect_chat_citations_with_deadline,
 )
 from app.services.chat.chat_contracts import (
-    build_agent_state,
     build_confirmation_payload,
     chat_sse_error_payload,
     extract_pending_action_id_from_text,
@@ -38,7 +36,14 @@ from app.services.chat.message_helpers import (
     build_understanding_payload,
     split_ui,
 )
-from app.services.chat_study_service import ChatStudyService
+from app.services.chat.repository_port import AsyncChatRepositoryPort
+from app.services.chat.turn_core import (
+    TurnBusinessState,
+    TurnExecutionResult,
+    TurnRequest,
+    TurnStrategy,
+    build_routed_understanding,
+)
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 
@@ -46,26 +51,6 @@ if TYPE_CHECKING:
     from app.services.chat.message_orchestration_service import MessageOrchestrationService
 
 logger = structlog.get_logger(__name__)
-
-
-def _call_sync_with_user_scope(func: Any, **kwargs: Any) -> Any:
-    try:
-        return func(**kwargs)
-    except TypeError as exc:
-        message = str(exc)
-        unsupported_user_scope = (
-            "user_id" in message or "project_id" in message
-        ) and "unexpected keyword" in message
-        if not unsupported_user_scope:
-            raise
-        reduced = {
-            key: value
-            for key, value in kwargs.items()
-            if key not in {"user_id", "project_id"}
-        }
-        if "project_id" in message and "user_id" not in message:
-            reduced["user_id"] = kwargs.get("user_id")
-        return func(**reduced)
 
 
 class StreamingService:
@@ -79,14 +64,17 @@ class StreamingService:
         rag_service: RAGService | None,
         conversation_service: ConversationService,
         message_orchestration_service: MessageOrchestrationService,
+        study_job_service: Any | None = None,
     ):
         self._repo = repo
+        self._repo_io = AsyncChatRepositoryPort(repo)
         self._llm = llm_service
         self._tools = tool_service
         self._prompt_service = prompt_service
         self._rag_service = rag_service
         self._conversation_service = conversation_service
         self._message_orchestration_service = message_orchestration_service
+        self._study_jobs = study_job_service
 
     async def stream_message(
         self,
@@ -102,12 +90,11 @@ class StreamingService:
         requested_role: str | None = None,
         routing_decision: Any | None = None,
         route_applied: bool | None = None,
-    ):
+    ) -> AsyncIterator[str]:
         role = role or ModelRole.ORCHESTRATOR
         priority = priority or ModelPriority.HIGH_QUALITY
 
         max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
-        default_timeout = int(os.getenv("CHAT_DEFAULT_TIMEOUT_SECONDS", "30"))
         heartbeat_interval = int(os.getenv("CHAT_HEARTBEAT_INTERVAL_SECONDS", "30"))
         protocol_version = os.getenv("CHAT_SSE_PROTOCOL_VERSION", "2025-11.v1")
         deprecate_partial_at = os.getenv("CHAT_SSE_PARTIAL_DEPRECATE_AT", "2026-03-01")
@@ -130,16 +117,27 @@ class StreamingService:
             pass
 
         understanding = build_understanding_payload(message)
-        use_light_chat = self._message_orchestration_service._should_use_light_chat(
+        turn_request = TurnRequest(
+            conversation_id=conversation_id,
             message=message,
             role=role,
+            priority=priority,
+            timeout_seconds=timeout_seconds,
+            user_id=user_id,
+            project_id=project_id,
+            knowledge_space_id=knowledge_space_id,
+            identity_source=identity_source,
+            requested_role=requested_role,
+        )
+        turn_plan = self._message_orchestration_service.build_turn_plan(
+            request=turn_request,
             understanding=understanding,
+            routing_decision=routing_decision,
         )
-        citation_lookup_required = requires_mandatory_citations(message) or references_uploaded_material(
-            message
-        )
+        use_light_chat = turn_plan.dynamic_strategy is TurnStrategy.LIGHT_LLM
+        citation_lookup_required = turn_plan.citation_lookup_required
         try:
-            conv = self._repo.get_conversation(conversation_id)
+            conv = await self._repo_io.get_conversation(conversation_id)
             self._conversation_service.validate_conversation_access(
                 conversation_id, conv, user_id, project_id
             )
@@ -191,7 +189,7 @@ class StreamingService:
         )
         yield f"event: protocol\ndata: {proto}\n\n"
 
-        self._repo.add_message(conversation_id, role="user", text=message)
+        await self._repo_io.add_message(conversation_id, role="user", text=message)
         self._message_orchestration_service.schedule_active_memory_capture(
             user_id=user_id,
             message=message,
@@ -245,11 +243,22 @@ class StreamingService:
             )
         if grounded_result is not None:
             assistant_text = str(grounded_result.get("response") or "")
-            citations = grounded_result.get("citations") or []
+            grounded_citations = grounded_result.get("citations") or []
             citation_status = grounded_result.get("citation_status") or build_citation_status(
                 message=message,
-                citations=citations,
+                citations=grounded_citations,
             )
+            if citation_status.get("status") == "missing_required":
+                grounded_result.update(
+                    build_missing_citation_resolution(
+                        active_knowledge_space_id=(
+                            grounded_result.get("knowledge_space_id")
+                            or knowledge_space_id
+                        ),
+                        retrieval_reason=citation_status.get("reason"),
+                    )
+                )
+                assistant_text = str(grounded_result["response"])
             first_token = True
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i : i + 256]
@@ -272,8 +281,28 @@ class StreamingService:
                     except Exception:
                         pass
 
-            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
-            saved_message = self._repo.add_message(
+            grounded_execution = TurnExecutionResult.from_payload(
+                strategy=TurnStrategy.DOCUMENT_GROUNDING,
+                payload=grounded_result,
+                default_role=role,
+            )
+            grounded_delivery = str(
+                grounded_result.get("delivery_status") or "completed"
+            )
+            grounded_business_state = (
+                TurnBusinessState.PENDING_KNOWLEDGE_SPACE
+                if grounded_delivery == "pending_knowledge_space"
+                else TurnBusinessState.COMPLETED
+            )
+            grounded_final = self._message_orchestration_service.finalize_turn(
+                execution=grounded_execution,
+                understanding=understanding,
+                business_state=grounded_business_state,
+                delivery_status=grounded_delivery,
+                failure_classification=grounded_result.get("failure_classification"),
+            )
+            normalized_understanding = grounded_final.understanding
+            saved_message = await self._repo_io.add_message(
                 conversation_id,
                 role="assistant",
                 text=assistant_text,
@@ -290,18 +319,15 @@ class StreamingService:
                     "source_roles_used": grounded_result.get("source_roles_used"),
                     "source_scope": grounded_result.get("source_scope"),
                     "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts"),
-                    "citations": citations,
-                    "citation_status": citation_status,
+                    "citations": grounded_final.citations,
+                    "citation_status": grounded_final.citation_status,
                     "understanding": normalized_understanding,
-                    "confirmation": None,
-                    "agent_state": build_agent_state(
-                        stream_phase="completed",
-                        understanding=normalized_understanding,
-                        confirmation=None,
-                    ),
-                    "delivery_status": "completed",
-                    "provider": grounded_result.get("provider"),
-                    "model": grounded_result.get("model"),
+                    "confirmation": grounded_final.confirmation,
+                    "agent_state": grounded_final.agent_state,
+                    "delivery_status": grounded_final.delivery_status,
+                    "failure_classification": grounded_final.failure_classification,
+                    "provider": grounded_final.provider,
+                    "model": grounded_final.model,
                 },
             )
             out_tokens = self._prompt_service.estimate_tokens(assistant_text)
@@ -312,19 +338,21 @@ class StreamingService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=grounded_result,
-                    user_id=user_id,
                     project_id=project_id,
                 )
             except Exception:
                 pass
 
-            done_payload: dict[str, Any] = {
+            grounded_done_payload: dict[str, Any] = {
                 "conversation_id": conversation_id,
                 "message_id": str(saved_message.get("id")) if isinstance(saved_message, dict) else None,
-                "provider": grounded_result.get("provider"),
-                "model": grounded_result.get("model"),
-                "citations": citations,
-                "citation_status": citation_status,
+                "provider": grounded_final.provider,
+                "model": grounded_final.model,
+                "citations": grounded_final.citations,
+                "citation_status": grounded_final.citation_status,
+                "confirmation": grounded_final.confirmation,
+                "delivery_status": grounded_final.delivery_status,
+                "failure_classification": grounded_final.failure_classification,
                 "knowledge_space_id": grounded_result.get("knowledge_space_id"),
                 "mode_used": grounded_result.get("mode_used"),
                 "base_used": grounded_result.get("base_used"),
@@ -340,22 +368,14 @@ class StreamingService:
             }
             _, ui = split_ui(assistant_text)
             if ui:
-                done_payload["ui"] = ui
+                grounded_done_payload["ui"] = ui
             if normalized_understanding:
-                done_payload["understanding"] = normalized_understanding
-            agent_state = (
-                saved_message.get("agent_state")
-                if isinstance(saved_message, dict)
-                else None
-            ) or build_agent_state(
-                stream_phase="completed",
-                understanding=normalized_understanding,
-                confirmation=None,
-            )
+                grounded_done_payload["understanding"] = normalized_understanding
+            agent_state = grounded_final.agent_state
             if agent_state:
-                done_payload["agent_state"] = agent_state
-            done = json.dumps(done_payload, ensure_ascii=False)
-            yield f"event: done\ndata: {done}\n\n"
+                grounded_done_payload["agent_state"] = agent_state
+            grounded_done = json.dumps(grounded_done_payload, ensure_ascii=False)
+            yield f"event: done\ndata: {grounded_done}\n\n"
             return
 
         secret_result = await self._message_orchestration_service.generate_secret_recall_reply(
@@ -365,34 +385,59 @@ class StreamingService:
             conversation_id=conversation_id,
         )
         if secret_result is not None:
-            assistant_text = str(secret_result.get("response") or "")
+            secret_execution = TurnExecutionResult.from_payload(
+                strategy=TurnStrategy.SECRET_RECALL,
+                payload=secret_result,
+                default_role=role,
+            )
+            secret_final = self._message_orchestration_service.finalize_turn(
+                execution=secret_execution,
+                understanding=understanding,
+            )
+            assistant_text = secret_final.response
             tok = json.dumps(
                 {"text": assistant_text, "timestamp": int(_time.time() * 1000)},
                 ensure_ascii=False,
             )
             yield f"event: token\ndata: {tok}\n\n"
             yield f"event: partial\ndata: {tok}\n\n"
-            saved_message = self._repo.add_message(
+            saved_message = await self._repo_io.add_message(
                 conversation_id,
                 role="assistant",
                 text=assistant_text,
+                metadata={
+                    "citations": secret_final.citations,
+                    "citation_status": secret_final.citation_status,
+                    "understanding": secret_final.understanding,
+                    "confirmation": secret_final.confirmation,
+                    "agent_state": secret_final.agent_state,
+                    "delivery_status": secret_final.delivery_status,
+                    "failure_classification": secret_final.failure_classification,
+                    "provider": secret_final.provider,
+                    "model": secret_final.model,
+                },
             )
-            done = json.dumps(
+            secret_done = json.dumps(
                 {
                     "conversation_id": conversation_id,
                     "message_id": str(saved_message.get("id")) if isinstance(saved_message, dict) else None,
-                    "provider": secret_result.get("provider"),
-                    "model": secret_result.get("model"),
-                    "citations": [],
-                    "citation_status": secret_result.get("citation_status"),
+                    "provider": secret_final.provider,
+                    "model": secret_final.model,
+                    "citations": secret_final.citations,
+                    "citation_status": secret_final.citation_status,
+                    "understanding": secret_final.understanding,
+                    "confirmation": secret_final.confirmation,
+                    "agent_state": secret_final.agent_state,
+                    "delivery_status": secret_final.delivery_status,
+                    "failure_classification": secret_final.failure_classification,
                 },
                 ensure_ascii=False,
             )
-            yield f"event: done\ndata: {done}\n\n"
+            yield f"event: done\ndata: {secret_done}\n\n"
             return
 
         persona = conv.get("persona") or "assistant"
-        history = self._repo.get_recent_messages(conversation_id, limit=20)
+        history = await self._repo_io.get_recent_messages(conversation_id, limit=20)
 
         relevant_memories = None
         if self._rag_service and not use_light_chat:
@@ -411,277 +456,140 @@ class StreamingService:
         in_tokens = self._prompt_service.estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
 
-        if self._prompt_service.is_discovery_query(message):
-            start_t = _time.time()
-            assistant_text = self._prompt_service.render_discovery_intro(self._tools)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-
-            first_token = True
-            for i in range(0, len(assistant_text), 256):
-                chunk = assistant_text[i : i + 256]
-                tok = json.dumps(
-                    {"text": chunk, "timestamp": int(_time.time() * 1000)}, ensure_ascii=False
-                )
-                yield f"event: token\ndata: {tok}\n\n"
-                yield f"event: partial\ndata: {tok}\n\n"
-                if first_token:
-                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
-                    first_token = False
-                    try:
-                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
-
-                        CHAT_TTFT_SECONDS.labels(provider="janus", model="discovery").observe(
-                            ttft_ms / 1000.0
-                        )
-                    except Exception:
-                        pass
-
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            done_payload: dict[str, Any] = {
-                "conversation_id": conversation_id,
-                "provider": "janus",
-                "model": "discovery",
-                "citations": [],
-                "citation_status": build_citation_status(message=message, citations=[]),
-            }
-            _, ui = split_ui(assistant_text)
-            if ui:
-                done_payload["ui"] = ui
-            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
-            if normalized_understanding:
-                done_payload["understanding"] = normalized_understanding
-            agent_state = build_agent_state(
-                stream_phase="completed",
-                understanding=normalized_understanding,
-                confirmation=None,
+        immediate_strategies = {
+            TurnStrategy.HIGH_RISK_CONFIRMATION,
+            TurnStrategy.STATIC_DISCOVERY,
+            TurnStrategy.STATIC_DOCS,
+            TurnStrategy.STATIC_CAPABILITIES,
+            TurnStrategy.BLOCKED_TOOL_CREATION,
+        }
+        if turn_plan.primary_strategy in immediate_strategies:
+            execution = self._message_orchestration_service.execute_static_turn(
+                strategy=turn_plan.primary_strategy,
+                role=role,
             )
-            if agent_state:
-                done_payload["agent_state"] = agent_state
-            done = json.dumps(done_payload, ensure_ascii=False)
-            yield f"event: done\ndata: {done}\n\n"
-            return
-
-        if self._prompt_service.is_docs_query(message):
-            start_t = _time.time()
-            assistant_text = self._prompt_service.render_tools_documentation(self._tools)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-
-            first_token = True
-            for i in range(0, len(assistant_text), 256):
-                chunk = assistant_text[i : i + 256]
-                tok = json.dumps(
-                    {"text": chunk, "timestamp": int(_time.time() * 1000)}, ensure_ascii=False
-                )
-                yield f"event: token\ndata: {tok}\n\n"
-                yield f"event: partial\ndata: {tok}\n\n"
-                if first_token:
-                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
-                    first_token = False
-                    try:
-                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
-
-                        CHAT_TTFT_SECONDS.labels(provider="janus", model="tools_docs").observe(
-                            ttft_ms / 1000.0
-                        )
-                    except Exception:
-                        pass
-
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            done_payload = {
-                "conversation_id": conversation_id,
-                "provider": "janus",
-                "model": "tools_docs",
-                "citations": [],
-                "citation_status": build_citation_status(message=message, citations=[]),
-            }
-            _, ui = split_ui(assistant_text)
-            if ui:
-                done_payload["ui"] = ui
-            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
-            if normalized_understanding:
-                done_payload["understanding"] = normalized_understanding
-            agent_state = build_agent_state(
-                stream_phase="completed",
-                understanding=normalized_understanding,
-                confirmation=None,
+            result = execution.to_payload()
+            result_understanding = build_routed_understanding(
+                understanding,
+                routing_decision=routing_decision,
+                requested_role=requested_role,
+                selected_role=role,
+                route_applied=bool(route_applied),
+                requires_confirmation=turn_plan.requires_confirmation,
+                confirmation_reason=turn_plan.confirmation_reason,
             )
-            if agent_state:
-                done_payload["agent_state"] = agent_state
-            done = json.dumps(done_payload, ensure_ascii=False)
-            yield f"event: done\ndata: {done}\n\n"
-            return
-
-        if self._prompt_service.is_capabilities_query(message):
-            start_t = _time.time()
-            assistant_text = self._prompt_service.render_local_capabilities(self._tools)
-            elapsed = max(0.0, _time.time() - start_t)
-            CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-
-            first_token = True
-            for i in range(0, len(assistant_text), 256):
-                chunk = assistant_text[i : i + 256]
-                tok = json.dumps(
-                    {"text": chunk, "timestamp": int(_time.time() * 1000)}, ensure_ascii=False
-                )
-                ttft = _time.time() - start_t_overall
-                limit = float(timeout_seconds or default_timeout)
-                if limit > 0 and ttft > limit:
-                    err = json.dumps(
-                        chat_sse_error_payload(
-                            code="CHAT_STREAM_TIMEOUT",
-                            message="TTFT timeout",
-                            category="timeout",
-                            retryable=True,
-                            details={"phase": "ttft"},
-                        ),
-                        ensure_ascii=False,
-                    )
-                    try:
-                        from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
-
-                        CHAT_ERRORS_TOTAL.labels(code="TTFTTimeout").inc()
-                    except Exception:
-                        pass
-                    yield f"event: error\ndata: {err}\n\n"
-                    return
-                yield f"event: token\ndata: {tok}\n\n"
-                yield f"event: partial\ndata: {tok}\n\n"
-                if first_token:
-                    ttft_ms = int((_time.time() - start_t_overall) * 1000)
-                    first_token = False
-                    try:
-                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
-
-                        CHAT_TTFT_SECONDS.labels(provider="janus", model="capabilities").observe(
-                            ttft_ms / 1000.0
-                        )
-                    except Exception:
-                        pass
-
-            self._repo.add_message(conversation_id, role="assistant", text=assistant_text)
-            out_tokens = self._prompt_service.estimate_tokens(assistant_text)
-            CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-            done_payload = {
-                "conversation_id": conversation_id,
-                "provider": "janus",
-                "model": "capabilities",
-                "citations": [],
-                "citation_status": build_citation_status(message=message, citations=[]),
-            }
-            _, ui = split_ui(assistant_text)
-            if ui:
-                done_payload["ui"] = ui
-            normalized_understanding = normalize_understanding_payload(understanding, confirmation=None)
-            if normalized_understanding:
-                done_payload["understanding"] = normalized_understanding
-            agent_state = build_agent_state(
-                stream_phase="completed",
-                understanding=normalized_understanding,
-                confirmation=None,
+            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+                message=message,
+                assistant_response=execution.response,
+                conversation_id=conversation_id,
+                user_id=str(user_id) if user_id is not None else None,
+                existing_pending_action_id=None,
+                understanding=result_understanding,
             )
-            if agent_state:
-                done_payload["agent_state"] = agent_state
-            done = json.dumps(done_payload, ensure_ascii=False)
-            yield f"event: done\ndata: {done}\n\n"
-            return
-
-        current_provider = None
-        try:
-            if inspect.iscoroutinefunction(self._llm.select_provider):
-                pre = await self._llm.select_provider(
-                    role=role, priority=priority, user_id=user_id, project_id=project_id
+            confirmation_reason = (
+                result_understanding.get("confirmation_reason") or fallback_reason
+            )
+            confirmation_payload = build_confirmation_payload(
+                pending_action_id=pending_action_id,
+                reason=str(confirmation_reason) if confirmation_reason else None,
+            )
+            delivery_status = (
+                "waiting_confirmation"
+                if confirmation_payload and confirmation_payload.get("required")
+                else "completed"
+            )
+            if execution.citation_status is None:
+                execution.citation_status = build_citation_status(
+                    message=message,
+                    citations=[],
                 )
-            else:
-                pre = await asyncio.to_thread(
-                    _call_sync_with_user_scope,
-                    self._llm.select_provider,
-                    role=role,
-                    priority=priority,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
-            current_provider = pre.get("provider")
-            if self._llm.is_provider_open(current_provider or ""):
-                err = json.dumps(
-                    chat_sse_error_payload(
-                        code="CHAT_CIRCUIT_OPEN",
-                        message="Circuit open",
-                        category="availability",
-                        retryable=True,
-                    ),
+            finalized = self._message_orchestration_service.finalize_turn(
+                execution=execution,
+                understanding=result_understanding,
+                pending_action_id=pending_action_id,
+                confirmation_reason=(
+                    str(confirmation_reason) if confirmation_reason else None
+                ),
+                delivery_status=delivery_status,
+            )
+            normalized_understanding = finalized.understanding
+            confirmation_payload = finalized.confirmation
+            agent_state = finalized.agent_state or {}
+            assistant_text = execution.response
+            for i in range(0, len(assistant_text), 256):
+                token_payload = json.dumps(
+                    {
+                        "text": assistant_text[i : i + 256],
+                        "timestamp": int(_time.time() * 1000),
+                    },
                     ensure_ascii=False,
                 )
-                try:
-                    from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
+                yield f"event: token\ndata: {token_payload}\n\n"
+                yield f"event: partial\ndata: {token_payload}\n\n"
+            saved_message = await self._repo_io.add_message(
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+                metadata={
+                    "citations": [],
+                    "citation_status": finalized.citation_status,
+                    "understanding": normalized_understanding,
+                    "confirmation": confirmation_payload,
+                    "agent_state": agent_state,
+                    "delivery_status": delivery_status,
+                    "provider": execution.provider,
+                    "model": execution.model,
+                },
+            )
+            static_done_payload: dict[str, Any] = {
+                "conversation_id": conversation_id,
+                "message_id": (
+                    str(saved_message.get("id")) if isinstance(saved_message, dict) else None
+                ),
+                "provider": execution.provider,
+                "model": execution.model,
+                "citations": [],
+                "citation_status": finalized.citation_status,
+                "understanding": normalized_understanding,
+                "confirmation": confirmation_payload,
+                "agent_state": agent_state,
+                "delivery_status": delivery_status,
+            }
+            if agent_state.get("state") == "waiting_confirmation":
+                yield (
+                    "event: cognitive_status\ndata: "
+                    + json.dumps(
+                        {
+                            "state": "waiting_confirmation",
+                            "requires_confirmation": True,
+                            "reason": (confirmation_payload or {}).get("reason"),
+                            "timestamp": int(_time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+            yield f"event: done\ndata: {json.dumps(static_done_payload, ensure_ascii=False)}\n\n"
+            return
 
-                    CHAT_ERRORS_TOTAL.labels(code="CircuitOpen").inc()
-                except Exception:
-                    pass
-                yield f"event: error\ndata: {err}\n\n"
-                return
-
+        try:
             start_t = _time.time()
-            llm_timeout_seconds = timeout_seconds
-            llm_task_type = None
-            llm_complexity = None
-            llm_policy_overrides = None
-            if use_light_chat:
-                llm_timeout_seconds = max(
-                    1,
-                    int(os.getenv("CHAT_LIGHT_TIMEOUT_SECONDS", str(timeout_seconds or 12))),
+            task = asyncio.create_task(
+                self._message_orchestration_service.execute_dynamic_turn(
+                    plan=turn_plan,
+                    request=turn_request,
+                    prompt=prompt,
+                    persona=persona,
                 )
-                llm_task_type = "general_task"
-                llm_complexity = "low"
-                llm_policy_overrides = {
-                    "role": role.value,
-                    "priority": priority.value,
-                    "timeout_seconds": llm_timeout_seconds,
-                }
-            if inspect.iscoroutinefunction(self._llm.invoke_llm):
-                task = asyncio.create_task(
-                    self._llm.invoke_llm(
-                        prompt=prompt,
-                        role=role,
-                        priority=priority,
-                        timeout_seconds=llm_timeout_seconds,
-                        task_type=llm_task_type,
-                        complexity=llm_complexity,
-                        policy_overrides=llm_policy_overrides,
-                        user_id=user_id,
-                        project_id=project_id,
-                    )
-                )
-            else:
-                task = asyncio.create_task(
-                    asyncio.to_thread(
-                        _call_sync_with_user_scope,
-                        self._llm.invoke_llm,
-                        prompt=prompt,
-                        role=role,
-                        priority=priority,
-                        timeout_seconds=llm_timeout_seconds,
-                        task_type=llm_task_type,
-                        complexity=llm_complexity,
-                        policy_overrides=llm_policy_overrides,
-                        user_id=user_id,
-                        project_id=project_id,
-                    )
-                )
+            )
 
             if heartbeat_interval and heartbeat_interval > 0:
                 sent_heartbeat = False
                 while True:
-                    done, _ = await asyncio.wait({task}, timeout=max(1, heartbeat_interval))
-                    if done:
+                    completed_tasks, _ = await asyncio.wait(
+                        {task}, timeout=max(1, heartbeat_interval)
+                    )
+                    if completed_tasks:
                         if not sent_heartbeat:
                             hb = json.dumps({"timestamp": int(_time.time() * 1000)}, ensure_ascii=False)
                             yield f"event: heartbeat\ndata: {hb}\n\n"
@@ -690,73 +598,48 @@ class StreamingService:
                     yield f"event: heartbeat\ndata: {hb}\n\n"
                     sent_heartbeat = True
 
-            result = await task
+            execution = await task
+            result = execution.to_payload()
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-            current_provider = result.get("provider")
-
-            if self._cb_should_block(current_provider):
-                err = json.dumps(
-                    chat_sse_error_payload(
-                        code="CHAT_CIRCUIT_OPEN",
-                        message="Circuit open",
-                        category="availability",
-                        retryable=True,
-                    ),
-                    ensure_ascii=False,
-                )
-                try:
-                    from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
-
-                    CHAT_ERRORS_TOTAL.labels(code="CircuitOpen").inc()
-                except Exception:
-                    pass
-                yield f"event: error\ndata: {err}\n\n"
-                return
-
             citations: list[dict[str, Any]] = []
             citations_retrieval_failed = False
+            citation_failure_classification = None
+            citation_failure_reason = None
+            needs_study_job = False
             if citation_lookup_required:
-                try:
-                    citation_result = await collect_chat_citations(
-                        message=message,
-                        conversation_id=conversation_id,
-                        memory_service=getattr(self._rag_service, "_memory", None),
-                        limit=5,
-                    )
-                    citations = citation_result.get("citations") or []
-                    citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
-                except Exception:
-                    citations = []
-                    citations_retrieval_failed = True
+                citation_result = await collect_chat_citations_with_deadline(
+                    message=message,
+                    conversation_id=conversation_id,
+                    memory_service=getattr(self._rag_service, "_memory", None),
+                    limit=5,
+                    collector=collect_chat_citations,
+                )
+                citations = citation_result.get("citations") or []
+                citations_retrieval_failed = bool(citation_result.get("retrieval_failed"))
+                citation_failure_classification = citation_result.get(
+                    "failure_classification"
+                )
+                citation_failure_reason = citation_result.get("retrieval_failure_reason")
 
-            result_understanding = result.get("understanding") if isinstance(result, dict) else None
-            if not isinstance(result_understanding, dict):
-                result_understanding = dict(understanding or {})
-                result["understanding"] = result_understanding
+            raw_result_understanding = result.get("understanding")
+            result_understanding: dict[str, Any] = (  # type: ignore[no-redef]
+                dict(raw_result_understanding)
+                if isinstance(raw_result_understanding, dict)
+                else dict(understanding or {})
+            )
+            result["understanding"] = result_understanding
 
-            if routing_decision is not None and hasattr(routing_decision, "to_dict"):
-                try:
-                    result_understanding["routing"] = {
-                        "requested_role": requested_role,
-                        "selected_role": role.value,
-                        "route_applied": bool(route_applied),
-                        **routing_decision.to_dict(),
-                    }
-                except Exception:
-                    pass
-
-                try:
-                    if getattr(routing_decision, "risk_level", None) == "high":
-                        result_understanding["requires_confirmation"] = True
-                        result_understanding["confirmation_reason"] = "high_risk"
-                        if "alto risco" not in str(result.get("response", "")).lower():
-                            result["response"] = (
-                                "Pedido classificado como alto risco. Confirme o objetivo e o escopo antes de seguir.\n\n"
-                                f"{result.get('response', '')}"
-                            )
-                except Exception:
-                    pass
+            result_understanding = build_routed_understanding(
+                result_understanding,
+                routing_decision=routing_decision,
+                requested_role=requested_role,
+                selected_role=role,
+                route_applied=bool(route_applied),
+                requires_confirmation=turn_plan.requires_confirmation,
+                confirmation_reason=turn_plan.confirmation_reason,
+            )
+            result["understanding"] = result_understanding
 
             pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
             pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
@@ -789,6 +672,7 @@ class StreamingService:
                 message=message,
                 citations=citations,
                 retrieval_failed=citations_retrieval_failed,
+                retrieval_failure_reason=citation_failure_reason,
             )
             assistant_text = await self._message_orchestration_service.apply_response_memory_policies(
                 assistant_text=str(result.get("response") or ""),
@@ -806,14 +690,13 @@ class StreamingService:
                     )
                 )
                 if active_knowledge_space_id:
-                    assistant_text = (
-                        "Estou revisando o material vinculado a esta conversa para responder com evidências rastreáveis. "
-                        "Isso pode demorar um pouco, mas não vou estudar o código do Janus para responder sobre esse conteúdo."
+                    result.update(
+                        build_missing_citation_resolution(
+                            active_knowledge_space_id=active_knowledge_space_id,
+                            retrieval_reason=citation_status.get("reason"),
+                        )
                     )
-                    result["response"] = assistant_text
-                    result["provider"] = "janus"
-                    result["model"] = "knowledge_space_pending"
-                    result["knowledge_space_id"] = active_knowledge_space_id
+                    assistant_text = str(result["response"])
                     citations = []
                     yield (
                         "event: cognitive_status\ndata: "
@@ -840,42 +723,51 @@ class StreamingService:
                         )
                         + "\n\n"
                     )
-                    study_service = ChatStudyService(
-                        llm_service=self._llm,
-                        knowledge_service=None,
-                        autonomy_admin_service=None,
-                    )
-                    pending_progress_events: list[str] = []
-
-                    async def _progress(value: int, stage: str, reason: str) -> None:
-                        state = "study_progress" if stage != "synthesis" else "resuming_answer_generation"
-                        payload = {
-                            "state": state,
-                            "reason": reason,
-                            "progress": value,
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                        yield_data = json.dumps(payload, ensure_ascii=False)
-                        pending_progress_events.append(
-                            f"event: cognitive_status\ndata: {yield_data}\n\n"
+                    result.update(
+                        build_missing_citation_resolution(
+                            active_knowledge_space_id=None,
+                            retrieval_reason=citation_status.get("reason"),
                         )
-
-                    study_result = await study_service.answer_with_study(
-                        question=message,
-                        role=role,
-                        priority=priority,
-                        user_id=str(user_id) if user_id is not None else None,
-                        conversation_id=conversation_id,
-                        progress_cb=_progress,
                     )
-                    for progress_event in pending_progress_events:
-                        yield progress_event
-                    assistant_text = str(study_result.get("response") or MANDATORY_CITATION_GUARD_TEXT)
-                    result["response"] = assistant_text
-                    result["provider"] = study_result.get("provider") or result.get("provider")
-                    result["model"] = study_result.get("model") or result.get("model")
-                    citations = study_result.get("citations") or []
-                    citation_status = study_result.get("citation_status") or citation_status
+                    assistant_text = str(result["response"])
+                    needs_study_job = True
+            execution.response = assistant_text
+            execution.provider = str(result.get("provider") or execution.provider)
+            execution.model = str(result.get("model") or execution.model)
+            execution.citations = citations
+            execution.citation_status = citation_status
+            if needs_study_job:
+                business_state = TurnBusinessState.PENDING_STUDY
+            elif (
+                result.get("knowledge_space_id")
+                and citation_status.get("status") == "missing_required"
+            ):
+                business_state = TurnBusinessState.PENDING_KNOWLEDGE_SPACE
+            else:
+                business_state = TurnBusinessState.COMPLETED
+            finalized = self._message_orchestration_service.finalize_turn(
+                execution=execution,
+                understanding=result_understanding,
+                pending_action_id=pending_action_id,
+                confirmation_reason=(
+                    (result_understanding or {}).get("confirmation_reason")
+                    if isinstance(result_understanding, dict)
+                    else None
+                ),
+                business_state=business_state,
+                delivery_status=business_state.value,
+                failure_classification=(
+                    "knowledge_space_pending"
+                    if business_state is TurnBusinessState.PENDING_KNOWLEDGE_SPACE
+                    else (
+                        citation_failure_classification
+                        if business_state is not TurnBusinessState.PENDING_STUDY
+                        else None
+                    )
+                ),
+            )
+            normalized_understanding = finalized.understanding
+            confirmation_payload = finalized.confirmation
             _, ui = split_ui(assistant_text)
 
             for i in range(0, len(assistant_text), 256):
@@ -884,25 +776,47 @@ class StreamingService:
                 yield f"event: token\ndata: {tok}\n\n"
                 yield f"event: partial\ndata: {tok}\n\n"
 
-            saved_message = self._repo.add_message(
+            saved_message = await self._repo_io.add_message(
                 conversation_id,
                 role="assistant",
                 text=assistant_text,
                 metadata={
-                    "citations": citations,
-                    "citation_status": citation_status,
+                    "citations": finalized.citations,
+                    "citation_status": finalized.citation_status,
                     "understanding": normalized_understanding,
                     "confirmation": confirmation_payload,
-                    "agent_state": build_agent_state(
-                        stream_phase="completed",
-                        understanding=normalized_understanding,
-                        confirmation=confirmation_payload,
-                    ),
-                    "delivery_status": "completed",
-                    "provider": result.get("provider"),
-                    "model": result.get("model"),
+                    "agent_state": finalized.agent_state,
+                    "delivery_status": finalized.delivery_status,
+                    "failure_classification": finalized.failure_classification,
+                    "provider": finalized.provider,
+                    "model": finalized.model,
                 },
             )
+            study_job_payload = None
+            if needs_study_job and self._study_jobs is not None:
+                job = await asyncio.to_thread(
+                    self._study_jobs.create_job,
+                    conversation_id=conversation_id,
+                    message_id=str(saved_message.get("id")),
+                    question=message,
+                    user_id=str(user_id) if user_id is not None else None,
+                    placeholder_message=assistant_text,
+                )
+                study_job_payload = {
+                    "job_id": job.job_id,
+                    "status": job.status,
+                    "poll_url": f"/api/v1/chat/study-jobs/{job.job_id}",
+                    "conversation_id": conversation_id,
+                    "message_id": str(saved_message.get("id")),
+                    "placeholder_message": job.placeholder_message,
+                }
+                asyncio.create_task(
+                    self._study_jobs.run_job(
+                        job_id=job.job_id,
+                        role=role,
+                        priority=priority,
+                    )
+                )
             out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
 
@@ -926,7 +840,6 @@ class StreamingService:
                     user_message=message,
                     assistant_text=assistant_text,
                     result=result,
-                    user_id=user_id,
                     project_id=project_id,
                 )
             except Exception:
@@ -935,26 +848,22 @@ class StreamingService:
             done_payload: dict[str, Any] = {
                 "conversation_id": conversation_id,
                 "message_id": str(saved_message.get("id")) if isinstance(saved_message, dict) else None,
-                "provider": result.get("provider"),
-                "model": result.get("model"),
-                "citations": citations,
-                "citation_status": citation_status,
+                "provider": finalized.provider,
+                "model": finalized.model,
+                "citations": finalized.citations,
+                "citation_status": finalized.citation_status,
+                "delivery_status": finalized.delivery_status,
+                "failure_classification": finalized.failure_classification,
             }
             if ui:
                 done_payload["ui"] = ui
+            if study_job_payload:
+                done_payload["study_job"] = study_job_payload
             if normalized_understanding:
                 done_payload["understanding"] = normalized_understanding
             if confirmation_payload:
                 done_payload["confirmation"] = confirmation_payload
-            agent_state = (
-                saved_message.get("agent_state")
-                if isinstance(saved_message, dict)
-                else None
-            ) or build_agent_state(
-                stream_phase="completed",
-                understanding=normalized_understanding,
-                confirmation=confirmation_payload,
-            )
+            agent_state = finalized.agent_state
             if agent_state:
                 done_payload["agent_state"] = agent_state
                 if agent_state.get("state") == "waiting_confirmation":
@@ -974,7 +883,6 @@ class StreamingService:
             done = json.dumps(done_payload, ensure_ascii=False)
             yield f"event: done\ndata: {done}\n\n"
 
-            self._cb_on_success(current_provider)
             try:
                 latency_ms = int((_time.time() - start_t_overall) * 1000)
                 logger.info(
@@ -1009,12 +917,12 @@ class StreamingService:
             except Exception:
                 pass
             yield f"event: error\ndata: {err}\n\n"
-            try:
-                self._cb_on_error(current_provider)
-            except Exception:
-                pass
 
-    async def stream_events(self, conversation_id: str, user_id: str | None = None):
+    async def stream_events(
+        self,
+        conversation_id: str,
+        user_id: str | None = None,
+    ) -> AsyncIterator[str]:
         import json
         import time as now_time
 
@@ -1030,7 +938,7 @@ class StreamingService:
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
 
-        async def on_event(payload):
+        async def on_event(payload: Any) -> None:
             await queue.put(payload)
 
         routing_key = f"janus.event.conversation.{conversation_id}.#"
@@ -1091,58 +999,3 @@ class StreamingService:
             except Exception:
                 pass
             logger.info("log_info", message=f"Stream de eventos encerrado para {conversation_id}")
-
-    def _cb_should_block(self, provider: str | None) -> bool:
-        try:
-            if not provider:
-                return False
-            state = getattr(self, "_cb_state", {})
-            provider_state = state.get(provider)
-            if not provider_state:
-                return False
-            opened_at = provider_state.get("opened_at") or 0
-            cooldown = int(os.getenv("CHAT_CB_COOLDOWN_SECONDS", "60"))
-            return provider_state.get("state") == "open" and (_time.time() - opened_at) < cooldown
-        except Exception:
-            return False
-
-    def _cb_on_error(self, provider: str | None) -> None:
-        try:
-            if not provider:
-                return
-            state = getattr(self, "_cb_state", {})
-            provider_state = state.get(provider) or {"failures": 0, "state": "closed"}
-            provider_state["failures"] = int(provider_state.get("failures", 0)) + 1
-            threshold = int(os.getenv("CHAT_CB_FAILURE_THRESHOLD", "5"))
-            if provider_state["failures"] >= threshold:
-                provider_state["state"] = "open"
-                provider_state["opened_at"] = _time.time()
-                try:
-                    from app.core.monitoring.chat_metrics import CHAT_CB_STATE_CHANGES
-
-                    CHAT_CB_STATE_CHANGES.labels(provider=provider, state="open").inc()
-                except Exception:
-                    pass
-            state[provider] = provider_state
-            self._cb_state = state
-        except Exception:
-            pass
-
-    def _cb_on_success(self, provider: str | None) -> None:
-        try:
-            if not provider:
-                return
-            state = getattr(self, "_cb_state", {})
-            provider_state = state.get(provider) or {"failures": 0, "state": "closed"}
-            provider_state["failures"] = 0
-            provider_state["state"] = "closed"
-            try:
-                from app.core.monitoring.chat_metrics import CHAT_CB_STATE_CHANGES
-
-                CHAT_CB_STATE_CHANGES.labels(provider=provider, state="closed").inc()
-            except Exception:
-                pass
-            state[provider] = provider_state
-            self._cb_state = state
-        except Exception:
-            pass

@@ -14,9 +14,8 @@ from inspect import isawaitable
 from typing import Any
 
 import structlog
-from prometheus_client import Counter, Gauge
-
 from app.config import settings
+from prometheus_client import Counter, Gauge
 
 logger = structlog.get_logger(__name__)
 
@@ -313,10 +312,6 @@ async def initialize_default_jobs(scheduler: SchedulerService):
     """
     from app.core.agents.meta_agent import get_meta_agent
     from app.core.memory.memory_core import get_memory_db
-    from app.core.monitoring import get_health_monitor
-    from app.core.monitoring.poison_pill_handler import get_poison_pill_handler
-    from app.repositories.observability_repository import ObservabilityRepository
-    from app.services.observability_service import ObservabilityService
 
     # Job: MetaAgent Analysis (a cada 5 minutos)
     async def meta_agent_analysis():
@@ -520,6 +515,30 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         ),
         metadata={
             "description": "Expurgo auditável de secret memory expirada (RETENTION_PURGE_ENABLED)",
+        },
+    )
+
+    async def chat_rest_run_cleanup():
+        try:
+            from app.services.chat_rest_run_service import get_chat_rest_run_service
+
+            deleted = await asyncio.to_thread(
+                get_chat_rest_run_service().cleanup_expired
+            )
+            logger.info("chat_rest_run_cleanup", deleted=deleted)
+        except Exception as e:
+            logger.error("chat_rest_run_cleanup_failed", error=str(e))
+
+    scheduler.register_job(
+        name="chat_rest_run_cleanup",
+        callback=chat_rest_run_cleanup,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(
+            300,
+            int(getattr(settings, "CHAT_REST_RUN_CLEANUP_INTERVAL_SECONDS", 3600)),
+        ),
+        metadata={
+            "description": "Remove registros REST idempotentes terminais expirados",
         },
     )
 

@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+import hashlib
 import os
-from pathlib import Path
 import re
 import time
-from typing import Any
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, cast
 from uuid import uuid4
 
 import structlog
-
 from app.core.llm import ModelPriority, ModelRole
+from app.repositories.chat_study_repository import (
+    ChatStudyRepository,
+    ChatStudyRunState,
+    ChatStudyTransitionConflict,
+)
 from app.services.chat.chat_citation_service import build_citation_status, collect_chat_citations
 
 logger = structlog.get_logger(__name__)
@@ -128,6 +133,26 @@ class ChatStudyJob:
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    version: int = 1
+
+
+def _job_from_state(state: ChatStudyRunState) -> ChatStudyJob:
+    return ChatStudyJob(
+        job_id=state.job_id,
+        conversation_id=state.conversation_id,
+        message_id=state.message_id,
+        question=state.question,
+        user_id=state.owner_user_id or None,
+        status=state.status,
+        progress=state.progress,
+        placeholder_message=state.placeholder_message,
+        failure_classification=state.failure_classification,
+        final_response=state.final_response,
+        error=state.error,
+        created_at=state.created_at,
+        updated_at=state.updated_at,
+        version=state.version,
+    )
 
 
 class ChatStudyService:
@@ -265,7 +290,7 @@ class ChatStudyService:
         if self._knowledge is None or not hasattr(self._knowledge, "get_health_status"):
             return {}
         try:
-            return await self._knowledge.get_health_status()
+            return cast(dict[str, Any], await self._knowledge.get_health_status())
         except Exception as exc:
             logger.warning("chat_study_health_failed", error=str(exc))
             return {"status": "degraded"}
@@ -425,10 +450,22 @@ class ChatStudyService:
 
 
 class ChatStudyJobService:
-    def __init__(self, *, study_service: ChatStudyService, chat_service: Any) -> None:
+    def __init__(
+        self,
+        *,
+        study_service: ChatStudyService,
+        chat_service: Any,
+        repository: ChatStudyRepository | None = None,
+    ) -> None:
         self._study_service = study_service
         self._chat_service = chat_service
         self._jobs: dict[str, ChatStudyJob] = {}
+        self._repository = (
+            repository
+            if repository is not None
+            else (None if os.getenv("PYTEST_CURRENT_TEST") else ChatStudyRepository())
+        )
+        self._lease_seconds = int(os.getenv("CHAT_STUDY_JOB_LEASE_SECONDS", "300"))
 
     def create_job(
         self,
@@ -449,11 +486,43 @@ class ChatStudyJobService:
             progress=5,
             placeholder_message=placeholder_message,
         )
+        if self._repository is not None:
+            fingerprint = hashlib.sha256(question.encode("utf-8")).hexdigest()
+            state = self._repository.create_pending(
+                job_id=job.job_id,
+                owner_user_id=str(user_id or ""),
+                conversation_id=conversation_id,
+                message_id=str(message_id),
+                question=question,
+                request_fingerprint=fingerprint,
+                placeholder_message=placeholder_message,
+            )
+            return _job_from_state(state)
         self._jobs[job.job_id] = job
         return job
 
     def get_job(self, job_id: str) -> ChatStudyJob | None:
+        if self._repository is not None:
+            state = self._repository.get(job_id)
+            return _job_from_state(state) if state is not None else None
         return self._jobs.get(job_id)
+
+    def cancel_job(self, job_id: str) -> ChatStudyJob | None:
+        job = self.get_job(job_id)
+        if job is None:
+            return None
+        if self._repository is not None:
+            state = self._repository.transition(
+                job_id=job_id,
+                from_states={"pending", "running"},
+                to_state="cancelled",
+                progress=job.progress,
+            )
+            return _job_from_state(state)
+        if job.status in {"pending", "running"}:
+            job.status = "cancelled"
+            job.updated_at = time.time()
+        return job
 
     async def run_job(
         self,
@@ -462,17 +531,45 @@ class ChatStudyJobService:
         role: ModelRole = ModelRole.ORCHESTRATOR,
         priority: ModelPriority = ModelPriority.FAST_AND_CHEAP,
     ) -> None:
-        job = self._jobs.get(job_id)
+        if self._repository is not None:
+            state = await asyncio.to_thread(self._repository.get, job_id)
+            job = _job_from_state(state) if state is not None else None
+        else:
+            job = self.get_job(job_id)
         if job is None:
             return
-        job.status = "running"
-        job.updated_at = time.time()
+        worker_token: str | None = None
+        if self._repository is not None:
+            worker_token = uuid4().hex
+            claimed = await asyncio.to_thread(
+                self._repository.claim,
+                job_id=job_id,
+                worker_token=worker_token,
+                lease_seconds=self._lease_seconds,
+            )
+            if claimed is None:
+                return
+            job = _job_from_state(claimed)
+        else:
+            job.status = "running"
+            job.updated_at = time.time()
 
         async def _progress(value: int, _stage: str, reason: str) -> None:
             job.progress = value
             job.updated_at = time.time()
             if reason:
                 job.placeholder_message = reason
+            if self._repository is not None:
+                await asyncio.to_thread(
+                    self._repository.transition,
+                    job_id=job_id,
+                    from_states={"running"},
+                    to_state="running",
+                    progress=value,
+                    placeholder_message=reason or job.placeholder_message,
+                    worker_token=worker_token,
+                    lease_seconds=self._lease_seconds,
+                )
 
         try:
             result = await self._study_service.answer_with_study(
@@ -492,12 +589,6 @@ class ChatStudyJobService:
                 "provider": result.get("provider"),
                 "model": result.get("model"),
             }
-            await self._chat_service.update_message_payload(
-                conversation_id=job.conversation_id,
-                message_id=int(job.message_id),
-                patch=patch,
-                user_id=job.user_id,
-            )
             job.status = "completed"
             job.progress = 100
             job.failure_classification = result.get("failure_classification")
@@ -507,11 +598,50 @@ class ChatStudyJobService:
                 **result,
             }
             job.updated_at = time.time()
+            if self._repository is not None:
+                await asyncio.to_thread(
+                    self._repository.transition,
+                    job_id=job_id,
+                    from_states={"running"},
+                    to_state="completed",
+                    progress=100,
+                    failure_classification=job.failure_classification,
+                    final_response=job.final_response,
+                    worker_token=worker_token,
+                )
+            try:
+                await self._chat_service.update_message_payload(
+                    conversation_id=job.conversation_id,
+                    message_id=int(job.message_id),
+                    patch=patch,
+                    user_id=job.user_id,
+                )
+            except Exception as materialization_exc:
+                logger.error(
+                    "chat_study_result_materialization_failed",
+                    job_id=job_id,
+                    error=str(materialization_exc),
+                )
         except Exception as exc:
             logger.error("chat_study_job_failed", job_id=job_id, error=str(exc))
             job.status = "failed"
             job.error = str(exc)
             job.updated_at = time.time()
+            if self._repository is not None:
+                try:
+                    await asyncio.to_thread(
+                        self._repository.transition,
+                        job_id=job_id,
+                        from_states={"pending", "running"},
+                        to_state="failed",
+                        failure_classification="application",
+                        error=str(exc),
+                        worker_token=worker_token,
+                    )
+                except ChatStudyTransitionConflict:
+                    current = await asyncio.to_thread(self._repository.get, job_id)
+                    if current is not None and current.status in {"cancelled", "completed"}:
+                        return
             try:
                 await self._chat_service.update_message_payload(
                     conversation_id=job.conversation_id,

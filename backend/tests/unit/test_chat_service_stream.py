@@ -10,7 +10,18 @@ class DummyLLM(LLMService):
     def __init__(self):
         pass
 
-    def invoke_llm(self, prompt, role, priority, timeout_seconds=None, project_id=None):
+    async def invoke_llm(
+        self,
+        prompt,
+        role,
+        priority,
+        timeout_seconds=None,
+        task_type=None,
+        complexity=None,
+        policy_overrides=None,
+        user_id=None,
+        project_id=None,
+    ):
         return {"response": "ok", "provider": "dummy", "model": "m"}
 
     def select_provider(self, role, priority, project_id=None):

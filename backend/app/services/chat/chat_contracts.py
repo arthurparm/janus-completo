@@ -235,6 +235,16 @@ def normalize_understanding_payload(
     if not isinstance(understanding, dict):
         return None
     normalized = dict(understanding)
+    if normalized.get("confidence") is not None:
+        try:
+            confidence = max(0.0, min(1.0, float(normalized["confidence"])))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        normalized["confidence"] = round(confidence, 2)
+        normalized["confidence_band"] = (
+            "high" if confidence >= 0.80 else "medium" if confidence >= 0.60 else "low"
+        )
+        normalized["low_confidence"] = confidence < 0.65
     normalized_reason = _normalize_confirmation_reason(normalized.get("confirmation_reason"))
     if normalized_reason is None:
         normalized.pop("confirmation_reason", None)

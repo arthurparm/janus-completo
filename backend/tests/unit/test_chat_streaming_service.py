@@ -2,8 +2,19 @@ import json
 
 import pytest
 from app.core.llm import ModelPriority, ModelRole
+from app.services.chat.chat_citation_service import (
+    references_uploaded_material,
+    requires_mandatory_citations,
+)
 from app.services.chat.conversation_service import ConversationService
 from app.services.chat.streaming_service import StreamingService
+from app.services.chat.turn_core import (
+    ChatTurnFinalizer,
+    ChatTurnPlanner,
+    TurnExecutionResult,
+    TurnPlanningSignals,
+    TurnStrategy,
+)
 
 MANDATORY_CITATION_GUARD_TEXT = (
     "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
@@ -40,7 +51,7 @@ class _FakeLLM:
     def is_provider_open(self, provider: str) -> bool:
         return False
 
-    def invoke_llm(
+    async def invoke_llm(
         self,
         prompt,
         role,
@@ -95,10 +106,13 @@ class _FakePromptService:
 
 
 class _FakeMessageOrchestration:
-    def __init__(self):
+    def __init__(self, llm_service):
         self.calls = 0
         self.grounded_calls = 0
         self.grounded_result = None
+        self._llm = llm_service
+        self._planner = ChatTurnPlanner()
+        self._finalizer = ChatTurnFinalizer()
 
     def _should_use_light_chat(self, *, message, role, understanding):
         if role != ModelRole.ORCHESTRATOR:
@@ -106,6 +120,71 @@ class _FakeMessageOrchestration:
         if not understanding or understanding.get("intent") not in {"general", "question"}:
             return False
         return len((message or "").strip()) <= 160
+
+    def build_turn_plan(self, *, request, understanding, routing_decision):
+        risk_level = getattr(routing_decision, "risk_level", None)
+        return self._planner.plan(
+            request,
+            TurnPlanningSignals(
+                understanding=understanding,
+                light_chat_eligible=self._should_use_light_chat(
+                    message=request.message,
+                    role=request.role,
+                    understanding=understanding,
+                ),
+                citation_lookup_required=(
+                    requires_mandatory_citations(request.message)
+                    or references_uploaded_material(request.message)
+                ),
+                risk_level=risk_level,
+            ),
+        )
+
+    async def execute_dynamic_turn(self, *, plan, request, prompt, persona):
+        payload = await self._llm.invoke_llm(
+            prompt=prompt,
+            role=request.role,
+            priority=request.priority,
+            timeout_seconds=request.timeout_seconds or 12,
+            task_type="general_task",
+            complexity="low",
+            policy_overrides={
+                "role": request.role.value,
+                "priority": request.priority.value,
+                "timeout_seconds": request.timeout_seconds or 12,
+            },
+            user_id=request.user_id,
+            project_id=request.project_id,
+        )
+        return TurnExecutionResult.from_payload(
+            strategy=plan.dynamic_strategy,
+            payload=payload,
+            default_role=request.role,
+        )
+
+    def execute_static_turn(self, *, strategy, role):
+        response_by_strategy = {
+            TurnStrategy.HIGH_RISK_CONFIRMATION: (
+                "Pedido classificado como alto risco. "
+                "Confirme o objetivo e o escopo antes de seguir."
+            ),
+            TurnStrategy.STATIC_DISCOVERY: "discovery",
+            TurnStrategy.STATIC_DOCS: "docs",
+            TurnStrategy.STATIC_CAPABILITIES: "capabilities",
+            TurnStrategy.BLOCKED_TOOL_CREATION: (
+                "Tool creation and autonomous code evolution are permanently disabled."
+            ),
+        }
+        return TurnExecutionResult(
+            strategy=strategy,
+            response=response_by_strategy[strategy],
+            provider="janus",
+            model=strategy.value,
+            role=role.value,
+        )
+
+    def finalize_turn(self, **kwargs):
+        return self._finalizer.finalize(**kwargs)
 
     async def generate_document_grounded_reply(self, **kwargs):
         self.grounded_calls += 1
@@ -193,11 +272,12 @@ def _parse_sse_chunks(chunks: list[str]) -> list[tuple[str, object]]:
 @pytest.mark.asyncio
 async def test_streaming_service_emits_protocol_partial_and_done():
     repo = _FakeRepo()
+    llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     streaming = StreamingService(
         repo=repo,
-        llm_service=_FakeLLM(),
+        llm_service=llm,
         tool_service=None,
         prompt_service=_FakePromptService(),
         rag_service=None,
@@ -233,7 +313,7 @@ async def test_streaming_service_light_chat_skips_rag_grounding_and_optional_cit
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -268,11 +348,12 @@ async def test_streaming_service_light_chat_skips_rag_grounding_and_optional_cit
 @pytest.mark.asyncio
 async def test_streaming_service_sse_high_risk_emits_confirmation_and_waiting_state(monkeypatch):
     repo = _FakeRepo()
+    llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     streaming = StreamingService(
         repo=repo,
-        llm_service=_FakeLLM(),
+        llm_service=llm,
         tool_service=None,
         prompt_service=_FakePromptService(),
         rag_service=None,
@@ -325,11 +406,12 @@ async def test_streaming_service_sse_high_risk_emits_confirmation_and_waiting_st
 @pytest.mark.asyncio
 async def test_streaming_service_sse_non_risk_does_not_emit_confirmation(monkeypatch):
     repo = _FakeRepo()
+    llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     streaming = StreamingService(
         repo=repo,
-        llm_service=_FakeLLM(),
+        llm_service=llm,
         tool_service=None,
         prompt_service=_FakePromptService(),
         rag_service=None,
@@ -363,11 +445,12 @@ async def test_streaming_service_sse_non_risk_does_not_emit_confirmation(monkeyp
 @pytest.mark.asyncio
 async def test_streaming_service_missing_required_citations_emits_and_persists_guard(monkeypatch):
     repo = _FakeRepo()
+    llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     streaming = StreamingService(
         repo=repo,
-        llm_service=_FakeLLM(),
+        llm_service=llm,
         tool_service=None,
         prompt_service=_FakePromptService(),
         rag_service=None,
@@ -417,11 +500,12 @@ async def test_streaming_service_missing_required_citations_emits_and_persists_g
 @pytest.mark.asyncio
 async def test_streaming_service_missing_required_citations_with_knowledge_space_skips_repo_study(monkeypatch):
     repo = _FakeRepo()
+    llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     streaming = StreamingService(
         repo=repo,
-        llm_service=_FakeLLM(),
+        llm_service=llm,
         tool_service=None,
         prompt_service=_FakePromptService(),
         rag_service=None,
@@ -437,14 +521,6 @@ async def test_streaming_service_missing_required_citations_with_knowledge_space
             "count": 0,
             "reason": "no_retrievable_sources",
         },
-    )
-
-    async def _explode(*args, **kwargs):
-        raise AssertionError("repo study fallback should not run when knowledge space is active")
-
-    monkeypatch.setattr(
-        "app.services.chat.streaming_service.ChatStudyService.answer_with_study",
-        _explode,
     )
 
     chunks = [
@@ -478,8 +554,9 @@ async def test_streaming_service_missing_required_citations_with_knowledge_space
 @pytest.mark.asyncio
 async def test_streaming_service_document_grounding_short_circuits_llm():
     repo = _FakeRepo()
+    llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration()
+    msg_orch = _FakeMessageOrchestration(llm)
     msg_orch.grounded_result = {
         "response": "Do documento:\n- O texto menciona facial droop.",
         "provider": "janus",
@@ -496,7 +573,7 @@ async def test_streaming_service_document_grounding_short_circuits_llm():
     }
     streaming = StreamingService(
         repo=repo,
-        llm_service=_FakeLLM(),
+        llm_service=llm,
         tool_service=None,
         prompt_service=_FakePromptService(),
         rag_service=None,

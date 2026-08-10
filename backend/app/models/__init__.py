@@ -14,8 +14,10 @@ from app.models.autonomy_models import (
     AutonomyStep,
     AutonomyTaskEvidence,
 )
-from app.models.config_models import AgentConfiguration, Base, OptimizationHistory, Prompt
+from app.models.chat_rest_models import ChatRestRun
 from app.models.chat_stream_models import ChatStreamEvent, ChatStreamRun
+from app.models.chat_study_models import ChatStudyRun
+from app.models.config_models import AgentConfiguration, Base, OptimizationHistory, Prompt
 from app.models.document_models import DocumentManifest
 from app.models.feedback_models import FeedbackEntry
 from app.models.knowledge_space_models import KnowledgeSpace
@@ -39,6 +41,8 @@ __all__ = [
     "OptimizationHistory",
     "ChatStreamRun",
     "ChatStreamEvent",
+    "ChatStudyRun",
+    "ChatRestRun",
     "AutonomyRun",
     "AutonomyStep",
     "AutonomyEnqueueLedger",

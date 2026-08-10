@@ -8,6 +8,7 @@ from app.repositories.chat_stream_repository import (
     ChatStreamIdempotencyConflict,
     ChatStreamRunState,
 )
+from app.services.chat_rest_run_service import get_chat_rest_run_service
 from app.services.chat_service import get_chat_service
 from app.services.chat_stream_run_service import (
     ChatStreamAttachment,
@@ -34,6 +35,7 @@ class _DummyChatService:
         self._repo = _DummyRepo()
         self.last_start_user_id = None
         self.last_message_user_id = None
+        self.message_calls = 0
         self.last_stream_user_id = None
         self.last_stream_conversation_id = None
         self.last_events_user_id = None
@@ -42,6 +44,7 @@ class _DummyChatService:
         self.last_replaced_text = None
         self.last_replaced_user_id = None
         self.last_message_patch = None
+        self.last_finalized_turn = None
         self.last_history_user_id = None
         self.list_calls = 0
         self._assistant_message = {"id": "77", "role": "assistant", "text": "ok"}
@@ -53,7 +56,17 @@ class _DummyChatService:
     def resolve_active_knowledge_space_id(self, conversation_id, user_id, requested_knowledge_space_id=None):
         return requested_knowledge_space_id
 
+    async def resolve_authorized_knowledge_space_id(
+        self,
+        conversation_id,
+        user_id,
+        project_id=None,
+        requested_knowledge_space_id=None,
+    ):
+        return requested_knowledge_space_id
+
     async def send_message(self, **kwargs):
+        self.message_calls += 1
         self.last_message_user_id = kwargs.get("user_id")
         return {
             "response": "ok",
@@ -93,6 +106,17 @@ class _DummyChatService:
             "user_id": user_id,
         }
         self._assistant_message.update({"text": patch.get("text", self._assistant_message["text"])})
+        return dict(self._assistant_message)
+
+    async def persist_finalized_turn(self, **kwargs):
+        self.last_finalized_turn = kwargs
+        result = kwargs["result"]
+        self._assistant_message = {
+            "id": "77",
+            "role": "assistant",
+            "text": result.get("response"),
+            **result,
+        }
         return dict(self._assistant_message)
 
     def stream_message(self, **kwargs):
@@ -188,17 +212,46 @@ class _DummyChatStreamRunService:
                 yield f"id: {sequence}\n{chunk}"
 
 
+class _DummyChatRestRunService:
+    def __init__(self):
+        self.records = {}
+
+    def attach(self, *, owner_user_id, conversation_id, request_id, request_fingerprint):
+        key = (owner_user_id, conversation_id, request_id)
+        record = self.records.get(key)
+        if record is not None:
+            return SimpleNamespace(
+                replay_result=record,
+                producer_token=None,
+            )
+        return SimpleNamespace(
+            replay_result=None,
+            producer_token="producer-1",
+            key=key,
+        )
+
+    def complete(self, attachment, result):
+        self.records[attachment.key] = dict(result)
+
+    def fail(self, attachment, error_code):
+        return None
+
+
 def _build_client(
     chat_service: _DummyChatService,
     memory_service: _DummyMemoryService | None = None,
     study_jobs=None,
     stream_run_service: _DummyChatStreamRunService | None = None,
+    rest_run_service: _DummyChatRestRunService | None = None,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(chat_router, prefix="/api/v1/chat")
     app.dependency_overrides[get_chat_service] = lambda: chat_service
     app.dependency_overrides[get_chat_stream_run_service] = (
         lambda: stream_run_service or _DummyChatStreamRunService()
+    )
+    app.dependency_overrides[get_chat_rest_run_service] = (
+        lambda: rest_run_service or _DummyChatRestRunService()
     )
     app.dependency_overrides[get_memory_service] = lambda: memory_service or _DummyMemoryService()
     if study_jobs is not None:
@@ -301,6 +354,25 @@ def test_chat_message_auth_precedes_body_validation():
     assert authenticated_missing_fields.status_code == 422
 
 
+def test_chat_message_idempotency_replays_without_second_execution():
+    service = _DummyChatService()
+    rest_runs = _DummyChatRestRunService()
+    client = _build_client(service, rest_run_service=rest_runs)
+    headers = _auth_headers(77)
+    payload = {
+        "conversation_id": "conv-rest-replay",
+        "message": "Explique a resposta de forma breve.",
+    }
+
+    first = client.post("/api/v1/chat/message", json=payload, headers=headers)
+    second = client.post("/api/v1/chat/message", json=payload, headers=headers)
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json() == first.json()
+    assert service.message_calls == 1
+
+
 def test_chat_message_requires_citations_for_code_or_docs_queries(monkeypatch):
     async def _no_citations(**kwargs):
         return {"citations": [], "retrieval_failed": False}
@@ -331,7 +403,7 @@ def test_chat_message_requires_citations_for_code_or_docs_queries(monkeypatch):
     assert "estudando a base" in data["response"].lower()
     assert data["study_job"]["job_id"]
     assert data["message_id"] == "77"
-    assert svc.last_message_patch["patch"]["delivery_status"] == "pending_study"
+    assert svc.last_finalized_turn["result"]["delivery_status"] == "pending_study"
 
 
 def test_chat_study_job_denies_access_to_other_user_with_authenticated_actor():

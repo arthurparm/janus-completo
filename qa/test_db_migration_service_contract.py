@@ -57,6 +57,8 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
     assert any("CREATE TABLE IF NOT EXISTS data_governance_records" in q for q in fake.executed_sql)
     assert any("CREATE TABLE chat_stream_runs" in q for q in fake.executed_sql)
     assert any("CREATE TABLE chat_stream_events" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE chat_study_runs" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE chat_rest_runs" in q for q in fake.executed_sql)
     assert all("audit_events" not in q for q in fake.executed_sql)
 
 
@@ -194,6 +196,7 @@ def test_chat_stream_ledger_migration_is_owner_scoped_and_cursor_indexed(monkeyp
     applied: list[str] = []
     monkeypatch.setattr(svc, "_table_exists", lambda *_args: False)
     monkeypatch.setattr(svc, "_index_exists", lambda *_args: False)
+    monkeypatch.setattr(svc, "_column_exists", lambda *_args: False)
 
     svc._prepare_chat_stream_ledger_schema(
         fake,
@@ -207,3 +210,42 @@ def test_chat_stream_ledger_migration_is_owner_scoped_and_cursor_indexed(monkeyp
     assert "UNIQUE (owner_user_id, session_id, request_id)" in sql
     assert "UNIQUE (run_id, sequence)" in sql
     assert "CREATE INDEX idx_chat_stream_event_cursor" in sql
+
+
+def test_chat_study_migration_is_owner_scoped_versioned_and_indexed(monkeypatch):
+    svc = DBMigrationService()
+    fake = _FakeSession("postgresql")
+    applied: list[str] = []
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args: False)
+    monkeypatch.setattr(svc, "_index_exists", lambda *_args: False)
+
+    svc._prepare_chat_study_schema(fake, dialect="postgresql", applied=applied)
+
+    sql = "\n".join(fake.executed_sql)
+    assert "owner_user_id VARCHAR(128) NOT NULL" in sql
+    assert "version INTEGER NOT NULL DEFAULT 1" in sql
+    assert "worker_token VARCHAR(64)" in sql
+    assert "lease_until TIMESTAMP" in sql
+    assert "UNIQUE (owner_user_id, conversation_id, message_id)" in sql
+    assert "CREATE INDEX idx_chat_study_status_lease" in sql
+
+
+def test_chat_rest_migration_is_scoped_leased_and_retained(monkeypatch):
+    svc = DBMigrationService()
+    fake = _FakeSession("postgresql")
+    applied: list[str] = []
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args: False)
+    monkeypatch.setattr(svc, "_index_exists", lambda *_args: False)
+
+    svc._prepare_chat_rest_idempotency_schema(
+        fake,
+        dialect="postgresql",
+        applied=applied,
+    )
+
+    sql = "\n".join(fake.executed_sql)
+    assert "UNIQUE (owner_user_id, conversation_id, request_id)" in sql
+    assert "producer_token VARCHAR(64)" in sql
+    assert "lease_until TIMESTAMP" in sql
+    assert "expires_at TIMESTAMP NOT NULL" in sql
+    assert "CREATE INDEX idx_chat_rest_status_lease" in sql
