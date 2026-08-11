@@ -19,6 +19,8 @@ No Janus, liberdade significa agência reflexiva e responsável: ele pode propor
 
 A versão executável dessa lei vive em `backend/app/core/project_constitution.py`. Ela é aplicada antes dos prompts configuráveis do chat e em todas as etapas do planejador autônomo, para que uma configuração dinâmica não possa apagar a missão fundadora.
 
+As consequências dessa filosofia para arquitetura, modelos de metas, memória, reflexão, segurança, UX e revisão de código estão definidas em [Filosofia do Projeto Janus](documentation/janus-project-philosophy.md). Esse documento é obrigatório para alterações em agentes e autonomia, conforme o contrato de `AGENTS.md`.
+
 ## Structure
 
 ### Frontend (`frontend/`)
@@ -118,20 +120,19 @@ environment.
 
 ## Documentation
 
-Comprehensive documentation is available in the `documentation/` directory:
+Canonical documentation:
 
-- [Project Overview](documentation/project-overview.md)
-- [Architecture - Frontend](documentation/architecture-frontend.md)
-- [Architecture - Backend](documentation/architecture-backend.md)
-- [Integration Architecture](documentation/integration-architecture.md)
-- [Deployment Guide](documentation/deployment-guide.md)
-- [Deployment Split PC1/PC2](documentation/deployment-split-pc1-pc2.md)
-- [API Endpoint Matrix (Live)](documentation/qa/api-endpoint-matrix.md)
-- [API Test Playbook](documentation/qa/api-test-playbook.md)
-- [Incident Response Runbook](documentation/operations/incident-response-runbook.md)
-- [Postmortem Template](documentation/qa/postmortem-template.md)
-- [Domain SLOs and Alerts](documentation/qa/domain-slo-alerts.md)
-- [Technical Backlog](documentation/planning/technical-backlog.md)
+- [Filosofia do Projeto Janus](documentation/janus-project-philosophy.md)
+- [Mapa do código](CODEBASE_MAP.md)
+- [Runtime do backend](BACKEND_RUNTIME.md)
+- [Arquitetura do frontend Angular](FRONTEND_ANGULAR.md)
+- [Operação e QA](OPS_QA.md)
+- [Autonomia e riscos](AUTONOMY_RISK.md)
+- [Índice de memória do projeto](PROJECT_MEMORY_INDEX.md)
+- [Matriz de endpoints da API](documentation/qa/api-endpoint-matrix.md)
+- [OpenAPI](documentation/openapi/README.md)
+- [Runbook de prontidão para produção](documentation/operations/production-readiness-runbook.md)
+- [Checklist de sequência de release](documentation/operations/release-sequence-checklist.md)
 
 ## Roadmap / Backlog
 

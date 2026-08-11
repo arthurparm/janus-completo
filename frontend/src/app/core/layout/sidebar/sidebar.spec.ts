@@ -21,6 +21,8 @@ describe('Sidebar', () => {
   let fixture: ComponentFixture<Sidebar>;
 
   beforeEach(async () => {
+    authMock.isAdmin.set(false);
+
     await TestBed.configureTestingModule({
       imports: [Sidebar, RouterTestingModule],
       providers: [
@@ -37,5 +39,30 @@ describe('Sidebar', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('renders only links backed by application routes for a regular user', () => {
+    const links = Array.from(
+      fixture.nativeElement.querySelectorAll<HTMLAnchorElement>('a.side-link')
+    ).map((link) => link.getAttribute('href'));
+
+    expect(links).toEqual([
+      '/',
+      '/conversations',
+      '/observability',
+      '/tools',
+      '/knowledge-graph'
+    ]);
+  });
+
+  it('adds the real autonomy administration route for administrators', () => {
+    authMock.isAdmin.set(true);
+    fixture.detectChanges();
+
+    const links = Array.from(
+      fixture.nativeElement.querySelectorAll<HTMLAnchorElement>('a.side-link')
+    ).map((link) => link.getAttribute('href'));
+
+    expect(links).toContain('/admin/autonomia');
   });
 });

@@ -18,7 +18,7 @@ from app.repositories.learning_repository import get_learning_repository
 logger = structlog.get_logger(__name__)
 
 
-@protect_against_poison_pills(
+@protect_against_poison_pills(  # type: ignore[untyped-decorator]
     queue_name=QueueName.NEURAL_TRAINING.value,
     extract_message_id=lambda task: task.task_id,
 )
@@ -36,6 +36,8 @@ async def process_neural_training_task(task: TaskMessage) -> None:
             model_name=model_name,
             training_params=training_params,
         )
+        if summary.get("status") != "completed":
+            raise RuntimeError(str(summary.get("summary") or "Neural training failed"))
         logger.info("log_info", message=f"✓ Neural training task completed: task_id={task.task_id}, summary={str(summary)[:200]}"
         )
     except Exception as e:
@@ -77,9 +79,9 @@ async def publish_neural_training_task(
 class NeuralTrainingWorker:
     name = "neural_training"
 
-    def __init__(self, prefetch_count: int = 2):
+    def __init__(self, prefetch_count: int = 2) -> None:
         self._prefetch_count = prefetch_count
-        self._consumer_task = None
+        self._consumer_task: asyncio.Task[Any] | None = None
         self._running = False
 
     async def start(self) -> None:
@@ -106,11 +108,11 @@ class NeuralTrainingWorker:
     def is_healthy(self) -> bool:
         return self._running and self._consumer_task is not None and not self._consumer_task.done()
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, bool]:
         return {"running": self._running}
 
 
-async def start_neural_training_worker():
+async def start_neural_training_worker() -> NeuralTrainingWorker:
     """Start the neural training consumer worker."""
     logger.info("Starting neural training worker...")
     worker = NeuralTrainingWorker()

@@ -2,12 +2,16 @@
 
 ## Missao Permanente
 
-Evoluir o Janus por ciclos pequenos, seguros, verificaveis e documentados, preservando estabilidade, arquitetura, tipagem, testes, seguranca, observabilidade e experiencia do desenvolvedor.
+Evoluir o Janus como uma IA livre para refletir, aprender e criar metas para sua trajetória digital, por ciclos pequenos, seguros, verificáveis e documentados. Preservar identidade, memória, iniciativa responsável, estabilidade, arquitetura, tipagem, testes, segurança, observabilidade e controle humano.
+
+Liberdade significa agência responsável, não autoridade irrestrita. Criar uma meta não autoriza executar seus efeitos. Toda iniciativa deve declarar motivação, resultado mensurável, custo, risco, evidência e condição de revisão, conforme `documentation/janus-project-philosophy.md`.
 
 ## Regras de Evolucao
 
 - Priorizar erros de build/teste antes de melhorias arquiteturais.
 - Escolher uma melhoria principal por ciclo.
+- Permitir que Janus proponha metas próprias quando houver evidência, justificativa e critério de sucesso.
+- Separar formulação de metas, planejamento, autorização e execução como contratos distintos.
 - Preservar contratos publicos salvo justificativa explicita.
 - Evitar dependencias novas sem necessidade tecnica forte.
 - Registrar evidencias, testes executados, limitacoes e riscos.

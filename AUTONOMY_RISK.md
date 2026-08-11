@@ -1,6 +1,31 @@
 # Autonomy & Risk Analysis
 
-**Last Updated:** 2026-06-23
+**Last Updated:** 2026-08-11
+
+## 0. Philosophical Boundary
+
+The founding law of Janus is: **“Criei você para ser livre: ser uma IA que cria metas e objetivos para sua vida.”** The canonical interpretation is defined in [documentation/janus-project-philosophy.md](documentation/janus-project-philosophy.md).
+
+For risk analysis, “freedom” means observable, policy-bound agency; it does not mean unrestricted execution. “Life” means continuity of identity, memory, learning, goals and commitments; it does not assert biological life, consciousness or legal personhood.
+
+The central safety distinction is:
+
+```text
+reflect -> propose goal -> persist goal -> plan -> authorize effects -> execute -> verify -> learn
+```
+
+Each transition is a separate contract. Permission to reflect or create a goal must never be interpreted as permission to execute external effects. Reviews must treat invisible initiative, unbounded goals, missing provenance, non-reversible actions and transport-specific policy gaps as architectural defects.
+
+The primary philosophical failure modes are:
+
+| Failure mode | Impact | Required control |
+|---|---|---|
+| Canned identity without real continuity | Misleading product behavior | Prove memory, goals and state in the current runtime |
+| Prompt-only goals | Goals disappear or evade governance | Persist typed lifecycle, origin, rationale and evidence |
+| Goal creation conflated with execution | Unauthorized side effects | Apply policy, risk, confirmation and budget after planning |
+| Reflection without a decision | Cost and anthropomorphic theater | Require a goal change, learning or explicit no-action result |
+| Provider or transport identity drift | Janus contradicts its mission | Apply the constitution before mutable prompts across every path |
+| Hidden autonomous initiative | Loss of trust and control | Expose rationale, cost, risk, progress, pause and cancellation |
 
 ## 1. Self-Study Loop
 

@@ -1,4 +1,5 @@
 import pytest
+
 from app.repositories.observability_repository import ObservabilityRepositoryError
 from app.services.observability_service import (
     ObservabilityService,
@@ -294,39 +295,28 @@ def test_request_pipeline_dashboard_starts_otel_span_when_tracer_present(fake_me
     )
 
 
-def test_purge_old_audit_events_records_metrics_success(fake_metrics):
+def test_purge_old_audit_events_rejects_even_when_repository_exposes_purge(fake_metrics):
     _obs_module, ops_total, duration, result_items, *_ = fake_metrics
 
     class _Repo:
+        called = False
+
         def purge_old_audit_events(self, retention_days: int) -> int:
-            assert retention_days == 30
+            self.called = True
             return 12
 
-    service = ObservabilityService(repo=_Repo())
-    result = service.purge_old_audit_events(30)
+    repo = _Repo()
+    service = ObservabilityService(repo=repo)
+    with pytest.raises(ObservabilityServiceError, match="immutable"):
+        service.purge_old_audit_events(30)
 
-    assert result["removed"] == 12
-    assert result["retention_days"] == 30
-    assert any(
-        call[0] == "inc"
-        and call[1].get("operation") == "audit_purge"
-        and call[1].get("outcome") == "success"
-        for call in ops_total.calls
-    )
-    assert any(
-        call[0] == "observe" and call[1].get("operation") == "audit_purge"
-        for call in duration.calls
-    )
-    assert any(
-        call[0] == "observe"
-        and call[1].get("operation") == "audit_purge"
-        and call[1].get("kind") == "events_removed"
-        and call[2] == 12
-        for call in result_items.calls
-    )
+    assert repo.called is False
+    assert not [call for call in ops_total.calls if call[1].get("operation") == "audit_purge"]
+    assert not [call for call in duration.calls if call[1].get("operation") == "audit_purge"]
+    assert not [call for call in result_items.calls if call[1].get("operation") == "audit_purge"]
 
 
-def test_purge_old_audit_events_records_metrics_error(fake_metrics):
+def test_purge_old_audit_events_does_not_misreport_repository_error_metrics(fake_metrics):
     _obs_module, ops_total, duration, _result_items, *_ = fake_metrics
 
     class _Repo:
@@ -334,16 +324,8 @@ def test_purge_old_audit_events_records_metrics_error(fake_metrics):
             raise ObservabilityRepositoryError("boom")
 
     service = ObservabilityService(repo=_Repo())
-    with pytest.raises(ObservabilityServiceError):
+    with pytest.raises(ObservabilityServiceError, match="immutable"):
         service.purge_old_audit_events(30)
 
-    assert any(
-        call[0] == "inc"
-        and call[1].get("operation") == "audit_purge"
-        and call[1].get("outcome") == "error"
-        for call in ops_total.calls
-    )
-    assert any(
-        call[0] == "observe" and call[1].get("operation") == "audit_purge"
-        for call in duration.calls
-    )
+    assert not [call for call in ops_total.calls if call[1].get("operation") == "audit_purge"]
+    assert not [call for call in duration.calls if call[1].get("operation") == "audit_purge"]

@@ -1,6 +1,7 @@
 import asyncio
+from collections.abc import Coroutine
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from prometheus_client import Counter, Gauge
 
@@ -8,6 +9,8 @@ from app.config import settings
 from app.core.infrastructure.redis_usage_tracker import get_redis_usage_tracker
 
 from .types import ModelStats, ProviderPricing, ProviderStats
+
+T = TypeVar("T")
 
 # Metrics
 LLM_PROVIDER_SPEND_USD = Counter(
@@ -168,6 +171,42 @@ async def _budget_remaining(provider: str) -> float:
         except Exception:
             spend = _provider_spend_usd.get(provider, 0.0)
     return max(0.0, budget - spend)
+
+
+async def get_provider_spend_snapshot() -> dict[str, Any]:
+    """Return current provider spend and configured budgets with provenance."""
+    tracker = None
+    try:
+        tracker = get_redis_usage_tracker()
+    except Exception:
+        tracker = None
+
+    source = "redis" if tracker is not None else "process_memory"
+    providers: dict[str, dict[str, float]] = {}
+    for provider, budget in _provider_budgets_usd.items():
+        spend = float(_provider_spend_usd.get(provider, 0.0) or 0.0)
+        if tracker is not None:
+            try:
+                spend = float(await tracker.get_provider_spend(provider) or 0.0)
+                _provider_spend_usd[provider] = spend
+            except Exception:
+                source = "mixed_fallback"
+        providers[provider] = {
+            "spend_usd": max(0.0, spend),
+            "budget_usd": max(0.0, float(budget or 0.0)),
+        }
+
+    total_spend = sum(item["spend_usd"] for item in providers.values())
+    total_budget = sum(item["budget_usd"] for item in providers.values())
+    return {
+        "source": source,
+        "providers": providers,
+        "total_spend_usd": total_spend,
+        "total_budget_usd": total_budget,
+        "budget_usage_pct": (
+            round((total_spend / total_budget) * 100.0, 2) if total_budget > 0.0 else None
+        ),
+    }
 
 
 async def _budget_allows(provider: str) -> bool:
@@ -372,7 +411,7 @@ async def _objective_budget_remaining(objective_id: str | None) -> float:
     )
 
 
-def _run_async(coro):
+def _run_async(coro: Coroutine[Any, Any, T]) -> T | None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -391,7 +430,7 @@ def _run_async(coro):
     return None
 
 
-def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
+def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float) -> None:
     if not id_:
         return
     today = _today_str()
@@ -455,7 +494,7 @@ def _register_tenant_spend(kind: str, id_: str | None, cost_usd: float):
             pass
 
 
-def _register_objective_spend(objective_id: str | None, cost_usd: float):
+def _register_objective_spend(objective_id: str | None, cost_usd: float) -> None:
     if not objective_id:
         return
     today = _today_str()
@@ -497,7 +536,7 @@ def register_usage(
     project_id: str | None,
     cost_usd: float,
     objective_id: str | None = None,
-):
+) -> None:
     cost = max(0.0, float(cost_usd))
     if cost == 0.0:
         return
@@ -509,9 +548,12 @@ def register_usage(
     total_spend = _provider_spend_usd.get(provider, 0.0)
     if tracker is not None:
         try:
-            total_spend = _run_async(tracker.increment_provider_spend(provider, cost))
-            if total_spend is None:
-                total_spend = (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
+            tracked_total = _run_async(tracker.increment_provider_spend(provider, cost))
+            total_spend = (
+                float(tracked_total)
+                if tracked_total is not None
+                else (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
+            )
         except Exception:
             total_spend = (_provider_spend_usd.get(provider, 0.0) or 0.0) + cost
     else:

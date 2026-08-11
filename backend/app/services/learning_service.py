@@ -5,6 +5,7 @@ import structlog
 from fastapi import Depends
 
 from app.core.infrastructure.filesystem_manager import read_file
+from app.core.workers.neural_training_system import ModelType
 from app.core.workers.neural_training_worker import publish_neural_training_task
 from app.repositories.learning_repository import (
     LearningRepository,
@@ -86,13 +87,26 @@ class LearningService:
         """Publica uma tarefa de treinamento na fila e retorna o ack com task_id."""
         logger.info("Agendando treinamento de novo modelo", model_type=model_type)
         try:
+            try:
+                normalized_model_type = ModelType(str(model_type).lower())
+            except ValueError as exc:
+                raise TrainingFailedError(f"Tipo de modelo não suportado: {model_type}") from exc
+            if normalized_model_type != ModelType.CLASSIFIER:
+                raise TrainingFailedError(
+                    f"Backend de treinamento não implementado para {normalized_model_type.value}."
+                )
             # Deriva versão atual do dataset
             dataset_info = self._repo.get_dataset_version_info()
+            dataset_quality = self._repo.get_dataset_quality()
+            if not bool(dataset_quality["training_ready"]):
+                raise TrainingFailedError(
+                    "Dataset rotulado insuficiente; são necessárias duas classes com dois exemplos cada."
+                )
             # Deriva nome de modelo
             derived_model_name = model_name or f"janus-{str(model_type).lower()}"
             # Publica tarefa
             tp = dict(training_config or {})
-            tp.setdefault("model_type", str(model_type).lower())
+            tp.setdefault("model_type", normalized_model_type.value)
             if user_id:
                 tp["user_id"] = user_id
             task_id = await publish_neural_training_task(
@@ -112,6 +126,8 @@ class LearningService:
                 "model_name": derived_model_name,
             }
             return ack
+        except TrainingFailedError:
+            raise
         except Exception as e:
             logger.error("Erro inesperado ao agendar treinamento", exc_info=e)
             raise LearningServiceError("Falha ao agendar o treinamento.") from e
@@ -133,12 +149,15 @@ class LearningService:
 
     def get_health_status(self) -> dict[str, Any]:
         logger.info("Verificando saúde do módulo de aprendizado.")
+        dataset_quality = self._repo.get_dataset_quality()
+        training_capacity_available = bool(dataset_quality["training_ready"])
         return {
-            "status": "healthy",
+            "status": "healthy" if training_capacity_available else "degraded",
             "module": "neural_learning",
             "harvester_running": self._repo.is_harvester_healthy(),
-            "training_capacity_available": True,  # Mock
-            "data_quality_score": 0.92,  # Mock
+            "training_capacity_available": training_capacity_available,
+            "supported_model_types": [ModelType.CLASSIFIER.value],
+            "data_quality": dataset_quality,
         }
 
     async def preview_dataset(self, limit: int = 20) -> dict[str, Any]:
@@ -171,33 +190,9 @@ class LearningService:
             raise ModelNotFoundError(f"Modelo '{model_id}' não encontrado.")
 
         try:
-            content = read_file("workspace/training_data.jsonl")
-            if content.startswith("Erro:"):
-                # Sem arquivo de treino; retornar avaliação mock com aviso
-                metrics = {
-                    "accuracy": 0.0,
-                    "f1": 0.0,
-                    "precision": 0.0,
-                    "recall": 0.0,
-                    "note": "Sem dados de treino disponíveis",
-                }
-                return {"model_id": model_id, "examples_evaluated": 0, "metrics": metrics}
-
-            lines = content.strip().split("\n")[:test_data_limit]
-            examples_evaluated = len(lines)
-            # Métricas simuladas baseadas na quantidade avaliada
-            base = max(0.5, min(0.95, 0.7 + examples_evaluated / 1000))
-            metrics = {
-                "accuracy": round(base, 3),
-                "f1": round(base - 0.02, 3),
-                "precision": round(base + 0.01, 3),
-                "recall": round(base - 0.03, 3),
-            }
-            return {
-                "model_id": model_id,
-                "examples_evaluated": examples_evaluated,
-                "metrics": metrics,
-            }
+            return self._repo.evaluate_classifier(model_id, test_data_limit)
+        except (FileNotFoundError, ValueError) as e:
+            raise LearningServiceError(str(e)) from e
         except Exception as e:
             logger.error("Erro ao avaliar modelo", exc_info=e)
             raise LearningServiceError("Falha ao avaliar o modelo.") from e

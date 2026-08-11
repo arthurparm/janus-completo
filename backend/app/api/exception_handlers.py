@@ -1,5 +1,8 @@
+from collections.abc import Awaitable, Callable
+from typing import Any
+
 import structlog
-from fastapi import Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 # Importa as excecoes customizadas de cada servico
@@ -18,15 +21,7 @@ from app.services.learning_service import (
 )
 from app.services.llm_service import LLMServiceError, LLMTimeoutError
 from app.services.memory_service import MemoryServiceError
-
-try:
-    from app.services.meta_agent_service import MetaAgentServiceError
-except Exception:
-
-    class MetaAgentServiceError(Exception):  # type: ignore
-        pass
-
-
+from app.services.meta_agent_service import MetaAgentServiceError, MetaAgentUnavailableError
 from app.services.observability_service import MessageNotFoundError, ObservabilityServiceError
 from app.services.optimization_service import OptimizationServiceError
 from app.services.task_service import TaskServiceError
@@ -38,6 +33,8 @@ from app.services.tool_service import (
 )
 
 logger = structlog.get_logger(__name__)
+
+ExceptionHandler = Callable[[Request, Exception], Awaitable[JSONResponse]]
 
 _ERROR_TAXONOMY: dict[str, dict[str, str | int]] = {
     "RESOURCE_NOT_FOUND": {
@@ -54,6 +51,11 @@ _ERROR_TAXONOMY: dict[str, dict[str, str | int]] = {
         "category": "timeout",
         "http_status": status.HTTP_408_REQUEST_TIMEOUT,
         "description": "Service operation timed out.",
+    },
+    "SERVICE_UNAVAILABLE": {
+        "category": "availability",
+        "http_status": status.HTTP_503_SERVICE_UNAVAILABLE,
+        "description": "Required service dependencies are unavailable.",
     },
     "ACCESS_DENIED": {
         "category": "authz",
@@ -106,7 +108,7 @@ def _error_payload(
     status_code: int,
     detail: str,
     error_code: str,
-) -> dict:
+) -> dict[str, Any]:
     taxonomy = _ERROR_TAXONOMY.get(error_code, _ERROR_TAXONOMY["INTERNAL_SERVICE_ERROR"])
     trace_id = getattr(request.state, "correlation_id", None)
     return {
@@ -175,6 +177,19 @@ async def http_408_timeout_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
+async def http_503_service_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("service_unavailable", exc_info=exc, url=request.url.path)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=_error_payload(
+            request,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+            error_code="SERVICE_UNAVAILABLE",
+        ),
+    )
+
+
 async def generic_service_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.error("service_unexpected_error", exc_info=exc, url=request.url.path)
     detail = str(exc)
@@ -198,14 +213,15 @@ async def generic_service_exception_handler(request: Request, exc: Exception) ->
 # --- Funcao para registrar todos os handlers ---
 
 
-def add_exception_handlers(app):
+def add_exception_handlers(app: FastAPI) -> None:
     """Adiciona todos os manipuladores de excecao customizados a aplicacao FastAPI."""
     logger.info("Registrando manipuladores de excecao customizados.")
 
-    exception_map = {
+    exception_map: dict[type[Exception], ExceptionHandler] = {
         **{exc: http_404_not_found_handler for exc in NOT_FOUND_EXCEPTIONS},
         **{exc: http_400_bad_request_handler for exc in BAD_REQUEST_EXCEPTIONS},
         **{exc: http_408_timeout_handler for exc in TIMEOUT_EXCEPTIONS},
+        MetaAgentUnavailableError: http_503_service_unavailable_handler,
     }
 
     for exc_type, handler in exception_map.items():

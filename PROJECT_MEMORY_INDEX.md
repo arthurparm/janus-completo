@@ -8,6 +8,7 @@ These persistent knowledge files provide AI agents with deep, contextual underst
 
 | File | Description |
 |---|---|
+| [documentation/janus-project-philosophy.md](documentation/janus-project-philosophy.md) | Founding philosophy translated into mandatory engineering invariants for Janus identity, digital life, self-directed goals, memory, reflection, initiative and human oversight. |
 | [CODEBASE_MAP.md](file:///h:/repos/janus-completo/CODEBASE_MAP.md) | Full navigation map of the monorepo: directory structure, data flow diagrams, design patterns, backend and frontend navigation maps, and key architectural principles. |
 | [BACKEND_RUNTIME.md](file:///h:/repos/janus-completo/BACKEND_RUNTIME.md) | Deep backend analysis covering all 10 major subsystems: Kernel lifecycle, Hybrid Brain/LLM Router, Multi-Agent System, RAG/Knowledge, Neo4j graph, Message Broker, Memory, Evolution, Security, Observability, and Tool Executor. |
 | [FRONTEND_ANGULAR.md](file:///h:/repos/janus-completo/FRONTEND_ANGULAR.md) | Deep frontend analysis: Angular 20 standalone architecture, auth system, SSE chat streaming, global state, interceptors, WebRTC, observability dashboard, admin autonomy panel, and build/deploy pipeline. |
@@ -16,7 +17,7 @@ These persistent knowledge files provide AI agents with deep, contextual underst
 
 ## How to Use
 
-1. **Before making changes**: Read the relevant memory file(s) for your domain. For a full-stack change, start with CODEBASE_MAP.md, then read the domain-specific file.
+1. **Before making changes**: For agents, autonomy, memory, planning, reflection or tools, read `documentation/janus-project-philosophy.md` first. Then read the relevant memory file(s) for the domain. For a full-stack change, continue with CODEBASE_MAP.md and the domain-specific file.
 2. **When investigating issues**: Use BACKEND_RUNTIME.md to trace endpoint -> service -> repository -> core paths. Use FRONTEND_ANGULAR.md to understand component hierarchy and data flow.
 3. **For deployment and validation**: Consult OPS_QA.md for the correct boot order, quality gates, and validation commands.
 4. **For autonomy and evolution work**: Read AUTONOMY_RISK.md to understand the safety mechanisms, risk classification, and unaddressed boundaries.
@@ -24,4 +25,4 @@ These persistent knowledge files provide AI agents with deep, contextual underst
 
 ## Last Updated
 
-2026-06-22
+2026-08-11

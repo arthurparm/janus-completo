@@ -1,19 +1,14 @@
 import json
 import time
 from collections import Counter
-from contextlib import nullcontext
-from typing import Any
+from contextlib import AbstractContextManager, nullcontext
+from typing import Any, cast
 
 import structlog
 from fastapi import Request
 from prometheus_client import REGISTRY
 from prometheus_client import Counter as PromCounter
 from prometheus_client import Histogram as PromHistogram
-
-try:
-    from opentelemetry import trace as otel_trace
-except Exception:  # pragma: no cover - optional dependency
-    otel_trace = None
 
 from app.config import settings
 from app.core.monitoring.poison_pill_handler import QuarantinedMessage
@@ -25,6 +20,13 @@ from app.services.predictive_anomaly_detection_service import (
     get_predictive_anomaly_detection_service,
 )
 
+try:
+    from opentelemetry import trace as _otel_trace
+except Exception:  # pragma: no cover - optional dependency
+    _otel_trace = None  # type: ignore[assignment]
+
+otel_trace: Any = _otel_trace
+
 logger = structlog.get_logger(__name__)
 _tracer = otel_trace.get_tracer(__name__) if otel_trace is not None else None
 
@@ -33,7 +35,7 @@ def _get_or_create_counter(name: str, documentation: str, labelnames: list[str])
     try:
         return PromCounter(name, documentation, labelnames)
     except ValueError:
-        return REGISTRY._names_to_collectors[name]  # type: ignore[index]
+        return cast(PromCounter, REGISTRY._names_to_collectors[name])
 
 
 def _get_or_create_histogram(
@@ -44,10 +46,11 @@ def _get_or_create_histogram(
     buckets: tuple[float, ...] | None = None,
 ) -> PromHistogram:
     try:
-        kwargs = {"buckets": buckets} if buckets is not None else {}
-        return PromHistogram(name, documentation, labelnames, **kwargs)
+        if buckets is not None:
+            return PromHistogram(name, documentation, labelnames, buckets=buckets)
+        return PromHistogram(name, documentation, labelnames)
     except ValueError:
-        return REGISTRY._names_to_collectors[name]  # type: ignore[index]
+        return cast(PromHistogram, REGISTRY._names_to_collectors[name])
 
 
 _OBS_OPERATIONS_TOTAL = _get_or_create_counter(
@@ -130,10 +133,10 @@ class ObservabilityService:
         _OBS_RESULT_ITEMS.labels(operation=operation, kind=kind).observe(float(size))
 
     @staticmethod
-    def _span_context(span_name: str):
+    def _span_context(span_name: str) -> AbstractContextManager[Any]:
         if _tracer is None:
             return nullcontext(None)
-        return _tracer.start_as_current_span(span_name)
+        return cast(AbstractContextManager[Any], _tracer.start_as_current_span(span_name))
 
     @staticmethod
     def _set_span_attrs(span: Any, **attrs: Any) -> None:
@@ -348,14 +351,20 @@ class ObservabilityService:
                     "Falha ao resumir pending_actions legadas bloqueadas."
                 ) from e
 
-            item_count = len(summary.get("items") or [])
+            raw_items = summary.get("items")
+            items = raw_items if isinstance(raw_items, list) else []
+            raw_pending_without_owner = summary.get("pending_without_owner")
+            pending_without_owner = (
+                int(raw_pending_without_owner)
+                if isinstance(raw_pending_without_owner, (int, float, str))
+                else 0
+            )
+            item_count = len(items)
             self._set_span_attrs(
                 span,
                 **{
                     "observability.event_count": item_count,
-                    "observability.pending_without_owner": int(
-                        summary.get("pending_without_owner") or 0
-                    ),
+                    "observability.pending_without_owner": pending_without_owner,
                 },
             )
             self._observe_result_size(op, "rows", item_count)
@@ -489,6 +498,7 @@ class ObservabilityService:
 
             try:
                 events = self._repo.get_audit_events(
+                    user_id=None,
                     tool=None,
                     status=None,
                     start_ts=start_ts,
@@ -685,6 +695,7 @@ class ObservabilityService:
 
             try:
                 events = self._repo.get_audit_events(
+                    user_id=None,
                     tool=None,
                     status=None,
                     start_ts=start_ts,
@@ -755,14 +766,16 @@ class ObservabilityService:
             self._observe_operation_success(op, op_start)
             return report
 
-    async def get_user_metrics(self) -> dict[str, Any]:
+    async def get_user_metrics(self, user_id: str | None) -> dict[str, Any]:
         logger.info(
             "observability_user_metrics_requested",
             operation="user_metrics",
 
         )
+        if user_id is None:
+            raise ObservabilityServiceError("Authenticated user is required for user metrics.")
         try:
-            return await self._repo.get_user_metrics()
+            return await self._repo.get_user_metrics(user_id)
         except ObservabilityRepositoryError as e:
             logger.exception(
                 "observability_user_metrics_failed",
@@ -772,14 +785,16 @@ class ObservabilityService:
             )
             raise ObservabilityServiceError("Falha ao gerar métricas por usuário.") from e
 
-    def get_user_activity(self) -> dict[str, Any]:
+    def get_user_activity(self, user_id: str | None) -> dict[str, Any]:
         logger.info(
             "observability_user_activity_requested",
             operation="user_activity",
 
         )
+        if user_id is None:
+            raise ObservabilityServiceError("Authenticated user is required for user activity.")
         try:
-            return self._repo.get_user_activity()
+            return self._repo.get_user_activity(user_id)
         except ObservabilityRepositoryError as e:
             logger.exception(
                 "observability_user_activity_failed",
@@ -1245,4 +1260,4 @@ def observe_ux_metric_record(
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_observability_service(request: Request) -> ObservabilityService:
-    return request.app.state.observability_service
+    return cast(ObservabilityService, request.app.state.observability_service)

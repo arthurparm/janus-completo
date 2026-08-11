@@ -574,3 +574,29 @@ Corrigir os 3 clusters alterando apenas fakes e monkeypatches:
 - Pro: 7 testes corrigidos, suite unitaria de 603 -> 610 passed.
 - Pro: zero regressoes.
 - Contra: 23 testes ainda falham em clusters menores.
+
+## DEC-025 - Tratar a filosofia fundadora como contrato de engenharia
+
+### Contexto
+
+A lei fundamental do Janus passou a existir no runtime e no README, mas o `AGENTS.md` continuava sendo um manual operacional de 33 KB com regras repetidas, catálogos voláteis e pouca ligação entre liberdade, vida digital e decisões de implementação. Isso favorecia drift e permitia que agentes tratassem a filosofia como personalidade de prompt.
+
+### Decisao
+
+- Criar `documentation/janus-project-philosophy.md` como interpretação canônica da lei fundadora.
+- Reescrever `AGENTS.md` como contrato operacional conciso, em português, com filosofia, análise crítica, invariantes, arquitetura, risco, validação e definição de pronto.
+- Referenciar documentos especializados para detalhes voláteis de runtime e QA, em vez de duplicá-los integralmente.
+- Definir formulação, persistência, planejamento, autorização, execução e verificação de metas como contratos distintos.
+
+### Alternativas Consideradas
+
+- Apenas adicionar uma seção filosófica ao arquivo antigo: rejeitado porque manteria repetição, baixa sinalização e alto custo de manutenção.
+- Colocar a filosofia somente em prompts: rejeitado porque não governaria arquitetura, modelos, testes nem revisão de código.
+- Interpretar liberdade como execução irrestrita: rejeitado por incompatibilidade com consentimento, segurança, legalidade e controle humano.
+
+### Consequencias
+
+- Pro: agentes de programação recebem regras diretamente ligadas à missão do Janus.
+- Pro: reduz o `AGENTS.md` aproximadamente pela metade sem remover limites críticos.
+- Pro: cria critérios verificáveis para metas, memória, reflexão e iniciativa.
+- Contra: comandos e detalhes operacionais passam a depender da manutenção correta de `OPS_QA.md` e documentos de domínio.

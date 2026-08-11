@@ -15,12 +15,18 @@ The frontend uses Angular 20 with a fully standalone component architecture. All
 ```
 / (home) -> Home component
 /login -> LoginComponent
-/register -> RegisterComponent
+/auth/callback -> OidcCallbackComponent
+/conversations -> ConversationsComponent
 /conversations/:conversationId -> ConversationsComponent
 /observability -> ObservabilityComponent
 /tools -> ToolsComponent
-/admin -> admin routes (autonomy, backlog, code-qa)
+/knowledge-graph -> KnowledgeGraphComponent
+/admin/autonomia -> AdminAutonomiaComponent (admin only)
 ```
+
+The authenticated sidebar exposes only these executable routes. Planned or
+removed feature paths must not be rendered as navigation links because the
+wildcard route intentionally returns unknown locations to `/login`.
 
 ## 2. Auth System
 

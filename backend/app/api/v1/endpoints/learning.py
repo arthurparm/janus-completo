@@ -1,8 +1,9 @@
+from enum import Enum
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.security.request_guard import require_service_actor
 from app.services.learning_service import (
@@ -41,11 +42,26 @@ class TrainingConfig(BaseModel):
     )
 
 
+class SupportedTrainingModelType(str, Enum):
+    CLASSIFIER = "classifier"
+
+
 class TrainRequest(BaseModel):
-    model_type: str = Field("CLASSIFIER")
+    model_type: SupportedTrainingModelType = Field(SupportedTrainingModelType.CLASSIFIER)
     model_name: str | None = Field(None, description="Nome do modelo a ser treinado")
     data_source: str | None = Field(None, description="Fonte opcional de dados para treino")
-    training_config: TrainingConfig = Field(default_factory=TrainingConfig)
+    training_config: TrainingConfig = TrainingConfig(
+        epochs=3,
+        batch_size=8,
+        learning_rate=1e-4,
+        validation_split=0.2,
+        max_examples=None,
+    )
+
+    @field_validator("model_type", mode="before")
+    @classmethod
+    def normalize_model_type(cls, value: Any) -> Any:
+        return value.lower() if isinstance(value, str) else value
 
 
 class LearningResponse(BaseModel):
@@ -131,7 +147,7 @@ async def trigger_harvesting(
     request: HarvestRequest,
     http: Request,
     learning_service: LearningService = Depends(get_learning_service),
-):
+) -> dict[str, Any]:
     """Delega a coleta de dados de experiência para o LearningService."""
     try:
         result = await learning_service.trigger_harvesting(
@@ -155,16 +171,16 @@ async def trigger_training(
     request: TrainRequest,
     http: Request,
     learning_service: LearningService = Depends(get_learning_service),
-):
+) -> dict[str, Any]:
     """Agenda o processo de treinamento de modelo via fila e retorna ack com task_id."""
     try:
         # Injeta data_source na config se fornecido
-        config_dict = request.training_config.dict()
+        config_dict = request.training_config.model_dump()
         if request.data_source:
             config_dict["data_source"] = request.data_source
 
         result = await learning_service.trigger_training(
-            request.model_type,
+            request.model_type.value,
             config_dict,
             model_name=request.model_name,
             user_id=require_service_actor(http),
@@ -185,7 +201,9 @@ async def trigger_training(
     response_model=TrainingStatusResponse,
     summary="Obtém status do treinamento atual",
 )
-async def get_training_status(learning_service: LearningService = Depends(get_learning_service)):
+async def get_training_status(
+    learning_service: LearningService = Depends(get_learning_service),
+) -> TrainingStatusResponse:
     """Busca o status de qualquer sessão de treinamento ativa via LearningService."""
     session = learning_service.get_training_status()
     if session:
@@ -194,16 +212,20 @@ async def get_training_status(learning_service: LearningService = Depends(get_le
 
 
 @router.get("/models", response_model=ModelListResponse, summary="Lista todos os modelos treinados")
-async def list_models(learning_service: LearningService = Depends(get_learning_service)):
+async def list_models(
+    learning_service: LearningService = Depends(get_learning_service),
+) -> ModelListResponse:
     """Delega a listagem de modelos para o LearningService."""
     models = learning_service.list_all_models()
-    return ModelListResponse(total=len(models), models=models)
+    return ModelListResponse(
+        total=len(models), models=[ModelInfo.model_validate(model) for model in models]
+    )
 
 
 @router.get("/models/{model_id}", response_model=ModelInfo, summary="Obtém detalhes de um modelo")
 async def get_model_details(
     model_id: str, learning_service: LearningService = Depends(get_learning_service)
-):
+) -> dict[str, Any]:
     """Delega a busca de detalhes de um modelo para o LearningService."""
     try:
         return learning_service.get_model_details(model_id)
@@ -212,7 +234,9 @@ async def get_model_details(
 
 
 @router.get("/stats", summary="Obtém estatísticas do sistema de treinamento")
-async def get_learning_stats(learning_service: LearningService = Depends(get_learning_service)):
+async def get_learning_stats(
+    learning_service: LearningService = Depends(get_learning_service),
+) -> dict[str, Any]:
     """Delega a busca de estatísticas para o LearningService."""
     return learning_service.get_learning_statistics()
 
@@ -220,7 +244,7 @@ async def get_learning_stats(learning_service: LearningService = Depends(get_lea
 @router.get("/dataset/preview", summary="Pré-visualiza exemplos do dataset de treino")
 async def preview_dataset(
     limit: int = 20, learning_service: LearningService = Depends(get_learning_service)
-):
+) -> dict[str, Any]:
     """Retorna os primeiros N exemplos do dataset de treino (JSONL)."""
     try:
         return await learning_service.preview_dataset(limit=limit)
@@ -236,7 +260,7 @@ async def preview_dataset(
 )
 async def evaluate_model(
     request: EvaluateRequest, learning_service: LearningService = Depends(get_learning_service)
-):
+) -> dict[str, Any]:
     """Delega a avaliação de um modelo para o LearningService."""
     try:
         result = learning_service.evaluate_model(request.model_id, request.test_data_limit)
@@ -255,7 +279,9 @@ async def evaluate_model(
     response_model=DatasetVersionResponse,
     summary="Obtém a versão atual do dataset de treino",
 )
-async def get_dataset_version(learning_service: LearningService = Depends(get_learning_service)):
+async def get_dataset_version(
+    learning_service: LearningService = Depends(get_learning_service),
+) -> dict[str, Any]:
     """Retorna metadados de versão do dataset de treino."""
     return learning_service.get_dataset_version_info()
 
@@ -265,10 +291,15 @@ async def get_dataset_version(learning_service: LearningService = Depends(get_le
     response_model=ExperimentListResponse,
     summary="Lista experimentos de treinamento",
 )
-async def list_experiments(learning_service: LearningService = Depends(get_learning_service)):
+async def list_experiments(
+    learning_service: LearningService = Depends(get_learning_service),
+) -> ExperimentListResponse:
     """Lista os experimentos rastreados pelo repositório de aprendizado."""
     exps = learning_service.list_experiments()
-    return ExperimentListResponse(total=len(exps), experiments=exps)
+    return ExperimentListResponse(
+        total=len(exps),
+        experiments=[ExperimentInfo.model_validate(experiment) for experiment in exps],
+    )
 
 
 @router.get(
@@ -278,7 +309,7 @@ async def list_experiments(learning_service: LearningService = Depends(get_learn
 )
 async def get_experiment_details(
     experiment_id: str, learning_service: LearningService = Depends(get_learning_service)
-):
+) -> dict[str, Any]:
     """Detalhes de um experimento específico."""
     try:
         return learning_service.get_experiment_details(experiment_id)
@@ -287,6 +318,8 @@ async def get_experiment_details(
 
 
 @router.get("/health", summary="Health check do sistema de treinamento")
-async def learning_health(learning_service: LearningService = Depends(get_learning_service)):
+async def learning_health(
+    learning_service: LearningService = Depends(get_learning_service),
+) -> dict[str, Any]:
     """Verifica a saúde do sistema de treinamento."""
     return learning_service.get_health_status()

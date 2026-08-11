@@ -83,16 +83,20 @@ export interface WorkersStatusResponse {
 // Auto Analysis
 export interface HealthInsight {
   issue: string
-  severity: string
+  severity: 'low' | 'medium' | 'high' | 'unknown'
   suggestion: string
   estimated_impact: string
+  source: 'llm_cost_tracker' | 'observability_slo' | 'feedback'
+  status: 'ok' | 'warning' | 'critical' | 'insufficient_data' | 'unavailable'
+  evidence: Record<string, unknown>
 }
 
 export interface AutoAnalysisResponse {
   timestamp: string
-  overall_health: string
+  overall_health: 'healthy' | 'warning' | 'critical' | 'unknown'
   insights: HealthInsight[]
-  fun_fact: string
+  summary: string
+  fun_fact: null
 }
 
 export type WorkersStatusItem = WorkerStatusResponse;

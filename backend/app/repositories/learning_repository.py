@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import time
 from datetime import datetime
@@ -7,13 +8,16 @@ from typing import Any
 import structlog
 from prometheus_client import Counter, Gauge, Histogram
 
-from app.core.infrastructure.filesystem_manager import read_file
+from app.core.infrastructure.filesystem_manager import WORKSPACE_DIR, read_file
 from app.core.workers import data_harvester
 from app.core.workers.data_harvester import TRAINING_DATA_FILE
-from app.core.workers.neural_training_system import ModelType, neural_trainer
-
-# Legacy simulation removed: use NeuralTrainer
-from app.core.workers.neural_training_system import TrainingConfig as NTTrainingConfig
+from app.core.workers.neural_training_system import (
+    ModelType,
+    neural_trainer,
+)
+from app.core.workers.neural_training_system import (
+    TrainingConfig as NTTrainingConfig,
+)
 
 ModelInfo = dict[str, Any]
 TrainingSession = dict[str, Any]
@@ -37,11 +41,11 @@ class LearningRepository:
     Abstrai a lógica de armazenamento e a execução de workers.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._training_sessions: dict[str, TrainingSession] = {}
         self._trained_models: dict[str, ModelInfo] = {}
         self._experiments: dict[str, dict[str, Any]] = {}
-        self._stats = {
+        self._stats: dict[str, Any] = {
             "total_harvested": 0,
             "total_trained": 0,
             "last_harvest": None,
@@ -56,7 +60,7 @@ class LearningRepository:
 
     def get_all_models(self) -> list[ModelInfo]:
         """Lista modelos treinados lendo do filesystem (workspace/models)."""
-        models_dir = os.path.join("/app", "workspace", "models")
+        models_dir = str(WORKSPACE_DIR / "models")
         results: list[ModelInfo] = []
         try:
             if not os.path.isdir(models_dir):
@@ -102,7 +106,7 @@ class LearningRepository:
         # Primeiro, verifica memória
         if model_id in self._trained_models:
             return self._trained_models.get(model_id)
-        models_dir = os.path.join("/app", "workspace", "models")
+        models_dir = str(WORKSPACE_DIR / "models")
         model_path = os.path.join(models_dir, model_id)
         meta_path = os.path.join(model_path, "metadata.json")
         if os.path.isfile(meta_path):
@@ -146,10 +150,19 @@ class LearningRepository:
         self._update_dataset_version()
         stats = self._stats.copy()
         stats["active_training_sessions"] = 1 if self.get_active_training_session() else 0
-        stats["avg_training_time_minutes"] = 2.5  # Mock
+        completed_durations = [
+            float(exp["duration_seconds"])
+            for exp in self._experiments.values()
+            if exp.get("status") == "completed" and exp.get("duration_seconds") is not None
+        ]
+        stats["avg_training_time_minutes"] = (
+            sum(completed_durations) / len(completed_durations) / 60
+            if completed_durations
+            else None
+        )
         return stats
 
-    def increment_harvested_count(self, count: int):
+    def increment_harvested_count(self, count: int) -> None:
         self._stats["total_harvested"] += count
         self._stats["last_harvest"] = datetime.utcnow().isoformat()
 
@@ -174,12 +187,14 @@ class LearningRepository:
 
         # Monta configuração de treinamento
         tp = training_params or {}
-        model_type_str = str(tp.get("model_type" or "classifier")).lower()
+        model_type_str = str(tp.get("model_type", "classifier")).lower()
         user_id = tp.get("user_id")
         try:
             model_type = ModelType(model_type_str)
-        except Exception:
-            model_type = ModelType.CLASSIFIER
+        except ValueError as exc:
+            raise ValueError(f"Tipo de modelo não suportado: {model_type_str}") from exc
+        if model_type != ModelType.CLASSIFIER:
+            raise ValueError(f"Backend de treinamento não implementado para {model_type.value}")
 
         config = NTTrainingConfig(
             model_type=model_type,
@@ -218,12 +233,21 @@ class LearningRepository:
                 }
             )
             self._experiments[experiment_id] = exp
+            self._training_sessions[experiment_id] = {
+                "current_model": result.model_name,
+                "progress": 1.0,
+                "status": exp["status"],
+            }
+            if result.status.value == "completed":
+                self._stats["total_trained"] += 1
+                self._stats["last_training"] = exp["completed_at"]
             self._experiments_total.labels(exp["status"]).inc()
 
             # Retorna payload enriquecido
             enriched = {
                 "message": "Treinamento concluído.",
                 "summary": f"Modelo {result.model_name} v{result.model_version} salvo.",
+                "status": "completed",
                 "experiment_id": experiment_id,
                 "dataset_version": dataset_info.get("version"),
                 "dataset_num_examples": dataset_info.get("num_examples"),
@@ -232,6 +256,16 @@ class LearningRepository:
                 "accuracy": result.accuracy,
                 "loss": result.loss,
             }
+            if result.status.value != "completed":
+                return {
+                    "message": "Falha no treino.",
+                    "summary": result.error or "Treinamento não concluído.",
+                    "status": "failed",
+                    "experiment_id": experiment_id,
+                    "dataset_version": dataset_info.get("version"),
+                    "dataset_num_examples": dataset_info.get("num_examples"),
+                    "model_name": result.model_name,
+                }
             return enriched
         except Exception as e:
             elapsed = time.perf_counter() - start_ts
@@ -247,10 +281,16 @@ class LearningRepository:
                 }
             )
             self._experiments[experiment_id] = exp
+            self._training_sessions[experiment_id] = {
+                "current_model": model_name,
+                "progress": 0.0,
+                "status": "error",
+            }
             logger.error("Erro no processo de treinamento", exc_info=e)
             return {
                 "message": "Falha no treino.",
                 "summary": str(e),
+                "status": "error",
                 "experiment_id": experiment_id,
             }
 
@@ -271,7 +311,84 @@ class LearningRepository:
 
     def is_harvester_healthy(self) -> bool:
         """Verifica a saúde do worker de coleta de dados."""
-        return hasattr(data_harvester, "harvester")
+        harvester = data_harvester.harvester
+        return harvester is not None and bool(harvester._tasks)
+
+    def get_dataset_quality(self) -> dict[str, Any]:
+        """Calcula qualidade observável do JSONL sem inventar score."""
+        content = read_file(os.path.join("workspace", TRAINING_DATA_FILE))
+        if content.startswith("Erro:"):
+            return {
+                "available": False,
+                "score": None,
+                "total_lines": 0,
+                "valid_examples": 0,
+                "invalid_lines": 0,
+                "labeled_examples": 0,
+                "label_counts": {},
+                "training_ready": False,
+            }
+
+        lines = [line for line in content.splitlines() if line.strip()]
+        valid_examples = 0
+        labeled_examples = 0
+        label_counts: dict[str, int] = {}
+        for line in lines:
+            try:
+                item = json.loads(line)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(item, dict):
+                continue
+            prompt = str(item.get("prompt") or "").strip()
+            completion = str(item.get("completion") or "").strip()
+            if prompt and completion:
+                valid_examples += 1
+            label = str(item.get("label") or "").strip()
+            text_value = str(item.get("text") or item.get("completion") or "").strip()
+            if label and label != "unknown" and text_value:
+                labeled_examples += 1
+                label_counts[label] = label_counts.get(label, 0) + 1
+        training_ready = len(label_counts) >= 2 and all(count >= 2 for count in label_counts.values())
+        return {
+            "available": True,
+            "score": valid_examples / len(lines) if lines else None,
+            "total_lines": len(lines),
+            "valid_examples": valid_examples,
+            "invalid_lines": len(lines) - valid_examples,
+            "labeled_examples": labeled_examples,
+            "label_counts": dict(sorted(label_counts.items())),
+            "training_ready": training_ready,
+        }
+
+    def evaluate_classifier(self, model_id: str, limit: int) -> dict[str, Any]:
+        model_path = WORKSPACE_DIR / "models" / model_id / "model.json"
+        dataset_content = read_file(os.path.join("workspace", TRAINING_DATA_FILE))
+        if not model_path.is_file():
+            raise FileNotFoundError(f"Artefato do modelo '{model_id}' não encontrado.")
+        if dataset_content.startswith("Erro:"):
+            raise ValueError("Dataset de avaliação indisponível.")
+
+        with model_path.open(encoding="utf-8") as handle:
+            artifact = json.load(handle)
+        rows: list[tuple[str, str]] = []
+        for line in dataset_content.splitlines():
+            if len(rows) >= limit or not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            text_value = str(item.get("text") or item.get("completion") or "").strip()
+            label = str(item.get("label") or "").strip()
+            if text_value and label and label != "unknown":
+                rows.append((text_value, label))
+        metrics = neural_trainer.evaluate_classifier_artifact(artifact, rows)
+        return {
+            "model_id": model_id,
+            "examples_evaluated": int(metrics["examples_evaluated"]),
+            "metrics": metrics,
+        }
 
     # ===== Dataset Versioning =====
 
@@ -280,7 +397,12 @@ class LearningRepository:
         try:
             content = read_file(os.path.join("workspace", TRAINING_DATA_FILE))
             if content.startswith("Erro:"):
-                info = {"version": None, "num_examples": 0, "hash": None, "last_modified": None}
+                info: dict[str, Any] = {
+                    "version": None,
+                    "num_examples": 0,
+                    "hash": None,
+                    "last_modified": None,
+                }
                 self._stats["dataset"].update(info)
                 self._dataset_examples.set(0)
                 return info
@@ -302,7 +424,8 @@ class LearningRepository:
             return info
         except Exception:
             # Em caso de erro, não quebrar chamadas de stats
-            return self._stats.get("dataset", {})
+            dataset = self._stats.get("dataset", {})
+            return dataset if isinstance(dataset, dict) else {}
 
     def get_dataset_version_info(self) -> dict[str, Any]:
         return self._update_dataset_version()

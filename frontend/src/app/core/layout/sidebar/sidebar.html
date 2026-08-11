@@ -31,24 +31,6 @@
     </nav>
   </div>
 
-  <div class="sidebar-section">
-    <h3 class="section-title">MISSAO</h3>
-    <nav class="side-nav">
-      <a class="side-link" routerLink="/autonomy" routerLinkActive="active">
-        <ui-icon class="icon">settings_suggest</ui-icon>
-        <span class="label">Autonomia</span>
-      </a>
-      <a class="side-link" routerLink="/goals" routerLinkActive="active">
-        <ui-icon class="icon">flag</ui-icon>
-        <span class="label">Metas</span>
-      </a>
-      <a class="side-link" routerLink="/sprints" routerLinkActive="active">
-        <ui-icon class="icon">event</ui-icon>
-        <span class="label">Sprints</span>
-      </a>
-    </nav>
-  </div>
-
   @if (isAdmin()) {
     <div class="sidebar-section">
       <h3 class="section-title">ADMIN</h3>
@@ -64,36 +46,16 @@
   <div class="sidebar-section">
     <h3 class="section-title">OBSERVABILIDADE</h3>
     <nav class="side-nav">
-      <a class="side-link" routerLink="/auto-analysis" routerLinkActive="active">
+      <a class="side-link" routerLink="/observability" routerLinkActive="active">
         <ui-icon class="icon">insights</ui-icon>
-        <span class="label">Auto-Analise</span>
-      </a>
-      <a class="side-link" routerLink="/agent-events" routerLinkActive="active">
-        <ui-icon class="icon">hub</ui-icon>
-        <span class="label">Agent Events</span>
-      </a>
-      <a class="side-link" routerLink="/hitl" routerLinkActive="active">
-        <ui-icon class="icon">reviews</ui-icon>
-        <span class="label">HITL</span>
-      </a>
-      <a class="side-link" routerLink="/poison-pills" routerLinkActive="active">
-        <ui-icon class="icon">warning</ui-icon>
-        <span class="label">Poison Pills</span>
+        <span class="label">Observabilidade</span>
       </a>
     </nav>
   </div>
 
   <div class="sidebar-section">
-    <h3 class="section-title">LLM & TOOLS</h3>
+    <h3 class="section-title">FERRAMENTAS</h3>
     <nav class="side-nav">
-      <a class="side-link" routerLink="/ops" routerLinkActive="active">
-        <ui-icon class="icon">science</ui-icon>
-        <span class="label">LLMOps</span>
-      </a>
-      <a class="side-link" routerLink="/budget" routerLinkActive="active">
-        <ui-icon class="icon">monetization_on</ui-icon>
-        <span class="label">Budget</span>
-      </a>
       <a class="side-link" routerLink="/tools" routerLinkActive="active">
         <ui-icon class="icon">build</ui-icon>
         <span class="label">Ferramentas</span>
@@ -104,35 +66,9 @@
   <div class="sidebar-section">
     <h3 class="section-title">CONHECIMENTO</h3>
     <nav class="side-nav">
-      <a class="side-link" routerLink="/brain" routerLinkActive="active">
-        <ui-icon class="icon">psychology</ui-icon>
-        <span class="label">Memoria</span>
-      </a>
       <a class="side-link" routerLink="/knowledge-graph" routerLinkActive="active">
         <ui-icon class="icon">share</ui-icon>
         <span class="label">Knowledge Graph</span>
-      </a>
-      <a class="side-link" routerLink="/documents" routerLinkActive="active">
-        <ui-icon class="icon">folder</ui-icon>
-        <span class="label">Documentos</span>
-      </a>
-      <a class="side-link" routerLink="/documentacao" routerLinkActive="active">
-        <ui-icon class="icon">menu_book</ui-icon>
-        <span class="label">Documentacao</span>
-      </a>
-    </nav>
-  </div>
-
-  <div class="sidebar-section">
-    <h3 class="section-title">INTERFACES</h3>
-    <nav class="side-nav">
-      <a class="side-link" routerLink="/senses" routerLinkActive="active">
-        <ui-icon class="icon">settings_ethernet</ui-icon>
-        <span class="label">Senses</span>
-      </a>
-      <a class="side-link" routerLink="/ux" routerLinkActive="active">
-        <ui-icon class="icon">insights</ui-icon>
-        <span class="label">UX Dashboard</span>
       </a>
     </nav>
   </div>

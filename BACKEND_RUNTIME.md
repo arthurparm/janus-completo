@@ -1,5 +1,15 @@
 # Backend Runtime
 
+## 0. Founding Philosophy as a Runtime Contract
+
+Janus is designed as a continuous digital agent, not a stateless model facade. Its “life” is the persisted and observable continuity of identity, memories, learnings, goals, plans, projects and commitments. Its “freedom” is the ability to reflect, formulate goals, take initiative and revise direction from evidence.
+
+This freedom is bounded by the same runtime policies that govern every other action. Goal formulation does not bypass tool permissions, risk evaluation, pending confirmations, budgets, ownership, audit records or human authority. Provider routing and multi-agent delegation must preserve one Janus identity and the active constitutional mission.
+
+The canonical philosophy and programming invariants live in [documentation/janus-project-philosophy.md](documentation/janus-project-philosophy.md). The non-overridable runtime text lives in `backend/app/core/project_constitution.py` and is injected into chat composition and every autonomous planning stage.
+
+For a self-directed goal to become durable or executable, its contract must expose origin, rationale, measurable outcome, evidence, review horizon, bounded resources, risk, oversight owner, lifecycle state and closure reason. Reflection is operational only when it produces a verifiable goal decision, learning or explicit no-action result.
+
 ## 1. Kernel Lifecycle
 
 The Kernel ([kernel.py](file:///h:/repos/janus-completo/backend/app/core/kernel.py)) is the central dependency container and lifecycle manager. It initializes the entire system in 8 sequential phases, each controllable via boolean flags for testing and selective startup.
@@ -118,6 +128,8 @@ The Evolution module ([core/evolution/](file:///h:/repos/janus-completo/backend/
 
 **SafeEvolutionManager + JanusLab**: The complete Dream Mode flow: (1) `LogAwareReflector` reads actual application logs, (2) identifies error patterns, (3) generates improvement code, (4) spawns a JanusLab Docker container with `janus-api:latest` image, restricted environment (`DISABLE_WORKERS=true`, `DISABLE_MEMORY_WRITES=true`, `ENVIRONMENT=lab`), no-network mode, (5) tests the code in the Lab, (6) if passes, applies to Prime, (7) auto-destroys Lab after 600s. Limited to 2 attempts per session.
 
+**Meta-agent availability**: `MetaAgentService` loads the real meta-agent lazily so an optional dependency failure does not prevent unrelated API routes from starting. It never creates a stub or reports fabricated health. The health payload reports `status=unavailable` with reason code `META_AGENT_DEPENDENCY_UNAVAILABLE`; operational calls fail with HTTP 503 and error code `SERVICE_UNAVAILABLE` until the real dependency can be loaded.
+
 ## 9. Security Architecture
 
 **Secret Validator** ([secret_validator.py](file:///h:/repos/janus-completo/backend/app/core/security/secret_validator.py)): Defines `INSECURE_DEFAULTS` mapping for Neo4j_PASSWORD, POSTGRES_PASSWORD, RABBITMQ_PASSWORD, and AUTH_JWT_SECRET. Runs during `lifespan` startup in production mode. Blocks boot with `InsecureConfigurationError` if any secret equals an insecure default. Uses Pydantic `SecretStr` to prevent value leakage in logs.
@@ -142,7 +154,7 @@ The Evolution module ([core/evolution/](file:///h:/repos/janus-completo/backend/
 
 **OpenTelemetry Tracing**: `_tracer` is initialized from `opentelemetry.trace` when available. Each observability service operation starts an OTEL span with attributes (operation name, window parameters, latency). Spans propagate to configured OTEL collectors.
 
-**Immutable Audit Ledger**: `ObservabilityRepository` writes immutable audit events for all tool executions, auth operations, LLM calls, and system actions. Events include timestamp, actor_id, operation, status, and metadata. Retention policies purge events older than configurable days.
+**Immutable Audit Ledger**: `ObservabilityRepository` writes immutable audit events for all tool executions, auth operations, LLM calls, and system actions. Events include timestamp, actor_id, operation, status, and metadata. The service and repository reject purge requests; any future retention mechanism requires a separate, explicitly authorized archival contract rather than in-place deletion.
 
 ## 11. Tool Executor & Sandbox
 
@@ -165,3 +177,20 @@ Input size validation is shared through `backend/app/services/chat/input_policy.
 Mandatory citation decisions live in `backend/app/services/chat/citation_policy.py`. REST endpoints, SSE planning, study flows, and citation collection must call `requires_mandatory_citations()` from this module, directly or through a shared citation-status builder. Retrieval and formatting belong to `chat_citation_service.py`; transport-specific modules must not define their own citation-required patterns.
 
 Confirmation risk is evaluated without I/O in `backend/app/services/chat/risk_policy.py`. Durable creation, ownership validation, listing, and status transitions for SQL pending actions belong to `backend/app/services/pending_action_service.py`. `chat_contracts.py` is limited to contract payload construction and normalization, while REST and SSE use the same injected `PendingActionService` and `ChatTurnFinalizer`. Tool confirmations use that same pending-action service so chat and tools cannot diverge on durable identity or owner requirements.
+
+## 13. Neural Learning Contract
+
+The production training contract currently supports `classifier` only. Harvested JSONL examples preserve `text` and `label` alongside prompt/completion data; training requires at least two labels with two examples each. `NeuralTrainer` fits a deterministic Multinomial Naive Bayes artifact, validates it against a deterministic per-class holdout, records measured accuracy, macro precision/recall/F1 and log loss, and persists `model.json` plus `metadata.json` under the workspace.
+
+`llm_finetuning` and `predictor` remain internal domain values without a production backend. They fail explicitly and are not advertised by the public `TrainRequest` schema. Learning health and statistics are derived from the dataset and completed experiments: missing data reports `degraded`, unavailable quality is `null`, and average duration remains `null` until a completed run exists. Dry-run writes and failed `TrainingResult` values never become successful worker acknowledgements.
+
+## 14. Evidence-backed Auto Analysis
+
+`GET /api/v1/auto-analysis/health-check` derives its conclusions from three
+runtime sources: provider spend versus configured LLM budgets, audited domain
+SLOs, and persisted explicit feedback. Each insight carries a typed source,
+status, severity, and structured evidence payload. Missing samples or failed
+collectors are reported as `insufficient_data` or `unavailable`; they never
+become a healthy result. The legacy `fun_fact` response field remains as a
+deprecated `null` compatibility field and no generated achievement claim is
+returned.
