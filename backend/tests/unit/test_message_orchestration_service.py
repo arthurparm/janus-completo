@@ -35,6 +35,7 @@ class _FakeRepo:
                 "metadata": metadata or {},
             }
         )
+        return {"id": str(len(self.message_records)), "role": role, "text": text}
 
 
 class _FakePromptService:
@@ -67,7 +68,7 @@ class _FakePromptService:
     def is_capabilities_query(self, message):
         return self.capabilities
 
-    def render_local_capabilities(self, tools):
+    def render_local_capabilities(self):
         return "capabilities response"
 
     def is_tool_request(self, message):
@@ -151,6 +152,22 @@ class _FakeOutboxService:
         self.calls.append((payload, aggregate_id, dedupe_key))
 
 
+class _MetricRecorder:
+    def __init__(self):
+        self.calls = []
+        self._labels = {}
+
+    def labels(self, **labels):
+        self._labels = labels
+        return self
+
+    def inc(self, value=1):
+        self.calls.append((dict(self._labels), value))
+
+    def observe(self, value):
+        self.calls.append((dict(self._labels), value))
+
+
 class _FakeConversationService(ConversationService):
     def __init__(self):
         self.validations = []
@@ -202,11 +219,12 @@ def _build_service(
     rag_service=None,
     outbox_service=None,
     manifest_repo=None,
+    tool_service=None,
 ):
     return MessageOrchestrationService(
         repo=repo or _FakeRepo(),
         llm_service=llm_service or _FakeLLMService(),
-        tool_service=None,
+        tool_service=tool_service,
         prompt_service=prompt_service or _FakePromptService(),
         rag_service=rag_service,
         command_handler=command_handler or _FakeCommandHandler(),
@@ -252,6 +270,215 @@ async def test_send_message_rejects_large_payload(monkeypatch):
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("flag", "message", "expected_model", "expected_text"),
+    [
+        ("discovery", "quais ferramentas", "discovery", "discovery response"),
+        ("docs", "como usar a ferramenta", "tools_docs", "docs response"),
+        ("capabilities", "o que você pode fazer", "capabilities", "capabilities response"),
+    ],
+)
+async def test_group2_static_turn_persists_once_with_complete_metadata_and_no_knowledge_effects(
+    flag,
+    message,
+    expected_model,
+    expected_text,
+):
+    repo = _FakeRepo()
+    prompt = _FakePromptService()
+    setattr(prompt, flag, True)
+    rag = _FakeRagService()
+    outbox = _FakeOutboxService()
+    llm = _FakeLLMService()
+    agent_loop = _FakeAgentLoop()
+    service = _build_service(
+        repo=repo,
+        prompt_service=prompt,
+        rag_service=rag,
+        outbox_service=outbox,
+        llm_service=llm,
+        agent_loop=agent_loop,
+    )
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message=message,
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.FAST_AND_CHEAP,
+        user_id="user-1",
+        project_id="project-1",
+    )
+    await asyncio.sleep(0)
+
+    assert [record["role"] for record in repo.message_records] == ["user", "assistant"]
+    assistant = repo.message_records[1]
+    assert assistant["text"] == expected_text
+    assert assistant["metadata"] == {
+        "knowledge_space_id": None,
+        "mode_used": None,
+        "base_used": None,
+        "answer_strategy": None,
+        "estimated_wait_seconds": None,
+        "estimated_wait_range_seconds": None,
+        "processing_profile": None,
+        "processing_notice": None,
+        "evidence_count": None,
+        "source_roles_used": None,
+        "source_scope": None,
+        "gaps_or_conflicts": None,
+        "citations": [],
+        "citation_status": {
+            "mode": "optional",
+            "status": "not_applicable",
+            "count": 0,
+            "reason": None,
+        },
+        "ui": None,
+        "understanding": result["understanding"],
+        "confirmation": None,
+        "agent_state": result["agent_state"],
+        "delivery_status": "completed",
+        "failure_classification": None,
+        "provider": "janus",
+        "model": expected_model,
+    }
+    assert result["response"] == expected_text
+    assert result["provider"] == "janus"
+    assert result["model"] == expected_model
+    assert result["citations"] == []
+    assert result["citation_status"]["status"] == "not_applicable"
+    assert result["delivery_status"] == "completed"
+    assert result["confirmation"] is None
+    assert result["message_id"] == "2"
+    assert repo.recent_calls == 0
+    assert prompt.build_calls == 0
+    assert llm.calls == []
+    assert agent_loop.calls == 0
+    assert rag.retrieve_calls == 0
+    assert rag.index_calls == 0
+    assert rag.summary_calls == 1
+    assert outbox.calls == []
+
+
+@pytest.mark.asyncio
+async def test_static_summarization_is_fail_open_after_assistant_persistence():
+    class FailingSummaryRag(_FakeRagService):
+        async def maybe_summarize(self, *args, **kwargs):
+            self.summary_calls += 1
+            raise RuntimeError("summary unavailable")
+
+    repo = _FakeRepo()
+    prompt = _FakePromptService()
+    prompt.discovery = True
+    rag = FailingSummaryRag()
+    service = _build_service(repo=repo, prompt_service=prompt, rag_service=rag)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="quais ferramentas",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.FAST_AND_CHEAP,
+    )
+
+    assert result["delivery_status"] == "completed"
+    assert [record["role"] for record in repo.message_records] == ["user", "assistant"]
+    assert rag.summary_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_static_metrics_are_recorded_once_after_final_persistence(monkeypatch):
+    repo = _FakeRepo()
+    prompt = _FakePromptService()
+    prompt.docs = True
+    messages = _MetricRecorder()
+    tokens = _MetricRecorder()
+    spend = _MetricRecorder()
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.CHAT_MESSAGES_TOTAL",
+        messages,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.CHAT_TOKENS_TOTAL",
+        tokens,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.CHAT_SPEND_USD_TOTAL",
+        spend,
+    )
+    service = _build_service(repo=repo, prompt_service=prompt)
+
+    await service.send_message(
+        conversation_id="conv-1",
+        message="docs da tool",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.FAST_AND_CHEAP,
+    )
+
+    assert messages.calls.count(({"role": "user", "outcome": "accepted"}, 1)) == 1
+    assert messages.calls.count(({"role": "assistant", "outcome": "success"}, 1)) == 1
+    assert ({"role": "assistant", "outcome": "error"}, 1) not in messages.calls
+    assert len(tokens.calls) == 1
+    assert tokens.calls[0][0] == {"direction": "out"}
+    assert spend.calls == []
+
+
+@pytest.mark.asyncio
+async def test_static_persistence_failure_records_error_without_success(monkeypatch):
+    class FailingAssistantRepo(_FakeRepo):
+        def add_message(self, conversation_id, role, text, metadata=None):
+            if role == "assistant":
+                raise RuntimeError("assistant write failed")
+            return super().add_message(conversation_id, role, text, metadata)
+
+    repo = FailingAssistantRepo()
+    prompt = _FakePromptService()
+    prompt.capabilities = True
+    messages = _MetricRecorder()
+    errors = _MetricRecorder()
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.CHAT_MESSAGES_TOTAL",
+        messages,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.message_orchestration_service.CHAT_ERRORS_TOTAL",
+        errors,
+    )
+    service = _build_service(repo=repo, prompt_service=prompt)
+
+    with pytest.raises(RuntimeError, match="assistant write failed"):
+        await service.send_message(
+            conversation_id="conv-1",
+            message="o que você pode fazer",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+        )
+
+    assert messages.calls.count(({"role": "assistant", "outcome": "error"}, 1)) == 1
+    assert ({"role": "assistant", "outcome": "success"}, 1) not in messages.calls
+    assert errors.calls == [({"code": "InvocationError"}, 1)]
+    assert [record["role"] for record in repo.message_records] == ["user"]
+
+
+@pytest.mark.asyncio
+async def test_negative_group2_message_continues_to_existing_light_llm_path():
+    repo = _FakeRepo()
+    prompt = _FakePromptService()
+    llm = _FakeLLMService(response="dynamic response")
+    service = _build_service(repo=repo, prompt_service=prompt, llm_service=llm)
+
+    result = await service.send_message(
+        conversation_id="conv-1",
+        message="Qual é o status?",
+        role=ModelRole.ORCHESTRATOR,
+        priority=ModelPriority.FAST_AND_CHEAP,
+    )
+
+    assert result["response"] == "dynamic response"
+    assert len(llm.calls) == 1
+    assert prompt.build_calls == 1
 
 
 @pytest.mark.asyncio

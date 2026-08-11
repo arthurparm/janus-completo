@@ -87,7 +87,6 @@ DOCUMENT_CITATION = {
     "title": "manual.txt",
     "file_path": "manual.txt",
     "source_type": "document",
-    "type": "document",
     "line_start": 10,
     "line_end": 12,
     "line": 10,
@@ -219,7 +218,7 @@ class CapturePromptService:
     def is_capabilities_query(self, message: str) -> bool:
         return self.scenario.prompt_kind == "capabilities"
 
-    def render_local_capabilities(self, tools: Any) -> str:
+    def render_local_capabilities(self) -> str:
         return "capabilities response"
 
     def is_tool_request(self, message: str) -> bool:

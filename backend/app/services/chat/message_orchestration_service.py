@@ -16,6 +16,7 @@ from app.core.exceptions.chat_exceptions import (
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
 from app.core.monitoring.chat_metrics import (
+    CHAT_ERRORS_TOTAL,
     CHAT_LATENCY_SECONDS,
     CHAT_MESSAGES_TOTAL,
     CHAT_SPEND_USD_TOTAL,
@@ -40,16 +41,20 @@ from app.services.chat.message_helpers import (
     split_ui,
 )
 from app.services.chat.turn_core import (
+    IMMEDIATE_TURN_STRATEGIES,
+    STATIC_RESPONSE_STRATEGIES,
     ChatTurnExecutor,
     ChatTurnFinalizer,
     ChatTurnPlanner,
     TurnBusinessState,
+    TurnEffectsPolicy,
     TurnExecutionResult,
     TurnPlan,
     TurnPlanningSignals,
     TurnRequest,
     TurnResult,
     TurnStrategy,
+    infer_turn_strategy,
 )
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
@@ -146,13 +151,17 @@ class MessageOrchestrationService:
         )
         return self._turn_planner.plan(request, signals)
 
-    def execute_static_turn(
+    async def execute_static_turn(
         self,
         *,
         strategy: TurnStrategy,
         role: ModelRole,
     ) -> TurnExecutionResult:
-        return self._turn_executor.execute_static(strategy=strategy, role=role)
+        return await asyncio.to_thread(
+            self._turn_executor.execute_static,
+            strategy=strategy,
+            role=role,
+        )
 
     async def execute_dynamic_turn(
         self,
@@ -1469,6 +1478,7 @@ class MessageOrchestrationService:
             routing_decision=routing_decision,
         )
         use_light_chat = turn_plan.dynamic_strategy is TurnStrategy.LIGHT_LLM
+        turn_effects = TurnEffectsPolicy.for_strategy(turn_plan.primary_strategy)
 
         await asyncio.to_thread(self._repo.add_message, conversation_id, role="user", text=message)
         CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
@@ -1476,33 +1486,78 @@ class MessageOrchestrationService:
             user_id=resolved_user_id,
             message=message,
             conversation_id=conversation_id)
-        self._schedule_rag_index_message(
-            text=message,
-            conversation_id=conversation_id,
-            user_id=resolved_user_id,
-            role="user",
-            project_id=project_id,
-            identity_source=identity_source)
+        if turn_effects.index_user_message:
+            self._schedule_rag_index_message(
+                text=message,
+                conversation_id=conversation_id,
+                user_id=resolved_user_id,
+                role="user",
+                project_id=project_id,
+                identity_source=identity_source,
+            )
 
-        immediate_strategies = {
-            TurnStrategy.HIGH_RISK_CONFIRMATION,
-            TurnStrategy.STATIC_DISCOVERY,
-            TurnStrategy.STATIC_DOCS,
-            TurnStrategy.STATIC_CAPABILITIES,
-            TurnStrategy.BLOCKED_TOOL_CREATION,
-        }
         immediate_strategy = (
             turn_plan.primary_strategy
-            if turn_plan.primary_strategy in immediate_strategies
+            if turn_plan.primary_strategy in IMMEDIATE_TURN_STRATEGIES
             else None
         )
         if immediate_strategy is not None:
             start_t = _time.time()
-            execution = self.execute_static_turn(strategy=immediate_strategy, role=role)
+            try:
+                execution = await self.execute_static_turn(
+                    strategy=immediate_strategy,
+                    role=role,
+                )
+            except Exception as exc:
+                if immediate_strategy in STATIC_RESPONSE_STRATEGIES:
+                    CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="error").inc()
+                    CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
+                    raise ChatServiceError("Static response unavailable") from exc
+                raise
             assistant_text = execution.response
             clean_text, ui = split_ui(assistant_text)
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
+            result = execution.to_payload()
+            result["conversation_id"] = conversation_id
+            result["response"] = clean_text
+            result["delivery_status"] = (
+                "waiting_confirmation"
+                if immediate_strategy is TurnStrategy.HIGH_RISK_CONFIRMATION
+                else "completed"
+            )
+            if ui:
+                result["ui"] = ui
+
+            result = _attach_understanding_typed(result, understanding)
+            if immediate_strategy in STATIC_RESPONSE_STRATEGIES:
+                if defer_finalization:
+                    return result
+                finalized = self.finalize_turn(
+                    execution=execution,
+                    understanding=understanding,
+                    delivery_status="completed",
+                )
+                finalized_payload = finalized.to_payload()
+                finalized_payload["conversation_id"] = conversation_id
+                try:
+                    saved_message = await self.persist_finalized_turn(
+                        conversation_id=conversation_id,
+                        user_message=message,
+                        result=finalized_payload,
+                        user_id=resolved_user_id,
+                        project_id=project_id,
+                        identity_source=identity_source,
+                        role=role,
+                        priority=priority,
+                    )
+                except Exception:
+                    CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="error").inc()
+                    CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
+                    raise
+                finalized_payload["message_id"] = str(saved_message.get("id"))
+                return finalized_payload
+
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
             if not defer_finalization:
                 await asyncio.to_thread(
@@ -1524,16 +1579,6 @@ class MessageOrchestrationService:
                     )
             except Exception:
                 pass
-            result = execution.to_payload()
-            result["conversation_id"] = conversation_id
-            result["response"] = clean_text
-            result["delivery_status"] = (
-                "waiting_confirmation"
-                if immediate_strategy is TurnStrategy.HIGH_RISK_CONFIRMATION
-                else "completed"
-            )
-            if ui:
-                result["ui"] = ui
             if not defer_finalization:
                 try:
                     self.trigger_post_response_events(
@@ -1545,7 +1590,7 @@ class MessageOrchestrationService:
                     )
                 except Exception:
                     pass
-            return _attach_understanding_typed(result, understanding)
+            return result
 
         if self._command_handler.is_command(message):
             start_t = _time.time()
@@ -1817,6 +1862,8 @@ class MessageOrchestrationService:
         user_id: str | None,
         project_id: str | None,
         identity_source: str,
+        role: ModelRole | None = None,
+        priority: ModelPriority | None = None,
     ) -> dict[str, Any]:
         conv = await asyncio.to_thread(self._repo.get_conversation, conversation_id)
         self._validate_conversation_access(
@@ -1851,6 +1898,8 @@ class MessageOrchestrationService:
         )
         metadata = {key: result.get(key) for key in metadata_keys}
         assistant_text = str(result.get("response") or "")
+        strategy = infer_turn_strategy(result)
+        effects = TurnEffectsPolicy.for_strategy(strategy)
         saved = cast(
             dict[str, Any],
             await asyncio.to_thread(
@@ -1861,21 +1910,43 @@ class MessageOrchestrationService:
                 metadata=metadata,
             ),
         )
-        self._schedule_rag_index_message(
-            text=assistant_text,
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role="assistant",
-            project_id=project_id,
-            identity_source=identity_source,
-        )
-        self.trigger_post_response_events(
-            conversation_id=conversation_id,
-            user_message=user_message,
-            assistant_text=assistant_text,
-            result=result,
-            project_id=project_id,
-        )
+        if strategy in STATIC_RESPONSE_STRATEGIES:
+            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
+            CHAT_TOKENS_TOTAL.labels(direction="out").inc(
+                estimate_tokens(self._prompt_service, assistant_text)
+            )
+            if effects.summarize_conversation and self._rag_service:
+                try:
+                    await self._rag_service.maybe_summarize(
+                        conversation_id,
+                        role=role or ModelRole.ORCHESTRATOR,
+                        priority=priority or ModelPriority.FAST_AND_CHEAP,
+                        project_id=project_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "static_turn_summarization_failed",
+                        conversation_id=conversation_id,
+                        strategy=strategy.value,
+                        error_type=type(exc).__name__,
+                    )
+        if effects.index_assistant_message:
+            self._schedule_rag_index_message(
+                text=assistant_text,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role="assistant",
+                project_id=project_id,
+                identity_source=identity_source,
+            )
+        if effects.consolidate_response:
+            self.trigger_post_response_events(
+                conversation_id=conversation_id,
+                user_message=user_message,
+                assistant_text=assistant_text,
+                result=result,
+                project_id=project_id,
+            )
         return saved
 
     def trigger_post_response_events(

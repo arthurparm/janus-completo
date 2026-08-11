@@ -27,6 +27,46 @@ class TurnStrategy(StrEnum):
     AGENT_LOOP = "agent_loop"
 
 
+STATIC_RESPONSE_STRATEGIES = frozenset(
+    {
+        TurnStrategy.STATIC_DISCOVERY,
+        TurnStrategy.STATIC_DOCS,
+        TurnStrategy.STATIC_CAPABILITIES,
+    }
+)
+
+IMMEDIATE_TURN_STRATEGIES = frozenset(
+    {
+        TurnStrategy.HIGH_RISK_CONFIRMATION,
+        *STATIC_RESPONSE_STRATEGIES,
+        TurnStrategy.BLOCKED_TOOL_CREATION,
+    }
+)
+
+
+@dataclass(frozen=True)
+class TurnEffectsPolicy:
+    """Application effects allowed after a turn has been planned."""
+
+    persist_messages: bool = True
+    summarize_conversation: bool = True
+    index_user_message: bool = True
+    index_assistant_message: bool = True
+    consolidate_response: bool = True
+
+    @classmethod
+    def for_strategy(cls, strategy: TurnStrategy) -> "TurnEffectsPolicy":
+        if strategy in STATIC_RESPONSE_STRATEGIES:
+            return cls(
+                persist_messages=True,
+                summarize_conversation=True,
+                index_user_message=False,
+                index_assistant_message=False,
+                consolidate_response=False,
+            )
+        return cls()
+
+
 def infer_turn_strategy(payload: Mapping[str, Any]) -> TurnStrategy:
     raw = payload.get("strategy")
     if raw:
@@ -219,7 +259,7 @@ class ChatTurnExecutor:
             response = self._prompt.render_tools_documentation(self._tools)
             model = "tools_docs"
         elif strategy is TurnStrategy.STATIC_CAPABILITIES:
-            response = self._prompt.render_local_capabilities(self._tools)
+            response = self._prompt.render_local_capabilities()
             model = "capabilities"
         elif strategy is TurnStrategy.BLOCKED_TOOL_CREATION:
             from app.core.security.security_alerts import emit_security_alert
@@ -232,9 +272,12 @@ class ChatTurnExecutor:
             model = "tool_creation"
         else:
             raise ValueError(f"Strategy is not static: {strategy.value}")
+        response = str(response).strip()
+        if not response:
+            raise ValueError(f"Static response is empty: {strategy.value}")
         return TurnExecutionResult(
             strategy=strategy,
-            response=str(response),
+            response=response,
             provider="janus",
             model=model,
             role=role.value,
@@ -418,9 +461,13 @@ class ChatTurnFinalizer:
             dict(understanding) if understanding is not None else None,
             confirmation=confirmation,
         )
+        agent_understanding = normalized_understanding
+        if execution.strategy in STATIC_RESPONSE_STRATEGIES and agent_understanding is not None:
+            agent_understanding = deepcopy(agent_understanding)
+            agent_understanding["low_confidence"] = False
         agent_state = build_agent_state(
             stream_phase=stream_phase,
-            understanding=normalized_understanding,
+            understanding=agent_understanding,
             confirmation=confirmation,
         )
         if confirmation and confirmation.get("required"):

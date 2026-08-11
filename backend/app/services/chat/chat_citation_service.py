@@ -82,8 +82,6 @@ def map_citation_hits(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "doc_id": meta.get("doc_id"),
                 "file_path": meta.get("file_path"),
                 "source_type": source_type,
-                # Legacy compat for frontend already reading `type`
-                "type": source_type,
                 "origin": meta.get("origin"),
                 "line_start": line_start,
                 "line_end": line_end,

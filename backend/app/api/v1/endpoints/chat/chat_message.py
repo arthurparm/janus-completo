@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import ValidationError
 
 from app.core.llm import ModelPriority, ModelRole
+from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL, CHAT_MESSAGES_TOTAL
 from app.services.chat.chat_citation_service import (
     build_citation_status,
     build_missing_citation_resolution,
@@ -21,6 +22,7 @@ from app.services.chat.chat_contracts import (
     maybe_create_fallback_pending_action,
 )
 from app.services.chat.turn_core import (
+    STATIC_RESPONSE_STRATEGIES,
     ChatTurnFinalizer,
     TurnBusinessState,
     TurnExecutionResult,
@@ -61,15 +63,19 @@ logger = structlog.get_logger(__name__)
 CITATION_COLLECTION_TIMEOUT_SECONDS = citation_collection_timeout_seconds()
 
 
-def _required_int(value: Any, *, field_name: str) -> int:
+def _required_int(value: object, *, field_name: str) -> int:
     if value is None:
         raise ValueError(f"{field_name} is required")
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        raise ValueError(f"{field_name} must be an integer")
     return int(value)
 
 
-def _bounded_confidence(value: Any) -> float:
+def _bounded_confidence(value: object) -> float:
     if value is None:
         return 0.0
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        raise ValueError("confidence must be numeric")
     return max(0.0, min(1.0, float(value)))
 
 
@@ -98,7 +104,7 @@ async def _collect_chat_citations_with_deadline(
     memory: MemoryService,
     limit: int,
 ) -> dict[str, Any]:
-    return await collect_chat_citations_with_deadline(
+    result = await collect_chat_citations_with_deadline(
         message=message,
         conversation_id=conversation_id,
         memory_service=memory,
@@ -106,6 +112,14 @@ async def _collect_chat_citations_with_deadline(
         timeout_seconds=CITATION_COLLECTION_TIMEOUT_SECONDS,
         collector=collect_chat_citations,
     )
+    if not isinstance(result, dict):
+        raise TypeError("Citation collector returned an invalid result")
+    normalized_result: dict[str, Any] = {}
+    for key, value in result.items():
+        if not isinstance(key, str):
+            raise TypeError("Citation collector returned a non-string result key")
+        normalized_result[key] = value
+    return normalized_result
 
 
 async def _finalize_and_persist_turn(
@@ -114,6 +128,7 @@ async def _finalize_and_persist_turn(
     result: dict[str, Any],
     payload: ChatMessageRequest,
     role: ModelRole,
+    priority: ModelPriority,
     user_id: str,
     project_id: str | None,
     identity_source: str,
@@ -164,15 +179,30 @@ async def _finalize_and_persist_turn(
         delivery_status=delivery_status,
         failure_classification=result.get("failure_classification"),
     )
-    finalized_payload = finalized.to_payload()
-    saved_message = await service.persist_finalized_turn(
-        conversation_id=payload.conversation_id,
-        user_message=payload.message,
-        result=finalized_payload,
-        user_id=user_id,
-        project_id=project_id,
-        identity_source=identity_source,
-    )
+    raw_finalized_payload = finalized.to_payload()
+    if not isinstance(raw_finalized_payload, dict):
+        raise TypeError("Turn finalizer returned an invalid payload")
+    finalized_payload: dict[str, Any] = {}
+    for key, value in raw_finalized_payload.items():
+        if not isinstance(key, str):
+            raise TypeError("Turn finalizer returned a non-string payload key")
+        finalized_payload[key] = value
+    try:
+        saved_message = await service.persist_finalized_turn(
+            conversation_id=payload.conversation_id,
+            user_message=payload.message,
+            result=finalized_payload,
+            user_id=user_id,
+            project_id=project_id,
+            identity_source=identity_source,
+            role=role,
+            priority=priority,
+        )
+    except Exception:
+        if finalized.strategy in STATIC_RESPONSE_STRATEGIES:
+            CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="error").inc()
+            CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
+        raise
     finalized_payload["message_id"] = str(saved_message.get("id"))
     return finalized_payload
 
@@ -348,7 +378,7 @@ async def send_message(
             }
         )
         try:
-            attachment = await asyncio.to_thread(
+            attached = await asyncio.to_thread(
                 rest_runs.attach,
                 owner_user_id=user_id,
                 conversation_id=payload.conversation_id,
@@ -377,11 +407,9 @@ async def send_message(
                     http_status=status.HTTP_409_CONFLICT,
                 ),
             ) from exc
-        if attachment.replay_result is not None:
-            return cast(
-                ChatMessageResponse,
-                ChatMessageResponse(**attachment.replay_result),
-            )
+        attachment = attached
+        if attached.replay_result is not None:
+            return ChatMessageResponse(**attached.replay_result)
     try:
         result: dict[str, Any] = await service.send_message(
             conversation_id=payload.conversation_id,
@@ -586,6 +614,7 @@ async def send_message(
             result=result,
             payload=payload,
             role=role,
+            priority=priority,
             user_id=user_id,
             project_id=project_id,
             identity_source=ctx.identity_source,
@@ -636,4 +665,4 @@ async def send_message(
             result=result,
         )
 
-    return cast(ChatMessageResponse, ChatMessageResponse(**result))
+    return ChatMessageResponse(**result)

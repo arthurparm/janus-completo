@@ -143,7 +143,8 @@
         "correct_paths": [
           "output.agent_state",
           "output.delivery_status",
-          "persistence.writes.update_message_payload"
+          "persistence.writes.update_message_payload",
+          "execution.outbox_enqueue_count"
         ]
       },
       "sse": {
@@ -171,7 +172,8 @@
           "output.citation_status",
           "output.delivery_status",
           "execution.study_job_create_count",
-          "persistence.writes.update_message_payload"
+          "persistence.writes.update_message_payload",
+          "execution.outbox_enqueue_count"
         ]
       },
       "sse": {
@@ -201,7 +203,8 @@
         "correct_paths": [
           "output.agent_state",
           "output.delivery_status",
-          "persistence.writes.update_message_payload"
+          "persistence.writes.update_message_payload",
+          "execution.outbox_enqueue_count"
         ]
       },
       "sse": {
@@ -260,7 +263,8 @@
         "correct_paths": [
           "output.agent_state",
           "output.delivery_status",
-          "persistence.writes.update_message_payload"
+          "persistence.writes.update_message_payload",
+          "output.citations[0].type"
         ]
       },
       "sse": {
@@ -276,7 +280,8 @@
         ],
         "correct_paths": [
           "output.delivery_status",
-          "execution.outbox_enqueue_count"
+          "execution.outbox_enqueue_count",
+          "output.citations[0].type"
         ]
       }
     },

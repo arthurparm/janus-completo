@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 from app.api.v1.endpoints.chat import router as chat_router
@@ -38,6 +39,7 @@ class _DummyChatService:
         self.message_calls = 0
         self.last_stream_user_id = None
         self.last_stream_conversation_id = None
+        self.last_stream_strategy = None
         self.last_events_user_id = None
         self.last_events_conversation_id = None
         self.last_replaced_conversation_id = None
@@ -68,6 +70,29 @@ class _DummyChatService:
     async def send_message(self, **kwargs):
         self.message_calls += 1
         self.last_message_user_id = kwargs.get("user_id")
+        if kwargs.get("message") == "STATIC_DOCS_CONTRACT":
+            return {
+                "strategy": "static_docs",
+                "response": "canonical static docs",
+                "provider": "janus",
+                "model": "tools_docs",
+                "role": kwargs["role"].value,
+                "conversation_id": kwargs.get("conversation_id", "conv-1"),
+                "citations": [],
+                "citation_status": {
+                    "mode": "optional",
+                    "status": "not_applicable",
+                    "count": 0,
+                    "reason": None,
+                },
+                "delivery_status": "completed",
+                "understanding": {
+                    "intent": "documentation_query",
+                    "summary": "static docs",
+                    "confidence": 0.82,
+                    "requires_confirmation": False,
+                },
+            }
         return {
             "response": "ok",
             "provider": "stub",
@@ -122,11 +147,36 @@ class _DummyChatService:
     def stream_message(self, **kwargs):
         self.last_stream_user_id = kwargs.get("user_id")
         self.last_stream_conversation_id = kwargs.get("conversation_id")
+        is_static_docs = kwargs.get("message") == "STATIC_DOCS_CONTRACT"
+        if is_static_docs:
+            self.last_stream_strategy = "static_docs"
 
         async def _gen():
             yield 'event: protocol\ndata: {"version":"2025-11.v1"}\n\n'
-            yield 'event: token\ndata: {"text":"ok"}\n\n'
-            yield "event: done\ndata: [DONE]\n\n"
+            if is_static_docs:
+                yield 'event: token\ndata: {"text":"canonical static docs"}\n\n'
+                yield 'event: partial\ndata: {"text":"canonical static docs"}\n\n'
+                yield (
+                    "event: done\ndata: "
+                    + json.dumps(
+                        {
+                            "provider": "janus",
+                            "model": "tools_docs",
+                            "citations": [],
+                            "citation_status": {
+                                "mode": "optional",
+                                "status": "not_applicable",
+                                "count": 0,
+                                "reason": None,
+                            },
+                            "delivery_status": "completed",
+                        }
+                    )
+                    + "\n\n"
+                )
+            else:
+                yield 'event: token\ndata: {"text":"ok"}\n\n'
+                yield "event: done\ndata: [DONE]\n\n"
 
         return _gen()
 
@@ -373,6 +423,51 @@ def test_chat_message_idempotency_replays_without_second_execution():
     assert service.message_calls == 1
 
 
+def test_group2_static_rest_and_sse_share_normalized_projection_without_patch_write():
+    service = _DummyChatService()
+    client = _build_client(service)
+    headers = _auth_headers(78)
+
+    rest = client.post(
+        "/api/v1/chat/message",
+        json={"conversation_id": "conv-1", "message": "STATIC_DOCS_CONTRACT"},
+        headers=headers,
+    )
+    stream = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "STATIC_DOCS_CONTRACT"},
+        headers=headers,
+    )
+
+    assert rest.status_code == 200, rest.text
+    assert stream.status_code == 200, stream.text
+    token_text = ""
+    done = None
+    for block in stream.text.split("\n\n"):
+        event_name = None
+        data = None
+        for line in block.splitlines():
+            if line.startswith("event:"):
+                event_name = line.split(":", 1)[1].strip()
+            elif line.startswith("data:"):
+                data = json.loads(line.split(":", 1)[1].strip())
+        if event_name == "token":
+            token_text += data["text"]
+        elif event_name == "done":
+            done = data
+
+    rest_payload = rest.json()
+    assert service.last_finalized_turn["result"]["strategy"] == "static_docs"
+    assert service.last_stream_strategy == "static_docs"
+    assert token_text == rest_payload["response"] == "canonical static docs"
+    assert done is not None
+    for key in ("provider", "model", "citations", "citation_status", "delivery_status"):
+        assert done[key] == rest_payload[key]
+    assert service.last_finalized_turn["result"]["confirmation"] is None
+    assert service.last_finalized_turn["result"]["agent_state"]["state"] == "completed"
+    assert service.last_message_patch is None
+
+
 def test_chat_message_requires_citations_for_code_or_docs_queries(monkeypatch):
     async def _no_citations(**kwargs):
         return {"citations": [], "retrieval_failed": False}
@@ -477,7 +572,6 @@ def test_chat_message_required_citations_include_clickable_source_metadata(monke
             "citations": [
                 {
                     "source_type": "code",
-                    "type": "code",
                     "line_start": 42,
                     "line_end": 44,
                     "line": 42,
@@ -529,7 +623,7 @@ def test_chat_message_required_citations_include_clickable_source_metadata(monke
     assert len(data["citations"]) == 1
     citation = data["citations"][0]
     assert citation["source_type"] == "code"
-    assert citation["type"] == "code"
+    assert "type" not in citation
     assert citation["line_start"] == 42
     assert citation["line_end"] == 44
     assert citation["line"] == 42
@@ -608,7 +702,6 @@ def test_chat_message_document_citations_prevent_pending_study(monkeypatch):
                     "title": "genesis-backup-2026-02-05.json",
                     "file_path": "genesis-backup-2026-02-05.json",
                     "source_type": "document",
-                    "type": "document",
                     "snippet": '{"version":1}',
                 }
             ],

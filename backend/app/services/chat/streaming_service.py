@@ -13,9 +13,12 @@ from app.core.exceptions.chat_exceptions import ChatServiceError
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
 from app.core.monitoring.chat_metrics import (
+    CHAT_ERRORS_TOTAL,
     CHAT_LATENCY_SECONDS,
+    CHAT_MESSAGES_TOTAL,
     CHAT_SPEND_USD_TOTAL,
     CHAT_TOKENS_TOTAL,
+    CHAT_TTFT_SECONDS,
 )
 from app.repositories.chat_repository import ChatRepository, ChatRepositoryError
 from app.services.chat.chat_citation_service import (
@@ -38,7 +41,10 @@ from app.services.chat.message_helpers import (
 )
 from app.services.chat.repository_port import AsyncChatRepositoryPort
 from app.services.chat.turn_core import (
+    IMMEDIATE_TURN_STRATEGIES,
+    STATIC_RESPONSE_STRATEGIES,
     TurnBusinessState,
+    TurnEffectsPolicy,
     TurnExecutionResult,
     TurnRequest,
     TurnStrategy,
@@ -190,6 +196,7 @@ class StreamingService:
         yield f"event: protocol\ndata: {proto}\n\n"
 
         await self._repo_io.add_message(conversation_id, role="user", text=message)
+        CHAT_MESSAGES_TOTAL.labels(role="user", outcome="accepted").inc()
         self._message_orchestration_service.schedule_active_memory_capture(
             user_id=user_id,
             message=message,
@@ -205,6 +212,237 @@ class StreamingService:
             )
             + "\n\n"
         )
+
+        if turn_plan.primary_strategy in IMMEDIATE_TURN_STRATEGIES:
+            immediate_strategy = turn_plan.primary_strategy
+            effects = TurnEffectsPolicy.for_strategy(immediate_strategy)
+
+            if immediate_strategy in STATIC_RESPONSE_STRATEGIES:
+                async def _complete_static_turn() -> tuple[
+                    TurnExecutionResult,
+                    Any,
+                    dict[str, Any],
+                ]:
+                    execution = await self._message_orchestration_service.execute_static_turn(
+                        strategy=immediate_strategy,
+                        role=role,
+                    )
+                    result_understanding = build_routed_understanding(
+                        understanding,
+                        routing_decision=routing_decision,
+                        requested_role=requested_role,
+                        selected_role=role,
+                        route_applied=bool(route_applied),
+                    )
+                    finalized = self._message_orchestration_service.finalize_turn(
+                        execution=execution,
+                        understanding=result_understanding,
+                        delivery_status="completed",
+                    )
+                    finalized_payload = finalized.to_payload()
+                    saved_message = (
+                        await self._message_orchestration_service.persist_finalized_turn(
+                            conversation_id=conversation_id,
+                            user_message=message,
+                            result=finalized_payload,
+                            user_id=user_id,
+                            project_id=project_id,
+                            identity_source=identity_source,
+                            role=role,
+                            priority=priority,
+                        )
+                    )
+                    return execution, finalized, saved_message
+
+                try:
+                    if not effects.persist_messages:
+                        raise RuntimeError("Static response persistence is disabled")
+                    static_task = asyncio.create_task(_complete_static_turn())
+                    if heartbeat_interval and heartbeat_interval > 0:
+                        while True:
+                            static_completed_tasks, _ = await asyncio.wait(
+                                {static_task},
+                                timeout=max(1, heartbeat_interval),
+                            )
+                            if static_completed_tasks:
+                                break
+                            heartbeat = json.dumps(
+                                {"timestamp": int(_time.time() * 1000)},
+                                ensure_ascii=False,
+                            )
+                            yield f"event: heartbeat\ndata: {heartbeat}\n\n"
+                    execution, finalized, saved_message = await static_task
+                except Exception as exc:
+                    CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="error").inc()
+                    CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
+                    logger.error(
+                        "chat_static_stream_failed",
+                        conversation_id=conversation_id,
+                        strategy=immediate_strategy.value,
+                        error_type=type(exc).__name__,
+                    )
+                    error_payload = json.dumps(
+                        chat_sse_error_payload(
+                            code="CHAT_INVOCATION_ERROR",
+                            message="Static response unavailable",
+                            category="internal",
+                            retryable=True,
+                        ),
+                        ensure_ascii=False,
+                    )
+                    yield f"event: error\ndata: {error_payload}\n\n"
+                    return
+
+                assistant_text = finalized.response
+                first_token = True
+                for i in range(0, len(assistant_text), 256):
+                    token_payload = json.dumps(
+                        {
+                            "text": assistant_text[i : i + 256],
+                            "timestamp": int(_time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    if first_token:
+                        CHAT_TTFT_SECONDS.labels(
+                            provider=finalized.provider,
+                            model=finalized.model,
+                        ).observe(max(0.0, _time.time() - start_t_overall))
+                        first_token = False
+                    yield f"event: token\ndata: {token_payload}\n\n"
+                    yield f"event: partial\ndata: {token_payload}\n\n"
+
+                static_done_payload: dict[str, Any] = {
+                    "conversation_id": conversation_id,
+                    "message_id": (
+                        str(saved_message.get("id"))
+                        if isinstance(saved_message, dict)
+                        else None
+                    ),
+                    "provider": finalized.provider,
+                    "model": finalized.model,
+                    "citations": finalized.citations,
+                    "citation_status": finalized.citation_status,
+                    "understanding": finalized.understanding,
+                    "confirmation": finalized.confirmation,
+                    "agent_state": finalized.agent_state,
+                    "delivery_status": finalized.delivery_status,
+                }
+                yield (
+                    "event: done\ndata: "
+                    + json.dumps(static_done_payload, ensure_ascii=False)
+                    + "\n\n"
+                )
+                return
+
+            execution = await self._message_orchestration_service.execute_static_turn(
+                strategy=immediate_strategy,
+                role=role,
+            )
+            result_understanding = build_routed_understanding(
+                understanding,
+                routing_decision=routing_decision,
+                requested_role=requested_role,
+                selected_role=role,
+                route_applied=bool(route_applied),
+                requires_confirmation=turn_plan.requires_confirmation,
+                confirmation_reason=turn_plan.confirmation_reason,
+            )
+            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+                message=message,
+                assistant_response=execution.response,
+                conversation_id=conversation_id,
+                user_id=str(user_id) if user_id is not None else None,
+                existing_pending_action_id=None,
+                understanding=result_understanding,
+            )
+            confirmation_reason = (
+                result_understanding.get("confirmation_reason") or fallback_reason
+            )
+            confirmation_payload = build_confirmation_payload(
+                pending_action_id=pending_action_id,
+                reason=str(confirmation_reason) if confirmation_reason else None,
+            )
+            delivery_status = (
+                "waiting_confirmation"
+                if confirmation_payload and confirmation_payload.get("required")
+                else "completed"
+            )
+            if execution.citation_status is None:
+                execution.citation_status = build_citation_status(
+                    message=message,
+                    citations=[],
+                )
+            finalized = self._message_orchestration_service.finalize_turn(
+                execution=execution,
+                understanding=result_understanding,
+                pending_action_id=pending_action_id,
+                confirmation_reason=(
+                    str(confirmation_reason) if confirmation_reason else None
+                ),
+                delivery_status=delivery_status,
+            )
+            assistant_text = execution.response
+            for i in range(0, len(assistant_text), 256):
+                token_payload = json.dumps(
+                    {
+                        "text": assistant_text[i : i + 256],
+                        "timestamp": int(_time.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"event: token\ndata: {token_payload}\n\n"
+                yield f"event: partial\ndata: {token_payload}\n\n"
+            saved_message = await self._repo_io.add_message(
+                conversation_id,
+                role="assistant",
+                text=assistant_text,
+                metadata={
+                    "citations": finalized.citations,
+                    "citation_status": finalized.citation_status,
+                    "understanding": finalized.understanding,
+                    "confirmation": finalized.confirmation,
+                    "agent_state": finalized.agent_state,
+                    "delivery_status": finalized.delivery_status,
+                    "provider": finalized.provider,
+                    "model": finalized.model,
+                },
+            )
+            immediate_done_payload: dict[str, Any] = {
+                "conversation_id": conversation_id,
+                "message_id": (
+                    str(saved_message.get("id")) if isinstance(saved_message, dict) else None
+                ),
+                "provider": finalized.provider,
+                "model": finalized.model,
+                "citations": finalized.citations,
+                "citation_status": finalized.citation_status,
+                "understanding": finalized.understanding,
+                "confirmation": finalized.confirmation,
+                "agent_state": finalized.agent_state,
+                "delivery_status": finalized.delivery_status,
+            }
+            if (finalized.agent_state or {}).get("state") == "waiting_confirmation":
+                yield (
+                    "event: cognitive_status\ndata: "
+                    + json.dumps(
+                        {
+                            "state": "waiting_confirmation",
+                            "requires_confirmation": True,
+                            "reason": (finalized.confirmation or {}).get("reason"),
+                            "timestamp": int(_time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+            yield (
+                "event: done\ndata: "
+                + json.dumps(immediate_done_payload, ensure_ascii=False)
+                + "\n\n"
+            )
+            return
+
         try:
             runtime_notice = self._message_orchestration_service.build_knowledge_space_runtime_notice(
                 conversation_id=conversation_id,
@@ -272,8 +510,6 @@ class StreamingService:
                     ttft_ms = int((_time.time() - start_t_overall) * 1000)
                     first_token = False
                     try:
-                        from app.core.monitoring.chat_metrics import CHAT_TTFT_SECONDS
-
                         CHAT_TTFT_SECONDS.labels(
                             provider=str(grounded_result.get("provider") or "janus"),
                             model=str(grounded_result.get("model") or "document_grounding"),
@@ -455,122 +691,6 @@ class StreamingService:
         )
         in_tokens = self._prompt_service.estimate_tokens(prompt)
         CHAT_TOKENS_TOTAL.labels(direction="in").inc(in_tokens)
-
-        immediate_strategies = {
-            TurnStrategy.HIGH_RISK_CONFIRMATION,
-            TurnStrategy.STATIC_DISCOVERY,
-            TurnStrategy.STATIC_DOCS,
-            TurnStrategy.STATIC_CAPABILITIES,
-            TurnStrategy.BLOCKED_TOOL_CREATION,
-        }
-        if turn_plan.primary_strategy in immediate_strategies:
-            execution = self._message_orchestration_service.execute_static_turn(
-                strategy=turn_plan.primary_strategy,
-                role=role,
-            )
-            result = execution.to_payload()
-            result_understanding = build_routed_understanding(
-                understanding,
-                routing_decision=routing_decision,
-                requested_role=requested_role,
-                selected_role=role,
-                route_applied=bool(route_applied),
-                requires_confirmation=turn_plan.requires_confirmation,
-                confirmation_reason=turn_plan.confirmation_reason,
-            )
-            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
-                message=message,
-                assistant_response=execution.response,
-                conversation_id=conversation_id,
-                user_id=str(user_id) if user_id is not None else None,
-                existing_pending_action_id=None,
-                understanding=result_understanding,
-            )
-            confirmation_reason = (
-                result_understanding.get("confirmation_reason") or fallback_reason
-            )
-            confirmation_payload = build_confirmation_payload(
-                pending_action_id=pending_action_id,
-                reason=str(confirmation_reason) if confirmation_reason else None,
-            )
-            delivery_status = (
-                "waiting_confirmation"
-                if confirmation_payload and confirmation_payload.get("required")
-                else "completed"
-            )
-            if execution.citation_status is None:
-                execution.citation_status = build_citation_status(
-                    message=message,
-                    citations=[],
-                )
-            finalized = self._message_orchestration_service.finalize_turn(
-                execution=execution,
-                understanding=result_understanding,
-                pending_action_id=pending_action_id,
-                confirmation_reason=(
-                    str(confirmation_reason) if confirmation_reason else None
-                ),
-                delivery_status=delivery_status,
-            )
-            normalized_understanding = finalized.understanding
-            confirmation_payload = finalized.confirmation
-            agent_state = finalized.agent_state or {}
-            assistant_text = execution.response
-            for i in range(0, len(assistant_text), 256):
-                token_payload = json.dumps(
-                    {
-                        "text": assistant_text[i : i + 256],
-                        "timestamp": int(_time.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                yield f"event: token\ndata: {token_payload}\n\n"
-                yield f"event: partial\ndata: {token_payload}\n\n"
-            saved_message = await self._repo_io.add_message(
-                conversation_id,
-                role="assistant",
-                text=assistant_text,
-                metadata={
-                    "citations": [],
-                    "citation_status": finalized.citation_status,
-                    "understanding": normalized_understanding,
-                    "confirmation": confirmation_payload,
-                    "agent_state": agent_state,
-                    "delivery_status": delivery_status,
-                    "provider": execution.provider,
-                    "model": execution.model,
-                },
-            )
-            static_done_payload: dict[str, Any] = {
-                "conversation_id": conversation_id,
-                "message_id": (
-                    str(saved_message.get("id")) if isinstance(saved_message, dict) else None
-                ),
-                "provider": execution.provider,
-                "model": execution.model,
-                "citations": [],
-                "citation_status": finalized.citation_status,
-                "understanding": normalized_understanding,
-                "confirmation": confirmation_payload,
-                "agent_state": agent_state,
-                "delivery_status": delivery_status,
-            }
-            if agent_state.get("state") == "waiting_confirmation":
-                yield (
-                    "event: cognitive_status\ndata: "
-                    + json.dumps(
-                        {
-                            "state": "waiting_confirmation",
-                            "requires_confirmation": True,
-                            "reason": (confirmation_payload or {}).get("reason"),
-                            "timestamp": int(_time.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n\n"
-                )
-            yield f"event: done\ndata: {json.dumps(static_done_payload, ensure_ascii=False)}\n\n"
-            return
 
         try:
             start_t = _time.time()
@@ -911,8 +1031,6 @@ class StreamingService:
                 ensure_ascii=False,
             )
             try:
-                from app.core.monitoring.chat_metrics import CHAT_ERRORS_TOTAL
-
                 CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
             except Exception:
                 pass

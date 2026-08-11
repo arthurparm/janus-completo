@@ -2,12 +2,58 @@
 Prompt Builder Service - Modular Architecture
 Delegates to PromptComposer for efficient, intent-based prompt generation.
 """
-import structlog
-from typing import Any
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
+import structlog
 from app.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class CompiledPromptSnapshot:
+    """Validated immutable projection returned by the prompt composer."""
+
+    text: str
+    modules_used: tuple[str, ...]
+    token_count: int
+
+    @classmethod
+    def from_value(cls, value: object) -> "CompiledPromptSnapshot":
+        text = getattr(value, "text", None)
+        modules_used = getattr(value, "modules_used", None)
+        token_count = getattr(value, "token_count", None)
+        if not isinstance(text, str) or not text.strip():
+            raise TypeError("Compiled prompt text must be a non-empty string")
+        if not isinstance(modules_used, list) or not all(
+            isinstance(module, str) and module for module in modules_used
+        ):
+            raise TypeError("Compiled prompt modules must be a list of non-empty strings")
+        if isinstance(token_count, bool) or not isinstance(token_count, int) or token_count < 0:
+            raise TypeError("Compiled prompt token count must be a non-negative integer")
+        return cls(
+            text=text,
+            modules_used=tuple(modules_used),
+            token_count=token_count,
+        )
+
+
+@runtime_checkable
+class ToolDiscoveryCatalog(Protocol):
+    def list_tools(
+        self,
+        *,
+        category: object | None,
+        permission_level: object | None,
+        tags: list[str] | None,
+    ) -> Sequence[object]: ...
+
+
+@runtime_checkable
+class ToolDocumentationCatalog(Protocol):
+    def generate_documentation(self) -> str: ...
 
 
 class PromptBuilderService:
@@ -25,10 +71,20 @@ class PromptBuilderService:
         """
         self.prompt_service = prompt_service
 
+    @staticmethod
+    def _classify_intent_value(message: str) -> str:
+        from app.core.prompts.intent_classifier import IntentClassifier
+
+        classified = IntentClassifier().classify(message)
+        value = getattr(classified, "value", None)
+        if not isinstance(value, str):
+            raise TypeError("Intent classifier returned an invalid intent")
+        return value
+
     async def build_prompt(
         self,
         persona: str,
-        history: list[dict[str, Any]],
+        history: Sequence[Mapping[str, object]],
         new_user_message: str,
         summary: str | None,
         relevant_memories: str | None = None,
@@ -66,8 +122,16 @@ class PromptBuilderService:
         intent = classifier.classify(new_user_message)
 
         # Build context
+        normalized_history: list[Message] = []
+        for entry in history:
+            history_role = entry.get("role", "user")
+            history_text = entry.get("text", "")
+            if not isinstance(history_role, str) or not isinstance(history_text, str):
+                raise TypeError("Prompt history entries require string role and text fields")
+            normalized_history.append(Message(role=history_role, text=history_text))
+
         context = ConversationContext(
-            history=[Message(role=h.get("role", "user"), text=h.get("text", "")) for h in history],
+            history=normalized_history,
             current_message=new_user_message,
             summary=summary,
             relevant_memories=relevant_memories,
@@ -76,7 +140,7 @@ class PromptBuilderService:
 
         # Compose prompt using modular system
         composer = get_prompt_composer(self.prompt_service)
-        compiled = await composer.compose(intent, context)
+        compiled = CompiledPromptSnapshot.from_value(await composer.compose(intent, context))
 
         logger.info("log_info", message=f"[PROMPT_BUILD] ✅ Composed {len(compiled.modules_used)} modules, "
             f"~{compiled.token_count} tokens (intent={intent.value})"
@@ -86,25 +150,21 @@ class PromptBuilderService:
 
     def is_capabilities_query(self, message: str) -> bool:
         """Check if message is asking about capabilities."""
-        from app.core.prompts.intent_classifier import IntentClassifier
+        from app.core.prompts.types import IntentType
 
-        classifier = IntentClassifier()
-        # IntentClassifier methods are synchronous in recent versions
-        return classifier.is_capabilities_query(message)
+        return self._classify_intent_value(message) == str(IntentType.CAPABILITIES_QUERY.value)
 
     def is_tool_request(self, message: str) -> bool:
         """Check if message is requesting tool creation."""
-        from app.core.prompts.intent_classifier import IntentClassifier
+        from app.core.prompts.types import IntentType
 
-        classifier = IntentClassifier()
-        return classifier.is_tool_request(message)
+        return self._classify_intent_value(message) == str(IntentType.TOOL_CREATION.value)
 
     def is_script_request(self, message: str) -> bool:
         """Check if message is requesting script generation."""
-        from app.core.prompts.intent_classifier import IntentClassifier
+        from app.core.prompts.types import IntentType
 
-        classifier = IntentClassifier()
-        return classifier.is_script_request(message)
+        return self._classify_intent_value(message) == str(IntentType.SCRIPT_GENERATION.value)
 
     def is_discovery_query(self, message: str) -> bool:
         """Check if message is an interactive discovery query."""
@@ -127,37 +187,39 @@ class PromptBuilderService:
         ]
         return any(k in message.lower() for k in keywords)
 
-    def render_discovery_intro(self, tools: Any) -> str:
-        """Render introductory message listing available tools."""
-        tool_list = []
-        # Try ToolService.list_tools pattern
-        if hasattr(tools, "list_tools"):
-            try:
-                # Assuming ToolService signature: list_tools(category, permission_level, tags)
-                tool_list = tools.list_tools(category=None, permission_level=None, tags=None)
-            except Exception:
-                # Fallback for simple list_tools()
-                try:
-                    tool_list = tools.list_tools()
-                except Exception:
-                    pass
-        # Fallback to get_tools pattern (alternate interface or mock)
-        elif hasattr(tools, "get_tools"):
-            tool_list = tools.get_tools()
+    def render_discovery_intro(self, tools: ToolDiscoveryCatalog | None) -> str:
+        """Render the homologated catalog without hiding repository failures."""
+        if not isinstance(tools, ToolDiscoveryCatalog):
+            raise RuntimeError("Homologated tool catalog is unavailable")
 
-        names = [t.name for t in tool_list] if isinstance(tool_list, list) else []
+        tool_list = tools.list_tools(category=None, permission_level=None, tags=None)
+        if not isinstance(tool_list, list):
+            raise RuntimeError("Homologated tool catalog returned an invalid payload")
 
+        names: list[str] = []
+        for metadata in tool_list:
+            raw_name = getattr(metadata, "name", None)
+            if isinstance(raw_name, str) and raw_name.strip():
+                names.append(raw_name.strip())
+        names = sorted(dict.fromkeys(names), key=str.casefold)
+
+        if not tool_list:
+            return "O catálogo homologado de ferramentas está vazio no momento."
         if not names:
-            return "Estou equipado com diversas ferramentas para análise de código e sistema. Pergunte 'quais ferramentas' novamente para tentar recarregar a lista."
+            return "O catálogo homologado não possui ferramentas com metadata válida no momento."
 
         return f"Estou equipado com as seguintes ferramentas: {', '.join(names)}. Pergunte 'como usar [ferramenta]' para mais detalhes."
 
-    def render_tools_documentation(self, tools: Any) -> str:
-        """Render detailed documentation for all tools."""
-        # Simple implementation for fallback
-        return "Documentação detalhada das ferramentas: ..."
+    def render_tools_documentation(self, tools: ToolDocumentationCatalog | None) -> str:
+        """Delegate tool documentation to the homologated product catalog."""
+        if not isinstance(tools, ToolDocumentationCatalog):
+            raise RuntimeError("Homologated tool documentation is unavailable")
+        documentation = tools.generate_documentation()
+        if not isinstance(documentation, str) or not documentation.strip():
+            raise RuntimeError("Homologated tool documentation is empty")
+        return documentation
 
-    def render_local_capabilities(self, tools: Any) -> str:
+    def render_local_capabilities(self) -> str:
         """Render local capabilities overview."""
         return "Posso analisar código, executar comandos de terminal, e gerenciar arquivos."
 

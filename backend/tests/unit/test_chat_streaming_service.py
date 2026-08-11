@@ -26,6 +26,7 @@ class _FakeRepo:
     def __init__(self):
         self.messages = []
         self.conv = {"persona": "assistant", "summary": None, "messages": []}
+        self.recent_calls = 0
 
     def get_conversation(self, conversation_id):
         if conversation_id != "conv-1":
@@ -38,6 +39,7 @@ class _FakeRepo:
         return payload
 
     def get_recent_messages(self, conversation_id, limit=20):
+        self.recent_calls += 1
         return []
 
 
@@ -80,7 +82,11 @@ class _FakeLLM:
 
 
 class _FakePromptService:
+    def __init__(self):
+        self.build_calls = 0
+
     async def build_prompt(self, persona, history, message, summary, relevant_memories):
+        self.build_calls += 1
         return f"{persona}:{message}"
 
     def estimate_tokens(self, text):
@@ -101,16 +107,21 @@ class _FakePromptService:
     def is_capabilities_query(self, message):
         return False
 
-    def render_local_capabilities(self, tools):
+    def render_local_capabilities(self):
         return "capabilities"
 
 
 class _FakeMessageOrchestration:
-    def __init__(self, llm_service):
+    def __init__(self, llm_service, *, repo=None, static_strategy=None):
         self.calls = 0
         self.grounded_calls = 0
         self.grounded_result = None
         self._llm = llm_service
+        self._repo = repo
+        self.static_strategy = static_strategy
+        self.persist_calls = []
+        self.persist_error = None
+        self.dynamic_calls = 0
         self._planner = ChatTurnPlanner()
         self._finalizer = ChatTurnFinalizer()
 
@@ -136,11 +147,15 @@ class _FakeMessageOrchestration:
                     requires_mandatory_citations(request.message)
                     or references_uploaded_material(request.message)
                 ),
+                is_discovery=self.static_strategy is TurnStrategy.STATIC_DISCOVERY,
+                is_docs=self.static_strategy is TurnStrategy.STATIC_DOCS,
+                is_capabilities=self.static_strategy is TurnStrategy.STATIC_CAPABILITIES,
                 risk_level=risk_level,
             ),
         )
 
     async def execute_dynamic_turn(self, *, plan, request, prompt, persona):
+        self.dynamic_calls += 1
         payload = await self._llm.invoke_llm(
             prompt=prompt,
             role=request.role,
@@ -162,7 +177,7 @@ class _FakeMessageOrchestration:
             default_role=request.role,
         )
 
-    def execute_static_turn(self, *, strategy, role):
+    async def execute_static_turn(self, *, strategy, role):
         response_by_strategy = {
             TurnStrategy.HIGH_RISK_CONFIRMATION: (
                 "Pedido classificado como alto risco. "
@@ -179,8 +194,27 @@ class _FakeMessageOrchestration:
             strategy=strategy,
             response=response_by_strategy[strategy],
             provider="janus",
-            model=strategy.value,
+            model={
+                TurnStrategy.STATIC_DISCOVERY: "discovery",
+                TurnStrategy.STATIC_DOCS: "tools_docs",
+                TurnStrategy.STATIC_CAPABILITIES: "capabilities",
+            }.get(strategy, strategy.value),
             role=role.value,
+            citation_status=(
+                {
+                    "mode": "optional",
+                    "status": "not_applicable",
+                    "count": 0,
+                    "reason": None,
+                }
+                if strategy
+                in {
+                    TurnStrategy.STATIC_DISCOVERY,
+                    TurnStrategy.STATIC_DOCS,
+                    TurnStrategy.STATIC_CAPABILITIES,
+                }
+                else None
+            ),
         )
 
     def finalize_turn(self, **kwargs):
@@ -227,6 +261,29 @@ class _FakeMessageOrchestration:
     def trigger_post_response_events(self, **kwargs):
         self.calls += 1
 
+    async def persist_finalized_turn(self, **kwargs):
+        self.persist_calls.append(kwargs)
+        if self.persist_error is not None:
+            raise self.persist_error
+        return self._repo.add_message(
+            kwargs["conversation_id"],
+            role="assistant",
+            text=kwargs["result"]["response"],
+            metadata={
+                key: kwargs["result"].get(key)
+                for key in (
+                    "citations",
+                    "citation_status",
+                    "understanding",
+                    "confirmation",
+                    "agent_state",
+                    "delivery_status",
+                    "provider",
+                    "model",
+                )
+            },
+        )
+
 
 class _FakeRoutingDecision:
     def __init__(self, *, risk_level: str = "high"):
@@ -269,6 +326,25 @@ def _parse_sse_chunks(chunks: list[str]) -> list[tuple[str, object]]:
     return events
 
 
+class _MetricRecorder:
+    def __init__(self, *, before_observe=None):
+        self.calls = []
+        self._labels = {}
+        self._before_observe = before_observe
+
+    def labels(self, **labels):
+        self._labels = labels
+        return self
+
+    def inc(self, value=1):
+        self.calls.append(("inc", dict(self._labels), value))
+
+    def observe(self, value):
+        if self._before_observe is not None:
+            self._before_observe()
+        self.calls.append(("observe", dict(self._labels), value))
+
+
 @pytest.mark.asyncio
 async def test_streaming_service_emits_protocol_partial_and_done():
     repo = _FakeRepo()
@@ -299,6 +375,161 @@ async def test_streaming_service_emits_protocol_partial_and_done():
     assert any(line.startswith("event: token") for line in lines), lines
     assert any(line.startswith("event: partial") for line in lines), lines
     assert any(line.startswith("event: done") for line in lines), lines
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("strategy", "message", "expected_text", "expected_model"),
+    [
+        (TurnStrategy.STATIC_DISCOVERY, "quais ferramentas", "discovery", "discovery"),
+        (TurnStrategy.STATIC_DOCS, "como usar a ferramenta", "docs", "tools_docs"),
+        (
+            TurnStrategy.STATIC_CAPABILITIES,
+            "o que você pode fazer",
+            "capabilities",
+            "capabilities",
+        ),
+    ],
+)
+async def test_group2_static_sse_persists_before_tokens_and_skips_dynamic_work(
+    monkeypatch,
+    strategy,
+    message,
+    expected_text,
+    expected_model,
+):
+    repo = _FakeRepo()
+    llm = _FakeLLM()
+    prompt = _FakePromptService()
+    msg_orch = _FakeMessageOrchestration(
+        llm,
+        repo=repo,
+        static_strategy=strategy,
+    )
+
+    def _assert_persisted_before_ttft():
+        assert [message[1] for message in repo.messages] == ["user", "assistant"]
+
+    ttft = _MetricRecorder(before_observe=_assert_persisted_before_ttft)
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.CHAT_TTFT_SECONDS",
+        ttft,
+    )
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=llm,
+        tool_service=None,
+        prompt_service=prompt,
+        rag_service=_FailingRagService(),
+        conversation_service=ConversationService(repo),
+        message_orchestration_service=msg_orch,
+    )
+
+    chunks = [
+        line
+        async for line in streaming.stream_message(
+            conversation_id="conv-1",
+            message=message,
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+        )
+    ]
+    events = _parse_sse_chunks(chunks)
+    names = [name for name, _ in events]
+    token_text = "".join(
+        payload["text"]
+        for name, payload in events
+        if name == "token" and isinstance(payload, dict)
+    )
+    done = next(payload for name, payload in events if name == "done")
+
+    assert names[:4] == ["start", "protocol", "ack", "cognitive_status"]
+    assert names.index("token") < names.index("partial") < names.index("done")
+    assert token_text == expected_text
+    assert done["provider"] == "janus"
+    assert done["model"] == expected_model
+    assert done["citations"] == []
+    assert done["citation_status"]["status"] == "not_applicable"
+    assert done["confirmation"] is None
+    assert done["agent_state"]["state"] == "completed"
+    assert done["delivery_status"] == "completed"
+    assert len(msg_orch.persist_calls) == 1
+    persisted = msg_orch.persist_calls[0]["result"]
+    assert persisted["response"] == expected_text
+    assert persisted["role"] == ModelRole.ORCHESTRATOR.value
+    assert persisted["provider"] == done["provider"]
+    assert persisted["model"] == done["model"]
+    assert persisted["citations"] == done["citations"]
+    assert persisted["citation_status"] == done["citation_status"]
+    assert persisted["delivery_status"] == done["delivery_status"]
+    assert repo.recent_calls == 0
+    assert prompt.build_calls == 0
+    assert llm.calls == []
+    assert msg_orch.dynamic_calls == 0
+    assert msg_orch.grounded_calls == 0
+    assert msg_orch.calls == 0
+    assert len(ttft.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_group2_static_sse_persistence_failure_emits_error_without_success_done(
+    monkeypatch,
+):
+    repo = _FakeRepo()
+    llm = _FakeLLM()
+    msg_orch = _FakeMessageOrchestration(
+        llm,
+        repo=repo,
+        static_strategy=TurnStrategy.STATIC_DOCS,
+    )
+    msg_orch.persist_error = RuntimeError("write failed")
+    message_metrics = _MetricRecorder()
+    error_metrics = _MetricRecorder()
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.CHAT_MESSAGES_TOTAL",
+        message_metrics,
+    )
+    monkeypatch.setattr(
+        "app.services.chat.streaming_service.CHAT_ERRORS_TOTAL",
+        error_metrics,
+    )
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=llm,
+        tool_service=None,
+        prompt_service=_FakePromptService(),
+        rag_service=None,
+        conversation_service=ConversationService(repo),
+        message_orchestration_service=msg_orch,
+    )
+
+    chunks = [
+        line
+        async for line in streaming.stream_message(
+            conversation_id="conv-1",
+            message="docs",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+        )
+    ]
+    events = _parse_sse_chunks(chunks)
+    names = [name for name, _ in events]
+
+    assert "error" in names
+    assert "token" not in names
+    assert "partial" not in names
+    assert "done" not in names
+    assert [message[1] for message in repo.messages] == ["user"]
+    assert sum(
+        1
+        for operation, labels, _ in message_metrics.calls
+        if operation == "inc" and labels == {"role": "assistant", "outcome": "error"}
+    ) == 1
+    assert not any(
+        labels == {"role": "assistant", "outcome": "success"}
+        for _, labels, _ in message_metrics.calls
+    )
+    assert len(error_metrics.calls) == 1
 
 
 @pytest.mark.asyncio

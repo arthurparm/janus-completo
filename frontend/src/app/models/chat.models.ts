@@ -176,7 +176,6 @@ export interface Citation {
   doc_id?: string;
   file_path?: string;
   origin?: string;
-  type?: string;
   line?: number | string;
   line_start?: number | string;
   line_end?: number | string;

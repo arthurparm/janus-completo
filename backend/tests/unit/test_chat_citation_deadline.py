@@ -2,6 +2,22 @@ import asyncio
 
 import pytest
 from app.api.v1.endpoints.chat import chat_message
+from app.services.chat.chat_citation_service import map_citation_hits
+
+
+def test_citation_mapping_exposes_only_canonical_source_type() -> None:
+    citations = map_citation_hits(
+        [
+            {
+                "id": "citation-1",
+                "metadata": {"type": "document", "file_path": "manual.txt"},
+                "content": "source text",
+            }
+        ]
+    )
+
+    assert citations[0]["source_type"] == "document"
+    assert "type" not in citations[0]
 
 
 @pytest.mark.asyncio

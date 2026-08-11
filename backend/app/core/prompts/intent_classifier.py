@@ -3,7 +3,6 @@ Intent classification for routing to appropriate prompt modules.
 Extracted from prompt_builder_service.py to separate logic from prompt content.
 """
 import structlog
-from typing import Any
 
 from app.core.prompts.types import IntentType
 
@@ -109,7 +108,7 @@ class IntentClassifier:
 
         # Return intent with highest score
         if intent_scores:
-            classified = max(intent_scores, key=intent_scores.get)
+            classified = max(intent_scores, key=lambda intent: intent_scores[intent])
             confidence = self._calculate_confidence(intent_scores[classified], len(message))
 
             logger.info("log_info", message=f"[INTENT_CLASSIFICATION] Classified as {classified.value} "
@@ -165,14 +164,3 @@ class IntentClassifier:
 
         return base_confidence
 
-    def is_tool_request(self, message: str) -> bool:
-        """Check if message is requesting tool creation (backward compatibility)."""
-        return self.classify(message) == IntentType.TOOL_CREATION
-
-    def is_script_request(self, message: str) -> bool:
-        """Check if message is requesting script generation (backward compatibility)."""
-        return self.classify(message) == IntentType.SCRIPT_GENERATION
-
-    def is_capabilities_query(self, message: str) -> bool:
-        """Check if message is asking about capabilities (backward compatibility)."""
-        return self.classify(message) == IntentType.CAPABILITIES_QUERY
