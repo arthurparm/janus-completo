@@ -20,10 +20,6 @@ class IntentClassifier:
         IntentType.TOOL_CREATION: [
             "tool",
             "ferramenta",
-            "capability",
-            "capacidade",
-            "habilidade",
-            "ability",
             "crie uma ferramenta",
             "create a tool",
         ],
@@ -67,6 +63,7 @@ class IntentClassifier:
         IntentType.CAPABILITIES_QUERY: [
             "what can you do",
             "o que você pode fazer",
+            "suas capacidades",
             "capabilities",
             "capacidades",
             "features",

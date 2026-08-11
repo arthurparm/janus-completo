@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   janus-api:
     build:
@@ -97,6 +95,7 @@ services:
       - ./backend/app:/app/app:ro
       - ./backend/scripts:/app/scripts:ro
       - ./.secrets/qdrant:/run/secrets/janus/qdrant:ro
+      - ./.secrets/internal:/run/secrets/janus/internal:ro
       - janus_app_data:/app/data
       - janus_workspace:/app/workspace
     extra_hosts:

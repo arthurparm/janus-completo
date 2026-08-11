@@ -278,7 +278,6 @@ async def test_send_message_rejects_large_payload(monkeypatch):
     [
         ("discovery", "quais ferramentas", "discovery", "discovery response"),
         ("docs", "como usar a ferramenta", "tools_docs", "docs response"),
-        ("capabilities", "o que você pode fazer", "capabilities", "capabilities response"),
     ],
 )
 async def test_group2_static_turn_persists_once_with_complete_metadata_and_no_knowledge_effects(
@@ -435,7 +434,7 @@ async def test_static_persistence_failure_records_error_without_success(monkeypa
 
     repo = FailingAssistantRepo()
     prompt = _FakePromptService()
-    prompt.capabilities = True
+    prompt.docs = True
     messages = _MetricRecorder()
     errors = _MetricRecorder()
     monkeypatch.setattr(
@@ -451,7 +450,7 @@ async def test_static_persistence_failure_records_error_without_success(monkeypa
     with pytest.raises(RuntimeError, match="assistant write failed"):
         await service.send_message(
             conversation_id="conv-1",
-            message="o que você pode fazer",
+            message="como usar a ferramenta",
             role=ModelRole.ORCHESTRATOR,
             priority=ModelPriority.FAST_AND_CHEAP,
         )

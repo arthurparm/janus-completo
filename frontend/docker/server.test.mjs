@@ -106,13 +106,17 @@ test('routes private and public API prefixes to their dedicated upstreams', asyn
   const publicResponse = await fetchText(
     `http://127.0.0.1:${proxyPort}/public-api/api/v1/auth/oidc-config`,
   )
+  const healthResponse = await fetchText(
+    `http://127.0.0.1:${proxyPort}/healthz/user`,
+  )
 
   assert.deepEqual(privateResponse, { status: 200, body: 'private' })
   assert.deepEqual(publicResponse, {
     status: 200,
     body: '{"issuer":"https://idp.example"}',
   })
-  assert.deepEqual(privateRequests, ['/api/v1/users/me?expanded=true'])
+  assert.deepEqual(healthResponse, { status: 200, body: 'private' })
+  assert.deepEqual(privateRequests, ['/api/v1/users/me?expanded=true', '/healthz/user'])
   assert.deepEqual(publicRequests, ['/api/v1/auth/oidc-config'])
 })
 

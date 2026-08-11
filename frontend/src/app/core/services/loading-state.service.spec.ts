@@ -6,8 +6,13 @@ describe('LoadingStateService', () => {
   let service: LoadingStateService
 
   beforeEach(() => {
+    vi.useFakeTimers()
     TestBed.configureTestingModule({})
     service = TestBed.inject(LoadingStateService)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('should be created', () => {
@@ -45,7 +50,7 @@ describe('LoadingStateService', () => {
   })
 
   describe('stopLoading', () => {
-    it('should stop loading and update state', (done) => {
+    it('should stop loading and update state', () => {
       service.startLoading('test-key')
       expect(service.isKeyLoading('test-key')).toBe(true)
       
@@ -55,14 +60,12 @@ describe('LoadingStateService', () => {
       expect(service.isKeyLoading('test-key')).toBe(false)
       
       // State should be removed after delay
-      setTimeout(() => {
-        expect(service.getLoadingState('test-key')).toBeUndefined()
-        expect(service.isLoading()).toBe(false)
-        done()
-      }, 400)
+      vi.advanceTimersByTime(300)
+      expect(service.getLoadingState('test-key')).toBeUndefined()
+      expect(service.isLoading()).toBe(false)
     })
 
-    it('should update global loading state', (done) => {
+    it('should update global loading state', () => {
       service.startLoading('key1', { global: true })
       service.startLoading('key2', { global: true })
       
@@ -70,13 +73,25 @@ describe('LoadingStateService', () => {
       
       service.stopLoading('key1')
       expect(service.isGlobalLoading()).toBe(true) // Still have key2
-      
+      vi.advanceTimersByTime(300)
+      expect(service.isGlobalLoading()).toBe(true)
+
       service.stopLoading('key2')
-      
-      setTimeout(() => {
-        expect(service.isGlobalLoading()).toBe(false)
-        done()
-      }, 400)
+      expect(service.isGlobalLoading()).toBe(false)
+      vi.advanceTimersByTime(300)
+      expect(service.isGlobalLoading()).toBe(false)
+    })
+
+    it('should not remove a loading state restarted before the cleanup delay', () => {
+      service.startLoading('test-key')
+      service.stopLoading('test-key')
+      vi.advanceTimersByTime(100)
+
+      service.startLoading('test-key')
+      vi.advanceTimersByTime(200)
+
+      expect(service.isKeyLoading('test-key')).toBe(true)
+      expect(service.getLoadingState('test-key')).toBeDefined()
     })
   })
 
@@ -134,7 +149,7 @@ describe('LoadingStateService', () => {
   })
 
   describe('forceStopAll', () => {
-    it('should force stop all active loadings', (done) => {
+    it('should force stop all active loadings', () => {
       service.startLoading('key1')
       service.startLoading('key2')
       
@@ -142,11 +157,25 @@ describe('LoadingStateService', () => {
       
       service.forceStopAll()
       
-      setTimeout(() => {
-        expect(service.isLoading()).toBe(false)
-        expect(service.loadingKeys()).toEqual([])
-        done()
-      }, 400)
+      expect(service.isLoading()).toBe(false)
+      expect(service.loadingKeys()).toEqual([])
+      vi.advanceTimersByTime(300)
+      expect(service.isLoading()).toBe(false)
+      expect(service.loadingKeys()).toEqual([])
+    })
+
+    it('should preserve loading states started during the cleanup delay', () => {
+      service.startLoading('old-key')
+      service.forceStopAll()
+      vi.advanceTimersByTime(100)
+
+      service.startLoading('new-key', { global: true, http: true })
+      vi.advanceTimersByTime(200)
+
+      expect(service.getLoadingState('old-key')).toBeUndefined()
+      expect(service.isKeyLoading('new-key')).toBe(true)
+      expect(service.isGlobalLoading()).toBe(true)
+      expect(service.isHttpLoading()).toBe(true)
     })
   })
 

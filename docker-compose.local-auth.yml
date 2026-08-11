@@ -1,0 +1,42 @@
+services:
+  janus-dev-idp:
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:-arthurparaiso}/janus-api:${VERSION:-0.5.44}
+    container_name: janus_dev_idp_pc1
+    platform: linux/amd64
+    init: true
+    command: ["uvicorn", "app.dev_oidc:app", "--host", "0.0.0.0", "--port", "8400"]
+    ports:
+      - "127.0.0.1:${OIDC_DEV_PORT:-8400}:8400"
+    environment:
+      - OIDC_DEV_PUBLIC_ORIGIN=http://localhost:${OIDC_DEV_PORT:-8400}
+      - OIDC_DEV_CLIENT_ID=${OIDC_PUBLIC_CLIENT_ID:-janus-spa}
+      - OIDC_DEV_AUDIENCE=${OIDC_USER_AUDIENCE:-janus-user-api}
+      - OIDC_DEV_ADMIN_GROUP=${OIDC_ADMIN_GROUP:-janus-administrators}
+      - OIDC_DEV_FACADE_SECRET=${ADMIN_FACADE_CLIENT_SECRET:?Set ADMIN_FACADE_CLIENT_SECRET in .env.pc1}
+      - OIDC_DEV_REDIRECT_URIS=http://localhost:${FRONTEND_PORT:-4300}/auth/callback,http://127.0.0.1:${FRONTEND_PORT:-4300}/auth/callback
+    volumes:
+      - ./backend/app:/app/app:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8400/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - janus-pc1-net
+
+  janus-api:
+    depends_on:
+      janus-dev-idp:
+        condition: service_healthy
+
+  janus-public-api:
+    depends_on:
+      janus-dev-idp:
+        condition: service_healthy
+
+  janus-control-plane:
+    depends_on:
+      janus-dev-idp:
+        condition: service_healthy

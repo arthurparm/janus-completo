@@ -76,4 +76,56 @@ describe('AuthService OIDC PKCE', () => {
     await Promise.resolve()
     expect(service.isAuthenticated()).toBe(false)
   })
+
+  it('allows an HTTP token endpoint only on local loopback', async () => {
+    sessionStorage.setItem('JANUS_OIDC_PKCE_VERIFIER', 'verifier-value')
+    sessionStorage.setItem('JANUS_OIDC_STATE', 'expected-state')
+    const service = TestBed.inject(AuthService)
+
+    const callback = service.handleCallback('authorization-code', 'expected-state')
+    http.expectOne(`${PUBLIC_API_BASE_URL}/api/v1/auth/oidc-config`).flush({
+      issuer: 'http://localhost:8400',
+      client_id: 'janus-spa',
+      audience: 'janus-user-api',
+      scopes: ['openid', 'profile', 'email'],
+      authorization_endpoint: 'http://localhost:8400/authorize',
+      response_type: 'code',
+      code_challenge_method: 'S256'
+    })
+    await Promise.resolve()
+    http.expectOne('http://localhost:8400/.well-known/openid-configuration').flush({
+      token_endpoint: 'http://localhost:8400/token'
+    })
+    await Promise.resolve()
+    http.expectOne('http://localhost:8400/token').flush({
+      access_token: 'local-signed-token', token_type: 'Bearer', expires_in: 900
+    })
+    await Promise.resolve()
+    http.expectOne(`${API_BASE_URL}/v1/users/me`).flush({ id: '1', username: 'local-user' })
+
+    await expect(callback).resolves.toBe('/')
+  })
+
+  it('rejects an insecure remote HTTP token endpoint', async () => {
+    sessionStorage.setItem('JANUS_OIDC_PKCE_VERIFIER', 'verifier-value')
+    sessionStorage.setItem('JANUS_OIDC_STATE', 'expected-state')
+    const service = TestBed.inject(AuthService)
+
+    const callback = service.handleCallback('authorization-code', 'expected-state')
+    http.expectOne(`${PUBLIC_API_BASE_URL}/api/v1/auth/oidc-config`).flush({
+      issuer: 'http://idp.example',
+      client_id: 'janus-spa',
+      audience: 'janus-user-api',
+      scopes: ['openid'],
+      authorization_endpoint: 'https://idp.example/authorize',
+      response_type: 'code',
+      code_challenge_method: 'S256'
+    })
+    await Promise.resolve()
+    http.expectOne('http://idp.example/.well-known/openid-configuration').flush({
+      token_endpoint: 'http://idp.example/token'
+    })
+
+    await expect(callback).rejects.toThrow('HTTPS or local loopback HTTP')
+  })
 })

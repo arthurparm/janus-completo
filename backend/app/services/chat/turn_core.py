@@ -181,10 +181,12 @@ class ChatTurnPlanner:
             candidates.append(TurnStrategy.STATIC_DISCOVERY)
         elif signals.is_docs:
             candidates.append(TurnStrategy.STATIC_DOCS)
-        elif signals.is_capabilities:
-            candidates.append(TurnStrategy.STATIC_CAPABILITIES)
         elif signals.is_tool_request and signals.is_explicit_tool_creation:
             candidates.append(TurnStrategy.BLOCKED_TOOL_CREATION)
+
+        # Capability questions are conversational requests. Keep the legacy
+        # static strategy readable for persisted turns, but never select it for
+        # a new turn: the model must answer in the current conversation context.
 
         if request.knowledge_space_id or signals.citation_lookup_required:
             candidates.append(TurnStrategy.DOCUMENT_GROUNDING)

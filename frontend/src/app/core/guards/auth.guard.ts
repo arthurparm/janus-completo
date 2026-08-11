@@ -5,7 +5,7 @@
 
 import { Injectable, inject } from '@angular/core';
 import { CanActivate, CanActivateChild, CanLoad, Router, ActivatedRouteSnapshot, RouterStateSnapshot, Route, UrlSegment } from '@angular/router';
-import { Observable, catchError, combineLatest, filter, map, of, take, timeout } from 'rxjs';
+import { Observable, catchError, filter, map, of, take, timeout } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { NotificationService } from '../notifications/notification.service';
 
@@ -41,11 +41,12 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   private checkAuth(route?: ActivatedRouteSnapshot, state?: RouterStateSnapshot): Observable<boolean> {
-    return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
-      filter(([ready]) => ready),
+    return this.authService.authReady$.pipe(
+      filter(ready => ready),
       timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
-      map(([, isAuthenticated]) => {
+      map(() => {
+        const isAuthenticated = this.authService.isAuthenticated()
         if (isAuthenticated) {
           return true;
         }
@@ -73,11 +74,12 @@ export class AuthGuard implements CanActivate, CanActivateChild, CanLoad {
   }
 
   private checkAuthForLoad(): Observable<boolean> {
-    return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
-      filter(([ready]) => ready),
+    return this.authService.authReady$.pipe(
+      filter(ready => ready),
       timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
-      map(([, isAuthenticated]) => {
+      map(() => {
+        const isAuthenticated = this.authService.isAuthenticated()
         if (!isAuthenticated) {
           this.notificationService.notifyWarning('Acesso negado', 'Por favor, faça login para acessar este módulo');
         }
@@ -106,11 +108,12 @@ export class RoleGuard implements CanActivate {
       return true;
     }
 
-    return combineLatest([this.authService.authReady$, this.authService.user$]).pipe(
-      filter(([ready]) => ready),
+    return this.authService.authReady$.pipe(
+      filter(ready => ready),
       timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
-      map(([, user]) => {
+      map(() => {
+        const user = this.authService.currentUserValue
         if (!user) {
           this.router.navigate(['/login']);
           return false;
@@ -182,11 +185,12 @@ export class NoAuthGuard implements CanActivate {
   private router = inject(Router);
 
   canActivate(): Observable<boolean> | Promise<boolean> | boolean {
-    return combineLatest([this.authService.authReady$, this.authService.isAuthenticated$]).pipe(
-      filter(([ready]) => ready),
+    return this.authService.authReady$.pipe(
+      filter(ready => ready),
       timeout(AUTH_READY_TIMEOUT_MS),
       take(1),
-      map(([, isAuthenticated]) => {
+      map(() => {
+        const isAuthenticated = this.authService.isAuthenticated()
         if (!isAuthenticated) {
           return true;
         }

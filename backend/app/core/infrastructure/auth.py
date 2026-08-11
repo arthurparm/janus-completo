@@ -5,6 +5,7 @@ import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import jwt
 import structlog
@@ -43,7 +44,14 @@ def _canonical_issuer(value: str) -> str:
 
 @lru_cache(maxsize=8)
 def _jwks_client(url: str, cache_seconds: int) -> PyJWKClient:
-    if not url.lower().startswith("https://"):
+    parsed = urlparse(url)
+    local_development_http = (
+        not _deployed()
+        and parsed.scheme.lower() == "http"
+        and (parsed.hostname or "").lower()
+        in {"localhost", "127.0.0.1", "::1", "janus-dev-idp"}
+    )
+    if parsed.scheme.lower() != "https" and not local_development_http:
         raise TokenValidationError("jwks_url_not_https")
     return PyJWKClient(
         url,

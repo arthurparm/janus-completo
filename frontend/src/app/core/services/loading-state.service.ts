@@ -42,7 +42,9 @@ export class LoadingStateService {
       isLoading: true,
       message: config?.message || '',
       progress: config?.progress || 0,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      global: config.global ?? false,
+      http: config.http ?? false
     }
 
     currentStates.set(key, newState)
@@ -92,20 +94,23 @@ export class LoadingStateService {
 
     if (existingState) {
       existingState.isLoading = false
-      existingState.completedAt = Date.now()
+      const completedAt = Date.now()
+      existingState.completedAt = completedAt
+      this.loadingStates.set(new Map(currentStates))
+      this.updateAggregateLoadingStates(currentStates)
 
       // Remove após um pequeno delay para permitir animações
       setTimeout(() => {
-        const states = this.loadingStates()
+        const states = new Map(this.loadingStates())
+        const stateToRemove = states.get(key)
+        if (stateToRemove?.isLoading || stateToRemove?.completedAt !== completedAt) {
+          return
+        }
         states.delete(key)
-        this.loadingStates.set(new Map(states))
+        this.loadingStates.set(states)
 
         // Verifica se ainda há loading global/HTTP ativo
-        const hasGlobalLoading = Array.from(states.values()).some(s => s.isLoading && s.global)
-        const hasHttpLoading = Array.from(states.values()).some(s => s.isLoading && s.http)
-
-        this.globalLoading.set(hasGlobalLoading)
-        this.httpLoading.set(hasHttpLoading)
+        this.updateAggregateLoadingStates(states)
       }, 300)
     }
   }
@@ -139,13 +144,28 @@ export class LoadingStateService {
    */
   forceStopAll(): void {
     const states = this.loadingStates()
+    const completedAt = Date.now()
     states.forEach((state, _key) => {
       state.isLoading = false
-      state.completedAt = Date.now()
+      state.completedAt = completedAt
     })
+    this.loadingStates.set(new Map(states))
+    this.updateAggregateLoadingStates(states)
 
     setTimeout(() => {
-      this.clearAll()
+      const currentStates = new Map(this.loadingStates())
+      currentStates.forEach((state, key) => {
+        if (!state.isLoading && state.completedAt === completedAt) {
+          currentStates.delete(key)
+        }
+      })
+      this.loadingStates.set(currentStates)
+      this.updateAggregateLoadingStates(currentStates)
     }, 300)
+  }
+
+  private updateAggregateLoadingStates(states: Map<string, LoadingState>): void {
+    this.globalLoading.set(Array.from(states.values()).some(state => state.isLoading && state.global))
+    this.httpLoading.set(Array.from(states.values()).some(state => state.isLoading && state.http))
   }
 }

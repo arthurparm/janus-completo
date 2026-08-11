@@ -113,7 +113,9 @@ export class AuthService {
         context: new HttpContext().set(SKIP_AUTH_SESSION, true)
       })
     )
-    if (!discovery.token_endpoint.startsWith('https://')) throw new Error('OIDC token endpoint must use HTTPS')
+    if (!isSecureOidcEndpoint(discovery.token_endpoint)) {
+      throw new Error('OIDC token endpoint must use HTTPS or local loopback HTTP')
+    }
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: config.client_id,
@@ -158,4 +160,15 @@ function randomUrlSafe(bytes: number): string {
 async function sha256UrlSafe(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function isSecureOidcEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || (
+      url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    )
+  } catch {
+    return false
+  }
 }

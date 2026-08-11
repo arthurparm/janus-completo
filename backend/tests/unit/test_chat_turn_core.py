@@ -241,11 +241,11 @@ def test_finalizer_builds_one_typed_confirmation_and_agent_state() -> None:
             {"is_docs": True, "is_capabilities": True},
             TurnStrategy.STATIC_DOCS,
         ),
-        ({"is_capabilities": True}, TurnStrategy.STATIC_CAPABILITIES),
+        ({"is_capabilities": True}, TurnStrategy.SECRET_RECALL),
         ({}, TurnStrategy.SECRET_RECALL),
     ],
 )
-def test_planner_preserves_discovery_docs_capabilities_precedence(
+def test_planner_preserves_discovery_and_docs_precedence_without_canned_capabilities(
     signals: dict[str, bool],
     expected: TurnStrategy,
 ) -> None:
@@ -259,7 +259,7 @@ def test_planner_preserves_discovery_docs_capabilities_precedence(
     )
 
     assert plan.primary_strategy is expected
-    if not signals:
+    if not signals or signals == {"is_capabilities": True}:
         assert plan.dynamic_strategy is TurnStrategy.LIGHT_LLM
 
 
@@ -310,6 +310,8 @@ def test_discovery_and_capabilities_detection_are_mutually_exclusive() -> None:
     assert prompt_builder.is_capabilities_query("Quais ferramentas estão disponíveis?") is False
     assert prompt_builder.is_discovery_query("O que você pode fazer?") is False
     assert prompt_builder.is_capabilities_query("O que você pode fazer?") is True
+    assert prompt_builder.is_capabilities_query("Quais são suas capacidades?") is True
+    assert prompt_builder.is_tool_request("Quais são suas capacidades?") is False
 
 
 @pytest.mark.asyncio

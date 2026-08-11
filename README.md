@@ -82,6 +82,30 @@ docker compose -f docker-compose.pc1.yml --env-file .env.pc1 up -d
 
 Order is mandatory: start `PC2` first, then `PC1`.
 
+For a fully interactive local login without an external identity provider, set
+the following non-secret values in the ignored `.env.pc1` file:
+
+```dotenv
+ENVIRONMENT=development
+CORS_ALLOW_ORIGINS=["http://localhost:4300","http://127.0.0.1:4300"]
+OIDC_ISSUER=http://localhost:8400
+OIDC_JWKS_URL=http://janus-dev-idp:8400/.well-known/jwks.json
+OIDC_AUTHORIZATION_ENDPOINT=http://localhost:8400/authorize
+OIDC_SERVICE_ISSUER=http://localhost:8400
+OIDC_SERVICE_JWKS_URL=http://janus-dev-idp:8400/.well-known/jwks.json
+OIDC_SERVICE_TOKEN_URL=http://janus-dev-idp:8400/token
+```
+
+Then start PC1 with the local-auth override:
+
+```bash
+docker compose -f docker-compose.pc1.yml -f docker-compose.local-auth.yml --env-file .env.pc1 up -d
+```
+
+The development IdP is bound to `127.0.0.1:8400`, supports Authorization Code
+with PKCE, and must never replace the HTTPS identity provider in a deployed
+environment.
+
 ## Documentation
 
 Comprehensive documentation is available in the `documentation/` directory:

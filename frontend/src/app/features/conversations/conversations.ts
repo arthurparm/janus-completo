@@ -514,7 +514,7 @@ export class ConversationsComponent {
   }
 
   confirmLowConfidence(): void {
-    this.prompt.setValue('Confirmo. Pode prosseguir com a acao solicitada.')
+    this.prompt.setValue('Quero esclarecer meu pedido: ')
   }
 
   toggleAdvanced(): void {

@@ -18,5 +18,11 @@ npm start
 ```
 
 The application will be available at `http://localhost:4200/`.
-Proxy is configured to forward `/api` requests to `http://localhost:8000`.
-In Docker (compose PC1), the frontend runs at `http://localhost:4300/`.
+The development proxy forwards private `/api` requests to `http://localhost:8000`
+and strips `/public-api` before forwarding public authentication discovery to
+`http://localhost:8001`.
+
+In Docker (compose PC1), the frontend runs at `http://localhost:4300/`. Its
+runtime server routes `/api` to `JANUS_API_URL` (`janus-api` by default) and
+`/public-api` to `JANUS_PUBLIC_API_URL` (`janus-public-api` by default), keeping
+the browser on the same origin while preserving the public/private API boundary.

@@ -11,12 +11,14 @@ describe('AuthGuard', () => {
   let guard: AuthGuard
   let authReady$: BehaviorSubject<boolean>
   let isAuthenticated$: BehaviorSubject<boolean>
+  let synchronousAuthenticated: boolean
   let routerNavigateSpy: ReturnType<typeof vi.fn>
   let notifyWarningSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     authReady$ = new BehaviorSubject<boolean>(false)
     isAuthenticated$ = new BehaviorSubject<boolean>(false)
+    synchronousAuthenticated = false
     routerNavigateSpy = vi.fn()
     notifyWarningSpy = vi.fn()
 
@@ -27,7 +29,8 @@ describe('AuthGuard', () => {
           provide: AuthService,
           useValue: {
             authReady$,
-            isAuthenticated$
+            isAuthenticated$,
+            isAuthenticated: () => synchronousAuthenticated
           }
         },
         {
@@ -58,6 +61,7 @@ describe('AuthGuard', () => {
     )
 
     isAuthenticated$.next(false)
+    synchronousAuthenticated = false
     authReady$.next(true)
 
     const allowed = await resultPromise
@@ -69,6 +73,20 @@ describe('AuthGuard', () => {
         replaceUrl: true
       })
     )
+  })
+
+  it('uses the current signal value when its observable emission is stale', async () => {
+    const route = new ActivatedRouteSnapshot()
+    const state = { url: '/conversations' }
+    synchronousAuthenticated = true
+
+    const resultPromise = firstValueFrom(
+      guard.canActivate(route, state as never) as Observable<boolean>
+    )
+    authReady$.next(true)
+
+    expect(await resultPromise).toBe(true)
+    expect(routerNavigateSpy).not.toHaveBeenCalled()
   })
 
   it('falls back when authReady does not resolve', async () => {
@@ -106,11 +124,13 @@ describe('NoAuthGuard', () => {
   let guard: NoAuthGuard
   let authReady$: BehaviorSubject<boolean>
   let isAuthenticated$: BehaviorSubject<boolean>
+  let synchronousAuthenticated: boolean
   let routerNavigateSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     authReady$ = new BehaviorSubject<boolean>(false)
     isAuthenticated$ = new BehaviorSubject<boolean>(true)
+    synchronousAuthenticated = true
     routerNavigateSpy = vi.fn()
 
     TestBed.configureTestingModule({
@@ -120,7 +140,8 @@ describe('NoAuthGuard', () => {
           provide: AuthService,
           useValue: {
             authReady$,
-            isAuthenticated$
+            isAuthenticated$,
+            isAuthenticated: () => synchronousAuthenticated
           }
         },
         {
@@ -155,11 +176,13 @@ describe('RoleGuard', () => {
   let guard: RoleGuard
   let authReady$: BehaviorSubject<boolean>
   let user$: BehaviorSubject<User | null>
+  let synchronousUser: User | null
   let routerNavigateSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     authReady$ = new BehaviorSubject<boolean>(false)
     user$ = new BehaviorSubject<User | null>(null)
+    synchronousUser = null
     routerNavigateSpy = vi.fn()
 
     TestBed.configureTestingModule({
@@ -169,7 +192,8 @@ describe('RoleGuard', () => {
           provide: AuthService,
           useValue: {
             authReady$,
-            user$
+            user$,
+            get currentUserValue() { return synchronousUser }
           }
         },
         {
@@ -196,10 +220,10 @@ describe('RoleGuard', () => {
     route.data = { roles: ['admin'] }
 
     const resultPromise = firstValueFrom(guard.canActivate(route) as Observable<boolean>)
-    user$.next({
+    synchronousUser = {
       id: '1',
       roles: ['admin']
-    })
+    }
     authReady$.next(true)
 
     const allowed = await resultPromise
@@ -212,6 +236,7 @@ describe('RoleGuard', () => {
     route.data = { roles: ['admin'] }
     authReady$.next(true)
     user$.next(null)
+    synchronousUser = null
 
     const allowed = await firstValueFrom(guard.canActivate(route) as Observable<boolean>)
     expect(allowed).toBe(false)

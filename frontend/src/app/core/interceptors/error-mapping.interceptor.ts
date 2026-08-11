@@ -1,5 +1,5 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
-import { catchError, throwError } from 'rxjs';
+import { catchError, tap, throwError } from 'rxjs';
 import { inject } from '@angular/core';
 import { NotificationService } from '../notifications/notification.service';
 import { DemoService } from '../services/demo.service';
@@ -18,16 +18,29 @@ function extractProblemDetails(err: HttpErrorResponse): { title: string; detail:
   return { title: `Erro HTTP ${err.status}`, detail: err.message };
 }
 
+function isJanusBackendRequest(url: string): boolean {
+  return url.startsWith('/api/') || url.startsWith('/public-api/') || url.startsWith('/healthz');
+}
+
 export const errorMappingInterceptor: HttpInterceptorFn = (req, next) => {
   const notifications = inject(NotificationService);
   const demoService = inject(DemoService);
+  const targetsJanusBackend = isJanusBackendRequest(req.url);
 
   return next(req).pipe(
+    tap(() => {
+      // A successful response proves that the local backend is reachable again.
+      // This prevents a transient startup/proxy failure from latching the banner.
+      if (targetsJanusBackend) {
+        demoService.resetMode();
+      }
+    }),
     catchError((err) => {
-      // Check for connection refusal / offline status / Proxy errors (500/502/503/504)
-      const isConnectionError = err.status === 0 || err.status === 504 || err.status === 502 || err.status === 503 || err.status === 500;
+      // A backend 500 is an operation failure, not proof that the backend is
+      // disconnected. Reserve offline mode for transport and gateway failures.
+      const isConnectionError = err.status === 0 || err.status === 504 || err.status === 502 || err.status === 503;
 
-      if (isConnectionError) {
+      if (isConnectionError && targetsJanusBackend) {
         // Suppress notification for connection/server errors
         // Enable offline mode silently
         demoService.enableOfflineMode();

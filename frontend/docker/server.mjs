@@ -30,7 +30,12 @@ function resolveProxyTarget(pathname) {
   if (pathname === '/public-api' || pathname.startsWith('/public-api/')) {
     return { backendUrl: publicBackendUrl, stripPrefix: '/public-api' };
   }
-  if (pathname === '/api' || pathname.startsWith('/api/') || pathname === '/healthz') {
+  if (
+    pathname === '/api' ||
+    pathname.startsWith('/api/') ||
+    pathname === '/healthz' ||
+    pathname.startsWith('/healthz/')
+  ) {
     return { backendUrl, stripPrefix: '' };
   }
   return null;
@@ -63,6 +68,7 @@ function proxyRequest(clientRequest, clientResponse, proxyTarget) {
   const target = new URL(`${upstreamPath}${incoming.search}`, proxyTarget.backendUrl);
   const headers = { ...clientRequest.headers, host: proxyTarget.backendUrl.host };
   const requestImpl = target.protocol === 'https:' ? httpsRequest : httpRequest;
+  let upstreamResponse;
   const proxy = requestImpl(
     {
       protocol: target.protocol,
@@ -73,12 +79,27 @@ function proxyRequest(clientRequest, clientResponse, proxyTarget) {
       headers,
     },
     backendResponse => {
+      upstreamResponse = backendResponse;
       clientResponse.writeHead(backendResponse.statusCode || 502, backendResponse.headers);
       backendResponse.pipe(clientResponse);
     },
   );
 
+  clientResponse.once('close', () => {
+    if (!clientResponse.writableEnded) {
+      upstreamResponse?.destroy();
+      proxy.destroy();
+    }
+  });
+
   proxy.on('error', error => {
+    if (clientResponse.destroyed) {
+      return;
+    }
+    if (clientResponse.headersSent) {
+      clientResponse.destroy(error);
+      return;
+    }
     clientResponse.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
     clientResponse.end(JSON.stringify({ detail: 'Frontend proxy failed', error: error.message }));
   });

@@ -202,6 +202,16 @@ describe('ConversationsComponent', () => {
     expect(confirmation?.pending_action_id).toBeUndefined()
   })
 
+  it('asks the user to clarify a low-confidence interpretation without implying an action', () => {
+    const fixture = TestBed.createComponent(ConversationsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    component.confirmLowConfidence()
+
+    expect(component.prompt.value).toBe('Quero esclarecer meu pedido: ')
+  })
+
   it('does not expose high-risk confirmation controls without a structured pending action', () => {
     const fixture = TestBed.createComponent(ConversationsComponent)
     const component = fixture.componentInstance
