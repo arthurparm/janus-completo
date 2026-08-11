@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import uuid
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 import structlog
@@ -104,13 +104,26 @@ def _validate_query_params(route: APIRoute, values: dict[str, Any]) -> None:
 
 
 async def _service_token(required_scopes: frozenset[str]) -> str:
-    if not settings.OIDC_SERVICE_TOKEN_URL.lower().startswith("https://"):
+    token_url = settings.OIDC_SERVICE_TOKEN_URL
+    parsed = urlparse(token_url)
+    deployed = str(settings.ENVIRONMENT).strip().lower() in {
+        "production",
+        "staging",
+        "homologation",
+    }
+    local_http = (
+        not deployed
+        and parsed.scheme == "http"
+        and (parsed.hostname or "").lower()
+        in {"localhost", "127.0.0.1", "::1", "janus-dev-idp"}
+    )
+    if parsed.scheme != "https" and not local_http:
         raise HTTPException(status_code=503, detail="Administrative service identity unavailable")
     if settings.ADMIN_FACADE_CLIENT_SECRET is None:
         raise HTTPException(status_code=503, detail="Administrative service identity unavailable")
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
-            settings.OIDC_SERVICE_TOKEN_URL,
+            token_url,
             data={
                 "grant_type": "client_credentials",
                 "audience": settings.OIDC_SERVICE_AUDIENCE,

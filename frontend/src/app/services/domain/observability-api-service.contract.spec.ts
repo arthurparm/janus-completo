@@ -58,6 +58,22 @@ describe('ObservabilityApiService (contract)', () => {
     });
   });
 
+  it('getReflexionSummary usa o relatório homologado do Meta-Agent', () => {
+    let result: unknown
+    svc.getReflexionSummary(5).subscribe((value) => { result = value })
+
+    const req = http.expectOne('/api/v1/admin-actions')
+    expect(req.request.method).toBe('POST')
+    expect(req.request.body).toEqual({
+      operation_id: 'get_latest_report_api_v1_meta_agent_report_latest_get',
+      path_params: {},
+      query_params: {},
+      payload: {},
+    })
+    req.flush({ message: 'Nenhum relatório disponível ainda', report: null })
+    expect(result).toEqual({ lessons: [] })
+  })
+
   it('approvePendingAction usa endpoint SQL quando action_id estiver presente', () => {
     svc.approvePendingAction({ action_id: 42, status: 'pending' }).subscribe();
 

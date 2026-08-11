@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ApiContextService } from '../api-context.service';
 import { PostSprintSummaryResponse, MetricsSummary, QuarantinedMessagesResponse, GraphQuarantineListResponse, AuditEventsResponse, ConsentsListResponse, PendingAction, PendingActionLegacyResidueSummary, PoisonPillStats, ObservabilitySystemHealth } from '../../models';
 import { AdminActionsApiService } from './admin-actions-api-service';
@@ -164,7 +165,14 @@ exportAuditEvents(
   }
 
 getReflexionSummary(limit: number = 10): Observable<PostSprintSummaryResponse> {
-    const qs = new URLSearchParams({ limit: String(limit) })
-    return this.http.get<PostSprintSummaryResponse>(this.apiContext.buildUrl(`/api/v1/reflexion/summary/post_sprint?${qs.toString()}`))
+    void limit
+    return this.adminActions.execute<{ report: PostSprintSummaryResponse['meta_report'] | null }>(
+      'get_latest_report_api_v1_meta_agent_report_latest_get'
+    ).pipe(
+      map((response) => ({
+        lessons: [],
+        ...(response.report ? { meta_report: response.report } : {}),
+      }))
+    )
   }
 }
