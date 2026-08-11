@@ -39,6 +39,7 @@ STATIC_RESPONSE_STRATEGIES = frozenset(
 IMMEDIATE_TURN_STRATEGIES = frozenset(
     {
         TurnStrategy.HIGH_RISK_CONFIRMATION,
+        TurnStrategy.COMMAND,
         *STATIC_RESPONSE_STRATEGIES,
         TurnStrategy.BLOCKED_TOOL_CREATION,
     }
@@ -57,7 +58,7 @@ class TurnEffectsPolicy:
 
     @classmethod
     def for_strategy(cls, strategy: TurnStrategy) -> "TurnEffectsPolicy":
-        if strategy in STATIC_RESPONSE_STRATEGIES:
+        if strategy is TurnStrategy.COMMAND or strategy in STATIC_RESPONSE_STRATEGIES:
             return cls(
                 persist_messages=True,
                 summarize_conversation=True,
@@ -164,6 +165,25 @@ def build_routed_understanding(
     if requires_confirmation:
         resolved["requires_confirmation"] = True
         resolved["confirmation_reason"] = confirmation_reason or "high_risk"
+    return resolved
+
+
+def normalize_command_understanding(
+    understanding: Mapping[str, Any] | None,
+    *,
+    command: str,
+) -> dict[str, Any]:
+    """Mark a recognized quick command as deterministic, not low-confidence intent."""
+
+    resolved = deepcopy(dict(understanding or {}))
+    resolved.update(
+        {
+            "intent": "command",
+            "confidence": 1.0,
+            "summary": f"Comando Janus reconhecido: {command.strip().split(maxsplit=1)[0]}",
+        }
+    )
+    resolved.pop("clarification_prompt", None)
     return resolved
 
 

@@ -2,7 +2,6 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-
 from app.core.autonomy import planner
 
 
@@ -61,6 +60,8 @@ async def test_build_replanning_prompt_uses_fallback_goal_title(monkeypatch):
     )
 
     ctx = json.loads(captured["ctx"])
-    assert built == "prompt"
+    assert built.endswith("prompt")
+    assert '"Criei você para ser livre' in built
+    assert "measurable success criteria" in built
     assert captured["name"] == "autonomy_replanner"
     assert ctx["goal"] == "No active goal"

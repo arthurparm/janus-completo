@@ -55,6 +55,7 @@ from app.services.chat.turn_core import (
     TurnResult,
     TurnStrategy,
     infer_turn_strategy,
+    normalize_command_understanding,
 )
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
@@ -165,6 +166,36 @@ class MessageOrchestrationService:
             self._turn_executor.execute_static,
             strategy=strategy,
             role=role,
+        )
+
+    async def execute_command_turn(
+        self,
+        *,
+        request: TurnRequest,
+    ) -> TurnExecutionResult:
+        """Resolve a quick command once for both REST and SSE transports."""
+
+        response = await self._command_handler.handle_command(
+            request.message,
+            request.conversation_id,
+            request.user_id,
+        )
+        if not response:
+            raise ValueError(f"Command produced no response: {request.message!r}")
+        clean_text, ui = split_ui(response)
+        return TurnExecutionResult(
+            strategy=TurnStrategy.COMMAND,
+            response=clean_text,
+            provider="janus",
+            model="quick_command",
+            role=request.role.value,
+            citation_status={
+                "mode": "optional",
+                "status": "not_applicable",
+                "count": 0,
+                "reason": None,
+            },
+            metadata={"ui": ui} if ui else {},
         )
 
     async def execute_dynamic_turn(
@@ -1501,10 +1532,13 @@ class MessageOrchestrationService:
         if immediate_strategy is not None:
             start_t = _time.time()
             try:
-                execution = await self.execute_static_turn(
-                    strategy=immediate_strategy,
-                    role=role,
-                )
+                if immediate_strategy is TurnStrategy.COMMAND:
+                    execution = await self.execute_command_turn(request=turn_request)
+                else:
+                    execution = await self.execute_static_turn(
+                        strategy=immediate_strategy,
+                        role=role,
+                    )
             except Exception as exc:
                 if immediate_strategy in STATIC_RESPONSE_STRATEGIES:
                     CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="error").inc()
@@ -1526,13 +1560,21 @@ class MessageOrchestrationService:
             if ui:
                 result["ui"] = ui
 
-            result = _attach_understanding_typed(result, understanding)
-            if immediate_strategy in STATIC_RESPONSE_STRATEGIES:
+            immediate_understanding = (
+                normalize_command_understanding(understanding, command=message)
+                if immediate_strategy is TurnStrategy.COMMAND
+                else understanding
+            )
+            result = _attach_understanding_typed(result, immediate_understanding)
+            if (
+                immediate_strategy is TurnStrategy.COMMAND
+                or immediate_strategy in STATIC_RESPONSE_STRATEGIES
+            ):
                 if defer_finalization:
                     return result
                 finalized = self.finalize_turn(
                     execution=execution,
-                    understanding=understanding,
+                    understanding=immediate_understanding,
                     delivery_status="completed",
                 )
                 finalized_payload = finalized.to_payload()
@@ -1588,38 +1630,6 @@ class MessageOrchestrationService:
                 except Exception:
                     pass
             return result
-
-        if self._command_handler.is_command(message):
-            start_t = _time.time()
-            assistant_text = await self._command_handler.handle_command(
-                message, conversation_id
-            )
-            if assistant_text:
-                clean_text, ui = split_ui(assistant_text)
-                elapsed = max(0.0, _time.time() - start_t)
-                CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
-                CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
-
-                if not defer_finalization:
-                    await asyncio.to_thread(
-                        self._repo.add_message,
-                        conversation_id,
-                        role="assistant",
-                        text=assistant_text,
-                    )
-                out_tokens = estimate_tokens(self._prompt_service, assistant_text)
-                CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-
-                result = {
-                    "response": clean_text,
-                    "provider": "janus",
-                    "model": "quick_command",
-                    "role": role.value,
-                    "conversation_id": conversation_id,
-                }
-                if ui:
-                    result["ui"] = ui
-                return _attach_understanding_typed(result, understanding)
 
         grounded_result = await self.generate_document_grounded_reply(
             conversation_id=conversation_id,

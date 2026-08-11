@@ -2,16 +2,16 @@
 Prompt Composer Service - Orchestrates modular prompt construction.
 Replaces monolithic prompt_builder_service with efficient, composable architecture.
 """
-import structlog
 from functools import lru_cache
-from typing import Any
 
+import structlog
 from app.core.prompts.base import PromptModule
-from app.core.prompts.context import ConversationContext, Message
+from app.core.prompts.context import ConversationContext
 from app.core.prompts.intent_classifier import IntentClassifier
 from app.core.prompts.modules import (
     ContextCompressionModule,
     GenerativeUIModule,
+    ProjectConstitutionModule,
     ReasoningProtocolModule,
     SystemIdentityModule,
     TaskSpecificModule,
@@ -63,6 +63,7 @@ class PromptComposer:
 
         # Initialize all modules
         self.modules: list[PromptModule] = [
+            ProjectConstitutionModule(),
             SystemIdentityModule(),
             ReasoningProtocolModule(),
             ContextCompressionModule(),

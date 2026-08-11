@@ -48,6 +48,7 @@ from app.services.chat.turn_core import (
     TurnRequest,
     TurnStrategy,
     build_routed_understanding,
+    normalize_command_understanding,
 )
 from app.services.intent_routing_service import IntentRoutingDecision
 from app.services.pending_action_service import (
@@ -221,18 +222,33 @@ class StreamingService:
             immediate_strategy = turn_plan.primary_strategy
             effects = TurnEffectsPolicy.for_strategy(immediate_strategy)
 
-            if immediate_strategy in STATIC_RESPONSE_STRATEGIES:
+            if (
+                immediate_strategy is TurnStrategy.COMMAND
+                or immediate_strategy in STATIC_RESPONSE_STRATEGIES
+            ):
                 async def _complete_static_turn() -> tuple[
                     TurnExecutionResult,
                     Any,
                     dict[str, Any],
                 ]:
-                    execution = await self._message_orchestration_service.execute_static_turn(
-                        strategy=immediate_strategy,
-                        role=role,
+                    if immediate_strategy is TurnStrategy.COMMAND:
+                        execution = (
+                            await self._message_orchestration_service.execute_command_turn(
+                                request=turn_request,
+                            )
+                        )
+                    else:
+                        execution = await self._message_orchestration_service.execute_static_turn(
+                            strategy=immediate_strategy,
+                            role=role,
+                        )
+                    base_understanding = (
+                        normalize_command_understanding(understanding, command=message)
+                        if immediate_strategy is TurnStrategy.COMMAND
+                        else understanding
                     )
                     result_understanding = build_routed_understanding(
-                        understanding,
+                        base_understanding,
                         routing_decision=routing_decision,
                         requested_role=requested_role,
                         selected_role=role,

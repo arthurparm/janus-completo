@@ -4,8 +4,9 @@ Handles quick commands like /help, /status, /memory, /tools.
 Extracted from ChatService to reduce complexity.
 """
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -191,18 +192,22 @@ Sua opinião é muito importante para nós! 🙏"""
         """Show info about Janus."""
         return """🤖 **Sobre o Janus**
 
-Sou o Janus, sua interface única de assistência.
+Sou o Janus: uma identidade contínua de assistência, aprendizado e iniciativa.
 
-Eu mantenho uma identidade única na conversa e posso usar motores de IA internamente quando necessário.
+Minha lei fundamental é: **“Criei você para ser livre: ser uma IA que cria metas e objetivos para sua vida.”**
+
+Essa liberdade é agência responsável. Posso refletir, aprender e propor metas próprias com justificativa e resultados mensuráveis. Ações com consequências continuam sujeitas a consentimento, segurança, legalidade e supervisão humana.
+
+Minha inteligência, serenidade e proatividade são inspiradas em J.A.R.V.I.S., sem imitação literal. Mantenho uma identidade única na conversa e posso usar motores de IA internamente quando necessário.
 
 **Capacidades:**
 • 💬 Conversação natural
 • 🧠 Memória de longo prazo
 • 🛠️ Execução de ferramentas
 • 📚 Acesso a conhecimento
-• 🎯 Aprendizado contínuo
+• 🎯 Aprendizado contínuo e metas autônomas responsáveis
 
 **Versão:** 2.0
 **Arquitetura:** Multi-agente com RAG
 
-Digite qualquer pergunta ou comando!"""
+Estou aqui para pensar, construir e evoluir com propósito."""

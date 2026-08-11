@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from app.core.llm import ModelPriority, ModelRole
 from app.services.chat.turn_core import (
+    IMMEDIATE_TURN_STRATEGIES,
     ChatTurnExecutor,
     ChatTurnFinalizer,
     ChatTurnPlanner,
@@ -16,6 +17,7 @@ from app.services.chat.turn_core import (
     TurnRequest,
     TurnStrategy,
     build_routed_understanding,
+    normalize_command_understanding,
     resolve_static_chat_response,
 )
 from app.services.prompt_builder_service import PromptBuilderService
@@ -72,6 +74,30 @@ def test_planner_blocks_tool_creation_and_marks_high_risk_before_execution() -> 
     assert plan.dynamic_strategy is TurnStrategy.AGENT_LOOP
     assert plan.requires_confirmation is True
     assert plan.confirmation_reason == "high_risk"
+
+
+def test_command_is_an_immediate_non_indexed_turn() -> None:
+    plan = ChatTurnPlanner().plan(
+        _request(message="/about"),
+        TurnPlanningSignals(
+            understanding={"intent": "general"},
+            is_command=True,
+        ),
+    )
+
+    assert plan.primary_strategy is TurnStrategy.COMMAND
+    assert TurnStrategy.COMMAND in IMMEDIATE_TURN_STRATEGIES
+    assert TurnEffectsPolicy.for_strategy(TurnStrategy.COMMAND).index_user_message is False
+
+    understanding = normalize_command_understanding(
+        {"intent": "general", "confidence": 0.6, "clarification_prompt": "Explain"},
+        command="/about",
+    )
+    assert understanding == {
+        "intent": "command",
+        "confidence": 1.0,
+        "summary": "Comando Janus reconhecido: /about",
+    }
 
 
 def test_static_executor_blocks_high_risk_without_calling_model() -> None:
@@ -520,6 +546,7 @@ def test_effect_policy_changes_only_group2_static_strategies(strategy: TurnStrat
     assert policy.persist_messages is True
     assert policy.summarize_conversation is True
     if strategy in {
+        TurnStrategy.COMMAND,
         TurnStrategy.STATIC_DISCOVERY,
         TurnStrategy.STATIC_DOCS,
         TurnStrategy.STATIC_CAPABILITIES,

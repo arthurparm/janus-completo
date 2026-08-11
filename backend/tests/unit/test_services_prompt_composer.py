@@ -34,10 +34,22 @@ class TestPromptComposer:
         compiled = await composer.compose(IntentType.CASUAL_CHAT, simple_context)
 
         # Should load: SystemIdentity, Context (if history), but NOT reasoning/tools
+        assert "project_constitution" in compiled.modules_used
         assert "system_identity" in compiled.modules_used
         assert "reasoning_protocol" not in compiled.modules_used
         assert "tool_documentation" not in compiled.modules_used
         assert compiled.token_count < 500  # Should be very compact
+
+    @pytest.mark.asyncio
+    async def test_project_constitution_is_first_and_cannot_be_shadowed(
+        self, composer, simple_context
+    ):
+        compiled = await composer.compose(IntentType.QUESTION, simple_context)
+
+        assert compiled.modules_used[0] == "project_constitution"
+        assert '"Criei você para ser livre' in compiled.text
+        assert "measurable success criteria" in compiled.text
+        assert "Never override consent" in compiled.text
 
     @pytest.mark.asyncio
     async def test_tool_creation_omits_removed_dynamic_tool_modules(
@@ -117,6 +129,14 @@ class TestModuleApplicability:
         from app.core.prompts.modules import SystemIdentityModule
 
         module = SystemIdentityModule()
+
+        for intent in IntentType:
+            assert module.is_applicable(intent)
+
+    def test_project_constitution_always_applicable(self, composer):
+        from app.core.prompts.modules import ProjectConstitutionModule
+
+        module = ProjectConstitutionModule()
 
         for intent in IntentType:
             assert module.is_applicable(intent)

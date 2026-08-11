@@ -1,16 +1,15 @@
 import json
-import re
 from typing import Any
 
 import structlog
-
+from app.core.agents.utils import parse_json_strict
 from app.core.autonomy.goal_manager import Goal
 from app.core.autonomy.policy_engine import PolicyEngine
-from app.core.llm import ModelPriority, ModelRole
-from app.core.tools.action_module import PermissionLevel, action_registry
 from app.core.infrastructure.prompt_loader import get_formatted_prompt
+from app.core.llm import ModelPriority, ModelRole
+from app.core.project_constitution import apply_project_constitution
+from app.core.tools.action_module import PermissionLevel, action_registry
 from app.services.llm_service import LLMService
-from app.core.agents.utils import parse_json_strict
 
 logger = structlog.get_logger(__name__)
 
@@ -113,13 +112,14 @@ async def _build_draft_prompt(
     sys_info = json.dumps(metrics or {}, ensure_ascii=False)
     tools_list = ", ".join(tools[:50])
 
-    return await get_formatted_prompt(
+    prompt = await get_formatted_prompt(
         "autonomy_plan_draft",
         goal=goal_txt,
         metrics=sys_info,
         tools=tools_list,
         max_steps=max_steps,
     )
+    return apply_project_constitution(prompt)
 
 
 # === Stage 2: CRITIQUE ===
@@ -128,12 +128,13 @@ async def _build_critique_prompt(
 ) -> str:
     plan_str = json.dumps(draft_plan, indent=2, ensure_ascii=False)
     metrics_str = json.dumps(metrics or {}, ensure_ascii=False)
-    return await get_formatted_prompt(
+    prompt = await get_formatted_prompt(
         "autonomy_plan_critique",
         goal=goal.title,
         plan=plan_str,
         metrics=metrics_str,
     )
+    return apply_project_constitution(prompt)
 
 
 # === Stage 3: REFINE ===
@@ -142,13 +143,14 @@ async def _build_refine_prompt(
 ) -> str:
     plan_str = json.dumps(draft_plan, indent=2, ensure_ascii=False)
     tools_list = ", ".join(tools[:50])
-    return await get_formatted_prompt(
+    prompt = await get_formatted_prompt(
         "autonomy_plan_refine",
         goal=goal.title,
         critique=critique,
         plan=plan_str,
         tools=tools_list,
     )
+    return apply_project_constitution(prompt)
 
 
 async def build_plan_for_goal(
@@ -251,11 +253,12 @@ async def _build_replanning_prompt(
         "remaining_steps_count": len(remaining_steps),
     }
     tools_list = ", ".join(tools[:50])
-    return await get_formatted_prompt(
+    prompt = await get_formatted_prompt(
         "autonomy_replanner",
         ctx=json.dumps(ctx, indent=2, ensure_ascii=False),
         tools_list=tools_list,
     )
+    return apply_project_constitution(prompt)
 
 
 async def replan_goal(

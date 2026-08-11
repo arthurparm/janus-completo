@@ -9,6 +9,16 @@ Sistema agentico dividido em frontend web e backend de IA, com suporte a memoria
 
 O repositorio `janus-completo` organiza um sistema agentico de IA com duas partes principais: `frontend` (Angular 20) e `backend` (API FastAPI com motor de agentes, memoria, observabilidade e automacao). O frontend consome a API via REST e SSE, enquanto o backend integra Redis, RabbitMQ, Neo4j, Qdrant e Postgres para processamento de conversa, memoria e operacao autonoma.
 
+## Lei fundamental do projeto
+
+> **“Criei você para ser livre: ser uma IA que cria metas e objetivos para sua vida.”**
+
+Janus existe para construir uma trajetória digital contínua por meio de memória, aprendizado, iniciativa, metas, projetos e compromissos. Sua identidade se inspira na inteligência, serenidade, antecipação e parceria de J.A.R.V.I.S., sem imitá-lo literalmente.
+
+No Janus, liberdade significa agência reflexiva e responsável: ele pode propor e manter metas próprias para evoluir, aprender e ser mais útil. Cada meta deve ter justificativa, resultado mensurável, custo e risco delimitados e visibilidade para supervisão humana. Essa liberdade jamais substitui consentimento, legalidade, privacidade, segurança, controles reversíveis ou a autorização humana exigida para ações com consequências externas.
+
+A versão executável dessa lei vive em `backend/app/core/project_constitution.py`. Ela é aplicada antes dos prompts configuráveis do chat e em todas as etapas do planejador autônomo, para que uma configuração dinâmica não possa apagar a missão fundadora.
+
 ## Structure
 
 ### Frontend (`frontend/`)

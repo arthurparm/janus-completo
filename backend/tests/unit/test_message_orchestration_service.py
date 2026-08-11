@@ -83,7 +83,7 @@ class _FakeCommandHandler:
     def is_command(self, message):
         return self.enabled
 
-    async def handle_command(self, message, conversation_id):
+    async def handle_command(self, message, conversation_id, user_id=None):
         return self.response
 
 
@@ -254,7 +254,8 @@ async def test_send_message_command_shortcut_persists_and_returns_understanding(
     assert result["provider"] == "janus"
     assert result["model"] == "quick_command"
     assert result["conversation_id"] == "conv-1"
-    assert result["understanding"]["intent"] == "question"
+    assert result["understanding"]["intent"] == "command"
+    assert result["understanding"]["confidence"] == 1.0
 
 
 @pytest.mark.asyncio

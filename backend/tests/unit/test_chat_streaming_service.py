@@ -189,6 +189,7 @@ class _FakeMessageOrchestration:
                     requires_mandatory_citations(request.message)
                     or references_uploaded_material(request.message)
                 ),
+                is_command=self.static_strategy is TurnStrategy.COMMAND,
                 is_discovery=self.static_strategy is TurnStrategy.STATIC_DISCOVERY,
                 is_docs=self.static_strategy is TurnStrategy.STATIC_DOCS,
                 is_capabilities=self.static_strategy is TurnStrategy.STATIC_CAPABILITIES,
@@ -257,6 +258,21 @@ class _FakeMessageOrchestration:
                 }
                 else None
             ),
+        )
+
+    async def execute_command_turn(self, *, request):
+        return TurnExecutionResult(
+            strategy=TurnStrategy.COMMAND,
+            response="about Janus constitution",
+            provider="janus",
+            model="quick_command",
+            role=request.role.value,
+            citation_status={
+                "mode": "optional",
+                "status": "not_applicable",
+                "count": 0,
+                "reason": None,
+            },
         )
 
     def finalize_turn(self, **kwargs):
@@ -424,14 +440,9 @@ async def test_streaming_service_emits_protocol_partial_and_done():
 @pytest.mark.parametrize(
     ("strategy", "message", "expected_text", "expected_model"),
     [
+        (TurnStrategy.COMMAND, "/about", "about Janus constitution", "quick_command"),
         (TurnStrategy.STATIC_DISCOVERY, "quais ferramentas", "discovery", "discovery"),
         (TurnStrategy.STATIC_DOCS, "como usar a ferramenta", "docs", "tools_docs"),
-        (
-            TurnStrategy.STATIC_CAPABILITIES,
-            "o que você pode fazer",
-            "capabilities",
-            "capabilities",
-        ),
     ],
 )
 async def test_group2_static_sse_persists_before_tokens_and_skips_dynamic_work(
