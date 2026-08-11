@@ -14,6 +14,10 @@ from app.core.agents.graph_orchestrator import get_graph
 from app.core.security.redaction import redact_sensitive_payload
 from app.repositories.observability_repository import record_audit_event_direct
 from app.services.chat_service import ChatService, ChatServiceError, get_chat_service
+from app.services.pending_action_service import (
+    PendingActionService,
+    get_pending_action_service,
+)
 
 router = APIRouter(tags=["PendingActions"], prefix="/pending_actions")
 logger = structlog.get_logger(__name__)
@@ -667,6 +671,7 @@ async def list_pending(
     limit: int = 50,
     http: Request = None,
     chat_service: ChatService = Depends(get_chat_service),
+    pending_actions: PendingActionService = Depends(get_pending_action_service),
 ):
     """
     List all threads that are currently interrupted and waiting for approval.
@@ -684,10 +689,11 @@ async def list_pending(
 
     if include_sql:
         try:
-            from app.repositories.pending_action_repository import PendingActionRepository
-
-            repo = PendingActionRepository()
-            sql_pending = repo.list(status=pending_status, limit=limit, user_id=resolved_user_id)
+            sql_pending = pending_actions.list(
+                status=pending_status,
+                limit=limit,
+                user_id=resolved_user_id,
+            )
             for item in sql_pending:
                 safe_args_json = _sanitize_pending_args_json(getattr(item, "args_json", None))
                 scope_summary, scope_targets = _extract_pending_scope(safe_args_json)
@@ -864,17 +870,15 @@ async def approve_sql_action(
     action_id: int,
     http: Request = None,
     chat_service: ChatService = Depends(get_chat_service),
+    pending_actions: PendingActionService = Depends(get_pending_action_service),
 ):
     try:
-        from app.repositories.pending_action_repository import PendingActionRepository
-
         resolved_user_id = _resolve_pending_actions_user_id(
             http,
             None,
             endpoint_label="/api/v1/pending_actions/action/approve",
         )
-        repo = PendingActionRepository()
-        current = repo.get(action_id)
+        current = pending_actions.get_for_access_review(action_id=action_id)
         if not current:
             raise HTTPException(status_code=404, detail="Pending action not found")
         if getattr(current, "status", "pending") != "pending":
@@ -898,9 +902,9 @@ async def approve_sql_action(
             )
             raise
 
-        updated = repo.set_status(
-            action_id,
-            "approved",
+        updated = pending_actions.update_status(
+            action_id=action_id,
+            status="approved",
             user_id=resolved_user_id,
         )
         if not updated:
@@ -962,17 +966,15 @@ async def reject_sql_action(
     action_id: int,
     http: Request = None,
     chat_service: ChatService = Depends(get_chat_service),
+    pending_actions: PendingActionService = Depends(get_pending_action_service),
 ):
     try:
-        from app.repositories.pending_action_repository import PendingActionRepository
-
         resolved_user_id = _resolve_pending_actions_user_id(
             http,
             None,
             endpoint_label="/api/v1/pending_actions/action/reject",
         )
-        repo = PendingActionRepository()
-        current = repo.get(action_id)
+        current = pending_actions.get_for_access_review(action_id=action_id)
         if not current:
             raise HTTPException(status_code=404, detail="Pending action not found")
         if getattr(current, "status", "pending") != "pending":
@@ -996,9 +998,9 @@ async def reject_sql_action(
             )
             raise
 
-        updated = repo.set_status(
-            action_id,
-            "rejected",
+        updated = pending_actions.update_status(
+            action_id=action_id,
+            status="rejected",
             user_id=resolved_user_id,
         )
         if not updated:

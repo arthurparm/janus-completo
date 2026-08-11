@@ -181,6 +181,33 @@ class ChatRepository:
         messages = self.get_history(conversation_id)
         return messages[-limit:] if limit > 0 else messages
 
+    def get_history_paginated(
+        self,
+        conversation_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        before_ts: float | None = None,
+        after_ts: float | None = None,
+    ) -> dict[str, Any]:
+        messages = self.get_history(conversation_id)
+        filtered = [
+            message
+            for message in messages
+            if (before_ts is None or float(message["timestamp"]) < before_ts)
+            and (after_ts is None or float(message["timestamp"]) > after_ts)
+        ]
+        total_count = len(filtered)
+        page = filtered[offset : offset + limit]
+        next_offset = offset + len(page)
+        return {
+            "messages": page,
+            "total_count": total_count,
+            "has_more": next_offset < total_count,
+            "next_offset": next_offset if next_offset < total_count else None,
+            "limit": limit,
+            "offset": offset,
+        }
+
     def list_conversations(
         self, user_id: str | None = None, project_id: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:
@@ -242,6 +269,42 @@ class ChatRepository:
         conv["summary"] = summary
         conv["updated_at"] = time()
         self._save()
+
+    def update_message_text(
+        self,
+        conversation_id: str,
+        message_id: int,
+        new_text: str,
+        user_id: str | None = None,
+    ) -> None:
+        conv = self.get_conversation(conversation_id)
+        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
+            raise ChatRepositoryError("Access denied: user_id mismatch")
+        for message in conv.get("messages") or []:
+            if int(message.get("id") or 0) == message_id:
+                message["text"] = new_text
+                conv["updated_at"] = time()
+                self._save()
+                return
+        raise ChatRepositoryError("Message not found")
+
+    def delete_message(
+        self,
+        conversation_id: str,
+        message_id: int,
+        user_id: str | None = None,
+    ) -> None:
+        conv = self.get_conversation(conversation_id)
+        if user_id and conv.get("user_id") and str(conv.get("user_id")) != str(user_id):
+            raise ChatRepositoryError("Access denied: user_id mismatch")
+        messages = conv.get("messages") or []
+        for index, message in enumerate(messages):
+            if int(message.get("id") or 0) == message_id:
+                del messages[index]
+                conv["updated_at"] = time()
+                self._save()
+                return
+        raise ChatRepositoryError("Message not found")
 
     def replace_last_assistant_message(
         self, conversation_id: str, new_text: str, user_id: str | None = None

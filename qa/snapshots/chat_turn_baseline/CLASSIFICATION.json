@@ -244,6 +244,7 @@
           "output.provider",
           "output.model",
           "execution.llm_invoke_count",
+          "execution.outbox_enqueue_count",
           "observations.trace[security_alert.emit]"
         ]
       }

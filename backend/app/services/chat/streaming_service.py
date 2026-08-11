@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import structlog
-from app.core.exceptions.chat_exceptions import ChatServiceError
+from app.core.exceptions.chat_exceptions import ChatServiceError, MessageTooLargeError
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
 from app.core.monitoring.chat_metrics import (
@@ -30,11 +30,10 @@ from app.services.chat.chat_citation_service import (
 from app.services.chat.chat_contracts import (
     build_confirmation_payload,
     chat_sse_error_payload,
-    extract_pending_action_id_from_text,
-    maybe_create_fallback_pending_action,
     normalize_understanding_payload,
 )
 from app.services.chat.conversation_service import ConversationService
+from app.services.chat.input_policy import validate_chat_message_size
 from app.services.chat.message_helpers import (
     build_understanding_payload,
     split_ui,
@@ -49,6 +48,11 @@ from app.services.chat.turn_core import (
     TurnRequest,
     TurnStrategy,
     build_routed_understanding,
+)
+from app.services.intent_routing_service import IntentRoutingDecision
+from app.services.pending_action_service import (
+    PendingActionService,
+    extract_pending_action_id_from_text,
 )
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
@@ -71,6 +75,7 @@ class StreamingService:
         conversation_service: ConversationService,
         message_orchestration_service: MessageOrchestrationService,
         study_job_service: Any | None = None,
+        pending_action_service: PendingActionService | None = None,
     ):
         self._repo = repo
         self._repo_io = AsyncChatRepositoryPort(repo)
@@ -81,6 +86,7 @@ class StreamingService:
         self._conversation_service = conversation_service
         self._message_orchestration_service = message_orchestration_service
         self._study_jobs = study_job_service
+        self._pending_actions = pending_action_service or PendingActionService()
 
     async def stream_message(
         self,
@@ -94,33 +100,31 @@ class StreamingService:
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
         requested_role: str | None = None,
-        routing_decision: Any | None = None,
+        routing_decision: IntentRoutingDecision | None = None,
         route_applied: bool | None = None,
     ) -> AsyncIterator[str]:
         role = role or ModelRole.ORCHESTRATOR
         priority = priority or ModelPriority.HIGH_QUALITY
 
-        max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
         heartbeat_interval = int(os.getenv("CHAT_HEARTBEAT_INTERVAL_SECONDS", "30"))
         protocol_version = os.getenv("CHAT_SSE_PROTOCOL_VERSION", "2025-11.v1")
         deprecate_partial_at = os.getenv("CHAT_SSE_PARTIAL_DEPRECATE_AT", "2026-03-01")
 
         try:
-            if message and len(message.encode("utf-8")) > max_bytes:
-                err = json.dumps(
-                    chat_sse_error_payload(
-                        code="CHAT_MESSAGE_TOO_LARGE",
-                        message="Message too large",
-                        category="validation",
-                        retryable=False,
-                        http_status=413,
-                    ),
-                    ensure_ascii=False,
-                )
-                yield f"event: error\ndata: {err}\n\n"
-                return
-        except Exception:
-            pass
+            validate_chat_message_size(message)
+        except MessageTooLargeError:
+            err = json.dumps(
+                chat_sse_error_payload(
+                    code="CHAT_MESSAGE_TOO_LARGE",
+                    message="Message too large",
+                    category="validation",
+                    retryable=False,
+                    http_status=413,
+                ),
+                ensure_ascii=False,
+            )
+            yield f"event: error\ndata: {err}\n\n"
+            return
 
         understanding = build_understanding_payload(message)
         turn_request = TurnRequest(
@@ -348,7 +352,7 @@ class StreamingService:
                 requires_confirmation=turn_plan.requires_confirmation,
                 confirmation_reason=turn_plan.confirmation_reason,
             )
-            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+            pending_action_id, fallback_reason = self._pending_actions.resolve_chat_confirmation(
                 message=message,
                 assistant_response=execution.response,
                 conversation_id=conversation_id,
@@ -393,20 +397,15 @@ class StreamingService:
                 )
                 yield f"event: token\ndata: {token_payload}\n\n"
                 yield f"event: partial\ndata: {token_payload}\n\n"
-            saved_message = await self._repo_io.add_message(
-                conversation_id,
-                role="assistant",
-                text=assistant_text,
-                metadata={
-                    "citations": finalized.citations,
-                    "citation_status": finalized.citation_status,
-                    "understanding": finalized.understanding,
-                    "confirmation": finalized.confirmation,
-                    "agent_state": finalized.agent_state,
-                    "delivery_status": finalized.delivery_status,
-                    "provider": finalized.provider,
-                    "model": finalized.model,
-                },
+            saved_message = await self._message_orchestration_service.persist_finalized_turn(
+                conversation_id=conversation_id,
+                user_message=message,
+                result=finalized.to_payload(),
+                user_id=user_id,
+                project_id=project_id,
+                identity_source=identity_source,
+                role=role,
+                priority=priority,
             )
             immediate_done_payload: dict[str, Any] = {
                 "conversation_id": conversation_id,
@@ -538,46 +537,18 @@ class StreamingService:
                 failure_classification=grounded_result.get("failure_classification"),
             )
             normalized_understanding = grounded_final.understanding
-            saved_message = await self._repo_io.add_message(
-                conversation_id,
-                role="assistant",
-                text=assistant_text,
-                metadata={
-                    "knowledge_space_id": grounded_result.get("knowledge_space_id"),
-                    "mode_used": grounded_result.get("mode_used"),
-                    "base_used": grounded_result.get("base_used"),
-                    "answer_strategy": grounded_result.get("answer_strategy"),
-                    "estimated_wait_seconds": grounded_result.get("estimated_wait_seconds"),
-                    "estimated_wait_range_seconds": grounded_result.get("estimated_wait_range_seconds"),
-                    "processing_profile": grounded_result.get("processing_profile"),
-                    "processing_notice": grounded_result.get("processing_notice"),
-                    "evidence_count": grounded_result.get("evidence_count"),
-                    "source_roles_used": grounded_result.get("source_roles_used"),
-                    "source_scope": grounded_result.get("source_scope"),
-                    "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts"),
-                    "citations": grounded_final.citations,
-                    "citation_status": grounded_final.citation_status,
-                    "understanding": normalized_understanding,
-                    "confirmation": grounded_final.confirmation,
-                    "agent_state": grounded_final.agent_state,
-                    "delivery_status": grounded_final.delivery_status,
-                    "failure_classification": grounded_final.failure_classification,
-                    "provider": grounded_final.provider,
-                    "model": grounded_final.model,
-                },
+            saved_message = await self._message_orchestration_service.persist_finalized_turn(
+                conversation_id=conversation_id,
+                user_message=message,
+                result=grounded_final.to_payload(),
+                user_id=user_id,
+                project_id=project_id,
+                identity_source=identity_source,
+                role=role,
+                priority=priority,
             )
             out_tokens = self._prompt_service.estimate_tokens(assistant_text)
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)
-            try:
-                self._message_orchestration_service.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=grounded_result,
-                    project_id=project_id,
-                )
-            except Exception:
-                pass
 
             grounded_done_payload: dict[str, Any] = {
                 "conversation_id": conversation_id,
@@ -762,7 +733,7 @@ class StreamingService:
             result["understanding"] = result_understanding
 
             pending_action_id = extract_pending_action_id_from_text(str(result.get("response") or ""))
-            pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+            pending_action_id, fallback_reason = self._pending_actions.resolve_chat_confirmation(
                 message=message,
                 assistant_response=str(result.get("response") or ""),
                 conversation_id=conversation_id,
@@ -896,21 +867,15 @@ class StreamingService:
                 yield f"event: token\ndata: {tok}\n\n"
                 yield f"event: partial\ndata: {tok}\n\n"
 
-            saved_message = await self._repo_io.add_message(
-                conversation_id,
-                role="assistant",
-                text=assistant_text,
-                metadata={
-                    "citations": finalized.citations,
-                    "citation_status": finalized.citation_status,
-                    "understanding": normalized_understanding,
-                    "confirmation": confirmation_payload,
-                    "agent_state": finalized.agent_state,
-                    "delivery_status": finalized.delivery_status,
-                    "failure_classification": finalized.failure_classification,
-                    "provider": finalized.provider,
-                    "model": finalized.model,
-                },
+            saved_message = await self._message_orchestration_service.persist_finalized_turn(
+                conversation_id=conversation_id,
+                user_message=message,
+                result=finalized.to_payload(),
+                user_id=user_id,
+                project_id=project_id,
+                identity_source=identity_source,
+                role=role,
+                priority=priority,
             )
             study_job_payload = None
             if needs_study_job and self._study_jobs is not None:
@@ -951,17 +916,6 @@ class StreamingService:
                         CHAT_SPEND_USD_TOTAL.labels(kind="user").inc(cost)
                     if project_id:
                         CHAT_SPEND_USD_TOTAL.labels(kind="project").inc(cost)
-            except Exception:
-                pass
-
-            try:
-                self._message_orchestration_service.trigger_post_response_events(
-                    conversation_id=conversation_id,
-                    user_message=message,
-                    assistant_text=assistant_text,
-                    result=result,
-                    project_id=project_id,
-                )
             except Exception:
                 pass
 

@@ -41,6 +41,10 @@ class TaskSpecificModule(PromptModule):
 
         try:
             content = await get_prompt(prompt_name)
-            return content or ""
         except Exception:
             return ""
+        if content is None:
+            return ""
+        if not isinstance(content, str):
+            raise TypeError("Task-specific prompt must be a string")
+        return content

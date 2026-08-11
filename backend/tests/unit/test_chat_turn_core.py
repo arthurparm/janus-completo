@@ -16,6 +16,7 @@ from app.services.chat.turn_core import (
     TurnRequest,
     TurnStrategy,
     build_routed_understanding,
+    resolve_static_chat_response,
 )
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.tool_service import ToolService
@@ -88,6 +89,61 @@ def test_static_executor_blocks_high_risk_without_calling_model() -> None:
 
     assert result.model == "high_risk_confirmation"
     assert "alto risco" in result.response
+
+
+@pytest.mark.parametrize(
+    ("strategy", "expected_text", "expected_model"),
+    [
+        (TurnStrategy.STATIC_DISCOVERY, "discovery", "discovery"),
+        (TurnStrategy.STATIC_DOCS, "docs", "tools_docs"),
+        (TurnStrategy.STATIC_CAPABILITIES, "capabilities", "capabilities"),
+    ],
+)
+def test_resolve_static_chat_response_is_the_shared_deterministic_resolver(
+    strategy: TurnStrategy,
+    expected_text: str,
+    expected_model: str,
+) -> None:
+    class Prompt:
+        def render_discovery_intro(self, tools: object) -> str:
+            assert tools is tool_service
+            return " discovery "
+
+        def render_tools_documentation(self, tools: object) -> str:
+            assert tools is tool_service
+            return " docs "
+
+        def render_local_capabilities(self) -> str:
+            return " capabilities "
+
+    tool_service = object()
+    resolved = resolve_static_chat_response(
+        strategy=strategy,
+        prompt_service=Prompt(),
+        tool_service=tool_service,
+    )
+
+    assert resolved.text == expected_text
+    assert resolved.model == expected_model
+
+
+def test_resolve_static_chat_response_rejects_invalid_or_empty_rendering() -> None:
+    class EmptyPrompt:
+        def render_discovery_intro(self, tools: object) -> str:
+            return " "
+
+    with pytest.raises(ValueError, match="not a static chat response"):
+        resolve_static_chat_response(
+            strategy=TurnStrategy.AGENT_LOOP,
+            prompt_service=EmptyPrompt(),
+            tool_service=None,
+        )
+    with pytest.raises(ValueError, match="Static response is empty"):
+        resolve_static_chat_response(
+            strategy=TurnStrategy.STATIC_DISCOVERY,
+            prompt_service=EmptyPrompt(),
+            tool_service=None,
+        )
 
 
 def test_routing_and_high_risk_understanding_are_transport_independent() -> None:
@@ -245,6 +301,15 @@ def test_prompt_builder_classifies_directly_from_canonical_intent(
     prompt_builder = PromptBuilderService()
 
     assert getattr(prompt_builder, method_name)(message) is True
+
+
+def test_discovery_and_capabilities_detection_are_mutually_exclusive() -> None:
+    prompt_builder = PromptBuilderService()
+
+    assert prompt_builder.is_discovery_query("Quais ferramentas estão disponíveis?") is True
+    assert prompt_builder.is_capabilities_query("Quais ferramentas estão disponíveis?") is False
+    assert prompt_builder.is_discovery_query("O que você pode fazer?") is False
+    assert prompt_builder.is_capabilities_query("O que você pode fazer?") is True
 
 
 @pytest.mark.asyncio

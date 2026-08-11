@@ -16,6 +16,26 @@ class PendingActionRepository:
             return self._session
         return db.get_session_direct()
 
+    @staticmethod
+    def _require_pending_action(value: object) -> PendingAction | None:
+        if value is None:
+            return None
+        if not isinstance(value, PendingAction):
+            raise TypeError("Pending-action query returned an invalid record")
+        return value
+
+    @classmethod
+    def _require_pending_action_list(cls, value: object) -> list[PendingAction]:
+        if not isinstance(value, list):
+            raise TypeError("Pending-action query returned a non-list result")
+        records: list[PendingAction] = []
+        for item in value:
+            record = cls._require_pending_action(item)
+            if record is None:
+                raise TypeError("Pending-action query returned a null record")
+            records.append(record)
+        return records
+
     def create(
         self,
         user_id: str | None,
@@ -53,13 +73,14 @@ class PendingActionRepository:
     def list_without_owner(self, limit: int = 500) -> list[PendingAction]:
         s = self._get_session()
         try:
-            return (
+            rows = (
                 s.query(PendingAction)
                 .filter(PendingAction.user_id.is_(None))
                 .order_by(desc(PendingAction.created_at))
                 .limit(limit)
                 .all()
             )
+            return self._require_pending_action_list(rows)
         finally:
             if not self._session:
                 s.close()
@@ -96,20 +117,18 @@ class PendingActionRepository:
         rows = self.list_without_owner(limit=sample_limit)
         pending_count = self.count_without_owner(status="pending")
         total_count = self.count_without_owner()
-        items = [
-            {
-                "action_id": getattr(item, "id", None),
-                "status": getattr(item, "status", None),
-                "tool_name": getattr(item, "tool_name", None),
-                "created_at": (
-                    getattr(item, "created_at", None).isoformat()
-                    if getattr(item, "created_at", None) is not None
-                    else None
-                ),
-                "conversation_id": self._extract_conversation_id(getattr(item, "args_json", None)),
-            }
-            for item in rows
-        ]
+        items: list[dict[str, object]] = []
+        for item in rows:
+            created_at = item.created_at
+            items.append(
+                {
+                    "action_id": item.id,
+                    "status": item.status,
+                    "tool_name": item.tool_name,
+                    "created_at": created_at.isoformat() if isinstance(created_at, datetime) else None,
+                    "conversation_id": self._extract_conversation_id(item.args_json),
+                }
+            )
         return {
             "total_without_owner": total_count,
             "pending_without_owner": pending_count,
@@ -150,7 +169,8 @@ class PendingActionRepository:
                 q = q.filter(PendingAction.status == status)
             if user_id is not None:
                 q = q.filter(PendingAction.user_id == str(user_id))
-            return q.order_by(desc(PendingAction.created_at)).limit(limit).all()
+            rows = q.order_by(desc(PendingAction.created_at)).limit(limit).all()
+            return self._require_pending_action_list(rows)
         finally:
             if not self._session:
                 s.close()
@@ -161,7 +181,7 @@ class PendingActionRepository:
             q = s.query(PendingAction).filter(PendingAction.id == action_id)
             if user_id is not None:
                 q = q.filter(PendingAction.user_id == str(user_id))
-            return q.first()
+            return self._require_pending_action(q.first())
         finally:
             if not self._session:
                 s.close()

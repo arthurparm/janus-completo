@@ -489,6 +489,12 @@ class CaptureFacade:
         self.trace.append("service.persist_finalized_turn")
         return await self.orchestration.persist_finalized_turn(**kwargs)
 
+    def resolve_pending_chat_confirmation(
+        self,
+        **kwargs: Any,
+    ) -> tuple[int | None, str | None]:
+        return _pending_action_double(**kwargs)
+
 
 class CaptureHttpRequest:
     def __init__(self, scenario: Scenario, jobs: CaptureStudyJobs):
@@ -591,6 +597,9 @@ def _build_environment(scenario: Scenario) -> CaptureEnvironment:
         conversation_service=conversation,
         message_orchestration_service=orchestration,
         study_job_service=jobs,
+        pending_action_service=SimpleNamespace(
+            resolve_chat_confirmation=_pending_action_double
+        ),
     )
     facade = CaptureFacade(orchestration, repo, trace)
     return CaptureEnvironment(
@@ -699,12 +708,6 @@ def _patches(env: CaptureEnvironment) -> ExitStack:
             "_collect_chat_citations_with_deadline",
             lambda **kwargs: _rest_citation_double(env.scenario, **kwargs),
         )
-    )
-    stack.enter_context(
-        patch.object(chat_message, "maybe_create_fallback_pending_action", _pending_action_double)
-    )
-    stack.enter_context(
-        patch.object(streaming_module, "maybe_create_fallback_pending_action", _pending_action_double)
     )
     stack.enter_context(
         patch.object(

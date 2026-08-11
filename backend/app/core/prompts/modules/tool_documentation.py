@@ -68,7 +68,13 @@ class ToolDocumentationModule(PromptModule):
             f"- {tool.name}: {self._first_line(tool.description)}" for tool in relevant_tools
         )
 
-        return await get_formatted_prompt("tool_documentation", tool_entries=tool_entries)
+        documentation = await get_formatted_prompt(
+            "tool_documentation",
+            tool_entries=tool_entries,
+        )
+        if not isinstance(documentation, str):
+            raise TypeError("Tool documentation prompt must be a string")
+        return documentation
 
     @staticmethod
     def _first_line(text: str | None) -> str:

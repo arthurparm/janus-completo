@@ -12,6 +12,7 @@ from app.services.chat.chat_contracts import (
     build_confirmation_payload,
     normalize_understanding_payload,
 )
+from app.services.intent_routing_service import IntentRoutingDecision
 
 
 class TurnStrategy(StrEnum):
@@ -143,7 +144,7 @@ class TurnPlan:
 def build_routed_understanding(
     understanding: Mapping[str, Any] | None,
     *,
-    routing_decision: Any | None,
+    routing_decision: IntentRoutingDecision | None,
     requested_role: str | None,
     selected_role: ModelRole,
     route_applied: bool,
@@ -219,6 +220,43 @@ class ChatTurnPlanner:
         return signals.light_chat_eligible
 
 
+@dataclass(frozen=True)
+class StaticChatResponse:
+    """Transport-neutral result of a deterministic static chat query."""
+
+    text: str
+    model: str
+
+
+def resolve_static_chat_response(
+    *,
+    strategy: TurnStrategy,
+    prompt_service: Any,
+    tool_service: Any | None,
+) -> StaticChatResponse:
+    """Resolve discovery, documentation, or capability replies in one place.
+
+    The resolver owns only deterministic selection and rendering. Authentication,
+    persistence, metrics, citations, and REST/SSE framing remain outside it.
+    """
+
+    if strategy is TurnStrategy.STATIC_DISCOVERY:
+        response = prompt_service.render_discovery_intro(tool_service)
+        model = "discovery"
+    elif strategy is TurnStrategy.STATIC_DOCS:
+        response = prompt_service.render_tools_documentation(tool_service)
+        model = "tools_docs"
+    elif strategy is TurnStrategy.STATIC_CAPABILITIES:
+        response = prompt_service.render_local_capabilities()
+        model = "capabilities"
+    else:
+        raise ValueError(f"Strategy is not a static chat response: {strategy.value}")
+    normalized_response = str(response).strip()
+    if not normalized_response:
+        raise ValueError(f"Static response is empty: {strategy.value}")
+    return StaticChatResponse(text=normalized_response, model=model)
+
+
 class ChatTurnExecutor:
     """Executes a selected strategy behind the chat-domain boundary."""
 
@@ -252,15 +290,14 @@ class ChatTurnExecutor:
                 model="high_risk_confirmation",
                 role=role.value,
             )
-        if strategy is TurnStrategy.STATIC_DISCOVERY:
-            response = self._prompt.render_discovery_intro(self._tools)
-            model = "discovery"
-        elif strategy is TurnStrategy.STATIC_DOCS:
-            response = self._prompt.render_tools_documentation(self._tools)
-            model = "tools_docs"
-        elif strategy is TurnStrategy.STATIC_CAPABILITIES:
-            response = self._prompt.render_local_capabilities()
-            model = "capabilities"
+        if strategy in STATIC_RESPONSE_STRATEGIES:
+            static_response = resolve_static_chat_response(
+                strategy=strategy,
+                prompt_service=self._prompt,
+                tool_service=self._tools,
+            )
+            response = static_response.text
+            model = static_response.model
         elif strategy is TurnStrategy.BLOCKED_TOOL_CREATION:
             from app.core.security.security_alerts import emit_security_alert
 
@@ -273,8 +310,6 @@ class ChatTurnExecutor:
         else:
             raise ValueError(f"Strategy is not static: {strategy.value}")
         response = str(response).strip()
-        if not response:
-            raise ValueError(f"Static response is empty: {strategy.value}")
         return TurnExecutionResult(
             strategy=strategy,
             response=response,

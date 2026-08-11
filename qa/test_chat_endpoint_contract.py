@@ -144,6 +144,12 @@ class _DummyChatService:
         }
         return dict(self._assistant_message)
 
+    def resolve_pending_chat_confirmation(self, **kwargs):
+        understanding = kwargs.get("understanding") or {}
+        return kwargs.get("existing_pending_action_id"), understanding.get(
+            "confirmation_reason"
+        )
+
     def stream_message(self, **kwargs):
         self.last_stream_user_id = kwargs.get("user_id")
         self.last_stream_conversation_id = kwargs.get("conversation_id")
@@ -922,6 +928,66 @@ def test_chat_stream_auth_precedes_payload_validation():
         headers=_auth_headers(1),
     )
     assert authenticated_missing_fields.status_code == 422
+
+
+def test_chat_stream_uses_configured_utf8_byte_limit(monkeypatch):
+    svc = _DummyChatService()
+    client = _build_client(svc)
+    monkeypatch.setenv("CHAT_MAX_MESSAGE_BYTES", "3")
+
+    response = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "áá"},
+        headers=_auth_headers(1),
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "CHAT_MESSAGE_TOO_LARGE"
+
+
+def test_rest_and_sse_share_configured_message_size_limit(monkeypatch):
+    svc = _DummyChatService()
+    client = _build_client(svc)
+    monkeypatch.setenv("CHAT_MAX_MESSAGE_BYTES", "3")
+    headers = _auth_headers(1)
+
+    rest = client.post(
+        "/api/v1/chat/message",
+        json={"conversation_id": "conv-1", "message": "\u00e1\u00e1"},
+        headers=headers,
+    )
+    stream = client.post(
+        "/api/v1/chat/stream/conv-1",
+        json={"message": "\u00e1\u00e1"},
+        headers=headers,
+    )
+
+    assert rest.status_code == stream.status_code == 413
+    assert rest.json()["detail"] == stream.json()["detail"]
+
+
+def test_rest_and_sse_share_authorized_conversation_resolution():
+    class DeniedService(_DummyChatService):
+        async def resolve_authorized_knowledge_space_id(self, **kwargs):
+            raise ChatServiceError("Access denied: user_id mismatch")
+
+    client = _build_client(DeniedService())
+    headers = _auth_headers(1)
+
+    rest = client.post(
+        "/api/v1/chat/message",
+        json={"conversation_id": "conv-private", "message": "hello"},
+        headers=headers,
+    )
+    stream = client.post(
+        "/api/v1/chat/stream/conv-private",
+        json={"message": "hello"},
+        headers=headers,
+    )
+
+    assert rest.status_code == stream.status_code == 403
+    assert rest.json()["detail"]["code"] == "CHAT_ACCESS_DENIED"
+    assert stream.json()["detail"]["code"] == "CHAT_ACCESS_DENIED"
 
 
 def test_chat_stream_reject_disallowed_origin(monkeypatch):

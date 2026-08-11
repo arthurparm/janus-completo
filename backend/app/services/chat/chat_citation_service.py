@@ -12,30 +12,12 @@ from app.db.vector_store import (
     build_user_docs_collection_name,
     get_async_qdrant_client,
 )
+from app.services.chat.citation_policy import requires_mandatory_citations
 
 MANDATORY_CITATION_GUARD_TEXT = (
     "Nao encontrei citacoes rastreaveis para essa resposta de documento/codigo. "
     "Envie mais contexto (arquivo, funcao ou documento) para eu responder com fonte."
 )
-
-_CITATION_REQUIRED_PATTERNS = (
-    r"\bcodigo\b",
-    r"\bcode\b",
-    r"\bfuncao\b",
-    r"\bfunction\b",
-    r"\bclasse\b",
-    r"\bclass\b",
-    r"\barquivo\b",
-    r"\bfile\b",
-    r"\bdocumentacao\b",
-    r"\bdocumentation\b",
-    r"\bdocs?\b",
-    r"\breadme\b",
-    r"\bapi\b",
-    r"\bendpoint\b",
-    r"\.py\b",
-    r"\.ts\b",
-    r"\.js\b")
 
 _UPLOADED_MATERIAL_PATTERNS = (
     r"\barquivo\b",
@@ -48,12 +30,6 @@ _UPLOADED_MATERIAL_PATTERNS = (
     r"\battachment\b",
     r"\battached\b",
     r"\bsent\b")
-
-
-def requires_mandatory_citations(message: str) -> bool:
-    text = (message or "").lower()
-    return any(re.search(pattern, text) for pattern in _CITATION_REQUIRED_PATTERNS)
-
 
 def references_uploaded_material(message: str) -> bool:
     text = (message or "").lower()

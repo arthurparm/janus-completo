@@ -4,7 +4,6 @@ Tests module selection, composition logic, and token optimization.
 """
 
 import pytest
-
 from app.core.prompts.context import ConversationContext, Message
 from app.core.prompts.types import IntentType
 from app.services.prompt_composer_service import PromptComposer
@@ -131,14 +130,15 @@ class TestModuleApplicability:
         assert not module.is_applicable(IntentType.CASUAL_CHAT)
         assert module.is_applicable(IntentType.ANALYSIS)
 
-    def test_tools_not_for_casual_chat(self, composer):
-        """Tools should not load for casual chat."""
+    def test_tools_not_for_non_executable_intents(self, composer):
+        """Tool docs should not load where no homologated tool can execute."""
         from app.core.prompts.modules import ToolDocumentationModule
 
         module = ToolDocumentationModule()
 
         assert not module.is_applicable(IntentType.CASUAL_CHAT)
-        assert module.is_applicable(IntentType.TOOL_CREATION)
+        assert not module.is_applicable(IntentType.TOOL_CREATION)
+        assert module.is_applicable(IntentType.CODE_REVIEW)
 
 
 @pytest.mark.asyncio

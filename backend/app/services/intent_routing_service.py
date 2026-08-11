@@ -1,9 +1,33 @@
 import re
 import unicodedata
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
+from typing import TypedDict
 
 from app.config import settings
 from app.core.llm import ModelRole
+
+
+class IntentAlternative(TypedDict):
+    intent: str
+    score: float
+    role: str
+
+
+class IntentRoutingPayload(TypedDict):
+    intent: str
+    risk_level: str
+    urgency_level: str
+    confidence: float
+    suggested_role: str
+    signals: list[str]
+    guardrails: list[str]
+    alternatives: list[IntentAlternative]
+
+
+class _IntentRule(TypedDict):
+    role: ModelRole
+    weight: float
+    keywords: tuple[str, ...]
 
 
 @dataclass
@@ -15,17 +39,23 @@ class IntentRoutingDecision:
     suggested_role: ModelRole
     signals: list[str] = field(default_factory=list)
     guardrails: list[str] = field(default_factory=list)
-    alternatives: list[dict[str, float | str]] = field(default_factory=list)
+    alternatives: list[IntentAlternative] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
-        payload = asdict(self)
-        payload["suggested_role"] = self.suggested_role.value
-        payload["confidence"] = round(float(self.confidence), 2)
-        return payload
+    def to_dict(self) -> IntentRoutingPayload:
+        return {
+            "intent": self.intent,
+            "risk_level": self.risk_level,
+            "urgency_level": self.urgency_level,
+            "confidence": round(float(self.confidence), 2),
+            "suggested_role": self.suggested_role.value,
+            "signals": list(self.signals),
+            "guardrails": list(self.guardrails),
+            "alternatives": [alternative.copy() for alternative in self.alternatives],
+        }
 
 
 class IntentRoutingService:
-    _INTENT_RULES: dict[str, dict] = {
+    _INTENT_RULES: dict[str, _IntentRule] = {
         "code_generation": {
             "role": ModelRole.CODE_GENERATOR,
             "weight": 1.45,
@@ -256,14 +286,15 @@ class IntentRoutingService:
         if risk_level == "high":
             suggested_role = ModelRole.SECURITY_AUDITOR
 
-        alternatives = [
-            {
+        alternatives: list[IntentAlternative] = []
+        for intent_name, score in sorted_scores[1:4]:
+            alternatives.append(
+                {
                 "intent": intent_name,
                 "score": round(float(score), 2),
                 "role": self._INTENT_RULES[intent_name]["role"].value,
-            }
-            for intent_name, score in sorted_scores[1:4]
-        ]
+                }
+            )
         guardrails = self._guardrails_for(risk_level=risk_level, urgency_level=urgency_level)
         signals = list(dict.fromkeys((best_hits + risk_signals)[:8]))
 

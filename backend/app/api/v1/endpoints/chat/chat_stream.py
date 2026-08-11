@@ -9,9 +9,12 @@ from app.repositories.chat_stream_repository import (
     ChatStreamRepositoryError,
 )
 from app.services.chat.chat_contracts import chat_http_error_detail
+from app.services.chat.input_policy import validate_chat_message_size
 from app.services.chat_service import (
     ChatService,
+    ChatServiceError,
     ConversationNotFoundError,
+    MessageTooLargeError,
     get_chat_service,
 )
 from app.services.chat_stream_run_service import (
@@ -176,22 +179,19 @@ async def stream_message(
             ),
         )
 
-    if message:
-        try:
-            message_size = len(message.encode("utf-8"))
-        except Exception:
-            message_size = len(message)
-        if message_size > 10 * 1024:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=chat_http_error_detail(
-                    code="CHAT_MESSAGE_TOO_LARGE",
-                    message="Message too large",
-                    category="validation",
-                    retryable=False,
-                    http_status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                ),
-            )
+    try:
+        validate_chat_message_size(message)
+    except MessageTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=chat_http_error_detail(
+                code="CHAT_MESSAGE_TOO_LARGE",
+                message="Message too large",
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_413_CONTENT_TOO_LARGE,
+            ),
+        )
 
     slot_user: str | None = None
     try:
@@ -206,49 +206,17 @@ async def stream_message(
                 confidence=routing_decision.confidence,
                 route_applied=route_applied,
             )
-        active_knowledge_space_id = service.resolve_active_knowledge_space_id(
+        project_id = actor_project_id(http) or project_id
+        active_knowledge_space_id = await service.resolve_authorized_knowledge_space_id(
             conversation_id=conversation_id,
             user_id=user_id,
+            project_id=project_id,
             requested_knowledge_space_id=knowledge_space_id,
         )
         if active_knowledge_space_id:
             knowledge_space_id = active_knowledge_space_id
             role_enum = ModelRole.ORCHESTRATOR
             route_applied = False
-        project_id = actor_project_id(http) or project_id
-        get_history = getattr(service, "get_history", None)
-        if callable(get_history):
-            try:
-                get_history(
-                    conversation_id,
-                    user_id=user_id,
-                    project_id=project_id,
-                )
-            except ConversationNotFoundError:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=chat_http_error_detail(
-                        code="CHAT_CONVERSATION_NOT_FOUND",
-                        message="Conversation not found",
-                        category="not_found",
-                        retryable=False,
-                        http_status=status.HTTP_404_NOT_FOUND,
-                    ),
-                )
-            except Exception as e:
-                if "Access denied" in str(e):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=chat_http_error_detail(
-                            code="CHAT_ACCESS_DENIED",
-                            message="Access denied",
-                            category="authz",
-                            retryable=False,
-                            http_status=status.HTTP_403_FORBIDDEN,
-                        ),
-                    )
-                raise
-
         slot_user = await acquire_sse_slot(
             channel="chat_stream",
             user_id=user_id,
@@ -334,7 +302,7 @@ async def stream_message(
             owner_user_id=owner_user_id,
             after_sequence=last_event_id,
         )
-    except ConversationNotFoundError:
+    except ConversationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=chat_http_error_detail(
@@ -344,7 +312,18 @@ async def stream_message(
                 retryable=False,
                 http_status=status.HTTP_404_NOT_FOUND,
             ),
-        )
+        ) from exc
+    except ChatServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=chat_http_error_detail(
+                code="CHAT_ACCESS_DENIED",
+                message="Access denied",
+                category="authz",
+                retryable=False,
+                http_status=status.HTTP_403_FORBIDDEN,
+            ),
+        ) from exc
 
     headers = {
         "Content-Type": "text/event-stream; charset=utf-8",

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-import json
-import re
 from typing import Any
+
+from app.services.chat.risk_policy import (
+    normalize_confirmation_reason,
+    summarize_confirmation_risk,
+)
 
 
 def chat_http_error_detail(
@@ -49,156 +52,14 @@ def chat_sse_error_payload(
         "retryable": retryable,
         "http_status": http_status,
         "details": details or {},
-        # Legacy compat for current frontend parser.
-        "error": message,
     }
 
 
-_PENDING_ACTION_ID_RE = re.compile(
-    r"(?:pending\s*action\s*id|pending[_\s-]*action[_\s-]*id)\s*[:=#-]?\s*(\d+)",
-    re.IGNORECASE,
-)
-_PENDING_ACTION_MARKER_RE = re.compile(
-    r"(?:pending\s*action\s*id|pending[_\s-]*action[_\s-]*id)\s*[:=#-]?\s*([A-Za-z0-9_-]+)",
-    re.IGNORECASE,
-)
-_HIGH_RISK_FALLBACK_KEYWORDS = (
-    "deploy",
-    "production",
-    "produção",
-    "prod ",
-    "prod-",
-    "delete",
-    "drop",
-    "truncate",
-    "shutdown",
-    "reset",
-    "wipe",
-    "destrut",
-    "delete",
-    "deletar",
-    "apagar",
-    "excluir",
-    "remover",
-    "rm -rf",
-    "powershell",
-    "cmd.exe",
-    "shell",
-)
-
-
-def extract_pending_action_id_from_text(text: str | None) -> int | None:
-    if not text:
-        return None
-    match = _PENDING_ACTION_ID_RE.search(text)
-    if not match:
-        return None
-    try:
-        return int(match.group(1))
-    except Exception:
-        return None
-
-
-def _normalize_confirmation_reason(reason: Any) -> str | None:
-    if reason is None:
-        return None
-    text = str(reason).strip()
-    if not text:
-        return None
-    if text.lower() in {"none", "null", "undefined"}:
-        return None
-    return text
-
-
-def maybe_create_fallback_pending_action(
-    *,
-    message: str,
-    assistant_response: str | None = None,
-    conversation_id: str | None = None,
-    user_id: str | None = None,
-    existing_pending_action_id: int | None = None,
-    understanding: dict[str, Any] | None = None,
-) -> tuple[int | None, str | None]:
-    if existing_pending_action_id is not None:
-        return existing_pending_action_id, _normalize_confirmation_reason(
-            (understanding or {}).get("confirmation_reason") if isinstance(understanding, dict) else None
-        )
-    context = understanding if isinstance(understanding, dict) else {}
-    requires_confirmation = bool(context.get("requires_confirmation"))
-    normalized_reason = _normalize_confirmation_reason(context.get("confirmation_reason"))
-    lowered_message = str(message or "").lower()
-    lowered_response = str(assistant_response or "").lower()
-    high_risk_signal = any(
-        keyword in lowered_message or keyword in lowered_response
-        for keyword in _HIGH_RISK_FALLBACK_KEYWORDS
-    )
-    pending_marker_signal = bool(_PENDING_ACTION_MARKER_RE.search(str(assistant_response or "")))
-    high_risk_reason = str(normalized_reason or "").lower() == "high_risk"
-
-    if not (requires_confirmation or high_risk_signal or pending_marker_signal):
-        return None, normalized_reason
-    if not (high_risk_signal or pending_marker_signal or high_risk_reason):
-        return None, normalized_reason
-
-    reason = normalized_reason or "high_risk"
-    try:
-        from app.repositories.pending_action_repository import PendingActionRepository
-
-        repo = PendingActionRepository()
-        pending = repo.create(
-            user_id=str(user_id) if user_id is not None else None,
-            tool_name="chat_high_risk_request",
-            args_json=json.dumps(
-                {
-                    "source": "chat_confirmation_fallback",
-                    "conversation_id": conversation_id,
-                    "message": message,
-                    "risk_reason": reason,
-                    "user_id": user_id,
-                },
-                ensure_ascii=False,
-            ),
-            run_id=None,
-            cycle=None,
-        )
-        pending_id = getattr(pending, "id", None)
-        if pending_id is None:
-            return None, reason
-        return int(pending_id), reason
-    except Exception:
-        return None, reason
-
-
-def summarize_risk_from_message_and_confirmation(
-    *,
-    understanding: dict[str, Any] | None,
-    confirmation: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if not isinstance(understanding, dict):
-        return None
-    risk = understanding.get("risk")
-    if isinstance(risk, dict):
-        return risk
-    requires_confirmation = bool(understanding.get("requires_confirmation"))
-    if not requires_confirmation and not confirmation:
-        return None
-    reason = str(understanding.get("confirmation_reason") or "")
-    level = "high" if reason == "high_risk" else ("medium" if requires_confirmation else "low")
-    summary = (
-        "Ação classificada como alto risco; confirmação obrigatória."
-        if reason == "high_risk"
-        else (
-            "Baixa confiança para executar ação; confirmação recomendada."
-            if reason == "low_confidence"
-            else "Ação requer confirmação antes de prosseguir."
-        )
-    )
-    return {
-        "level": level,
-        "source": "heuristic",
-        "summary": summary,
-        "requires_confirmation": requires_confirmation,
-    }
+def _normalize_confirmation_reason(reason: object) -> str | None:
+    normalized = normalize_confirmation_reason(reason)
+    if normalized is not None and not isinstance(normalized, str):
+        raise TypeError("Confirmation reason normalizer returned a non-string value")
+    return normalized
 
 
 def build_confirmation_payload(
@@ -259,7 +120,7 @@ def normalize_understanding_payload(
     elif normalized.get("requires_confirmation") and not normalized_reason:
         # No actionable confirmation and no valid reason: prevent false positives in UI/contracts.
         normalized["requires_confirmation"] = False
-    risk = summarize_risk_from_message_and_confirmation(
+    risk = summarize_confirmation_risk(
         understanding=normalized,
         confirmation=confirmation,
     )

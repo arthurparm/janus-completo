@@ -4,7 +4,7 @@ Each module is responsible for rendering a specific section of the final prompt.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Mapping
 
 from app.core.prompts.context import ConversationContext
 from app.core.prompts.types import IntentType
@@ -18,14 +18,14 @@ class PromptModule(ABC):
     Examples: SystemIdentity, ReasoningProtocol, ToolDocumentation, etc.
     """
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: Mapping[str, object] | None = None):
         """
         Initialize the module with optional configuration.
 
         Args:
             config: Module-specific configuration options
         """
-        self.config = config or {}
+        self.config = dict(config or {})
 
     @abstractmethod
     async def render(self, intent: IntentType, context: ConversationContext) -> str:

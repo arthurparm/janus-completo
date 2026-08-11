@@ -11,7 +11,6 @@ from app.core.agents.utils import parse_json_lenient
 from app.core.exceptions.chat_exceptions import (
     ChatServiceError,
     ConversationNotFoundError,
-    MessageTooLargeError,
 )
 from app.core.llm import ModelPriority, ModelRole
 from app.core.llm.pricing import _provider_pricing
@@ -30,9 +29,10 @@ from app.services.chat.chat_citation_service import (
     build_citation_status,
     collect_document_citations,
     references_uploaded_material,
-    requires_mandatory_citations,
 )
+from app.services.chat.citation_policy import requires_mandatory_citations
 from app.services.chat.conversation_service import ConversationService
+from app.services.chat.input_policy import validate_chat_message_size
 from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
@@ -58,6 +58,7 @@ from app.services.chat.turn_core import (
 )
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
+from app.services.intent_routing_service import IntentRoutingDecision
 from app.services.knowledge_space_service import KnowledgeSpaceService
 from app.services.outbox_service import OutboxService
 from app.services.procedural_memory_service import procedural_memory_service
@@ -71,7 +72,10 @@ logger = structlog.get_logger(__name__)
 def _attach_understanding_typed(
     payload: dict[str, Any], understanding: dict[str, Any] | None
 ) -> dict[str, Any]:
-    return cast(dict[str, Any], attach_understanding(payload, understanding))
+    attached = attach_understanding(payload, understanding)
+    if not isinstance(attached, dict) or not all(isinstance(key, str) for key in attached):
+        raise TypeError("Understanding attachment returned an invalid payload")
+    return attached
 
 
 class MessageOrchestrationService:
@@ -125,7 +129,7 @@ class MessageOrchestrationService:
         *,
         request: TurnRequest,
         understanding: dict[str, Any] | None,
-        routing_decision: Any | None = None,
+        routing_decision: IntentRoutingDecision | None = None,
     ) -> TurnPlan:
         light_chat_eligible = self._should_use_light_chat(
             message=request.message,
@@ -1434,7 +1438,7 @@ class MessageOrchestrationService:
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
         requested_role: str | None = None,
-        routing_decision: Any | None = None,
+        routing_decision: IntentRoutingDecision | None = None,
         route_applied: bool | None = None,
         defer_finalization: bool = False,
     ) -> dict[str, Any]:
@@ -1451,14 +1455,7 @@ class MessageOrchestrationService:
         )
         resolved_user_id = str(user_id or conv.get("user_id") or "").strip() or None
 
-        max_bytes = int(os.getenv("CHAT_MAX_MESSAGE_BYTES", str(10 * 1024)))
-        size_bytes = 0
-        try:
-            size_bytes = len(message.encode("utf-8")) if message else 0
-        except Exception:
-            size_bytes = len(message) if message else 0
-        if message and size_bytes > max_bytes:
-            raise MessageTooLargeError(size_bytes, max_bytes)
+        validate_chat_message_size(message)
         understanding = build_understanding_payload(message)
         turn_request = TurnRequest(
             conversation_id=conversation_id,

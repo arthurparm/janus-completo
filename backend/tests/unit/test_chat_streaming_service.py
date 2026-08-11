@@ -4,8 +4,8 @@ import pytest
 from app.core.llm import ModelPriority, ModelRole
 from app.services.chat.chat_citation_service import (
     references_uploaded_material,
-    requires_mandatory_citations,
 )
+from app.services.chat.citation_policy import requires_mandatory_citations
 from app.services.chat.conversation_service import ConversationService
 from app.services.chat.streaming_service import StreamingService
 from app.services.chat.turn_core import (
@@ -41,6 +41,48 @@ class _FakeRepo:
     def get_recent_messages(self, conversation_id, limit=20):
         self.recent_calls += 1
         return []
+
+
+@pytest.mark.asyncio
+async def test_streaming_service_uses_shared_configured_message_size_limit(monkeypatch):
+    monkeypatch.setenv("CHAT_MAX_MESSAGE_BYTES", "3")
+    repo = _FakeRepo()
+    llm = _FakeLLM()
+    streaming = StreamingService(
+        repo=repo,
+        llm_service=llm,
+        tool_service=None,
+        prompt_service=_FakePromptService(),
+        rag_service=None,
+        conversation_service=ConversationService(repo),
+        message_orchestration_service=_FakeMessageOrchestration(llm, repo=repo),
+    )
+
+    chunks = [
+        chunk
+        async for chunk in streaming.stream_message(
+            conversation_id="conv-1",
+            message="áá",
+            role=ModelRole.ORCHESTRATOR,
+            priority=ModelPriority.FAST_AND_CHEAP,
+        )
+    ]
+
+    events = _parse_sse_chunks(chunks)
+    assert events == [
+        (
+            "error",
+            {
+                "code": "CHAT_MESSAGE_TOO_LARGE",
+                "message": "Message too large",
+                "category": "validation",
+                "retryable": False,
+                "http_status": 413,
+                "details": {},
+            },
+        )
+    ]
+    assert repo.messages == []
 
 
 class _FakeLLM:
@@ -350,7 +392,7 @@ async def test_streaming_service_emits_protocol_partial_and_done():
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -375,6 +417,7 @@ async def test_streaming_service_emits_protocol_partial_and_done():
     assert any(line.startswith("event: token") for line in lines), lines
     assert any(line.startswith("event: partial") for line in lines), lines
     assert any(line.startswith("event: done") for line in lines), lines
+    assert len(msg_orch.persist_calls) == 1
 
 
 @pytest.mark.asyncio
@@ -544,7 +587,7 @@ async def test_streaming_service_light_chat_skips_rag_grounding_and_optional_cit
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -581,7 +624,14 @@ async def test_streaming_service_sse_high_risk_emits_confirmation_and_waiting_st
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
+    class FakePendingActions:
+        def resolve_chat_confirmation(self, **kwargs):
+            understanding = kwargs.get("understanding") or {}
+            assert understanding.get("requires_confirmation") is True
+            assert understanding.get("confirmation_reason") == "high_risk"
+            return 999, "high_risk"
+
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -590,17 +640,7 @@ async def test_streaming_service_sse_high_risk_emits_confirmation_and_waiting_st
         rag_service=None,
         conversation_service=convo_service,
         message_orchestration_service=msg_orch,
-    )
-
-    def _fake_fallback_pending_action(**kwargs):
-        understanding = kwargs.get("understanding") or {}
-        assert understanding.get("requires_confirmation") is True
-        assert understanding.get("confirmation_reason") == "high_risk"
-        return 999, "high_risk"
-
-    monkeypatch.setattr(
-        "app.services.chat.streaming_service.maybe_create_fallback_pending_action",
-        _fake_fallback_pending_action,
+        pending_action_service=FakePendingActions(),
     )
 
     chunks = [
@@ -625,6 +665,8 @@ async def test_streaming_service_sse_high_risk_emits_confirmation_and_waiting_st
     assert done["agent_state"]["state"] == "waiting_confirmation"
     assert done["understanding"]["requires_confirmation"] is True
     assert done["understanding"]["confirmation_reason"] == "high_risk"
+    assert len(msg_orch.persist_calls) == 1
+    assert msg_orch.persist_calls[0]["result"]["confirmation"]["pending_action_id"] == 999
 
     waiting_events = [
         p
@@ -639,7 +681,11 @@ async def test_streaming_service_sse_non_risk_does_not_emit_confirmation(monkeyp
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
+    class FakePendingActions:
+        def resolve_chat_confirmation(self, **kwargs):
+            return None, None
+
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -648,11 +694,7 @@ async def test_streaming_service_sse_non_risk_does_not_emit_confirmation(monkeyp
         rag_service=None,
         conversation_service=convo_service,
         message_orchestration_service=msg_orch,
-    )
-
-    monkeypatch.setattr(
-        "app.services.chat.streaming_service.maybe_create_fallback_pending_action",
-        lambda **kwargs: (None, None),
+        pending_action_service=FakePendingActions(),
     )
 
     chunks = [
@@ -678,7 +720,7 @@ async def test_streaming_service_missing_required_citations_emits_and_persists_g
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -733,7 +775,7 @@ async def test_streaming_service_missing_required_citations_with_knowledge_space
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
     streaming = StreamingService(
         repo=repo,
         llm_service=llm,
@@ -787,7 +829,7 @@ async def test_streaming_service_document_grounding_short_circuits_llm():
     repo = _FakeRepo()
     llm = _FakeLLM()
     convo_service = ConversationService(repo)
-    msg_orch = _FakeMessageOrchestration(llm)
+    msg_orch = _FakeMessageOrchestration(llm, repo=repo)
     msg_orch.grounded_result = {
         "response": "Do documento:\n- O texto menciona facial droop.",
         "provider": "janus",
@@ -827,6 +869,8 @@ async def test_streaming_service_document_grounding_short_circuits_llm():
     done = [payload for event, payload in events if event == "done" and isinstance(payload, dict)][-1]
     assert done["model"] == "document_grounding"
     assert done["citation_status"]["status"] == "present"
+    assert len(msg_orch.persist_calls) == 1
+    assert msg_orch.persist_calls[0]["result"]["model"] == "document_grounding"
     token_text = "".join(
         str(payload.get("text") or "")
         for event, payload in events

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from app.api.v1.endpoints.chat import router as chat_router
 from app.core.security.actor_context import ActorContext, AuthMethod
 from app.repositories.chat_stream_repository import ChatStreamRunState
+from app.services.chat_rest_run_service import get_chat_rest_run_service
 from app.services.chat_service import get_chat_service
 from app.services.chat_stream_run_service import (
     ChatStreamAttachment,
@@ -42,6 +44,18 @@ class _ProjectScopeChatService:
     ) -> str | None:
         return requested_knowledge_space_id
 
+    async def resolve_authorized_knowledge_space_id(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        requested_knowledge_space_id: str | None = None,
+    ) -> str | None:
+        del conversation_id, user_id
+        self.stream_project_id = project_id
+        return requested_knowledge_space_id
+
     async def send_message(self, **kwargs: Any) -> dict[str, Any]:
         self.message_project_id = kwargs.get("project_id")
         return {
@@ -59,6 +73,12 @@ class _ProjectScopeChatService:
                 "requires_confirmation": False,
             },
         }
+
+    def resolve_pending_chat_confirmation(self, **_kwargs):
+        return None, None
+
+    async def persist_finalized_turn(self, **_kwargs):
+        return {"id": "assistant-1"}
 
     def get_history(
         self,
@@ -149,12 +169,28 @@ class _PassThroughChatStreamRunService:
                 yield f"id: {sequence}\n{chunk}"
 
 
+class _PassThroughChatRestRunService:
+    def attach(self, **_kwargs):
+        return SimpleNamespace(replay_result=None, producer_token="project-scope", key="run")
+
+    def complete(self, *, attachment, result):
+        del attachment, result
+        return None
+
+    def fail(self, *, attachment, error_code):
+        del attachment, error_code
+        return None
+
+
 def _client_with_actor_project(service: _ProjectScopeChatService) -> TestClient:
     app = FastAPI()
     app.include_router(chat_router, prefix="/api/v1/chat")
     app.dependency_overrides[get_chat_service] = lambda: service
     app.dependency_overrides[get_chat_stream_run_service] = (
         lambda: _PassThroughChatStreamRunService()
+    )
+    app.dependency_overrides[get_chat_rest_run_service] = (
+        lambda: _PassThroughChatRestRunService()
     )
     app.dependency_overrides[get_memory_service] = lambda: object()
 

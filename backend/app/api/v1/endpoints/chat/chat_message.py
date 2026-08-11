@@ -14,13 +14,12 @@ from app.services.chat.chat_citation_service import (
     collect_chat_citations,
     collect_chat_citations_with_deadline,
     references_uploaded_material,
-    requires_mandatory_citations,
 )
 from app.services.chat.chat_contracts import (
     chat_http_error_detail,
-    extract_pending_action_id_from_text,
-    maybe_create_fallback_pending_action,
 )
+from app.services.chat.citation_policy import requires_mandatory_citations
+from app.services.chat.input_policy import validate_chat_message_size
 from app.services.chat.turn_core import (
     STATIC_RESPONSE_STRATEGIES,
     ChatTurnFinalizer,
@@ -48,6 +47,7 @@ from app.services.chat_service import (
 from app.services.chat_study_service import ChatStudyJobService, ChatStudyService
 from app.services.intent_routing_service import get_intent_routing_service
 from app.services.memory_service import MemoryService, get_memory_service
+from app.services.pending_action_service import extract_pending_action_id_from_text
 
 from .deps import actor_project_id, resolve_authenticated_user_context
 from .models import (
@@ -135,7 +135,7 @@ async def _finalize_and_persist_turn(
     pending_action_id: int | None,
 ) -> dict[str, Any]:
     understanding = result.get("understanding")
-    pending_action_id, fallback_reason = maybe_create_fallback_pending_action(
+    pending_action_id, fallback_reason = service.resolve_pending_chat_confirmation(
         message=payload.message,
         assistant_response=str(result.get("response") or ""),
         conversation_id=str(result.get("conversation_id") or payload.conversation_id),
@@ -280,6 +280,20 @@ async def send_message(
                     "input": None,
                 }
             ],
+        )
+
+    try:
+        validate_chat_message_size(payload.message)
+    except MessageTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=chat_http_error_detail(
+                code="CHAT_MESSAGE_TOO_LARGE",
+                message="Message too large",
+                category="validation",
+                retryable=False,
+                http_status=status.HTTP_413_CONTENT_TOO_LARGE,
+            ),
         )
 
     project_id = actor_project_id(http) or payload.project_id
@@ -451,13 +465,13 @@ async def send_message(
                 error_code="CHAT_MESSAGE_TOO_LARGE",
             )
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=chat_http_error_detail(
                 code="CHAT_MESSAGE_TOO_LARGE",
                 message=str(e),
                 category="validation",
                 retryable=False,
-                http_status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                http_status=status.HTTP_413_CONTENT_TOO_LARGE,
             ),
         )
     except ChatServiceError as e:

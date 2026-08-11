@@ -455,9 +455,9 @@ export class ChatStreamService {
         return
       }
       if (kind === 'error') {
-        const parsed = JSON.parse(data || '{}') as { error?: string; message?: string; code?: string; category?: string; retryable?: boolean; http_status?: number | null }
+        const parsed = JSON.parse(data || '{}') as { message?: string; code?: string; category?: string; retryable?: boolean; http_status?: number | null }
         this.handleError(
-          String(parsed?.message || parsed?.error || 'error'),
+          String(parsed?.message || 'error'),
           parsed?.retryable !== false,
           {
             code: typeof parsed?.code === 'string' ? parsed.code : undefined,

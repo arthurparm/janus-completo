@@ -8,8 +8,6 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from pydantic import ValidationError
-
 from app.config import settings
 from app.core.autonomy.policy_engine import (
     PolicyConfig,
@@ -22,6 +20,8 @@ from app.core.security.redaction import redact_sensitive_payload
 from app.core.tools import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.tool_usage_repository import ToolUsageRepository
+from app.services.pending_action_service import PendingActionService
+from pydantic import ValidationError
 
 logger = structlog.get_logger(__name__)
 
@@ -37,12 +37,18 @@ class ToolExecutorService:
     Service responsible for parsing tool calls from LLM output and executing them.
     """
 
-    def __init__(self, max_concurrency: int | None = None, timeout_seconds: float | None = None):
+    def __init__(
+        self,
+        max_concurrency: int | None = None,
+        timeout_seconds: float | None = None,
+        pending_action_service: PendingActionService | None = None,
+    ):
         self._max_concurrency = self._parse_max_concurrency(max_concurrency)
         self._timeout_seconds = self._parse_timeout_seconds(timeout_seconds)
         self._semaphore = (
             asyncio.Semaphore(self._max_concurrency) if self._max_concurrency > 0 else None
         )
+        self._pending_actions = pending_action_service or PendingActionService()
 
     def _parse_max_concurrency(self, max_concurrency: int | None) -> int:
         if max_concurrency is not None:
@@ -324,16 +330,11 @@ class ToolExecutorService:
         if not user_id:
             return None
         try:
-            from app.repositories.pending_action_repository import PendingActionRepository
-
             simulation_summary_json, simulation_version = self._simulation_to_storage(simulation)
-            repo = PendingActionRepository()
-            pending = repo.create(
-                user_id=str(user_id),
+            return self._pending_actions.create(
+                user_id=user_id,
                 tool_name=tool_name,
-                args_json=json.dumps(safe_args, ensure_ascii=False),
-                run_id=None,
-                cycle=None,
+                args=safe_args,
                 simulation_summary_json=simulation_summary_json,
                 simulation_generated_at=(
                     datetime.fromisoformat(str(simulation.generated_at))
@@ -342,9 +343,22 @@ class ToolExecutorService:
                 ),
                 simulation_version=simulation_version,
             )
-            return getattr(pending, "id", None)
         except Exception:
+            logger.exception(
+                "pending_action_persistence_failed",
+                tool_name=tool_name,
+                user_id=user_id,
+            )
             return None
+
+    @staticmethod
+    def _confirmation_result_message(*, base: str, pending_id: int | None) -> str:
+        if pending_id is not None:
+            return f"{base} Pending action id: {pending_id}."
+        return (
+            f"{base} Confirmation could not be persisted, so execution remains blocked; "
+            "retry after pending-action storage is available."
+        )
 
     async def execute_tool_calls(
         self,
@@ -462,16 +476,21 @@ class ToolExecutorService:
                     safe_args=safe_args,
                     simulation=simulation,
                 )
-                msg = (
-                    "Tool flagged as destructive. Dry-run simulation completed; "
-                    "manual confirmation is required before execution."
+                msg = self._confirmation_result_message(
+                    base=(
+                        "Tool flagged as destructive. Dry-run simulation completed; "
+                        "manual confirmation is required before execution."
+                    ),
+                    pending_id=pending_id,
                 )
-                if pending_id:
-                    msg += f" Pending action id: {pending_id}."
                 self._audit_pre_execution_event(
                     tool_name=name,
-                    status="pending_confirmation",
-                    reason="destructive_simulation_requires_confirmation",
+                    status="pending_confirmation" if pending_id is not None else "blocked",
+                    reason=(
+                        "destructive_simulation_requires_confirmation"
+                        if pending_id is not None
+                        else "pending_action_persistence_failed"
+                    ),
                     user_id=user_id,
                     detail={
                         "pending_id": pending_id,
@@ -488,13 +507,18 @@ class ToolExecutorService:
                     safe_args=safe_args,
                     simulation=simulation,
                 )
-                msg = "Tool requires confirmation before execution."
-                if pending_id:
-                    msg += f" Pending action id: {pending_id}."
+                msg = self._confirmation_result_message(
+                    base="Tool requires confirmation before execution.",
+                    pending_id=pending_id,
+                )
                 self._audit_pre_execution_event(
                     tool_name=name,
-                    status="pending_confirmation",
-                    reason=decision.reason or "requires_confirmation",
+                    status="pending_confirmation" if pending_id is not None else "blocked",
+                    reason=(
+                        decision.reason or "requires_confirmation"
+                        if pending_id is not None
+                        else "pending_action_persistence_failed"
+                    ),
                     user_id=user_id,
                     detail={"pending_id": pending_id},
                 )

@@ -268,6 +268,44 @@ async def test_execute_tool_calls_redacts_sensitive_args_before_pending_persiste
 
 
 @pytest.mark.asyncio
+async def test_confirmation_storage_failure_is_explicitly_blocked(monkeypatch):
+    events = []
+
+    class _NoSchemaTool:
+        args_schema = None
+        func = None
+
+        def invoke(self, _payload):
+            raise AssertionError("tool must remain blocked without a persisted confirmation")
+
+    class FailingPendingActions:
+        def create(self, **_kwargs):
+            raise RuntimeError("pending storage unavailable")
+
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(
+        tool_module,
+        "action_registry",
+        SimpleNamespace(
+            get_tool=lambda _name: _NoSchemaTool(),
+            record_call=lambda **_kwargs: None,
+        ),
+    )
+
+    service = ToolExecutorService(pending_action_service=FailingPendingActions())
+    outputs = await service.execute_tool_calls(
+        calls=[{"name": "schema_tool", "args": {"value": 1}}],
+        policy=DummyPolicy(require_confirmation=True, tool_allowed=True),
+        user_id="default",
+    )
+
+    assert "execution remains blocked" in outputs[0]["result"]
+    assert "Pending action id" not in outputs[0]["result"]
+    assert events[-1]["status"] == "blocked"
+    assert events[-1]["detail"]["reason"] == "pending_action_persistence_failed"
+
+
+@pytest.mark.asyncio
 async def test_execute_tool_calls_redacts_nested_tokens_before_pending_persistence(monkeypatch):
     created = {}
 

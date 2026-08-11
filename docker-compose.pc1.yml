@@ -209,6 +209,7 @@ services:
         condition: service_healthy
     environment:
       - JANUS_API_URL=${JANUS_API_URL:-http://janus-api:8000}
+      - JANUS_PUBLIC_API_URL=${JANUS_PUBLIC_API_URL:-http://janus-public-api:8000}
       - PORT=4300
     restart: unless-stopped
     mem_limit: 1536m

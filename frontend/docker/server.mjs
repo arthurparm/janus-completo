@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const staticRoot = resolve(__dirname, 'dist/janus-angular/browser');
 const backendUrl = new URL(process.env.JANUS_API_URL || 'http://janus-api:8000');
+const publicBackendUrl = new URL(
+  process.env.JANUS_PUBLIC_API_URL || 'http://janus-public-api:8000',
+);
 const port = Number(process.env.PORT || 4300);
 
 const contentTypes = new Map([
@@ -23,8 +26,14 @@ const contentTypes = new Map([
   ['.woff2', 'font/woff2'],
 ]);
 
-function isProxyPath(pathname) {
-  return pathname === '/api' || pathname.startsWith('/api/') || pathname === '/healthz';
+function resolveProxyTarget(pathname) {
+  if (pathname === '/public-api' || pathname.startsWith('/public-api/')) {
+    return { backendUrl: publicBackendUrl, stripPrefix: '/public-api' };
+  }
+  if (pathname === '/api' || pathname.startsWith('/api/') || pathname === '/healthz') {
+    return { backendUrl, stripPrefix: '' };
+  }
+  return null;
 }
 
 function sendStatic(response, pathname) {
@@ -46,9 +55,13 @@ function sendStatic(response, pathname) {
   createReadStream(candidate).pipe(response);
 }
 
-function proxyRequest(clientRequest, clientResponse) {
-  const target = new URL(clientRequest.url || '/', backendUrl);
-  const headers = { ...clientRequest.headers, host: backendUrl.host };
+function proxyRequest(clientRequest, clientResponse, proxyTarget) {
+  const incoming = new URL(clientRequest.url || '/', 'http://frontend.local');
+  const upstreamPath = proxyTarget.stripPrefix
+    ? incoming.pathname.slice(proxyTarget.stripPrefix.length) || '/'
+    : incoming.pathname;
+  const target = new URL(`${upstreamPath}${incoming.search}`, proxyTarget.backendUrl);
+  const headers = { ...clientRequest.headers, host: proxyTarget.backendUrl.host };
   const requestImpl = target.protocol === 'https:' ? httpsRequest : httpRequest;
   const proxy = requestImpl(
     {
@@ -75,11 +88,15 @@ function proxyRequest(clientRequest, clientResponse) {
 
 createServer((request, response) => {
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
-  if (isProxyPath(url.pathname)) {
-    proxyRequest(request, response);
+  const proxyTarget = resolveProxyTarget(url.pathname);
+  if (proxyTarget) {
+    proxyRequest(request, response, proxyTarget);
     return;
   }
   sendStatic(response, url.pathname);
 }).listen(port, '0.0.0.0', () => {
-  console.log(`Janus frontend listening on :${port}; proxy target ${backendUrl.origin}`);
+  console.log(
+    `Janus frontend listening on :${port}; ` +
+      `private proxy ${backendUrl.origin}; public proxy ${publicBackendUrl.origin}`,
+  );
 });

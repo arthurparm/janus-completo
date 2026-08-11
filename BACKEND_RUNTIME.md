@@ -155,3 +155,13 @@ The ToolExecutorService ([tool_executor_service.py](file:///h:/repos/janus-compl
 **Docker Sandbox** ([sandbox_executor.py](file:///h:/repos/janus-completo/backend/app/core/tools/sandbox_executor.py)): Executes Python code in isolated Docker containers with configurable resource limits (memory: configurable, CPU: 1.0 cores). Uses `execute_python_code` tool registered as SAFE permission level. The sandbox restricts imports (no os, subprocess, sys) and blocks filesystem/network access.
 
 **Command Sandbox** ([command_sandbox.py](file:///h:/repos/janus-completo/backend/app/core/tools/command_sandbox.py)): For OS-level commands, validates against a strict allowlist of executables and argv prefixes. Shell operators (&&, ||, ;, pipe, redirect) are blocked. Max command length is 600 characters. Multiline commands are rejected.
+
+## 12. Shared Chat Turn Policies
+
+REST and SSE share domain behavior but keep transport delivery separate. The common turn planner, static resolver, executor, finalizer, effect policy, and normalized results live in `backend/app/services/chat/turn_core.py`. `resolve_static_chat_response()` is the only resolver for discovery, tool documentation, and local-capability replies; callers must not reproduce the detection/rendering sequence in a transport adapter.
+
+Input size validation is shared through `backend/app/services/chat/input_policy.py`. Both transports use the UTF-8 byte count and the same `CHAT_MAX_MESSAGE_BYTES` setting, with a safe 10 KiB fallback for invalid or non-positive configuration.
+
+Mandatory citation decisions live in `backend/app/services/chat/citation_policy.py`. REST endpoints, SSE planning, study flows, and citation collection must call `requires_mandatory_citations()` from this module, directly or through a shared citation-status builder. Retrieval and formatting belong to `chat_citation_service.py`; transport-specific modules must not define their own citation-required patterns.
+
+Confirmation risk is evaluated without I/O in `backend/app/services/chat/risk_policy.py`. Durable creation, ownership validation, listing, and status transitions for SQL pending actions belong to `backend/app/services/pending_action_service.py`. `chat_contracts.py` is limited to contract payload construction and normalization, while REST and SSE use the same injected `PendingActionService` and `ChatTurnFinalizer`. Tool confirmations use that same pending-action service so chat and tools cannot diverge on durable identity or owner requirements.

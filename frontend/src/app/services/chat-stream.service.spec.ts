@@ -194,4 +194,30 @@ describe('ChatStreamService', () => {
     )
     expect(secondHeaders.get('Last-Event-ID')).toBe('7')
   })
+
+  it('consome o campo canonico message em erros SSE', async () => {
+    sessionStorage.setItem(AUTH_TOKEN_KEY, makeFakeToken(10))
+    const chunk = encoder.encode(
+      'event: error\ndata: {"message":"falha canonica","code":"PersistenceError","retryable":false}\n\n',
+    )
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: vi.fn()
+            .mockResolvedValueOnce({ value: chunk, done: false })
+            .mockResolvedValueOnce({ value: undefined, done: true }),
+        }),
+      },
+    }) as Response))
+
+    const service = TestBed.inject(ChatStreamService)
+    const errors: string[] = []
+    service.errors().subscribe((event) => errors.push(event.error))
+    service.start({ conversationId: 'conv-error', text: 'teste' })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(errors).toEqual(['falha canonica'])
+  })
 })

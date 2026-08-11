@@ -171,7 +171,6 @@ class PromptBuilderService:
         keywords = [
             "quais ferramentas",
             "quais tools",
-            "o que você pode fazer",
             "what tools",
             "listar ferramentas",
         ]
@@ -221,7 +220,13 @@ class PromptBuilderService:
 
     def render_local_capabilities(self) -> str:
         """Render local capabilities overview."""
-        return "Posso analisar código, executar comandos de terminal, e gerenciar arquivos."
+        return (
+            "Posso conversar e explicar, analisar código e documentação, e responder "
+            "com citações rastreáveis quando houver fontes disponíveis. Também posso "
+            "consultar o catálogo homologado de ferramentas e preparar ações sujeitas "
+            "às permissões e confirmações de segurança do Janus. Não crio ferramentas "
+            "dinamicamente nem executo ações de alto risco sem confirmação acionável."
+        )
 
     def estimate_tokens(self, text: str) -> int:
         """

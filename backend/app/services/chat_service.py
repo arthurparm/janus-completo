@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from typing import Any
 
 from app.core.exceptions.chat_exceptions import (
@@ -7,7 +8,7 @@ from app.core.exceptions.chat_exceptions import (
 )
 from app.core.llm import ModelPriority, ModelRole
 from app.repositories.chat_repository import ChatRepository
-from app.services.chat import ConversationService, MessageOrchestrationService, StreamingService
+from app.services.chat.conversation_service import ConversationService
 from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
@@ -15,13 +16,17 @@ from app.services.chat.message_helpers import (
     is_explicit_tool_creation,
     split_ui,
 )
+from app.services.chat.message_orchestration_service import MessageOrchestrationService
+from app.services.chat.streaming_service import StreamingService
 from app.services.chat_agent_loop import ChatAgentLoop
 from app.services.chat_command_handler import ChatCommandHandler
 from app.services.chat_event_publisher import ChatEventPublisher
 from app.services.chat_study_service import ChatStudyJobService, ChatStudyService
+from app.services.intent_routing_service import IntentRoutingDecision
 from app.services.llm_service import LLMService
 from app.services.memory_service import MemoryService
 from app.services.outbox_service import OutboxService
+from app.services.pending_action_service import PendingActionService
 from app.services.prompt_builder_service import PromptBuilderService
 from app.services.rag_service import RAGService
 from app.services.tool_executor_service import ToolExecutorService
@@ -53,6 +58,7 @@ class ChatService:
         rag_service: RAGService | None = None,
         event_logger: Any | None = None,
         outbox_service: OutboxService | None = None,
+        pending_action_service: PendingActionService | None = None,
     ):
         self._repo = repo
         self._llm = llm_service
@@ -64,7 +70,10 @@ class ChatService:
         self.llm_service = llm_service
 
         self._prompt_service = prompt_service or PromptBuilderService()
-        self._tool_executor = tool_executor_service or ToolExecutorService()
+        self._pending_actions = pending_action_service or PendingActionService()
+        self._tool_executor = tool_executor_service or ToolExecutorService(
+            pending_action_service=self._pending_actions
+        )
         if rag_service:
             self._rag_service = rag_service
         elif memory_service:
@@ -110,10 +119,38 @@ class ChatService:
             conversation_service=self._conversation_service,
             message_orchestration_service=self._message_orchestration_service,
             study_job_service=self._study_job_service,
+            pending_action_service=self._pending_actions,
         )
 
     def get_study_job_service(self) -> ChatStudyJobService:
         return self._study_job_service
+
+    def resolve_pending_chat_confirmation(
+        self,
+        *,
+        message: str,
+        assistant_response: str | None = None,
+        conversation_id: str | None = None,
+        user_id: str | None = None,
+        existing_pending_action_id: int | None = None,
+        understanding: dict[str, Any] | None = None,
+    ) -> tuple[int | None, str | None]:
+        resolved = self._pending_actions.resolve_chat_confirmation(
+            message=message,
+            assistant_response=assistant_response,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            existing_pending_action_id=existing_pending_action_id,
+            understanding=understanding,
+        )
+        if not isinstance(resolved, tuple) or len(resolved) != 2:
+            raise TypeError("Pending-action service returned an invalid confirmation result")
+        pending_action_id, reason = resolved
+        if isinstance(pending_action_id, bool) or not isinstance(pending_action_id, int | None):
+            raise TypeError("Pending-action service returned an invalid action id")
+        if not isinstance(reason, str | None):
+            raise TypeError("Pending-action service returned an invalid reason")
+        return pending_action_id, reason
 
     def _estimate_tokens(self, text: str) -> int:
         return estimate_tokens(self._prompt_service, text)
@@ -189,7 +226,7 @@ class ChatService:
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
         requested_role: str | None = None,
-        routing_decision: Any | None = None,
+        routing_decision: IntentRoutingDecision | None = None,
         route_applied: bool | None = None,
         defer_finalization: bool = False,
     ) -> dict[str, Any]:
@@ -345,8 +382,28 @@ class ChatService:
             requested_knowledge_space_id=requested_knowledge_space_id,
         )
 
-    async def persist_finalized_turn(self, **kwargs: Any) -> dict[str, Any]:
-        return await self._message_orchestration_service.persist_finalized_turn(**kwargs)
+    async def persist_finalized_turn(
+        self,
+        *,
+        conversation_id: str,
+        user_message: str,
+        result: dict[str, Any],
+        user_id: str | None,
+        project_id: str | None,
+        identity_source: str,
+        role: ModelRole | None = None,
+        priority: ModelPriority | None = None,
+    ) -> dict[str, Any]:
+        return await self._message_orchestration_service.persist_finalized_turn(
+            conversation_id=conversation_id,
+            user_message=user_message,
+            result=result,
+            user_id=user_id,
+            project_id=project_id,
+            identity_source=identity_source,
+            role=role,
+            priority=priority,
+        )
 
     async def stream_message(
         self,
@@ -360,9 +417,9 @@ class ChatService:
         knowledge_space_id: str | None = None,
         identity_source: str = "unknown",
         requested_role: str | None = None,
-        routing_decision: Any | None = None,
+        routing_decision: IntentRoutingDecision | None = None,
         route_applied: bool | None = None,
-    ):
+    ) -> AsyncIterator[str]:
         async for chunk in self._streaming_service.stream_message(
             conversation_id=conversation_id,
             message=message,
@@ -379,7 +436,11 @@ class ChatService:
         ):
             yield chunk
 
-    async def stream_events(self, conversation_id: str, user_id: str | None = None):
+    async def stream_events(
+        self,
+        conversation_id: str,
+        user_id: str | None = None,
+    ) -> AsyncIterator[str]:
         async for chunk in self._streaming_service.stream_events(
             conversation_id=conversation_id,
             user_id=user_id,
@@ -388,4 +449,7 @@ class ChatService:
 
 
 def get_chat_service(request: Request) -> ChatService:
-    return request.app.state.chat_service
+    service = getattr(request.app.state, "chat_service", None)
+    if not isinstance(service, ChatService):
+        raise RuntimeError("ChatService is not initialized")
+    return service

@@ -51,6 +51,71 @@ function waitForProxy(child) {
   })
 }
 
+function fetchText(url) {
+  return new Promise((resolve, reject) => {
+    const request = get(url, response => {
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', chunk => {
+        body += chunk
+      })
+      response.on('end', () => {
+        resolve({ status: response.statusCode, body })
+      })
+    })
+    request.once('error', reject)
+  })
+}
+
+test('routes private and public API prefixes to their dedicated upstreams', async t => {
+  const privateRequests = []
+  const publicRequests = []
+  const privateBackend = createServer((request, response) => {
+    privateRequests.push(request.url)
+    response.writeHead(200, { 'Content-Type': 'text/plain' })
+    response.end('private')
+  })
+  const publicBackend = createServer((request, response) => {
+    publicRequests.push(request.url)
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end('{"issuer":"https://idp.example"}')
+  })
+  const privatePort = await listen(privateBackend)
+  const publicPort = await listen(publicBackend)
+  const proxyPort = await reservePort()
+  const proxy = spawn(process.execPath, [serverPath], {
+    env: {
+      ...process.env,
+      JANUS_API_URL: `http://127.0.0.1:${privatePort}`,
+      JANUS_PUBLIC_API_URL: `http://127.0.0.1:${publicPort}`,
+      PORT: String(proxyPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  t.after(async () => {
+    proxy.kill()
+    await close(privateBackend)
+    await close(publicBackend)
+  })
+
+  await waitForProxy(proxy)
+  const privateResponse = await fetchText(
+    `http://127.0.0.1:${proxyPort}/api/v1/users/me?expanded=true`,
+  )
+  const publicResponse = await fetchText(
+    `http://127.0.0.1:${proxyPort}/public-api/api/v1/auth/oidc-config`,
+  )
+
+  assert.deepEqual(privateResponse, { status: 200, body: 'private' })
+  assert.deepEqual(publicResponse, {
+    status: 200,
+    body: '{"issuer":"https://idp.example"}',
+  })
+  assert.deepEqual(privateRequests, ['/api/v1/users/me?expanded=true'])
+  assert.deepEqual(publicRequests, ['/api/v1/auth/oidc-config'])
+})
+
 test('closes the upstream response when the client abandons a proxied stream', async t => {
   let resolveUpstreamClosed
   const upstreamClosed = new Promise(resolve => {
