@@ -16,7 +16,6 @@ class ToolDocumentationModule(PromptModule):
     """
 
     INTENT_TOOLS = {
-        IntentType.TOOL_CREATION: ["evolve_tool"],
         IntentType.SCRIPT_GENERATION: ["write_file", "execute_shell"],
         IntentType.CODE_REVIEW: ["read_file", "list_directory", "query_knowledge_graph"],
         IntentType.DEBUGGING: [
@@ -49,8 +48,8 @@ class ToolDocumentationModule(PromptModule):
         return 40  # Load after protocols
 
     def is_applicable(self, intent: IntentType) -> bool:
-        """Load tools for all intents except casual chat."""
-        return intent != IntentType.CASUAL_CHAT
+        """Load tools only when the intent can execute homologated tools."""
+        return intent not in {IntentType.CASUAL_CHAT, IntentType.TOOL_CREATION}
 
     async def render(self, intent: IntentType, context: ConversationContext) -> str:
         """Generate compact tool documentation."""

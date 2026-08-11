@@ -41,17 +41,19 @@ class TestPromptComposer:
         assert compiled.token_count < 500  # Should be very compact
 
     @pytest.mark.asyncio
-    async def test_tool_creation_modules(self, composer, simple_context):
-        """Test that tool creation loads appropriate modules."""
+    async def test_tool_creation_omits_removed_dynamic_tool_modules(
+        self, composer, simple_context
+    ):
+        """Blocked tool creation must not load obsolete execution guidance."""
         simple_context.current_message = "Crie uma ferramenta para buscar CEP"
 
         compiled = await composer.compose(IntentType.TOOL_CREATION, simple_context)
 
-        # Should load: Identity, Reasoning, Tools, Task-specific
         assert "system_identity" in compiled.modules_used
         assert "reasoning_protocol" in compiled.modules_used
-        assert "tool_documentation" in compiled.modules_used
-        assert "task_specific" in compiled.modules_used
+        assert "tool_documentation" not in compiled.modules_used
+        assert "task_specific" not in compiled.modules_used
+        assert "evolve_tool" not in compiled.text
 
     @pytest.mark.asyncio
     async def test_token_estimation(self, composer, simple_context):
@@ -83,14 +85,14 @@ class TestPromptComposer:
         assert compiled.token_count < 1500
 
     @pytest.mark.asyncio
-    async def test_intent_tool_filter(self, composer, simple_context):
-        """Test that only relevant tools are documented."""
+    async def test_tool_creation_never_advertises_removed_dynamic_tools(
+        self, composer, simple_context
+    ):
+        """The prompt must agree with the permanent dynamic-creation block."""
         compiled = await composer.compose(IntentType.TOOL_CREATION, simple_context)
 
-        # Check that output contains only relevant tools
-        assert "evolve_tool" in compiled.text
-        # Should NOT contain irrelevant tools for this intent
-        # (This is a basic check - could be more specific)
+        assert "evolve_tool" not in compiled.text
+        assert "tool creation flow" not in compiled.text.lower()
 
     @pytest.mark.asyncio
     async def test_no_duplicate_sections(self, composer, simple_context):

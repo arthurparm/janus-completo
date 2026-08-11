@@ -15,7 +15,6 @@ class TaskSpecificModule(PromptModule):
     """
 
     TASK_PROMPTS = {
-        IntentType.TOOL_CREATION: "task_tool_creation_protocol",
         IntentType.SCRIPT_GENERATION: "task_script_generation_protocol",
         IntentType.CODE_REVIEW: "task_code_review_protocol",
         IntentType.DEBUGGING: "task_debugging_protocol",

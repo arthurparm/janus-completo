@@ -1,4 +1,3 @@
-import json
 import re
 from typing import Any
 
@@ -191,10 +190,3 @@ def is_explicit_tool_creation(message: str) -> bool:
     return any(k in lower for k in creation_keywords)
 
 
-def format_tool_creation_response(result: dict[str, Any]) -> str:
-    if not result:
-        return "Tool creation returned an empty result."
-    name = result.get("name") or result.get("tool_name") or result.get("tool") or "unknown"
-    status = result.get("evolution_message") or "Tool creation completed."
-    payload = json.dumps(result, indent=2, ensure_ascii=False)
-    return f"{status}\n\nTool: {name}\n\n{payload}"

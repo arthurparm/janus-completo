@@ -12,7 +12,6 @@ from app.services.chat.message_helpers import (
     attach_understanding,
     build_understanding_payload,
     estimate_tokens,
-    format_tool_creation_response,
     is_explicit_tool_creation,
     split_ui,
 )
@@ -134,9 +133,6 @@ class ChatService:
 
     def _is_explicit_tool_creation(self, message: str) -> bool:
         return is_explicit_tool_creation(message)
-
-    def _format_tool_creation_response(self, result: dict[str, Any]) -> str:
-        return format_tool_creation_response(result)
 
     def _validate_conversation_access(
         self,
