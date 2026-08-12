@@ -9878,6 +9878,42 @@
                     "additionalProperties": false,
                     "properties": {
                       "operation_id": {
+                        "const": "purge_incompatible_checkpoints_api_v1_admin_checkpoints_purge_incompatible_post",
+                        "type": "string"
+                      },
+                      "path_params": {
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        },
+                        "default": {},
+                        "type": "object"
+                      },
+                      "payload": {
+                        "default": {},
+                        "type": "object"
+                      },
+                      "query_params": {
+                        "additionalProperties": true,
+                        "default": {},
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "operation_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation_id": {
                         "const": "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
                         "type": "string"
                       },
@@ -11657,6 +11693,7 @@
           "promote_quarantine_api_v1_knowledge_quarantine_promote_post",
           "publish_api_v1_deployment_publish_post",
           "publish_consolidation_api_v1_knowledge_consolidate_post",
+          "purge_incompatible_checkpoints_api_v1_admin_checkpoints_purge_incompatible_post",
           "reconcile_outbox_api_v1_tasks_outbox_reconcile_post",
           "reconcile_queue_policy_api_v1_tasks_queue__queue_name__policy_reconcile_post",
           "reflexion_health_api_v1_reflexion_health_get",

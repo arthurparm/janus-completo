@@ -1,7 +1,7 @@
-import structlog
 import operator
 from typing import Annotated, Literal, Sequence, TypedDict
 
+import structlog
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
@@ -37,13 +37,13 @@ async def supervisor_node(state: AgentState):
     # But we rely on external cleanup for incompatible versions.
     # Just ensure we set current version if missing (new threads)
     if state.get("schema_version") is None:
-        # We can't easily update state here without returning it. 
+        # We can't easily update state here without returning it.
         # But this is read-only logic mostly.
         pass
 
     messages = state["messages"]
     last_message = messages[-1]
-    
+
     # If we just came from a worker with output, return it
     if state.get("worker_output"):
         return {
@@ -51,7 +51,7 @@ async def supervisor_node(state: AgentState):
             "next_step": "finish",
             "worker_output": None # Clear for next turn
         }
-        
+
     # If we just came from approval
     if state.get("approval_status") == "approved":
         return {"next_step": "worker", "approval_status": None}
@@ -65,23 +65,23 @@ async def supervisor_node(state: AgentState):
     # Basic routing logic (can be replaced with LLM call)
     if isinstance(last_message, HumanMessage):
         content = last_message.content.lower()
-        
+
         # Example sensitive keyword detection
         if "delete" in content or "deploy" in content:
             return {
-                "next_step": "human_approval", 
+                "next_step": "human_approval",
                 "current_worker": "sysadmin",
                 "worker_input": last_message.content,
                 "schema_version": GRAPH_SCHEMA_VERSION
             }
-            
+
         return {
-            "next_step": "worker", 
+            "next_step": "worker",
             "current_worker": "assistant",
             "worker_input": last_message.content,
             "schema_version": GRAPH_SCHEMA_VERSION
         }
-        
+
     return {"next_step": "finish", "schema_version": GRAPH_SCHEMA_VERSION}
 
 async def worker_node(state: AgentState):
@@ -90,7 +90,7 @@ async def worker_node(state: AgentState):
     """
     worker_name = state.get("current_worker", "assistant")
     prompt = state.get("worker_input", "")
-    
+
     # Instantiate PydanticAI worker
     # In a real scenario, we would have a factory or registry of workers
     prompt_name = "leaf_worker_assistant"
@@ -214,3 +214,8 @@ def get_graph():
     workflow = _build_workflow()
     _graph_instance = workflow.compile(checkpointer=MemorySaver(), interrupt_before=["human_approval"])
     return _graph_instance
+
+
+def get_graph_checkpointer() -> AsyncPostgresSaver | None:
+    """Retorna o checkpointer Postgres ativo sem criar fallback implícito."""
+    return _checkpointer

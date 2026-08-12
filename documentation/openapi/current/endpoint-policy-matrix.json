@@ -1,6 +1,20 @@
 [
   {
     "human_delegable": true,
+    "method": "POST",
+    "operation_id": "purge_incompatible_checkpoints_api_v1_admin_checkpoints_purge_incompatible_post",
+    "ownership": "none",
+    "path": "/api/v1/admin/checkpoints/purge-incompatible",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
     "method": "PATCH",
     "operation_id": "update_config_api_v1_admin_config_patch",
     "ownership": "none",

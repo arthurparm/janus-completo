@@ -98,6 +98,8 @@ The MessageBroker ([message_broker.py](file:///h:/repos/janus-completo/backend/a
 
 **Worker Infrastructure**: 25+ background workers including: agent_tasks_worker (per-agent task execution), async_consolidation_worker (knowledge graph consolidation), data_harvester (external data collection), document_ingestion_worker (file processing), life_cycle_worker (scheduled memory consolidation and recent-failure diagnostics, without implicit goal execution), neural_training_worker (model fine-tuning). The life-cycle worker exposes its pulse, publication, failure and recovery state through the kernel health monitor.
 
+**Checkpoint compatibility maintenance**: `POST /api/v1/admin/checkpoints/purge-incompatible` is a service-only control-plane operation. It reads the latest serialized graph state per thread through the active Postgres checkpointer. Dry-run is the default. Deletion requires `execute=true`, an `expected_schema_version` equal to the runtime version, and a complete bounded scan; affected writes, blobs and checkpoints are removed in one database transaction. Missing checkpointer, incomplete scans and transaction failures are reported as explicit 503/409 responses rather than successful fallbacks.
+
 **Queue Policy Reconciliation**: `reconcile_queue_policy()` validates queue arguments against expected configuration. If mismatches are found and `force_delete=True`, the queue is deleted and recreated with correct arguments. This ensures consistent queue topology across restarts.
 
 **Trace Context Propagation**: Each published message receives trace headers (trace_id, parent_span_id). Consumers extract and restore trace context before processing, ensuring end-to-end trace continuity across service boundaries.

@@ -2717,6 +2717,84 @@
         "title": "PromoteQuarantineResponse",
         "type": "object"
       },
+      "PurgeIncompatibleRequest": {
+        "properties": {
+          "execute": {
+            "default": false,
+            "title": "Execute",
+            "type": "boolean"
+          },
+          "expected_schema_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Schema Version"
+          },
+          "max_checkpoints": {
+            "default": 1000,
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Max Checkpoints",
+            "type": "integer"
+          }
+        },
+        "title": "PurgeIncompatibleRequest",
+        "type": "object"
+      },
+      "PurgeIncompatibleResponse": {
+        "properties": {
+          "deleted_threads_count": {
+            "title": "Deleted Threads Count",
+            "type": "integer"
+          },
+          "executed": {
+            "title": "Executed",
+            "type": "boolean"
+          },
+          "incompatible_threads_count": {
+            "title": "Incompatible Threads Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "scan_complete": {
+            "title": "Scan Complete",
+            "type": "boolean"
+          },
+          "scanned_checkpoints": {
+            "title": "Scanned Checkpoints",
+            "type": "integer"
+          },
+          "scanned_threads": {
+            "title": "Scanned Threads",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scanned_checkpoints",
+          "scanned_threads",
+          "incompatible_threads_count",
+          "deleted_threads_count",
+          "scan_complete",
+          "executed",
+          "message"
+        ],
+        "title": "PurgeIncompatibleResponse",
+        "type": "object"
+      },
       "PurgeRunRequest": {
         "properties": {
           "limit": {
@@ -4352,6 +4430,64 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/checkpoints/purge-incompatible": {
+      "post": {
+        "description": "Inspeciona ou remove atomicamente threads com estado de grafo incompatível.",
+        "operationId": "purge_incompatible_checkpoints_api_v1_admin_checkpoints_purge_incompatible_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurgeIncompatibleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgeIncompatibleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:execute"
+            ]
+          }
+        ],
+        "summary": "Purge Incompatible Checkpoints",
+        "tags": [
+          "Admin"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
     "/api/v1/admin/config": {
       "patch": {
         "operationId": "update_config_api_v1_admin_config_patch",

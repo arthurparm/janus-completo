@@ -6,6 +6,7 @@ from app.api.v1.endpoints.workspace import router as workspace_router
 
 from .endpoints import (
     admin_actions,
+    admin_checkpoints,
     admin_config,
     agent,
     assistant,
@@ -60,6 +61,7 @@ for source, prefix in (
     (evaluation.router, ""),
     (users.user_router, ""),
     (admin_actions.router, ""),
+    (admin_checkpoints.router, ""),
     (chat.router, "/chat"),
     (context.router, "/context"),
     (feedback.router, ""),
