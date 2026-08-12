@@ -88,7 +88,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _rate_limit_subject(self, request: Request) -> tuple[str, float, int, str]:
         actor_context = getattr(request.state, "actor_context", None)
-        actor = actor_context.actor_id if actor_context is not None else None
+        actor = actor_context.actor_id if actor_context is not None and getattr(actor_context, "actor_id", None) else None
         if actor is None:
             actor = get_actor_user_id(request)
         if actor is not None and str(actor).strip():
@@ -144,8 +144,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Health check bypass
         path = request.url.path
-        if resolve_endpoint_policy(request) is None:
-            return await call_next(request)
+        try:
+            if resolve_endpoint_policy(request) is None:
+                return await call_next(request)
+        except (AttributeError, KeyError):
+            pass
         if path.startswith("/metrics") or path in {
             "/healthz/public",
             "/healthz/user",

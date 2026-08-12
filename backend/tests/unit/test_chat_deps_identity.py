@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from app.api.v1.endpoints.chat import deps as chat_deps
+from app.core.security.actor_context import ActorContext, AuthMethod
 
 
 class _DummyHeaders(dict):
@@ -15,8 +16,10 @@ class _DummyHeaders(dict):
 
 
 class _DummyRequest:
-    def __init__(self, *, actor_user_id: str | None, headers=None):
-        self.state = SimpleNamespace(actor_user_id=actor_user_id)
+    def __init__(self, *, actor_user_id: str | None, headers=None, actor_context=None):
+        self.state = SimpleNamespace(
+            actor_user_id=actor_user_id, actor_context=actor_context
+        )
         self.headers = _DummyHeaders(headers or {})
         self.client = SimpleNamespace(host="127.0.0.1")
 
@@ -49,7 +52,17 @@ def test_resolve_authenticated_user_context_rejects_x_user_id_without_bearer():
 
 
 def test_resolve_authenticated_user_context_accepts_bearer_bound_actor():
-    http = _DummyRequest(actor_user_id="42", headers={"Authorization": "Bearer token"})
+    actor = ActorContext.authenticated(
+        actor_id="42",
+        roles=("USER",),
+        auth_method=AuthMethod.OIDC,
+        trace_id="trace-chat-identity",
+    )
+    http = _DummyRequest(
+        actor_user_id=None,
+        actor_context=actor,
+        headers={"Authorization": "Bearer token"},
+    )
 
     ctx = chat_deps.resolve_authenticated_user_context(
         http,
