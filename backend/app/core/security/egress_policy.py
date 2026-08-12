@@ -4,13 +4,13 @@ from typing import Any
 
 from app.config import settings
 from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
+from app.core.security.security_audit import record_security_event
 from app.core.security.url_safety import (
     SafeHttpTarget,
     is_allowlisted_host,
     parse_allowed_hosts_from_env,
     resolve_safe_http_target,
 )
-from app.repositories.observability_repository import record_audit_event_direct
 
 
 def _try_parse_int(value: str | None) -> int | None:
@@ -30,11 +30,9 @@ def _normalize_hosts(hosts: list[str] | set[str]) -> set[str]:
 
 
 def _audit_egress_block(tool: str, raw_url: str, reason: str) -> None:
-    """
-    Registra tentativas de egress bloqueadas para auditoria contínua.
+    """Audit blocked egress, using the local outbox if the ledger is unavailable.
 
-    Observação: se o banco não estiver disponível, o registro falha de forma silenciosa
-    para não derrubar o fluxo do sistema, mas o bloqueio continua sendo aplicado.
+    Failure of both audit sinks never weakens the egress denial itself.
     """
     user_id = _try_parse_int(USER_ID.get())
     trace_id = TRACE_ID.get()
@@ -57,18 +55,15 @@ def _audit_egress_block(tool: str, raw_url: str, reason: str) -> None:
     if scheme:
         details["scheme"] = scheme
 
-    try:
-        record_audit_event_direct(
-            user_id=user_id,
-            endpoint="egress_policy",
-            action="egress_blocked",
-            tool=tool,
-            status="blocked",
-            trace_id=trace_id if trace_id and trace_id != "-" else None,
-            details_json=details,
-        )
-    except Exception:
-        return
+    record_security_event(
+        user_id=user_id,
+        endpoint="egress_policy",
+        action="egress_blocked",
+        tool=tool,
+        status="blocked",
+        trace_id=trace_id if trace_id and trace_id != "-" else None,
+        event=details,
+    )
 
 
 def enforce_tool_http_egress(raw_url: str, tool: str) -> SafeHttpTarget | None:

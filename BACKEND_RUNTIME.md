@@ -156,7 +156,7 @@ The Evolution module ([core/evolution/](file:///h:/repos/janus-completo/backend/
 
 **OpenTelemetry Tracing**: `_tracer` is initialized from `opentelemetry.trace` when available. Each observability service operation starts an OTEL span with attributes (operation name, window parameters, latency). Spans propagate to configured OTEL collectors.
 
-**Immutable Audit Ledger**: `ObservabilityRepository` writes immutable audit events for all tool executions, auth operations, LLM calls, and system actions. Events include timestamp, actor_id, operation, status, and metadata. The service and repository reject purge requests; any future retention mechanism requires a separate, explicitly authorized archival contract rather than in-place deletion.
+**Immutable Audit Ledger**: `ObservabilityRepository` writes immutable audit events for tool executions, auth operations, LLM calls, and system actions. Direct writers return whether the ledger accepted the event; callers that guard consequential effects can require persistence, while non-blocking telemetry remains explicitly best-effort. Security denials and blocked egress use a redacted, fsync-backed local outbox when the primary ledger is disabled or unavailable, without weakening the deny decision. Events include timestamp, actor_id, operation, status, and metadata. The service and repository reject purge requests; any future retention mechanism requires a separate, explicitly authorized archival contract rather than in-place deletion.
 
 ## 11. Tool Executor & Sandbox
 

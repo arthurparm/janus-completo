@@ -3,6 +3,8 @@ import json
 from typing import Any
 
 import structlog
+from fastapi import Depends
+
 from app.core.monitoring import HealthMonitor, get_health_monitor
 from app.core.monitoring.poison_pill_handler import (
     PoisonPillHandler,
@@ -15,7 +17,6 @@ from app.models.audit_ledger_models import AuditLedgerEvent
 from app.models.autonomy_models import AutonomyRun, AutonomyStep
 from app.models.user_models import Message
 from app.models.user_models import Session as ChatSession
-from fastapi import Depends
 
 logger = structlog.get_logger(__name__)
 
@@ -566,7 +567,13 @@ async def get_observability_repository(
 
 
 # Helper direto para registrar eventos de auditoria
-def record_audit_event_direct(event: dict[str, Any] | None = None, **kwargs: Any) -> None:
+def record_audit_event_direct(
+    event: dict[str, Any] | None = None,
+    *,
+    required: bool = False,
+    **kwargs: Any,
+) -> bool:
+    """Persist an audit event and expose whether the ledger accepted it."""
     if event is None:
         event = dict(kwargs)
     else:
@@ -576,7 +583,7 @@ def record_audit_event_direct(event: dict[str, Any] | None = None, **kwargs: Any
     try:
         from app.repositories.audit_ledger_repository import audit_ledger_repository
 
-        audit_ledger_repository.append(
+        entry_id = audit_ledger_repository.append(
             actor_user_id=_coerce_user_id(event.get("user_id")),
             endpoint=str(event.get("endpoint")),
             action=str(event.get("action")),
@@ -585,5 +592,15 @@ def record_audit_event_direct(event: dict[str, Any] | None = None, **kwargs: Any
             trace_id=str(event.get("trace_id")) if event.get("trace_id") is not None else None,
             payload_json=_normalize_ledger_payload(event),
         )
+        if entry_id is None:
+            if required:
+                raise ObservabilityRepositoryError("Audit ledger is disabled; required event was not recorded.")
+            return False
+        return True
     except Exception as e:
         logger.exception("observability_repo_audit_event_record_direct_failed", error=str(e))
+        if required:
+            if isinstance(e, ObservabilityRepositoryError):
+                raise
+            raise ObservabilityRepositoryError("Failed to record required audit event.") from e
+        return False

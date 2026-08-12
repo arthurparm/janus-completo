@@ -5,14 +5,14 @@ from app.core.security.url_safety import SafeHttpTarget
 
 def test_enforce_tool_http_egress_denies_when_allowlist_empty(monkeypatch):
     monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", [])
-    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+    monkeypatch.setattr(egress_policy, "record_security_event", lambda **_: True)
 
     assert egress_policy.enforce_tool_http_egress("https://example.com/a", tool="browse_url") is None
 
 
 def test_enforce_tool_http_egress_denies_when_host_not_allowlisted(monkeypatch):
     monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", ["allowed.example"])
-    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+    monkeypatch.setattr(egress_policy, "record_security_event", lambda **_: True)
     monkeypatch.setattr(egress_policy, "is_allowlisted_host", lambda raw_url, allowed_hosts: False)
 
     assert egress_policy.enforce_tool_http_egress("https://example.com/a", tool="browse_url") is None
@@ -20,7 +20,7 @@ def test_enforce_tool_http_egress_denies_when_host_not_allowlisted(monkeypatch):
 
 def test_enforce_tool_http_egress_allows_safe_target(monkeypatch):
     monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", ["example.com"])
-    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+    monkeypatch.setattr(egress_policy, "record_security_event", lambda **_: True)
     monkeypatch.setattr(egress_policy, "is_allowlisted_host", lambda raw_url, allowed_hosts: True)
 
     target = SafeHttpTarget(

@@ -6,13 +6,18 @@ import json
 from typing import Any
 
 import structlog
-from app.config import settings
-from app.db import db
-from app.models.audit_ledger_models import AuditLedgerEvent
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
+from app.db import db
+from app.models.audit_ledger_models import AuditLedgerEvent
+
 logger = structlog.get_logger(__name__)
+
+
+class AuditLedgerWriteError(RuntimeError):
+    """Raised when an enabled audit ledger cannot persist an event."""
 
 
 def _canonical_json(payload: Any) -> str:
@@ -61,8 +66,9 @@ class AuditLedgerRepository:
         if not bool(getattr(settings, "AUDIT_LEDGER_ENABLED", True)):
             return None
 
-        s = self._get_session()
+        s: Session | None = None
         try:
+            s = self._get_session()
             dialect = str(getattr(s.get_bind().dialect, "name", "") or "").lower()
             if dialect in ("postgresql", "postgres"):
                 s.execute(text("SELECT pg_advisory_xact_lock(98122731)"))
@@ -109,14 +115,16 @@ class AuditLedgerRepository:
             s.refresh(row)
             return int(row.id)
         except Exception as exc:
-            try:
-                s.rollback()
-            except Exception:
-                pass
+            if s is not None:
+                try:
+                    s.rollback()
+                except Exception:
+                    pass
             logger.warning("audit_ledger_append_failed", error=str(exc))
-            return None
+            raise AuditLedgerWriteError("Failed to append event to the audit ledger.") from exc
         finally:
-            s.close()
+            if s is not None:
+                s.close()
 
     def list_events(
         self,

@@ -1,4 +1,5 @@
 import pytest
+
 from app.config import settings
 from app.core.infrastructure.windows_agent_client import WindowsAgentClient
 from app.core.security import egress_policy
@@ -7,7 +8,7 @@ from app.core.security.url_safety import SafeHttpTarget
 
 def test_asvs_lite_tool_egress_blocks_when_allowlist_is_empty(monkeypatch):
     monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", [])
-    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+    monkeypatch.setattr(egress_policy, "record_security_event", lambda **_: True)
 
     assert (
         egress_policy.enforce_tool_http_egress(
@@ -27,7 +28,7 @@ def test_asvs_lite_tool_egress_returns_only_resolved_safe_target(monkeypatch):
         fetch_url="https://93.184.216.34/a",
     )
     monkeypatch.setattr(settings, "TOOL_EGRESS_ALLOW_HOSTS", ["example.com"])
-    monkeypatch.setattr(egress_policy, "record_audit_event_direct", lambda **_: None)
+    monkeypatch.setattr(egress_policy, "record_security_event", lambda **_: True)
     monkeypatch.setattr(egress_policy, "is_allowlisted_host", lambda *_: True)
     monkeypatch.setattr(egress_policy, "resolve_safe_http_target", lambda *_: target)
 
