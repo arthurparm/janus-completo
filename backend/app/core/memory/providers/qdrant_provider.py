@@ -1,15 +1,14 @@
 import asyncio
 import time
-import uuid
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 from qdrant_client import AsyncQdrantClient, models
 from qdrant_client.http.models import PayloadSchemaType
+
 from app.config import settings
 from app.core.infrastructure.resilience import CircuitBreaker, resilient
-from app.core.monitoring.health_monitor import get_timeout_recommendation, record_latency
-from app.core.infrastructure.logging_config import TRACE_ID
+from app.core.monitoring.health_monitor import get_timeout_recommendation
 from app.db.vector_store import aensure_collection
 from app.models.schemas import VectorCollection
 
@@ -21,7 +20,6 @@ try:
 except ImportError:
     _OTEL = False
     _tracer = None
-    from contextlib import nullcontext
 
 logger = structlog.get_logger(__name__)
 
@@ -103,7 +101,7 @@ class QdrantProvider:
             "metadata.consolidation_status": PayloadSchemaType.KEYWORD,
             "metadata.file_path": PayloadSchemaType.KEYWORD,
             "metadata.sha_after": PayloadSchemaType.KEYWORD,
-            
+
             "metadata.conversation_id": PayloadSchemaType.KEYWORD,
             "metadata.strong_memory": PayloadSchemaType.BOOL,
             "metadata.captured_at": PayloadSchemaType.INTEGER,
@@ -139,29 +137,26 @@ class QdrantProvider:
         except Exception:
             return False
 
-    async def upsert(self, point_id: Any, vector: list[float], payload: dict[str, Any]):
-        """Insere ou atualiza um ponto no vetor DB."""
+    async def upsert(
+        self, point_id: Any, vector: list[float], payload: dict[str, Any]
+    ) -> None:
+        """Insere ou atualiza um ponto no vetor DB com resiliência."""
         if self._offline:
             return
 
         try:
             point = models.PointStruct(id=point_id, payload=payload, vector=vector)
 
-            # TODO trace logic duplicate
-            await self._run_upsert_secure(point)
+            @resilient(circuit_breaker=self._cb, operation_name="qdrant_upsert")
+            async def _execute_upsert() -> Any:
+                return await self.client.upsert(
+                    collection_name=self.collection_name, points=[point], wait=True
+                )
 
+            await _execute_upsert()
         except Exception:
             logger.warning("Upsert Qdrant falhou.", exc_info=True)
             self._offline = True
-
-    @resilient(circuit_breaker=None)  # We apply CB via manual method or pass self._cb here?
-    # The original used a locally defined @resilient wrapper accessing self._cb via closure.
-    # To use the decorator on a method, we need a way to pass the dynamic CB.
-    # For now, let's wrap the internal call manually or assume the decorator can handle 'self'.
-    # Limitations of the current 'resilient' decorator: it expects 'circuit_breaker' arg to be static instance.
-    # We'll use a helper method.
-    async def _run_upsert_secure(self, point):
-        await self.client.upsert(collection_name=self.collection_name, points=[point], wait=True)
 
     async def search(
         self,
@@ -176,8 +171,6 @@ class QdrantProvider:
                 return []
 
         try:
-            import asyncio as _asyncio
-
             # We define wrapper here to capture self._cb correctly in decorators if needed,
             # or we manually handle CB execution.
             # Ideally the @resilient decorator should support `circuit_breaker_getter`.

@@ -7,11 +7,22 @@ from app.core.memory.memory_core import MemoryCore
 from app.models.schemas import Experience
 
 
+def _async_circuit_breaker() -> MagicMock:
+    circuit_breaker = MagicMock()
+
+    async def call_async(coro_func, *, operation="unknown"):
+        del operation
+        return await coro_func()
+
+    circuit_breaker.call_async = AsyncMock(side_effect=call_async)
+    return circuit_breaker
+
+
 @pytest.mark.asyncio
 async def test_memory_core_dependency_injection():
     # 1. Mock dependencies
     mock_client = AsyncMock()
-    mock_cb = MagicMock()
+    mock_cb = _async_circuit_breaker()
 
     # Mock settings using a simple class so getattr works with defaults
     class MockSettings:
@@ -63,7 +74,7 @@ async def test_memory_core_dependency_injection():
 @pytest.mark.asyncio
 async def test_memory_core_applies_strong_metadata_contract(monkeypatch):
     mock_client = AsyncMock()
-    mock_cb = MagicMock()
+    mock_cb = _async_circuit_breaker()
 
     class MockSettings:
         QDRANT_HOST = "localhost"
@@ -107,7 +118,7 @@ async def test_memory_core_applies_strong_metadata_contract(monkeypatch):
 @pytest.mark.asyncio
 async def test_memory_core_can_patch_metadata_after_write(monkeypatch):
     mock_client = AsyncMock()
-    mock_cb = MagicMock()
+    mock_cb = _async_circuit_breaker()
 
     class MockSettings:
         QDRANT_HOST = "localhost"
