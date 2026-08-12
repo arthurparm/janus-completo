@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Any
 
 import structlog
+from pydantic import ValidationError
+
 from app.config import settings
 from app.core.autonomy.policy_engine import (
     PolicyConfig,
@@ -21,7 +23,6 @@ from app.core.tools import action_registry
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.tool_usage_repository import ToolUsageRepository
 from app.services.pending_action_service import PendingActionService
-from pydantic import ValidationError
 
 logger = structlog.get_logger(__name__)
 
@@ -233,7 +234,7 @@ class ToolExecutorService:
         except Exception as e:
             return False, args, f"Invalid arguments for tool schema: {e}"
 
-    def _audit_pre_execution_event(
+    def _record_tool_audit_event(
         self,
         *,
         tool_name: str,
@@ -241,7 +242,8 @@ class ToolExecutorService:
         reason: str,
         user_id: str | None = None,
         detail: dict[str, Any] | None = None,
-    ) -> None:
+        required: bool = False,
+    ) -> bool:
         try:
             safe_detail = (
                 redact_sensitive_payload(detail or {})
@@ -256,7 +258,15 @@ class ToolExecutorService:
                 "status": status,
                 "detail": {"reason": redact_sensitive_payload(reason), **safe_detail},
             }
-            record_audit_event_direct(payload)
+            recorded = record_audit_event_direct(payload, required=required)
+            if not recorded:
+                logger.warning(
+                    "tool_precheck_audit_not_recorded",
+                    tool_name=tool_name,
+                    status=status,
+                    reason=reason,
+                )
+            return recorded
         except Exception as e:
             logger.warning(
                 "tool_precheck_audit_failed",
@@ -265,6 +275,7 @@ class ToolExecutorService:
                 reason=reason,
                 error=str(e),
             )
+            return False
 
     def _simulation_to_storage(self, simulation: SimulationResult | None) -> tuple[str | None, str | None]:
         if simulation is None:
@@ -383,7 +394,7 @@ class ToolExecutorService:
             safe_args: Any = {}
 
             if not effective_policy.can_continue_cycle():
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="blocked",
                     reason="policy_cycle_limit",
@@ -400,7 +411,7 @@ class ToolExecutorService:
 
             content_safety = effective_policy.validate_content_safety(args_text)
             if not content_safety.allowed:
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="blocked",
                     reason="content_safety",
@@ -417,7 +428,7 @@ class ToolExecutorService:
 
             tool = action_registry.get_tool(name)
             if not tool:
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="not_found",
                     reason="tool_not_registered",
@@ -433,7 +444,7 @@ class ToolExecutorService:
 
             args_valid, normalized_args, args_error = self._validate_tool_args(tool=tool, args=args)
             if not args_valid:
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="blocked",
                     reason="invalid_args_schema",
@@ -483,7 +494,7 @@ class ToolExecutorService:
                     ),
                     pending_id=pending_id,
                 )
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="pending_confirmation" if pending_id is not None else "blocked",
                     reason=(
@@ -511,7 +522,7 @@ class ToolExecutorService:
                     base="Tool requires confirmation before execution.",
                     pending_id=pending_id,
                 )
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="pending_confirmation" if pending_id is not None else "blocked",
                     reason=(
@@ -526,7 +537,7 @@ class ToolExecutorService:
                 continue
 
             if not decision.allowed:
-                self._audit_pre_execution_event(
+                self._record_tool_audit_event(
                     tool_name=name,
                     status="blocked",
                     reason=decision.reason or "policy_block",
@@ -550,7 +561,7 @@ class ToolExecutorService:
                             user_id=str(user_id), tool_name=name, daily_limit=limit
                         )
                         if not allowed:
-                            self._audit_pre_execution_event(
+                            self._record_tool_audit_event(
                                 tool_name=name,
                                 status="quota_exceeded",
                                 reason="daily_quota",
@@ -595,7 +606,7 @@ class ToolExecutorService:
                         )
                         if allowed:
                             continue
-                        self._audit_pre_execution_event(
+                        self._record_tool_audit_event(
                             tool_name=name,
                             status="quota_exceeded",
                             reason="sliding_window_quota",
@@ -620,6 +631,32 @@ class ToolExecutorService:
                         break
                     if quota_blocked:
                         continue
+
+            metadata = action_registry.get_metadata(name)
+            permission_level = getattr(getattr(metadata, "permission_level", None), "value", None)
+            audit_recorded = self._record_tool_audit_event(
+                tool_name=name,
+                status="approved",
+                reason="policy_precheck_passed",
+                user_id=user_id,
+                detail={
+                    "permission_level": permission_level or "unknown",
+                    "scope_summary": scope_summary,
+                    "scope_targets": scope_targets,
+                },
+                required=True,
+            )
+            if not audit_recorded:
+                outputs.append(
+                    {
+                        "name": name,
+                        "result": (
+                            "Tool execution blocked because the required audit event "
+                            "could not be persisted. Retry after audit storage is available."
+                        ),
+                    }
+                )
+                continue
 
             start = time.perf_counter()
             success = False
@@ -683,6 +720,16 @@ class ToolExecutorService:
                     outputs.append({"name": name, "result": f"Tool Error (non-fatal): {error_msg}"})
             finally:
                 duration = time.perf_counter() - start
+                self._record_tool_audit_event(
+                    tool_name=name,
+                    status="succeeded" if success else "failed",
+                    reason="tool_execution_completed",
+                    user_id=user_id,
+                    detail={
+                        "duration_seconds": duration,
+                        "error": error_msg,
+                    },
+                )
                 try:
                     action_registry.record_call(
                         tool_name=name,

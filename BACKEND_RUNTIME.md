@@ -164,6 +164,8 @@ The ToolExecutorService ([tool_executor_service.py](file:///h:/repos/janus-compl
 
 **JSON Envelope Protocol**: Tool calls arrive as structured JSON with tool name, arguments, and metadata. The executor validates the envelope, resolves the tool from `action_registry`, validates arguments against schema, and returns structured results.
 
+**Execution Audit Gate**: After policy, confirmation, schema, and quota checks pass, the executor must persist an `approved` audit event before invoking any tool, including read-only tools. A disabled or unavailable ledger blocks invocation with an explicit retryable result. The executor records a redacted `succeeded` or `failed` outcome after the call; this outcome is observability and does not retroactively authorize the effect.
+
 **PolicyEngine ([policy_engine.py](file:///h:/repos/janus-completo/backend/app/core/autonomy/policy_engine.py))**: Multi-layer validation: (1) Content safety check for injection patterns (jailbreak, ignore instructions, unsafe mode), (2) Destructive operation detection with simulation confirmation, (3) Quota enforcement (max actions per cycle=20, max seconds=60), (4) Command allowlist/blocklist for restricted tools with argv prefix matching, (5) Risk profile selection (conservative/balanced/aggressive) controlling auto-confirm behavior.
 
 **Docker Sandbox** ([sandbox_executor.py](file:///h:/repos/janus-completo/backend/app/core/tools/sandbox_executor.py)): Executes Python code in isolated Docker containers with configurable resource limits (memory: configurable, CPU: 1.0 cores). Uses `execute_python_code` tool registered as SAFE permission level. The sandbox restricts imports (no os, subprocess, sys) and blocks filesystem/network access.
