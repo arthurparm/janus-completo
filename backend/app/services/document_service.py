@@ -9,6 +9,9 @@ from typing import Any
 from uuid import uuid4
 
 import structlog
+from fastapi import UploadFile
+from qdrant_client import models
+
 from app.config import settings
 from app.core.embeddings.embedding_manager import aembed_texts
 from app.core.governance.data_classification import classify_text, default_retention_decision
@@ -27,8 +30,6 @@ from app.repositories.observability_repository import record_audit_event_direct
 from app.services.document_parser_service import DocumentParserService
 from app.services.document_semantic_enrichment_service import DocumentSemanticEnrichmentService
 from app.services.outbox_service import OutboxService
-from fastapi import UploadFile
-from qdrant_client import models
 
 try:
     from opentelemetry import trace  # type: ignore
