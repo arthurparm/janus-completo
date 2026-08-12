@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -102,10 +104,9 @@ async def revoke_consent(consent_id: int, request: Request):
         actor = require_authenticated_actor_id(request)
         if str(actor) != str(c.user_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found")
-        from datetime import datetime
 
         c.granted = "False"
-        c.revoked_at = datetime.utcnow()
+        c.revoked_at = datetime.now(timezone.utc)
         s.commit()
         s.refresh(c)
         return ConsentResponse(
