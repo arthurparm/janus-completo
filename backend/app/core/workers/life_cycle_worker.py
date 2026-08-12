@@ -1,109 +1,163 @@
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol
 
 import structlog
 
-from app.core.autonomy.goal_manager import GoalManager
 from app.core.workers.async_consolidation_worker import publish_consolidation_task
-from app.services.memory_service import MemoryService
 
 logger = structlog.get_logger(__name__)
 
 
-class LifeCycleWorker:
-    """
-    O 'Coração' do Janus (Life Loop).
-    Executa periodicamente para garantir que o sistema tenha 'iniciativa'.
+class FailureMemory(Protocol):
+    async def recall_recent_failures(
+        self, *, limit: int, timeframe_seconds: int
+    ) -> list[Any]: ...
 
-    Responsabilidades:
-    1. Verificar metas pendentes (GoalManager).
-    2. Disparar consolidação de memória se inativo.
-    3. Auto-análise de falhas recentes.
-    """
+
+ConsolidationPublisher = Callable[..., Awaitable[Any]]
+
+
+class LifeCycleWorker:
+    """Executa manutenção periódica sem autorizar ou executar metas."""
 
     def __init__(
-        self, goal_manager: GoalManager, memory_service: MemoryService, interval_seconds: int = 30
-    ):
-        self._goal_manager = goal_manager
-        self._memory_service = memory_service
-        self._interval = interval_seconds
-        self._running = False
-        self._task: asyncio.Task | None = None
-        self._last_consolidation_ts = 0.0
-        self._consolidation_interval = 600  # 10 minutes
+        self,
+        *,
+        memory_service: FailureMemory,
+        interval_seconds: float = 30,
+        consolidation_interval_seconds: float = 600,
+        clock: Callable[[], float] = time.time,
+        consolidation_publisher: ConsolidationPublisher = publish_consolidation_task,
+    ) -> None:
+        if interval_seconds <= 0:
+            raise ValueError("interval_seconds must be greater than zero")
+        if consolidation_interval_seconds <= 0:
+            raise ValueError("consolidation_interval_seconds must be greater than zero")
 
-    async def start(self):
+        self._memory_service = memory_service
+        self._interval = float(interval_seconds)
+        self._consolidation_interval = float(consolidation_interval_seconds)
+        self._clock = clock
+        self._consolidation_publisher = consolidation_publisher
+        self._running = False
+        self._task: asyncio.Task[None] | None = None
+        self._last_consolidation_ts: float | None = None
+        self._last_pulse_ts: float | None = None
+        self._last_error_ts: float | None = None
+        self._last_error: str | None = None
+        self._pulse_count = 0
+        self._consolidation_publish_count = 0
+        self._recent_failures_observed = 0
+        self._consecutive_failed_pulses = 0
+
+    async def start(self) -> None:
         if self._running:
             return
         self._running = True
-        self._task = asyncio.create_task(self._loop())
-        logger.info("LifeCycleWorker started.")
+        self._task = asyncio.create_task(self._loop(), name="janus-life-cycle-worker")
+        logger.info("life_cycle_worker_started", interval_seconds=self._interval)
 
-    async def stop(self):
+    async def stop(self) -> None:
         self._running = False
-        if self._task:
+        if self._task is not None:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        logger.info("LifeCycleWorker stopped.")
+            self._task = None
+        logger.info("life_cycle_worker_stopped")
 
-    async def _loop(self):
+    async def _loop(self) -> None:
         while self._running:
             try:
                 await self._pulse()
-            except Exception as e:
-                logger.error("Error in LifeCycle pulse", exc_info=e)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._record_pulse_failure(("pulse", exc))
+                logger.exception("life_cycle_pulse_unexpected_failure")
 
             await asyncio.sleep(self._interval)
 
-    async def _pulse(self):
-        """Um único 'batimento' do ciclo de vida."""
-        logger.debug("LifeCycle pulse...")
+    async def _pulse(self) -> None:
+        """Executa uma rodada independente de consolidação e diagnóstico."""
+        now = self._clock()
+        errors: list[tuple[str, Exception]] = []
 
-        # 1. Verificar Metas Pendentes (Placeholder)
-        try:
-            next_goal = self._goal_manager.get_next_goal()
-            if next_goal:
-                logger.info("log_info", message=f"Metas pendentes detectadas: {next_goal.title}.")
-        except Exception:
-            pass
-
-        # 2. Consolidação de Memória Periódica (Batch)
-        # Dispara a cada 10 minutos (600s)
-        now = time.time()
-        if (now - self._last_consolidation_ts) > self._consolidation_interval:
-            logger.info("LifeCycle: Disparando consolidação periódica (Batch)...")
+        if self._consolidation_is_due(now):
             try:
-                # Payload correto para o worker
-                payload = {"mode": "batch", "limit": 50, "min_score": 0.0}
-                
-                # FIX: publish_consolidation_task internamente chama get_broker()
-                # e faz await broker.publish(). Não precisamos de um contexto manager aqui
-                # se a função já lida com a conexão.
-                
-                # Se publish_consolidation_task estiver tentando usar 'async with get_broker()',
-                # isso falharia pois get_broker retorna o objeto direto.
-                # Verificamos que publish_consolidation_task usa 'broker = await get_broker()',
-                # então a chamada direta é segura.
-                
-                await publish_consolidation_task(payload=payload)
-                
+                await self._consolidation_publisher(
+                    payload={"mode": "batch", "limit": 50, "min_score": 0.0}
+                )
                 self._last_consolidation_ts = now
-                logger.info("LifeCycle: Tarefa de consolidação enviada com sucesso.")
-            except Exception as e:
-                # Logar exceção completa para debug
-                import traceback
-                logger.error("log_error", message=f"LifeCycle: Falha ao enviar consolidação: {e}\n{traceback.format_exc()}")
+                self._consolidation_publish_count += 1
+                logger.info("life_cycle_consolidation_published")
+            except Exception as exc:
+                errors.append(("consolidation", exc))
+                logger.exception("life_cycle_consolidation_publish_failed")
 
-        # 3. Auto-Check de Falhas (Resilience)
         try:
             failures = await self._memory_service.recall_recent_failures(
                 limit=5, timeframe_seconds=600
             )
-            if len(failures) >= 3:
-                logger.warning("log_warning", message=f"ALERTA DE SISTEMA: {len(failures)} falhas recentes detectadas pelo LifeCycle."
+            self._recent_failures_observed = len(failures)
+            if self._recent_failures_observed >= 3:
+                logger.warning(
+                    "life_cycle_recent_failures_detected",
+                    failure_count=self._recent_failures_observed,
+                    timeframe_seconds=600,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            errors.append(("failure_memory", exc))
+            logger.exception("life_cycle_failure_scan_failed")
+
+        self._pulse_count += 1
+        self._last_pulse_ts = now
+        if errors:
+            self._record_pulse_failure(*errors)
+        else:
+            self._consecutive_failed_pulses = 0
+            self._last_error = None
+
+    def _consolidation_is_due(self, now: float) -> bool:
+        return (
+            self._last_consolidation_ts is None
+            or now - self._last_consolidation_ts >= self._consolidation_interval
+        )
+
+    def _record_pulse_failure(self, *errors: tuple[str, Exception]) -> None:
+        self._consecutive_failed_pulses += 1
+        self._last_error_ts = self._clock()
+        self._last_error = ", ".join(
+            f"{component}:{type(exc).__name__}" for component, exc in errors
+        )
+
+    def get_health_status(self) -> dict[str, Any]:
+        if not self._running:
+            status = "unhealthy"
+            message = "Life-cycle maintenance worker is stopped"
+        elif self._consecutive_failed_pulses:
+            status = "degraded"
+            message = "Life-cycle maintenance completed with failures"
+        else:
+            status = "healthy"
+            message = "Life-cycle maintenance worker is running"
+
+        return {
+            "status": status,
+            "message": message,
+            "details": {
+                "running": self._running,
+                "pulse_count": self._pulse_count,
+                "last_pulse_at": self._last_pulse_ts,
+                "consolidation_publish_count": self._consolidation_publish_count,
+                "last_consolidation_at": self._last_consolidation_ts,
+                "recent_failures_observed": self._recent_failures_observed,
+                "consecutive_failed_pulses": self._consecutive_failed_pulses,
+                "last_error": self._last_error,
+                "last_error_at": self._last_error_ts,
+            },
+        }

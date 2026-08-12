@@ -96,7 +96,7 @@ The MessageBroker ([message_broker.py](file:///h:/repos/janus-completo/backend/a
 
 **Serialization**: Uses msgpack by default for compact binary serialization. Falls back to JSON for compatibility. Message headers carry trace context (trace_id, user_id) for distributed tracing.
 
-**Worker Infrastructure**: 25+ background workers including: agent_tasks_worker (per-agent task execution), async_consolidation_worker (knowledge graph consolidation), data_harvester (external data collection), document_ingestion_worker (file processing), life_cycle_worker (scheduled maintenance), neural_training_worker (model fine-tuning).
+**Worker Infrastructure**: 25+ background workers including: agent_tasks_worker (per-agent task execution), async_consolidation_worker (knowledge graph consolidation), data_harvester (external data collection), document_ingestion_worker (file processing), life_cycle_worker (scheduled memory consolidation and recent-failure diagnostics, without implicit goal execution), neural_training_worker (model fine-tuning). The life-cycle worker exposes its pulse, publication, failure and recovery state through the kernel health monitor.
 
 **Queue Policy Reconciliation**: `reconcile_queue_policy()` validates queue arguments against expected configuration. If mismatches are found and `force_delete=True`, the queue is deleted and recreated with correct arguments. This ensures consistent queue topology across restarts.
 

@@ -526,12 +526,17 @@ class Kernel:
             data_harvester_module.harvester = data_harvester
 
             life_cycle_worker = LifeCycleWorker(
-                goal_manager=self.goal_manager, memory_service=self.memory_service
+                memory_service=self.memory_service
             )
 
             await knowledge_consolidator.start(limit=10, min_score=0.0)
             await data_harvester.start()
             await life_cycle_worker.start()
+            self.monitor.register_health_check(
+                "life_cycle_worker",
+                life_cycle_worker.get_health_status,
+                is_critical=True,
+            )
             if self.outbox_service:
                 await self.outbox_service.start(interval_seconds=5)
 
