@@ -10,7 +10,17 @@ router = APIRouter(tags=["Resources"], prefix="/resources")
 
 @router.get("/gpu/usage/self")
 async def gpu_usage_self(request: Request):
-    return get_user_gpu_usage(require_authenticated_actor_id(request))
+    actor = require_authenticated_actor_id(request)
+    usage = get_user_gpu_usage(actor)
+    budget = getattr(settings, "TRAINING_GPU_BUDGET_PER_USER", {}).get(str(actor))
+    used = float(usage.get("used", 0.0))
+    return {
+        "actor_id": actor,
+        "used": used,
+        "budget": budget,
+        "remaining": (float(budget) - used) if budget is not None else None,
+        "updated_at": usage.get("updated_at"),
+    }
 
 
 class BudgetSetRequest(BaseModel):

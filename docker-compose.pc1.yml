@@ -17,7 +17,7 @@ services:
     env_file:
       - .env.pc1
     environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - JANUS_API_PROFILE=user
       - JANUS_BUILD_REF=${JANUS_BUILD_REF:-local-dev}
       - AUDIT_LEDGER_HMAC_KEY=${AUDIT_LEDGER_HMAC_KEY:?Set AUDIT_LEDGER_HMAC_KEY in .env.pc1}

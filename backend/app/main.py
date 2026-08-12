@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
@@ -164,10 +165,6 @@ async def lifespan(app: FastAPI):
         )
         logger.info("LLM Rate Limits initialized.")
 
-    # 4. Initialize Firebase (Persistence) - MOVED TO KERNEL
-    # Removed from here to avoid race condition with GoalManager
-    pass
-
     # 4.5 Start orchestrator-managed workers (queue consumers) if enabled.
     if (
         profile in {ApiProfile.CONTROL_PLANE, ApiProfile.ALL_TEST}
@@ -215,21 +212,17 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown complete.")
 
 
-_is_development = str(settings.ENVIRONMENT).strip().lower() == "development"
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Janus: An autonomous, modular AI software architect with a clean, decoupled architecture.",
     lifespan=lifespan,
-    docs_url="/docs" if _is_development else None,
-    redoc_url="/redoc" if _is_development else None,
-    openapi_url="/openapi.json" if _is_development else None,
+    # Routes always registered; SecurityContainmentMiddleware blocks them in non-development.
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
-setup_tracing(app)
 
-from app.core.monitoring import auto_healer_metrics as _auto_healer_metrics  # noqa: F401,E402
-
-# --- Configuração da Aplicação ---
 if PROMETHEUS_INSTRUMENTATOR_AVAILABLE:
     Instrumentator().instrument(app)
 else:
@@ -421,8 +414,6 @@ def health():
     operation_id="get_prometheus_metrics",
 )
 def metrics() -> PlainTextResponse:
-    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

@@ -63,17 +63,45 @@ async def purge_incompatible_threads(
     Purges threads that are incompatible with the current graph schema version.
     This is critical after deployments that change the state structure.
     """
-    if not force:
-        return CleanupResult(
-            deleted_threads_count=0, 
-            message="Dry run. Pass force=true to actually delete threads. (Not fully implemented for safety)"
-        )
+    async with postgres_db.get_session_async() as session:
+        try:
+            check_table = await session.execute(
+                text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'checkpoints');")
+            )
+            table_exists = check_table.scalar()
+            if not table_exists:
+                return CleanupResult(deleted_threads_count=0, message="Tabela 'checkpoints' não encontrada.")
 
-    # Simplified implementation:
-    # We execute a raw SQL to clean up.
-    # Assuming we want to clear ALL threads if we can't migrate.
-    # Real world: complex migration script.
-    
+            count_query = text(
+                "SELECT COUNT(DISTINCT thread_id) FROM checkpoints "
+                "WHERE metadata->>'schema_version' IS NULL OR metadata->>'schema_version' != :ver"
+            )
+            res = await session.execute(count_query, {"ver": str(GRAPH_SCHEMA_VERSION)})
+            count = res.scalar() or 0
+
+            if not force:
+                return CleanupResult(
+                    deleted_threads_count=count,
+                    message=f"Dry run. Identificadas {count} thread(s) incompatíveis para a versão {GRAPH_SCHEMA_VERSION}. Use force=true para remover."
+                )
+
+            if count > 0:
+                delete_query = text(
+                    "DELETE FROM checkpoints "
+                    "WHERE metadata->>'schema_version' IS NULL OR metadata->>'schema_version' != :ver"
+                )
+                await session.execute(delete_query, {"ver": str(GRAPH_SCHEMA_VERSION)})
+                await session.commit()
+
+            return CleanupResult(
+                deleted_threads_count=count,
+                message=f"Removidas com sucesso {count} thread(s) incompatíveis para a versão {GRAPH_SCHEMA_VERSION}."
+            )
+        except Exception as e:
+            logger.error("Erro ao remover threads incompatíveis", exc_info=e)
+            return CleanupResult(deleted_threads_count=0, message=f"Erro durante remoção: {str(e)}")
+
+
 from app.services.knowledge_graph_service import get_knowledge_graph_service
 
 @router.get("/contextual", summary="Retorna subgrafo contextual para visualização")
@@ -89,19 +117,15 @@ async def get_contextual_graph(
     ou 'conversation_id' (busca contexto relevante da conversa).
     """
     service = get_knowledge_graph_service()
-    
-    # Simulação de extração de entidades da query
-    # Em produção, usaria NLP/NER ou busca vetorial para encontrar os nós iniciais
+
     node_names = []
     if query:
-        # Divide por espaço e remove pontuação básica (muito simplificado)
         parts = query.replace(",", "").split()
-        # Filtra palavras pequenas (stopwords fake)
-        node_names = [p for p in parts if len(p) > 3]
+        node_names = [p for p in parts if len(p) > 2]
     
-    # Se tiver conversation_id, poderia buscar do contexto (memória de curto prazo)
-    # Por enquanto, focamos na query direta.
-    
+    if conversation_id and not node_names:
+        node_names = [conversation_id]
+
     if not node_names:
         return {"nodes": [], "edges": []}
 

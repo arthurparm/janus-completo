@@ -117,7 +117,9 @@ class SecurityContainmentMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         path = request.url.path
         environment = str(settings.ENVIRONMENT).strip().lower()
         if path in {"/docs", "/redoc", "/openapi.json"}:
-            if environment != "development" or not _is_loopback(request):
+            # In development, allow docs regardless of origin (Docker gateway is not loopback).
+            # In any other environment, always block.
+            if environment != "development":
                 return await self._blocked(
                     request,
                     actor=None,

@@ -55,8 +55,9 @@ class KnowledgeRoutingPolicy:
         *,
         include_graph: bool = True,
         query: str | None = None,
+        user_id: str | None = None,
     ) -> RouteDecision:
-        del query
+        del query, user_id
         key = _normalize_intent(intent)
         decision = self._rules.get(key, self._default_decision)
 

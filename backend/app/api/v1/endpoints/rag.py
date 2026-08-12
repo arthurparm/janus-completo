@@ -2,7 +2,7 @@ import builtins
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from app.core.memory.rag_telemetry import confidence_from_scores, emit_step_telemetry
@@ -90,6 +90,7 @@ class RAGSearchResponse(BaseModel):
     response_model=RAGSearchResponse,
     summary="Busca baseada em fatos com memória vetorial")
 async def rag_search(
+    request: Request,
     query: str = Query(..., description="Pergunta ou texto de busca"),
     type: str | None = Query(None, description="Filtrar por tipo da experiência"),
     origin: str | None = Query(None, description="Filtrar por metadata.origin"),
@@ -98,9 +99,10 @@ async def rag_search(
     limit: int | None = Query(5, ge=1, le=10),
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     service: MemoryService = Depends(get_memory_service)):
+    user_id = require_authenticated_actor_id(request)
     route_decision = get_knowledge_routing_policy().resolve(
         RouteIntent.RAG_SEARCH,
-        user_id=None,
+        user_id=user_id,
         include_graph=False,
         query=query)
     route_meta = {
@@ -119,6 +121,7 @@ async def rag_search(
         filters["metadata.file_path"] = file_path
     # Evita duplicatas por padrão
     filters["status_not"] = "duplicate"
+    filters["user_id"] = str(user_id)
 
     import time as _t
 
@@ -136,7 +139,20 @@ async def rag_search(
         _RAG_REQ.labels("search", "error").inc()
         _RAG_LAT.labels("search", "error").observe(max(0.0, _t.perf_counter() - _start))
         error_code = builtins.type(e).__name__
-        results = []
+        _emit_rag_step(
+            endpoint="/rag/search",
+            step="retrieval",
+            source="vector",
+            db="qdrant",
+            started_at=_start,
+            confidence=0.0,
+            error_code=error_code,
+            extra=route_meta,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vector retrieval is temporarily unavailable.",
+        ) from e
     try:
         _RAG_RESULTS_TOTAL.labels("search").inc(len(results))
         for r in results:
