@@ -48,8 +48,9 @@
       "AutoAnalysisResponse": {
         "properties": {
           "fun_fact": {
+            "deprecated": true,
             "title": "Fun Fact",
-            "type": "string"
+            "type": "null"
           },
           "insights": {
             "items": {
@@ -59,7 +60,17 @@
             "type": "array"
           },
           "overall_health": {
+            "enum": [
+              "healthy",
+              "warning",
+              "critical",
+              "unknown"
+            ],
             "title": "Overall Health",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
             "type": "string"
           },
           "timestamp": {
@@ -71,7 +82,7 @@
           "timestamp",
           "overall_health",
           "insights",
-          "fun_fact"
+          "summary"
         ],
         "title": "AutoAnalysisResponse",
         "type": "object"
@@ -1871,12 +1882,43 @@
             "title": "Estimated Impact",
             "type": "string"
           },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
           "issue": {
             "title": "Issue",
             "type": "string"
           },
           "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "unknown"
+            ],
             "title": "Severity",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "llm_cost_tracker",
+              "observability_slo",
+              "feedback"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "insufficient_data",
+              "unavailable"
+            ],
+            "title": "Status",
             "type": "string"
           },
           "suggestion": {
@@ -1888,7 +1930,9 @@
           "issue",
           "severity",
           "suggestion",
-          "estimated_impact"
+          "estimated_impact",
+          "source",
+          "status"
         ],
         "title": "HealthInsight",
         "type": "object"
@@ -2196,6 +2240,41 @@
           "summary"
         ],
         "title": "LearningResponse",
+        "type": "object"
+      },
+      "LessonItem": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "metadata"
+        ],
+        "title": "LessonItem",
         "type": "object"
       },
       "ModelInfo": {
@@ -2554,6 +2633,34 @@
         "title": "PolicyUpdateRequest",
         "type": "object"
       },
+      "PostSprintSummaryResponse": {
+        "properties": {
+          "lessons": {
+            "items": {
+              "$ref": "#/components/schemas/LessonItem"
+            },
+            "title": "Lessons",
+            "type": "array"
+          },
+          "meta_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta Report"
+          }
+        },
+        "required": [
+          "lessons"
+        ],
+        "title": "PostSprintSummaryResponse",
+        "type": "object"
+      },
       "PromoteQuarantineRequest": {
         "properties": {
           "from_name": {
@@ -2854,6 +2961,109 @@
           "details"
         ],
         "title": "ReconcilePolicyResponse",
+        "type": "object"
+      },
+      "ReflexionRequest": {
+        "properties": {
+          "max_iterations": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Iterations"
+          },
+          "max_time_seconds": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 30.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Time Seconds"
+          },
+          "success_threshold": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Threshold"
+          },
+          "task": {
+            "minLength": 1,
+            "title": "Task",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "ReflexionRequest",
+        "type": "object"
+      },
+      "ReflexionResponse": {
+        "properties": {
+          "best_result": {
+            "title": "Best Result",
+            "type": "string"
+          },
+          "best_score": {
+            "title": "Best Score",
+            "type": "number"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "iterations": {
+            "title": "Iterations",
+            "type": "integer"
+          },
+          "lessons_learned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lessons Learned",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "best_result",
+          "best_score",
+          "iterations",
+          "lessons_learned",
+          "elapsed_seconds",
+          "steps"
+        ],
+        "title": "ReflexionResponse",
         "type": "object"
       },
       "RegisterRelTypeRequest": {
@@ -3378,6 +3588,13 @@
         "title": "StepItem",
         "type": "object"
       },
+      "SupportedTrainingModelType": {
+        "enum": [
+          "classifier"
+        ],
+        "title": "SupportedTrainingModelType",
+        "type": "string"
+      },
       "SystemAnalysisResponse": {
         "properties": {
           "analysis_type": {
@@ -3812,12 +4029,19 @@
             "title": "Model Name"
           },
           "model_type": {
-            "default": "CLASSIFIER",
-            "title": "Model Type",
-            "type": "string"
+            "$ref": "#/components/schemas/SupportedTrainingModelType",
+            "default": "classifier"
           },
           "training_config": {
-            "$ref": "#/components/schemas/TrainingConfig"
+            "$ref": "#/components/schemas/TrainingConfig",
+            "default": {
+              "batch_size": 8,
+              "early_stopping": true,
+              "epochs": 3,
+              "learning_rate": 0.0001,
+              "save_checkpoints": true,
+              "validation_split": 0.2
+            }
           }
         },
         "title": "TrainRequest",
@@ -4187,7 +4411,7 @@
     },
     "/api/v1/auto-analysis/health-check": {
       "get": {
-        "description": "O Janus olha para si mesmo e diz: \"Como estou me saindo?\"\n\nRetorna insights simples e úteis sobre o próprio sistema.",
+        "description": "Summarize operational evidence without inferring unmeasured capabilities.",
         "operationId": "auto_analyze_api_v1_auto_analysis_health_check_get",
         "responses": {
           "200": {
@@ -8525,7 +8749,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Preview Dataset Api V1 Learning Dataset Preview Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -8822,7 +9050,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Learning Health Api V1 Learning Health Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -8955,7 +9187,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Learning Stats Api V1 Learning Stats Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -11711,6 +11947,269 @@
         ],
         "x-janus-scopes": [
           "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/reflexion/config": {
+      "get": {
+        "description": "Retorna a configuração padrão do sistema Reflexion, via serviço.",
+        "operationId": "get_reflexion_config_api_v1_reflexion_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:read"
+            ]
+          }
+        ],
+        "summary": "Obtém configuração padrão do Reflexion",
+        "tags": [
+          "Reflexion"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:read"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/reflexion/execute": {
+      "post": {
+        "description": "Delega a execução de uma tarefa com o ciclo de auto-otimização para o ReflexionService.\nO tratamento de erros (Validação, Timeout, etc.) é feito pelo exception handler central.",
+        "operationId": "execute_with_reflexion_api_v1_reflexion_execute_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReflexionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReflexionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:execute"
+            ]
+          }
+        ],
+        "summary": "Executa tarefa com o ciclo Reflexion",
+        "tags": [
+          "Reflexion"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/reflexion/health": {
+      "get": {
+        "description": "Delega a verificação de saúde do módulo para o ReflexionService.",
+        "operationId": "reflexion_health_api_v1_reflexion_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:read"
+            ]
+          }
+        ],
+        "summary": "Verifica saúde do módulo Reflexion",
+        "tags": [
+          "Reflexion"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:read"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/reflexion/reset-circuit-breaker": {
+      "post": {
+        "description": "Delega o reset dos circuit breakers para o ReflexionService.",
+        "operationId": "reset_circuit_breaker_api_v1_reflexion_reset_circuit_breaker_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:execute"
+            ]
+          }
+        ],
+        "summary": "Reseta o circuit breaker dos agentes",
+        "tags": [
+          "Reflexion"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/reflexion/summary/post_sprint": {
+      "get": {
+        "description": "Retorna um resumo pós-sprint com lições aprendidas recentes e o último relatório do Meta-Agente.",
+        "operationId": "get_post_sprint_summary_api_v1_reflexion_summary_post_sprint_get",
+        "parameters": [
+          {
+            "description": "Limite de lições recentes",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Limite de lições recentes",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Janela de tempo em segundos para lições (padrão: 1 hora)",
+            "in": "query",
+            "name": "timeframe_seconds",
+            "required": false,
+            "schema": {
+              "default": 3600,
+              "description": "Janela de tempo em segundos para lições (padrão: 1 hora)",
+              "maximum": 86400,
+              "minimum": 60,
+              "title": "Timeframe Seconds",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Score mínimo das lições",
+            "in": "query",
+            "name": "min_score",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Score mínimo das lições",
+              "title": "Min Score"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostSprintSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:read"
+            ]
+          }
+        ],
+        "summary": "Resumo pós-sprint: lições e estado do sistema",
+        "tags": [
+          "Reflexion"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:read"
         ],
         "x-janus-security-profile": "control-plane"
       }

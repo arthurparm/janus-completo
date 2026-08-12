@@ -1996,6 +1996,76 @@
   },
   {
     "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_reflexion_config_api_v1_reflexion_config_get",
+    "ownership": "none",
+    "path": "/api/v1/reflexion/config",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "execute_with_reflexion_api_v1_reflexion_execute_post",
+    "ownership": "none",
+    "path": "/api/v1/reflexion/execute",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "reflexion_health_api_v1_reflexion_health_get",
+    "ownership": "none",
+    "path": "/api/v1/reflexion/health",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "reset_circuit_breaker_api_v1_reflexion_reset_circuit_breaker_post",
+    "ownership": "none",
+    "path": "/api/v1/reflexion/reset-circuit-breaker",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_post_sprint_summary_api_v1_reflexion_summary_post_sprint_get",
+    "ownership": "none",
+    "path": "/api/v1/reflexion/summary/post_sprint",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
     "method": "POST",
     "operation_id": "migrate_db_schema_api_v1_system_db_migrate_post",
     "ownership": "none",

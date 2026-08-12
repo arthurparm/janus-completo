@@ -33,6 +33,7 @@ from .endpoints import (
     productivity,
     profiles,
     rag,
+    reflexion,
     system_overview,
     system_status,
     tasks,
@@ -84,5 +85,6 @@ for source, prefix in (
     (tools.router, "/tools"),
     (users.router, ""),
     (workers.router, "/workers"),
+    (reflexion.router, "/reflexion"),
 ):
     api_router.include_router(source, prefix=prefix)

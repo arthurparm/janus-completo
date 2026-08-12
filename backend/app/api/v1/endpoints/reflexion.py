@@ -86,7 +86,6 @@ async def reflexion_health(service: ReflexionService = Depends(get_reflexion_ser
     """Delega a verificação de saúde do módulo para o ReflexionService."""
     try:
         health_status = service.get_health_status()
-        health_status["sprint"] = 5
         return health_status
     except Exception as e:
         # O handler genérico pode não ser suficiente se quisermos um status 503 específico aqui
