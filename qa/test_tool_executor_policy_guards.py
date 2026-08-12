@@ -160,7 +160,7 @@ def test_validate_tool_args_uses_pydantic_v2_schema_path_directly():
 async def test_execute_tool_calls_blocks_invalid_args_by_schema(monkeypatch):
     events = []
     tool = _SchemaTool()
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(
         tool_module,
         "action_registry",
@@ -188,12 +188,13 @@ async def test_execute_tool_calls_blocks_invalid_args_by_schema(monkeypatch):
 @pytest.mark.asyncio
 async def test_execute_tool_calls_normalizes_args_by_schema(monkeypatch):
     tool = _SchemaTool()
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload, **_kwargs: True)
     monkeypatch.setattr(
         tool_module,
         "action_registry",
         SimpleNamespace(
             get_tool=lambda _name: tool,
+            get_metadata=lambda _name: SimpleNamespace(permission_level=SimpleNamespace(value="read_only")),
             record_call=lambda **_kwargs: None,
         ),
     )
@@ -229,7 +230,7 @@ async def test_execute_tool_calls_redacts_sensitive_args_before_pending_persiste
 
     import app.repositories.pending_action_repository as pending_repo_module
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
     monkeypatch.setattr(
         tool_module,
@@ -282,7 +283,7 @@ async def test_confirmation_storage_failure_is_explicitly_blocked(monkeypatch):
         def create(self, **_kwargs):
             raise RuntimeError("pending storage unavailable")
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(
         tool_module,
         "action_registry",
@@ -323,7 +324,7 @@ async def test_execute_tool_calls_redacts_nested_tokens_before_pending_persisten
 
     import app.repositories.pending_action_repository as pending_repo_module
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload, **_kwargs: None)
     monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
     monkeypatch.setattr(
         tool_module,
@@ -370,12 +371,13 @@ async def test_execute_tool_calls_records_redacted_args_in_telemetry(monkeypatch
     captured = {}
     tool = _SchemaTool()
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload, **_kwargs: True)
     monkeypatch.setattr(
         tool_module,
         "action_registry",
         SimpleNamespace(
             get_tool=lambda _name: tool,
+            get_metadata=lambda _name: SimpleNamespace(permission_level=SimpleNamespace(value="read_only")),
             record_call=lambda **kwargs: captured.update(kwargs),
         ),
     )
@@ -397,7 +399,7 @@ async def test_execute_tool_calls_records_redacted_args_in_telemetry(monkeypatch
 @pytest.mark.asyncio
 async def test_execute_tool_calls_blocks_unsafe_args_and_audits(monkeypatch):
     events = []
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(
         tool_module,
         "action_registry",
@@ -429,7 +431,7 @@ async def test_execute_tool_calls_blocks_unsafe_args_and_audits(monkeypatch):
 @pytest.mark.asyncio
 async def test_execute_tool_calls_audits_not_found_tool(monkeypatch):
     events = []
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(
         tool_module,
         "action_registry",
@@ -456,7 +458,7 @@ async def test_execute_tool_calls_audits_not_found_tool(monkeypatch):
 @pytest.mark.asyncio
 async def test_execute_tool_calls_audits_cycle_limit(monkeypatch):
     events = []
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
 
     service = ToolExecutorService()
     policy = DummyPolicy(can_continue=False)
@@ -491,7 +493,7 @@ async def test_execute_tool_calls_requires_confirmation_for_destructive_simulati
 
     import app.repositories.pending_action_repository as pending_repo_module
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
     monkeypatch.setattr(
         tool_module,
@@ -537,7 +539,7 @@ async def test_execute_tool_calls_persists_scope_metadata_for_pending_actions(mo
 
     import app.repositories.pending_action_repository as pending_repo_module
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload: None)
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda _payload, **_kwargs: None)
     monkeypatch.setattr(pending_repo_module, "PendingActionRepository", DummyPendingRepo)
     monkeypatch.setattr(
         tool_module,
@@ -587,7 +589,7 @@ async def test_execute_tool_calls_enforces_sliding_window_quota(monkeypatch):
         def invoke(self, _payload):
             raise AssertionError("tool should not execute when quota is blocked")
 
-    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload: events.append(payload))
+    monkeypatch.setattr(tool_module, "record_audit_event_direct", lambda payload, **_kwargs: events.append(payload))
     monkeypatch.setattr(tool_module, "get_redis_usage_tracker", lambda: DummyTracker())
     monkeypatch.setattr(
         tool_module,
