@@ -13,7 +13,10 @@ def test_janus_lab_requires_neo4j_password_when_env_missing(monkeypatch):
 
 
 def test_env_example_uses_required_placeholders_for_critical_secrets():
-    env_example = Path("backend/app/.env.example").read_text(encoding="utf-8")
+    path = Path("backend/app/.env.example")
+    if not path.is_file():
+        path = Path("app/.env.example")
+    env_example = path.read_text(encoding="utf-8")
 
     assert "OIDC_ISSUER=https://" in env_example
     assert "OIDC_SERVICE_AUDIENCE=janus-control-plane" in env_example

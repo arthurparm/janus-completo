@@ -30,11 +30,10 @@ class TestNamespaceRegistration:
         ns = registry.get_namespace("explicit_core")
         assert ns == "core"
 
-    def test_register_evolution(self, registry):
+    def test_register_evolution_disabled(self, registry):
         tool = FakeTool("evolution_tool")
-        registry.register_tool(tool, namespace="evolution")
-        ns = registry.get_namespace("evolution_tool")
-        assert ns == "evolution"
+        with pytest.raises(PermissionError, match="permanently disabled"):
+            registry.register_tool(tool, namespace="evolution")
 
     def test_register_user(self, registry):
         tool = FakeTool("user_tool")
@@ -42,21 +41,21 @@ class TestNamespaceRegistration:
         ns = registry.get_namespace("user_tool")
         assert ns == "user"
 
-    def test_evolution_cannot_shadow_core(self, registry):
+    def test_evolution_cannot_register(self, registry):
         core_tool = FakeTool("shadow_tool")
         registry.register_tool(core_tool, namespace="core")
         evo_tool = FakeTool("shadow_tool")
-        with pytest.raises(ValueError, match="Cannot"):
+        with pytest.raises(PermissionError, match="permanently disabled"):
             registry.register_tool(evo_tool, namespace="evolution")
 
 
 class TestResolveTool:
-    def test_resolve_tool_evolution_first(self, registry):
+    def test_resolve_tool_user_namespace(self, registry):
         core_tool = FakeTool("multi_tool")
         registry.register_tool(core_tool, namespace="core")
-        evo_tool = FakeTool("multi_tool_evo")
-        registry.register_tool(evo_tool, namespace="evolution")
-        resolved = registry.resolve_tool("multi_tool_evo")
+        user_tool = FakeTool("multi_tool_user")
+        registry.register_tool(user_tool, namespace="user")
+        resolved = registry.resolve_tool("multi_tool_user")
         assert resolved is not None
 
     def test_resolve_tool_falls_back_to_core(self, registry):
@@ -74,18 +73,18 @@ class TestListByNamespace:
     def test_list_by_namespace(self, registry):
         registry.register_tool(FakeTool("c1"), namespace="core")
         registry.register_tool(FakeTool("c2"), namespace="core")
-        registry.register_tool(FakeTool("e1"), namespace="evolution")
+        registry.register_tool(FakeTool("u1"), namespace="user")
 
         core_tools = registry.list_by_namespace("core")
-        evo_tools = registry.list_by_namespace("evolution")
+        user_tools = registry.list_by_namespace("user")
         assert len(core_tools) == 2
-        assert len(evo_tools) == 1
+        assert len(user_tools) == 1
 
 
 class TestGetNamespace:
     def test_get_namespace(self, registry):
-        registry.register_tool(FakeTool("evo_ns"), namespace="evolution")
-        assert registry.get_namespace("evo_ns") == "evolution"
+        registry.register_tool(FakeTool("user_ns"), namespace="user")
+        assert registry.get_namespace("user_ns") == "user"
 
     def test_get_namespace_unknown(self, registry):
         assert registry.get_namespace("unknown") is None

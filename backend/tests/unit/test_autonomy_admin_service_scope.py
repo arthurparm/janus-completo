@@ -655,6 +655,7 @@ async def test_ensure_code_graph_ready_force_reindexes_when_graph_exists():
 
 def test_get_self_study_status_includes_running_progress():
     service = _new_service(citations=[])
+    service._self_study_local_only = True
     now = datetime(2026, 3, 4, 19, 10, tzinfo=timezone.utc)
 
     class _Repo:

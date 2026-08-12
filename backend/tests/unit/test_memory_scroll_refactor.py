@@ -17,7 +17,7 @@ async def test_search_recent_failures_uses_scroll():
 
     # Explicit async side effect for robust mocking
     async def call_async_side_effect(func, *args, **kwargs):
-        return await func(*args, **kwargs)
+        return await func()
 
     mock_cb = MagicMock()
     # Mocking the decorator usage if needed (though resilient uses call_async internally usually)
@@ -52,7 +52,7 @@ async def test_search_recent_lessons_uses_scroll():
     mock_client.search = AsyncMock(return_value=[])
 
     async def call_async_side_effect(func, *args, **kwargs):
-        return await func(*args, **kwargs)
+        return await func()
 
     mock_cb = MagicMock()
     mock_cb.side_effect = lambda f: f

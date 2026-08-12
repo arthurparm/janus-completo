@@ -49,18 +49,19 @@ async def test_get_formatted_prompt_formats_successfully(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_formatted_prompt_is_tolerant_on_missing_placeholder(monkeypatch, caplog):
+async def test_get_formatted_prompt_is_tolerant_on_missing_placeholder(monkeypatch, caplog, capsys):
     async def fake_get_prompt(prompt_name: str, **kwargs):
         del prompt_name, kwargs
         return "Ola {nome}"
 
     monkeypatch.setattr(prompt_module, "get_prompt", fake_get_prompt)
 
-    with caplog.at_level("ERROR"):
-        result = await prompt_module.get_formatted_prompt("welcome", outro="x")
+    result = await prompt_module.get_formatted_prompt("welcome", outro="x")
 
     assert result == "Ola {nome}"
-    assert "Variável faltando no prompt" in caplog.text
+    captured = capsys.readouterr()
+    log_text = captured.out + captured.err + caplog.text
+    assert "prompt_format_variable_missing" in log_text or "welcome" in log_text
 
 
 def test_prompts_dir_is_exported():

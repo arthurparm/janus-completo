@@ -39,7 +39,7 @@ async def test_llm_repository_blocks_external_pii(monkeypatch):
     monkeypatch.setattr("app.repositories.llm_repository.get_llm_client", _fake_get_llm_client)
     monkeypatch.setattr("app.repositories.llm_repository.rc_get", lambda *_a, **_k: None)
     monkeypatch.setattr("app.repositories.llm_repository.rc_put", lambda *_a, **_k: None)
-    monkeypatch.setattr("app.repositories.llm_repository.record_audit_event_direct", lambda *_a, **_k: None)
+    monkeypatch.setattr("app.repositories.observability_repository.record_audit_event_direct", lambda *_a, **_k: None)
 
     repo = LLMRepository()
     with pytest.raises(LLMRepositoryError):

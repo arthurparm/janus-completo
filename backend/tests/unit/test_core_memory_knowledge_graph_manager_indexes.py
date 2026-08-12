@@ -21,8 +21,17 @@ async def test_index_codebase_uses_only_canonical_index_operations(monkeypatch):
 
     assert result["message"] == "Indexação e análise da base de código concluídas."
 
-    allowed_ops = {"ensure_index", "cleanup_code_entities", "merge_calls"}
-    assert all(op in allowed_ops for op, _ in recorded_calls)
+    allowed_ops = {
+        "ensure_index",
+        "cleanup_code_entities",
+        "cleanup_code_entities_symbols",
+        "cleanup_code_entities_files",
+        "delete_stale_rels",
+        "delete_stale_code_nodes",
+        "merge_calls",
+    }
+    ops = [op for op, _ in recorded_calls]
+    assert all(op in allowed_ops for op in ops), f"Unexpected ops: {set(ops) - allowed_ops}"
 
     index_queries = [query for op, query in recorded_calls if op == "ensure_index"]
     assert len(index_queries) == 8

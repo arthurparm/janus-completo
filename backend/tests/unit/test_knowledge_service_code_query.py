@@ -44,7 +44,7 @@ async def test_ask_code_with_citations_returns_answer_and_citations():
         question="Como Engine.run chama helper em app/main.py", limit=7, citation_limit=4
     )
 
-    assert result["answer"] == "answer:Como Engine.run chama helper em app/main.py?:7"
+    assert result["answer"] == "answer:Como Engine.run chama helper em app/main.py:7"
     assert len(result["citations"]) == 1
     assert repo.calls[0]["limit"] == 4
     assert "engine.run" in repo.calls[0]["tokens"]

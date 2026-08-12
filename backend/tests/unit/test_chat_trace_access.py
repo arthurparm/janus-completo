@@ -1,9 +1,10 @@
-from app.api.v1.endpoints.chat import router as chat_router
-from app.services.chat_service import ChatServiceError, get_chat_service
-from app.services.trace_service import get_trace_service
+from types import SimpleNamespace
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+from app.api.v1.endpoints.chat import router as chat_router
+from app.services.chat_service import ChatServiceError, get_chat_service
+from app.services.trace_service import get_trace_service
 from qa.auth_test_support import issue_test_actor_token
 
 
@@ -40,6 +41,7 @@ def test_trace_endpoint_checks_chat_access_before_returning_trace():
 
     @app.middleware("http")
     async def _inject_actor(request: Request, call_next):
+        request.state.actor_context = SimpleNamespace(actor_id="user-1")
         request.state.actor_user_id = "user-1"
         return await call_next(request)
 

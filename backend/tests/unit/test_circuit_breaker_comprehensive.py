@@ -11,7 +11,7 @@ This test suite covers:
 import asyncio
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -286,7 +286,7 @@ class TestCircuitBreakerMonitoring:
         now = datetime.now()
 
         # Older metrics with low error rate (20 minutes ago)
-        old_time = now.replace(minute=(now.minute - 20) % 60)
+        old_time = now - timedelta(minutes=20)
         old_metrics = CircuitBreakerMetricsSnapshot(
             timestamp=old_time,
             total_calls=100,
@@ -302,7 +302,7 @@ class TestCircuitBreakerMonitoring:
         )
 
         # Recent metrics with high error rate (5 minutes ago)
-        recent_time = now.replace(minute=(now.minute - 5) % 60)
+        recent_time = now - timedelta(minutes=5)
         recent_metrics = CircuitBreakerMetricsSnapshot(
             timestamp=recent_time,
             total_calls=100,

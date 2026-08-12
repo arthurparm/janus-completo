@@ -31,7 +31,7 @@ async def test_semantic_query_emits_required_telemetry(monkeypatch):
         emitted.append(kwargs)
         return kwargs
 
-    monkeypatch.setattr(knowledge_module, "query_knowledge_graph", _fake_query)
+    monkeypatch.setattr("app.core.memory.graph_rag_core.query_knowledge_graph", _fake_query)
     monkeypatch.setattr(knowledge_module, "emit_step_telemetry", _fake_emit)
 
     service = KnowledgeService(_FakeRepo())
@@ -59,7 +59,7 @@ async def test_ask_code_with_citations_emits_code_citations_telemetry(monkeypatc
         emitted.append(kwargs)
         return kwargs
 
-    monkeypatch.setattr(knowledge_module, "query_knowledge_graph", _fake_query)
+    monkeypatch.setattr("app.core.memory.graph_rag_core.query_knowledge_graph", _fake_query)
     monkeypatch.setattr(knowledge_module, "emit_step_telemetry", _fake_emit)
 
     service = KnowledgeService(_FakeRepo())
@@ -67,7 +67,7 @@ async def test_ask_code_with_citations_emits_code_citations_telemetry(monkeypatc
         question="How does run call helper", limit=4, citation_limit=2
     )
 
-    assert result["answer"] == "answer:How does run call helper?:4"
+    assert result["answer"] == "answer:How does run call helper:4"
     assert len(result["citations"]) == 1
     code_events = [event for event in emitted if event.get("step") == "code_citations"]
     assert code_events

@@ -1,18 +1,20 @@
-
 import pytest
 
+from app.core.infrastructure.resilience import CircuitOpenError
 from app.repositories.chat_repository_sql import ChatRepositorySQL
 from app.services.chat_service import ChatService
 
 
 class DummyLLMService:
-  def __init__(self, open_state=True):
+  def __init__(self, open_state=False):
     self._open = open_state
   def select_provider(self, role, priority, project_id=None):
     return {"provider": "dummy", "model": "m"}
   def is_provider_open(self, provider: str) -> bool:
-    return True
-  def invoke_llm(self, **kwargs):
+    return self._open
+  async def invoke_llm(self, **kwargs):
+    if not self._open:
+      raise CircuitOpenError("CircuitOpen: dummy circuit is open")
     return {"response": "ok", "provider": "dummy", "model": "m"}
 
 
