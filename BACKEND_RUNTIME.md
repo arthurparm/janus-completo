@@ -188,6 +188,8 @@ The production training contract currently supports `classifier` only. Harvested
 
 `llm_finetuning` and `predictor` remain internal domain values without a production backend. They fail explicitly and are not advertised by the public `TrainRequest` schema. Learning health and statistics are derived from the dataset and completed experiments: missing data reports `degraded`, unavailable quality is `null`, and average duration remains `null` until a completed run exists. Dry-run writes and failed `TrainingResult` values never become successful worker acknowledgements.
 
+Deployment precheck accepts only confined model identifiers and requires a real `metadata.json`, `model.json`, holdout metrics, and explicitly measured fairness evidence. Accuracy is never converted into a synthetic bias score. Staging persists a rollout plan, but publication currently returns `501` because no model-activation adapter is connected to the inference runtime; it never marks a database row active while runtime behavior would remain unchanged.
+
 ## 14. Evidence-backed Auto Analysis
 
 `GET /api/v1/auto-analysis/health-check` derives its conclusions from three
