@@ -756,3 +756,23 @@ TypeError: DocumentIngestionService._delete_doc_points() got an unexpected keywo
 - Pro: 13 testes unitários de `document_service`/`documents`/`orchestrator profiles` + suíte completa permanecem verdes.
 - Contra: documentos enviados antes desta correção (com `doc_id` já criado) ficaram órfãos permanentemente em `status=processing` no Postgres — nenhum reprocessamento automático foi adicionado; são registros de teste, sem impacto de produção real neste ambiente.
 - Contra: `.env.pc1` foi alterado localmente (não versionado) para ligar workers; se o usuário reiniciar o stack sem saber disso, voltará ao estado anterior — comportamento aceitável pois é justamente a configuração default documentada em `.env.pc1.example`.
+
+## DEC-031 - 403 em `/chat/stream` no smoke de referência: não é bug, é `ensure_origin_allowed` funcionando
+
+### Contexto
+
+DEC-029 deixou registrado como pendente um `403 Forbidden` em `POST /api/v1/chat/stream/{id}`, novo ponto de falha de `auth-session-runtime.smoke.spec.ts` depois da correção de sessão (DEC-029). Investiguei capturando o corpo real da resposta (o teste só checava o status code): `{"detail":"Origin not allowed"}`.
+
+Rastreado até `ensure_origin_allowed()` (`backend/app/api/v1/endpoints/chat/deps.py:192`), chamada como a primeira linha do handler de `/chat/stream`: rejeita com 403 qualquer requisição cujo header `Origin` não esteja em `settings.CORS_ALLOW_ORIGINS`. `.env.pc1` define `CORS_ALLOW_ORIGINS=["http://localhost:4300","http://127.0.0.1:4300"]` — só a porta do frontend Docker publicado. Eu estive rodando os smoke tests contra `ng serve` (porta 4200, escolhida por refletir o código-fonte atual sem rebuild de imagem) para as investigações de DEC-029/030; o navegador real envia `Origin: http://localhost:4200` nesse caso, que nunca esteve na allowlist.
+
+Chamadas simples (`GET /users/me`, upload de documento, etc.) não passam por essa checagem — ela é especifica do endpoint de streaming, um controle deliberado (provavelmente anti-CSRF/pinning de origem para o canal SSE). Não é um bug de produto; é uma nao-correspondencia entre o ambiente de teste (`ng serve` na porta 4200) e a origem que o backend local está configurado para aceitar (porta 4300).
+
+### Decisao
+
+Nenhuma alteração de código. Documentar a causa para não re-investigar: para validar fluxos de chat/stream contra o backend local, usar a porta 4300 (frontend Docker publicado, rebuild necessário para refletir mudanças de código) ou adicionar `http://localhost:4200` a `CORS_ALLOW_ORIGINS` em `.env.pc1` deliberadamente ao rodar `ng serve` para esse fim especifico — não fiz essa segunda opção por ser uma mudança de superfície de segurança (CORS) sem necessidade neste ciclo.
+
+### Consequencias
+
+- Pro: nenhum código de produto alterado para um "bug" que não existe; a checagem de origem no streaming continua intacta.
+- Pro: economiza reinvestigação futura — qualquer smoke de chat/stream rodado via `ng serve` (porta 4200) vai reproduzir este mesmo 403, e agora está documentado por quê.
+- Contra: `auth-session-runtime.smoke.spec.ts` continua sem uma execução verde completa nesta sessão — o teste em si está correto, só precisa rodar contra a origem certa (4300, com imagem reconstruída) ou com `.env.pc1` ajustado para incluir 4200 quando o objetivo for testar contra `ng serve`.
