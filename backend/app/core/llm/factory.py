@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -212,6 +213,13 @@ def _validate_openrouter_key(key: str | None) -> bool:
     return True
 
 
+def _validate_omniroute_key(key: str | None) -> bool:
+    if not key or len(key) < 10:
+        _warn_invalid_key_once("omniroute")
+        return False
+    return True
+
+
 def _health_check_ollama(llm: ChatOllama, timeout_s: int = 30) -> bool:
     executor = None
     try:
@@ -357,6 +365,20 @@ def warm_llm_pool(specs: list[str] | None = None) -> dict[str, int]:
                     },
                 )
                 _add_to_pool("openrouter", model, llm)
+            elif provider == "omniroute":
+                _require_langchain_openai()
+                if not bool(settings.OMNIROUTE_ENABLED) or not _validate_omniroute_key(
+                    getattr(settings.OMNIROUTE_API_KEY, "get_secret_value", lambda: None)()
+                ):
+                    continue
+                # Reuse OpenAI client structure but pointed at the self-hosted OmniRoute gateway
+                llm = ChatOpenAI(
+                    model=model,
+                    temperature=0,
+                    api_key=getattr(settings.OMNIROUTE_API_KEY, "get_secret_value", lambda: None)(),
+                    base_url=settings.OMNIROUTE_BASE_URL,
+                )
+                _add_to_pool("omniroute", model, llm)
             else:
                 continue
             key = _pool_key(provider, model)
@@ -382,6 +404,9 @@ def _infer_provider(llm: BaseChatModel) -> str:
             return "xai"
         if "openrouter" in base_url.lower():
             return "openrouter"
+        omniroute_host = urlparse(str(settings.OMNIROUTE_BASE_URL or "")).hostname
+        if omniroute_host and omniroute_host.lower() in base_url.lower():
+            return "omniroute"
         return "openai"
     if isinstance(llm, ChatGoogleGenerativeAI):
         return "google_gemini"

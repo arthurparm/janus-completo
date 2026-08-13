@@ -210,7 +210,7 @@ async def get_budget_summary():
 
     from app.core.llm import pricing
 
-    providers = ["openai", "deepseek", "xai", "openrouter"]
+    providers = ["openai", "deepseek", "xai", "openrouter", "omniroute"]
     if settings.GEMINI_ENABLED:
         providers.append("google_gemini")
     if settings.OLLAMA_ENABLED:

@@ -796,3 +796,35 @@ Nenhuma ação de código. Esta é uma dependência externa (cota de API) que s�
 - Pro: os dois bugs reais corrigidos nesta sessão (DEC-029 sessão, DEC-030 ingestão de documentos) agora tem confirmação end-to-end contra a origem/imagem corretamente configurada, não só contra `ng serve`.
 - Pro: fronteira de responsabilidade clara — tudo que é código/config do Janus está validado; o que resta é uma decisão de conta/cota do usuário.
 - Contra: nenhum smoke test que dependa de uma resposta real do LLM (chat, memória generativa) vai passar até a cota resetar ou ser ampliada.
+
+## DEC-033 - Failover em cadeia entre provedores LLM; circuit breakers isolados por provedor; rate limit respeita reset real
+
+### Contexto
+
+O usuário pediu algo "versátil": quando um provedor de LLM falha (esgota cota, erro, etc.), o sistema deveria tentar outro automaticamente, em cadeia. Investigando o 429 do OpenRouter do DEC-032, encontrei três problemas concretos:
+
+1. `LLMRepository.invoke_llm` só tentava **um único fallback** após a falha do provedor primário — se esse também falhasse, o erro era propagado sem tentar mais nenhum provedor, mesmo havendo outros configurados (OpenAI, DeepSeek, OpenRouter, e agora OmniRoute).
+2. **Bug real de isolamento**: `_provider_circuit_breakers` (`backend/app/core/llm/resilience.py`) só pré-registrava `["ollama", "openai", "google_gemini", "unknown"]`. Qualquer provider fora dessa lista — `deepseek`, `xai`, `openrouter`, `omniroute` — caía no fallback `_provider_circuit_breakers.get(self.provider, _provider_circuit_breakers["unknown"])` e **compartilhava o mesmo circuit breaker "unknown"** com todos os outros providers ausentes da lista. Reproduzi isso ao vivo: o OpenRouter esgotou cota (3 falhas), abriu o circuito "unknown", e o DeepSeek — que nunca tinha falhado — foi rejeitado imediatamente (`circuit_breaker_call_attempt_while_open`, `failure_count=3`) só por compartilhar o mesmo breaker.
+3. `_handle_rate_limit_error` (`client.py`) tratava **qualquer** 429 como cota diária esgotada e bloqueava o modelo até meia-noite UTC via `mark_exhausted_for_day`, sem checar se o provedor informou um horário de reset real, nem distinguir cota diária (ex.: "free-models-per-day" do OpenRouter, que por coincidência resetava exatamente à meia-noite UTC) de um limite de concorrência/RPM transitório (ex.: DeepSeek relata "Concurrency Limit" de 500-2500 requisições simultâneas por modelo — usuário confirmou via captura de tela — que se recupera em segundos, não no dia seguinte).
+
+### Decisao
+
+1. `LLMRepository.invoke_llm`: convertido o bloco de failover único em um loop limitado por `LLM_FAILOVER_MAX_PROVIDERS` (novo setting, default 4), acumulando provedores excluídos a cada falha e pedindo o próximo candidato ao roteador, até um responder ou o roteador não ter mais candidatos elegíveis (`get_llm_client` já filtra por circuit breaker e orçamento).
+2. `_provider_circuit_breakers`: expandido para cobrir todo `provider_key` que `_infer_provider` pode retornar (`deepseek`, `xai`, `openrouter`, `omniroute`, além dos já existentes) — cada provedor real agora tem sua própria instância isolada; `"unknown"` volta a ser só o fallback genuíno para providers realmente não identificados.
+3. `_handle_rate_limit_error` + `_extract_rate_limit_reset_at` (novo, `client.py`): tenta extrair o horário real de reset do 429 (header HTTP padrão `Retry-After`/`X-RateLimit-Reset`, com fallback para o metadata aninhado que gateways estilo OpenRouter embutem só no corpo textual do erro). Se encontrar, `mark_exhausted_for_day` (agora aceita `reset_at` opcional) bloqueia o modelo só até aquele instante exato. Se não encontrar mas a mensagem sinalizar cota diária (`per-day`, `daily`, etc.), mantém o comportamento conservador anterior (bloqueia até meia-noite UTC). Se for um 429 sem nenhum desses sinais (ex.: limite de concorrência), **não marca esgotado para o dia** — deixa o circuit breaker do próprio provedor (agora corretamente isolado) aplicar o recuo curto padrão, evitando bloquear um provedor saudável por 24h por causa de um pico momentâneo.
+
+Durante a implementação, encontrei um trabalho substancial já em andamento (não commitado) de outra sessão/chat do usuário: integração completa de um novo provedor "OmniRoute" (gateway self-hosted opcional, desabilitado por padrão) espalhada por 12 arquivos, incluindo três dos que eu também estava editando (`config.py`, `client.py`, `resilience.py`, `rate_limiter.py`, `llm_repository.py`). Um `git stash`/`stash pop` malfeito quase sobrescreveu esse trabalho; recuperado com merge de 3 vias arquivo por arquivo (base=HEAD, mine=minhas edições, theirs=stash), preservando os dois lados integralmente — nenhuma linha do trabalho de OmniRoute foi perdida.
+
+### Alternativas Consideradas
+
+- Corrigir só o failover em cadeia e deixar o bug do circuit breaker compartilhado: rejeitado — sem isolar os breakers, a cadeia de failover herdaria falsos-positivos de "circuito aberto" entre provedores não relacionados, tornando o próprio failover não confiável.
+- Tratar todo 429 com o mesmo bloqueio até meia-noite UTC (comportamento anterior): rejeitado por pedido explícito do usuário — um 429 de limite de concorrência (DeepSeek) não é uma cota diária e não deveria custar o provedor pelo resto do dia.
+- Resolver a colisão com o stash descartando meu trabalho e recomeçando: rejeitado — havia trabalho real e válido dos dois lados; merge de 3 vias preserva ambos sem retrabalho.
+
+### Consequencias
+
+- Pro: chat real segue funcionando após restart dos containers com o código mesclado (`provider: deepseek` respondeu com sucesso), 162 testes da área de LLM + 2 novos arquivos de teste (failover em cadeia, precisão de rate limit) passam.
+- Pro: circuit breakers confirmados isolados em runtime real (`id()` distinto para cada um dos 8 providers, incluindo omniroute).
+- Pro: nenhuma linha do trabalho pré-existente de OmniRoute (outra sessão) foi perdida na resolução do conflito.
+- Contra: `LLM_FAILOVER_MAX_PROVIDERS=4` é um teto arbitrário (evita loop infinito); se todos os provedores estiverem genuinamente indisponíveis, ainda assim falha após até 5 tentativas totais (1 primária + 4 de failover) — não há espera/retry entre elas além do que o circuit breaker/retry de cada client já aplica.
+- Contra: a extração de `reset_at` via regex no corpo textual do erro (fallback para gateways que só embutem o header em JSON aninhado) é frágil a mudanças de formato do provedor; se quebrar, o sistema volta ao comportamento conservador (bloqueio até meia-noite) ou ao circuit breaker padrão, nunca a um estado pior do que antes.

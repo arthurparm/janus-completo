@@ -56,6 +56,45 @@ LLM_TOKENS = Counter(
 )
 
 
+_DAILY_QUOTA_SIGNALS = ("per-day", "per day", "daily", "requests per day", "rpd")
+
+
+def _extract_rate_limit_reset_at(error: Exception) -> float | None:
+    """Extrai o timestamp unix (segundos) em que a cota do provedor reseta, se informado.
+
+    Tenta, em ordem: headers HTTP padrão (Retry-After, X-RateLimit-Reset) na resposta
+    real do provedor; e, como fallback, o corpo JSON de erro aninhado que provedores
+    estilo OpenRouter embutem em `error.metadata.headers` (visível apenas na
+    representação textual da exceção, não nos headers HTTP reais).
+    Retorna None quando não há informação suficiente para saber o horário exato.
+    """
+    import re
+
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        try:
+            retry_after = headers.get("retry-after") or headers.get("Retry-After")
+            if retry_after:
+                return time.time() + float(retry_after)
+            reset_header = headers.get("x-ratelimit-reset") or headers.get("X-RateLimit-Reset")
+            if reset_header:
+                value = float(reset_header)
+                # Normaliza epoch em milissegundos para segundos.
+                return value / 1000.0 if value > 1e12 else value
+        except Exception:
+            pass
+
+    match = re.search(r"['\"]X-RateLimit-Reset['\"]\s*:\s*['\"]?(\d+)", str(error))
+    if match:
+        try:
+            value = float(match.group(1))
+            return value / 1000.0 if value > 1e12 else value
+        except Exception:
+            return None
+    return None
+
+
 class LLMClient:
     """Cliente unificado para invocar LLMs com métricas, timeouts e resiliência.
 
@@ -154,18 +193,49 @@ class LLMClient:
 
     def _handle_rate_limit_error(self, error: Exception):
         try:
-            is_quota = False
             err_str = str(error).lower()
             err_type = str(type(error))
+            is_rate_limited = (
+                "ResourceExhausted" in err_type or "429" in err_str or "quota" in err_str
+            )
+            if not is_rate_limited:
+                return
 
-            # Detectar erros de cota/rate limit
-            if "ResourceExhausted" in err_type or "429" in err_str or "quota" in err_str:
-                is_quota = True
+            reset_at = _extract_rate_limit_reset_at(error)
+            is_daily_quota = any(signal in err_str for signal in _DAILY_QUOTA_SIGNALS)
 
-            if is_quota:
-                logger.warning("log_warning", message=f"Quota Exceeded for {self.provider}/{self.model}. Marking as exhausted for day."
+            if reset_at is not None:
+                # Provedor informou exatamente quando a cota libera (ex.: X-RateLimit-Reset
+                # ou Retry-After) — respeita esse horário em vez de qualquer suposição.
+                logger.warning(
+                    "log_warning",
+                    message=(
+                        f"Rate limit para {self.provider}/{self.model}. "
+                        f"Marcando indisponível até o reset informado pelo provedor."
+                    ),
+                )
+                get_rate_limiter().mark_exhausted_for_day(
+                    self.provider, self.model, reset_at=reset_at
+                )
+            elif is_daily_quota:
+                # Sem horário exato, mas a mensagem indica cota diária (ex.: "free tier
+                # per-day") — mantém o comportamento conservador de bloquear até meia-noite UTC.
+                logger.warning(
+                    "log_warning",
+                    message=f"Quota diária excedida para {self.provider}/{self.model}. Marcando como esgotado para o dia.",
                 )
                 get_rate_limiter().mark_exhausted_for_day(self.provider, self.model)
+            else:
+                # 429 sem sinal de cota diária (ex.: limite de concorrência/RPM momentâneo)
+                # não deve bloquear o modelo pelo resto do dia; o circuit breaker do
+                # próprio provedor já aplica um recuo curto e específico para isso.
+                logger.info(
+                    "log_info",
+                    message=(
+                        f"Rate limit transiente para {self.provider}/{self.model} "
+                        f"(sem sinal de cota diária) — não marcado como esgotado para o dia."
+                    ),
+                )
         except Exception as e:
             logger.error("log_error", message=f"Error handling rate limit: {e}", exc_info=True)
 

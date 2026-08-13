@@ -26,6 +26,7 @@ CURRENT_RUNTIME_MODELS = frozenset(
         "gpt-oss:20b",
         "qwen3.5:9b",
         "ministral-3:14b",
+        "auto",
     }
 )
 
@@ -162,6 +163,7 @@ class AppSettings(BaseSettings):
     LLM_RETRY_MAX_ATTEMPTS: int = 3
     LLM_RETRY_INITIAL_BACKOFF_SECONDS: float = 0.5
     LLM_RETRY_MAX_BACKOFF_SECONDS: float = 5.0
+    LLM_FAILOVER_MAX_PROVIDERS: int = 4  # Provedores adicionais tentados em cadeia após a falha inicial
     LLM_CACHE_TTL_SECONDS: int = 3600
     LLM_RESPONSE_CACHE_USE_MSGPACK: bool = False
     LLM_POOL_MAX_SIZE: int = 16
@@ -276,6 +278,11 @@ class AppSettings(BaseSettings):
         "google/gemma-4-31b-it:free",
         "openai/gpt-oss-20b:free",
     ]
+    OMNIROUTE_API_KEY: SecretStr | None = None
+    OMNIROUTE_BASE_URL: str = "http://localhost:20128/v1"
+    OMNIROUTE_ENABLED: bool = False
+    OMNIROUTE_MODEL_NAME: str = "auto"
+    OMNIROUTE_MODELS: list[str] = ["auto"]
     EMBEDDINGS_DEFAULT_PROVIDER: str = "openai"
     EMBEDDINGS_LOCAL_ENABLED: bool = False
     EMBEDDINGS_FAIL_CLOSED: bool = True
@@ -293,6 +300,7 @@ class AppSettings(BaseSettings):
     DEEPSEEK_MONTHLY_BUDGET_USD: float = 10.0
     XAI_MONTHLY_BUDGET_USD: float = 10.0
     OPENROUTER_MONTHLY_BUDGET_USD: float = 5.0
+    OMNIROUTE_MONTHLY_BUDGET_USD: float = 5.0
     # Dynamic Budget Guardrail: Force LOCAL_ONLY when total cloud spend >= this % of total budget
     BUDGET_THRESHOLD_PERCENT: float = 0.90
 
@@ -347,6 +355,8 @@ class AppSettings(BaseSettings):
     XAI_COST_PER_1K_OUTPUT_USD: float = 0.006
     OPENROUTER_COST_PER_1K_INPUT_USD: float = 0.0
     OPENROUTER_COST_PER_1K_OUTPUT_USD: float = 0.0
+    OMNIROUTE_COST_PER_1K_INPUT_USD: float = 0.0
+    OMNIROUTE_COST_PER_1K_OUTPUT_USD: float = 0.0
     # Tunáveis de desempenho do Ollama (opcionais, aplicados se definidos)
     OLLAMA_KEEP_ALIVE: str | None = "30m"  # mantém modelos carregados para reduzir cold-start
     OLLAMA_NUM_CTX: int | None = 4096  # contexto máximo por requisição
@@ -428,6 +438,9 @@ class AppSettings(BaseSettings):
             "output_per_1k_usd": 0.0,
         },
         "openai/gpt-oss-20b:free": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
+    }
+    OMNIROUTE_MODEL_PRICING: dict[str, dict[str, float]] = {
+        "auto": {"input_per_1k_usd": 0.0, "output_per_1k_usd": 0.0},
     }
 
     # Rate Limits por modelo (TPM=tokens/min, RPM=requests/min, TPD=tokens/day, RPD=requests/day)
@@ -842,6 +855,8 @@ class AppSettings(BaseSettings):
             *self.XAI_MODELS,
             self.OPENROUTER_MODEL_NAME,
             *self.OPENROUTER_MODELS,
+            self.OMNIROUTE_MODEL_NAME,
+            *self.OMNIROUTE_MODELS,
             self.OLLAMA_ORCHESTRATOR_MODEL,
             self.OLLAMA_CODER_MODEL,
             self.OLLAMA_CURATOR_MODEL,
@@ -888,6 +903,7 @@ class AppSettings(BaseSettings):
         "DEEPSEEK_MODELS",
         "XAI_MODELS",
         "OPENROUTER_MODELS",
+        "OMNIROUTE_MODELS",
         mode="before",
     )
     def _parse_models_list(cls, v: Any):
@@ -1040,6 +1056,7 @@ class AppSettings(BaseSettings):
         "DEEPSEEK_MODEL_PRICING",
         "XAI_MODEL_PRICING",
         "OPENROUTER_MODEL_PRICING",
+        "OMNIROUTE_MODEL_PRICING",
         mode="before",
     )
     def _parse_model_pricing(cls, v: Any):

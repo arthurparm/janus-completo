@@ -14,6 +14,7 @@ from .factory import (
     _health_check_ollama,
     _validate_deepseek_key,
     _validate_gemini_key,
+    _validate_omniroute_key,
     _validate_openai_key,
     _validate_openrouter_key,
     _validate_xai_key,
@@ -152,6 +153,8 @@ def _normalize_provider_key(provider: str | None) -> str | None:
         "openai": "openai",
         "deepseek": "deepseek",
         "openrouter": "openrouter",
+        "omniroute": "omniroute",
+        "omnirouter": "omniroute",
     }
     return aliases.get(key, key)
 
@@ -292,6 +295,8 @@ class LLMFactory:
             return self.selection.explicit_model or settings.XAI_MODEL_NAME
         if provider_key == "openrouter":
             return self.selection.explicit_model or settings.OPENROUTER_MODEL_NAME
+        if provider_key == "omniroute":
+            return self.selection.explicit_model or settings.OMNIROUTE_MODEL_NAME
         raise RuntimeError(f"Unsupported provider override: {provider_key}")
 
     def get_pooled(self, provider_key: str, model_name: str) -> BaseChatModel | None:
@@ -305,9 +310,23 @@ class LLMFactory:
 
     def cloud_catalog(self) -> list[dict[str, Any]]:
         if self.selection.priority == ModelPriority.HIGH_QUALITY:
-            provider_order = ["OpenRouter", "xAI", "OpenAI", "Google Gemini", "DeepSeek"]
+            provider_order = [
+                "OmniRoute",
+                "OpenRouter",
+                "xAI",
+                "OpenAI",
+                "Google Gemini",
+                "DeepSeek",
+            ]
         else:
-            provider_order = ["OpenRouter", "DeepSeek", "Google Gemini", "xAI", "OpenAI"]
+            provider_order = [
+                "OmniRoute",
+                "OpenRouter",
+                "DeepSeek",
+                "Google Gemini",
+                "xAI",
+                "OpenAI",
+            ]
 
         cloud_providers = {
             "DeepSeek": {
@@ -414,6 +433,24 @@ class LLMFactory:
                     extra_body={"reasoning": self.openrouter_reasoning},
                 ),
                 "models": settings.OPENROUTER_MODELS,
+            },
+            "OmniRoute": {
+                "name": "OmniRoute",
+                "provider_key": "omniroute",
+                "enabled": bool(settings.OMNIROUTE_ENABLED)
+                and _validate_omniroute_key(
+                    getattr(settings.OMNIROUTE_API_KEY, "get_secret_value", lambda: None)()
+                ),
+                "initializer_factory": lambda model: _create_openai_compatible_chat(
+                    model=model,
+                    temperature=self.default_temperature,
+                    api_key=getattr(
+                        settings.OMNIROUTE_API_KEY, "get_secret_value", lambda: None
+                    )(),
+                    base_url=settings.OMNIROUTE_BASE_URL,
+                    max_tokens=self.selection.max_tokens_override,
+                ),
+                "models": settings.OMNIROUTE_MODELS,
             },
         }
         return [cloud_providers[name] for name in provider_order if name in cloud_providers]

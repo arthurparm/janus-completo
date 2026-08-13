@@ -8,6 +8,7 @@ from app.core.infrastructure.logging_config import TRACE_ID, USER_ID
 from app.core.llm.factory import (
     _validate_deepseek_key,
     _validate_gemini_key,
+    _validate_omniroute_key,
     _validate_openai_key,
     _validate_openrouter_key,
     _validate_xai_key,
@@ -268,39 +269,60 @@ class LLMRepository:
             if disable_failover:
                 raise
             logger.warning(
-                "Falha na invocação inicial; tentando failover por provedor.", exc_info=True
+                "Falha na invocação inicial; tentando failover em cadeia por provedor.",
+                exc_info=True,
             )
-            # Failover: tenta outro provedor excluindo o atual
-            try:
-                failed_provider = getattr(client, "provider", "unknown") if client else None
-                exclude = [failed_provider] if failed_provider else None
-                fb_config = dict(llm_config or {})
-                if "provider" in fb_config:
-                    fb_config.pop("provider", None)
-                if "model" in fb_config:
-                    fb_config.pop("model", None)
-                if not fb_config:
-                    fb_config = None
-                client_fb = await get_llm_client(
-                    role=role,
-                    priority=priority,
-                    user_id=user_id,
-                    project_id=project_id,
-                    objective_id=objective_id,
-                    exclude_providers=exclude,
-                    config=fb_config,
-                )
-                # Se não houver mudança de provedor, repropaga
-                if client and getattr(client_fb, "provider", None) == getattr(
-                    client, "provider", None
-                ):
-                    raise e
-                enriched_fb = await client_fb.send_enriched(prompt, timeout_s=timeout_seconds)
+            # Failover em cadeia: tenta provedores adicionais, excluindo cada um que falhar,
+            # até um responder com sucesso ou o roteador não ter mais candidatos elegíveis
+            # (circuit breaker aberto e/ou orçamento excedido já filtram isso em get_llm_client).
+            failed_provider = getattr(client, "provider", "unknown") if client else None
+            excluded_providers: list[str] = [failed_provider] if failed_provider else []
+            fb_config = dict(llm_config or {})
+            fb_config.pop("provider", None)
+            fb_config.pop("model", None)
+            fb_config = fb_config or None
+            max_failover_attempts = max(
+                1, int(getattr(settings, "LLM_FAILOVER_MAX_PROVIDERS", 4))
+            )
+            last_error: Exception = e
+            for _attempt in range(max_failover_attempts):
+                try:
+                    client_fb = await get_llm_client(
+                        role=role,
+                        priority=priority,
+                        user_id=user_id,
+                        project_id=project_id,
+                        objective_id=objective_id,
+                        exclude_providers=excluded_providers,
+                        config=fb_config,
+                    )
+                except Exception as exc_no_candidate:
+                    # Nenhum provedor elegível restante (todos excluídos, circuito aberto
+                    # ou orçamento excedido) — para a cadeia aqui, não é um novo tipo de erro.
+                    last_error = exc_no_candidate
+                    break
+                if getattr(client_fb, "provider", None) in excluded_providers:
+                    # Segurança contra loop: o roteador reofertou um provedor já tentado.
+                    break
+                try:
+                    enriched_fb = await client_fb.send_enriched(prompt, timeout_s=timeout_seconds)
+                except Exception as exc_fb:
+                    last_error = exc_fb
+                    excluded_providers.append(client_fb.provider)
+                    logger.warning(
+                        "Failover falhou para provedor da cadeia; tentando próximo.",
+                        provider=client_fb.provider,
+                        attempt=_attempt + 1,
+                        max_attempts=max_failover_attempts,
+                        exc_info=True,
+                    )
+                    continue
+
                 if _OTEL and _tracer is not None:
                     try:
                         with _tracer.start_as_current_span("llm.invoke.failover") as span_fb:
                             span_fb.set_attribute(
-                                "llm.failed_provider", failed_provider or "unknown"
+                                "llm.failed_providers", ",".join(excluded_providers)
                             )
                             span_fb.set_attribute(
                                 "llm.provider", getattr(client_fb, "provider", "unknown")
@@ -332,11 +354,13 @@ class LLMRepository:
                     except Exception:
                         pass
                 return enriched_fb
-            except Exception as e2:
-                logger.error(
-                    "Erro no repositório ao invocar LLM (failover também falhou)", exc_info=True
-                )
-                raise LLMRepositoryError(f"Falha ao invocar LLM: {e2}") from e2
+
+            logger.error(
+                "Erro no repositório ao invocar LLM (cadeia de failover esgotada)",
+                failed_providers=excluded_providers,
+                exc_info=True,
+            )
+            raise LLMRepositoryError(f"Falha ao invocar LLM: {last_error}") from last_error
 
     def get_cache_entries(self) -> list[dict[str, Any]]:
         logger.debug("Buscando entradas do pool de LLMs no repositório.")
@@ -427,6 +451,9 @@ class LLMRepository:
         openrouter_key = getattr(
             settings.OPENROUTER_API_KEY, "get_secret_value", lambda: None
         )()
+        omniroute_key = getattr(
+            settings.OMNIROUTE_API_KEY, "get_secret_value", lambda: None
+        )()
 
         providers = [
             {
@@ -453,6 +480,13 @@ class LLMRepository:
                 "enabled": bool(settings.OPENROUTER_FREE_MODELS_ENABLED)
                 and _validate_openrouter_key(openrouter_key),
                 "model_default": settings.OPENROUTER_MODEL_NAME,
+            },
+            {
+                "provider": "omniroute",
+                "name": "OmniRoute",
+                "enabled": bool(settings.OMNIROUTE_ENABLED)
+                and _validate_omniroute_key(omniroute_key),
+                "model_default": settings.OMNIROUTE_MODEL_NAME,
             },
         ]
 

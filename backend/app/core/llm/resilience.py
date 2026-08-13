@@ -43,13 +43,27 @@ LLM_POOL_WARMS = Counter(
 _llm_pool: dict[str, list[CachedLLM]] = {}
 _MAX_CACHE_FAILURES = 3
 
-# Circuit Breakers por provedor para isolar falhas
+# Circuit Breakers por provedor para isolar falhas.
+# Precisa cobrir todo provider_key que `_infer_provider` (factory.py) pode retornar —
+# um provider ausente aqui cai no fallback "unknown" e passa a COMPARTILHAR o mesmo
+# circuit breaker com qualquer outro provider também ausente, então a falha de um
+# abre o circuito do outro por engano (ex.: openrouter esgotar cota derrubava deepseek
+# junto, mesmo o deepseek nunca tendo falhado).
 _provider_circuit_breakers: dict[str, CircuitBreaker] = {
     provider: CircuitBreaker(
         failure_threshold=settings.LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
         recovery_timeout=settings.LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
     )
-    for provider in ["ollama", "openai", "google_gemini", "unknown"]
+    for provider in [
+        "ollama",
+        "openai",
+        "google_gemini",
+        "deepseek",
+        "xai",
+        "openrouter",
+        "omniroute",
+        "unknown",
+    ]
 }
 
 

@@ -81,6 +81,10 @@ class ModelUsageTracker:
         # Modelos explicitamente marcados como esgotados para o dia (via erro 429 externo)
         self._daily_exhausted: set[str] = set()
 
+        # Modelos com reset de cota em timestamp conhecido (ex.: X-RateLimit-Reset do provedor),
+        # mais preciso que o reset fixo à meia-noite UTC usado por _daily_exhausted.
+        self._exhausted_until: dict[str, float] = {}
+
         # Tenta carregar do Firebase se habilitado
         if getattr(settings, "FIREBASE_ENABLED", False):
             self.load_limits_from_firebase()
@@ -286,18 +290,40 @@ class ModelUsageTracker:
             self._last_daily_reset = start_of_today
             logger.info("Contadores diários de rate limit resetados. Modelos esgotados liberados.")
 
-    def mark_exhausted_for_day(self, provider: str, model: str):
+    def mark_exhausted_for_day(
+        self, provider: str, model: str, *, reset_at: float | None = None
+    ):
         """
-        Marca um modelo como esgotado (cota diária atingida) até a meia-noite.
+        Marca um modelo como indisponível por erro 429 (quota/cota) até um momento de reset.
+
+        Se o provedor informar quando a cota realmente reseta (ex.: header
+        X-RateLimit-Reset), passe `reset_at` (timestamp unix) para respeitar esse
+        horário exato em vez do reset genérico à meia-noite UTC — evita tanto
+        liberar cedo demais (o provedor ainda rejeitaria) quanto bloquear o
+        modelo por mais tempo do que o necessário.
 
         Use quando receber um erro 429 com 'quota exceeded' ou 'FreeTier' na mensagem.
         Isso evita que o sistema fique tentando o modelo repetidamente.
         """
         key = self._get_model_key(provider, model)
         with self._lock:
-            self._daily_exhausted.add(key)
-            logger.warning("log_warning", message=f"Modelo {key} marcado como ESGOTADO para o dia. Será liberado à meia-noite UTC."
-            )
+            now = time.time()
+            if reset_at is not None and reset_at > now:
+                self._exhausted_until[key] = reset_at
+                logger.warning(
+                    "log_warning",
+                    message=(
+                        f"Modelo {key} marcado como ESGOTADO por cota. "
+                        f"Será liberado às {datetime.fromtimestamp(reset_at, UTC).isoformat()} "
+                        f"(em {reset_at - now:.0f}s)."
+                    ),
+                )
+            else:
+                self._daily_exhausted.add(key)
+                logger.warning(
+                    "log_warning",
+                    message=f"Modelo {key} marcado como ESGOTADO para o dia. Será liberado à meia-noite UTC.",
+                )
 
     def update_model_limits(
         self,
@@ -368,6 +394,21 @@ class ModelUsageTracker:
         key = self._get_model_key(provider, model)
         with self._lock:
             self._check_daily_reset()
+
+            # Reset com timestamp conhecido (ex.: X-RateLimit-Reset do provedor):
+            # expira sozinho quando o horário informado chega, sem esperar meia-noite.
+            reset_at = self._exhausted_until.get(key)
+            if reset_at is not None:
+                if time.time() < reset_at:
+                    return {
+                        "available": False,
+                        "usage_percent": 1.0,
+                        "details": {
+                            "exhausted": "Marked as exhausted until provider-reported quota reset",
+                            "reset_at": reset_at,
+                        },
+                    }
+                self._exhausted_until.pop(key, None)
 
             # Verifica se foi explicitamente marcado como esgotado (por erro 429 externo)
             if key in self._daily_exhausted:
