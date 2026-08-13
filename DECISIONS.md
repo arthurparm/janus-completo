@@ -655,3 +655,29 @@ Antes desta mudança, apenas humanos podiam criar metas via `POST /api/v1/autono
 - Pro: cadência de reflexão passa a ser consultável via API e UI, não apenas em logs de container.
 - Contra: `self_study_periodic` roda mesmo sem alguém olhar o painel; se `AUTONOMY_SELF_STUDY_PERIODIC_ENABLED` for esquecido ligado em ambiente de custo sensível, gera runs recorrentes — mitigado pelo default de 6h e pelo orçamento de tempo já existente por run.
 
+## DEC-028 - Servidor MCP local de manutenção do Janus
+
+### Contexto
+
+O usuário autorizou explicitamente a criação de ferramentas MCP (Model Context Protocol) no Janus para facilitar sua própria manutenção. O código não tinha nenhuma integração MCP prévia. O estado do `SchedulerService` é somente em memória dentro do processo da API, o que restringe o que um processo externo consegue introspectar sem duplicar a API HTTP.
+
+### Decisao
+
+Criar `backend/app/mcp/server.py`, um servidor MCP standalone (transporte stdio, `mcp.server.fastmcp.FastMCP`) para uso local por clientes de confiança (ex.: Claude Code), com seis ferramentas: `list_active_goals`, `get_goal`, `propose_goal`, `get_self_study_status`, `list_self_study_runs`, `get_autonomy_maturity`. `propose_goal` é a única escrita e usa `source="mcp"`, sujeita ao mesmo invariante de não autorizar execução. O servidor lê o Postgres diretamente via os mesmos repositórios já usados pela API (`GoalManager`, `AutonomyAdminRepository`), sem passar por HTTP, autenticação de `ActorContext` ou `endpoint_policy_manifest` — roda com o mesmo nível de confiança dos scripts existentes em `tooling/`, não é montado na API e não fica acessível pela rede.
+
+Escopo deliberadamente não incluído: ferramenta para `scheduler/jobs`, porque o estado do agendador é em memória no processo da API e um processo MCP separado não consegue enxergá-lo; documentado no docstring do módulo, com o endpoint HTTP correspondente como alternativa.
+
+A dependência `mcp` não foi adicionada a `pyproject.toml`/`poetry.lock`/`requirements.txt` (nem ao build Docker) porque o servidor é uma ferramenta opcional de manutenção local, não um runtime de produção; deve ser executado via `uv run --with mcp` (mesma convenção usada nesta sessão para dependências de teste ad hoc).
+
+### Alternativas Consideradas
+
+- Montar o MCP como sub-app ASGI dentro do FastAPI (`/mcp`): rejeitado porque o `endpoint_policy_manifest` teria apenas uma entrada de rota cobrindo todas as ferramentas MCP, perdendo o controle por operação (ownership/scopes) que os demais endpoints control-plane têm; expandiria a superfície HTTP não autenticada por ferramenta em vez de por rota.
+- Adicionar `mcp` como dependência de produção travada no lock: rejeitado por ser um ambiente de execução local opcional, não parte do runtime do container.
+- Expor também o estado do agendador via leitura direta de alguma tabela: rejeitado porque o `SchedulerService` não persiste estado; documentado como limitação em vez de inventar uma persistência nova fora de escopo.
+
+### Consequencias
+
+- Pro: Janus ganha uma superfície de introspecção/manutenção padronizada (MCP) reaproveitando os mesmos repositórios e invariantes de metas já validados.
+- Pro: nenhuma mudança em auth, manifest ou build de produção; risco confinado a um módulo novo e opcional.
+- Contra: por rodar fora do processo da API, o servidor MCP não vê o estado do `SchedulerService`; quem precisar da cadência do autoestudo periódico ainda depende do endpoint HTTP ou da UI.
+- Contra: `mcp` não está no lock de produção; rodar o servidor exige `uv run --with mcp` (ou instalação manual), documentado no próprio módulo.

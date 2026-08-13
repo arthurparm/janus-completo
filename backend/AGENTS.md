@@ -38,6 +38,7 @@ Leia [documentation/janus-project-philosophy.md](../documentation/janus-project-
 - Cálculo de risco, criação de ação pendente, persistência e apresentação de confirmação permanecem responsabilidades separadas.
 - Não remova confirmação, sandbox, allowlist, quota, redaction, retenção, autorização ou auditoria para fazer um fluxo funcionar.
 - Memória e conhecimento distinguem fato observado, inferência e conteúdo gerado, sempre com procedência e escopo.
+- `backend/app/mcp/server.py` expõe metas, autoestudo e maturidade via MCP (stdio) para clientes locais de confiança; não é montado na API HTTP nem passa pelo `endpoint_policy_manifest`. A única escrita é `propose_goal` (fonte `"mcp"`), sujeita ao mesmo invariante de não autorizar execução.
 
 ## Implementação
 
