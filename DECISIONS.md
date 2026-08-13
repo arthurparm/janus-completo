@@ -682,30 +682,38 @@ A dependência `mcp` não foi adicionada a `pyproject.toml`/`poetry.lock`/`requi
 - Contra: por rodar fora do processo da API, o servidor MCP não vê o estado do `SchedulerService`; quem precisar da cadência do autoestudo periódico ainda depende do endpoint HTTP ou da UI.
 - Contra: `mcp` não está no lock de produção; rodar o servidor exige `uv run --with mcp` (ou instalação manual), documentado no próprio módulo.
 
-## DEC-029 - Smoke de upload/RAG adicionado; flakiness de sessão OIDC local encontrada e não corrigida
+## DEC-029 - Corrigido NG0200 em AuthService que deslogava silenciosamente toda sessão restaurada; smoke de upload/RAG adicionado
 
 ### Contexto
 
-`CHANGELOG.md` (Ciclo 37, "Risco Residual") registrava que upload/indexação de documentos e busca RAG nunca foram validados de ponta a ponta no smoke autenticado. Confirmei que a lacuna seguia real: nenhum teste em `qa/` (que mocka `KnowledgeService`) nem em `frontend/e2e/*.smoke.spec.ts` cobre `POST /api/v1/documents/upload` com infraestrutura real.
+`CHANGELOG.md` (Ciclo 37, "Risco Residual") registrava que upload/indexação de documentos e busca RAG nunca foram validados de ponta a ponta no smoke autenticado. Ao tentar fechar essa lacuna com um novo smoke test, toda restauração de sessão OIDC (`page.goto('/')` numa aba nova, ou `page.reload()`) falhava de forma aparentemente intermitente: `GET /api/v1/users/me` às vezes nunca era sequer disparado, o usuário caía em `/login` sem erro no console e sem log correspondente no backend.
+
+Instrumentando `Storage.prototype.getItem/removeItem` com stack trace via `page.addInitScript` (script descartável, não commitado), a causa raiz apareceu: `AuthService.clearSession()` rodava e removia o token cerca de 2ms após confirmá-lo presente — tempo curto demais para um round-trip de rede, e sem nenhuma requisição `/api/` disparada. O `catch` genérico em `initializeAuth()` escondia o motivo; adicionando um `console.error` temporário no `catch`, a exceção real era:
+
+```
+NG0200: Circular dependency detected for `_AuthService`
+```
+
+Mecanismo: `AuthService` chama `void this.initializeAuth()` no construtor, que sincronamente (até o primeiro `await` real) invoca `this.http.get('/api/v1/users/me')`. O `HttpClient` monta e executa a cadeia de interceptors nesse mesmo call stack síncrono. `authSessionInterceptor` faz `inject(AuthService)` para poder chamar `auth.logout()` em um 401 — mas nesse ponto `AuthService` ainda está em construção (o construtor não retornou), então o Angular detecta a autorreferência e lança `NG0200` antes mesmo do `next(req)` ser chamado, ou seja, a requisição HTTP nunca sai do browser. **Toda vez que a página recarrega com um token válido em `sessionStorage`, o usuário é deslogado silenciosamente** — reproduzido de forma 100% determinística (não era flakiness) em `ng serve` e no build Docker publicado (porta 4300) igualmente; é um bug do código de produção, não do harness de teste.
 
 ### Decisao
 
-Adicionar `frontend/e2e/document-upload-rag.smoke.spec.ts`, seguindo o padrão de `admin-chat-real.smoke.spec.ts`: autentica com `JANUS_USER_ACCESS_TOKEN`, sobe um arquivo real com marcador único pela aba "Docs" da conversa, e confirma que a busca por similaridade retorna o trecho indexado.
+Adiar a primeira chamada de `initializeAuth()` para um microtask (`queueMicrotask` no construtor de `AuthService`, `frontend/src/app/core/auth/auth.service.ts`), garantindo que o construtor termine e o Angular libere `AuthService` da lista "em construção" antes do `http.get()` (e da cadeia de interceptors, incluindo o `inject(AuthService)` de `authSessionInterceptor`) executar. Também removi o `console.error` de diagnóstico, mantendo o `catch {}` original.
 
-Para obter um token localmente sem depender de login manual, usei o IdP de desenvolvimento (`backend/app/dev_oidc.py`, `docker-compose.local-auth.yml`) via o fluxo Authorization Code + PKCE completo por script (`POST /authorize/confirm` com os parâmetros da querystring, depois `POST /token`) — o provedor local não exige senha, apenas confirma um usuário fixo (`local-user`).
+Validado com evidência de runtime real (não só teste passando): 3 execuções consecutivas de um script de diagnóstico Playwright confirmaram `url-after-reload=/` (autenticado) em vez de `/login`, com chamadas reais a `GET /api/v1/chat/conversations`, `POST /api/v1/admin-actions` e `GET /healthz/user` retornando 200 com `Authorization` presente. `auth-session-runtime.smoke.spec.ts` (já existente) avançou de "falha na restauração de sessão" para "falha bem mais adiante, no envio de chat" — mudança de comportamento consistente com a correção.
 
-Não consegui validar uma execução verde: tanto o novo spec quanto o já existente `auth-session-runtime.smoke.spec.ts` falharam de forma intermitente logo após `page.goto('/')`/`page.reload()`, com `GET /api/v1/users/me` ora 200 ora 401 usando o mesmo token, via o proxy do `ng serve` (`--proxy-config proxy.conf.json`, backend Vite do Angular 20). O mesmo token, testado repetidamente via `curl` direto contra a mesma porta, respondeu 200 de forma consistente (10+ chamadas). Os logs do container `janus_api_pc1` não mostram nenhuma tentativa correspondente aos 401 observados no browser, o que aponta para o proxy do dev server (ou uma interação dele com o Docker Desktop no Windows) como origem mais provável, não o backend nem o token.
-
-Optei por não investigar mais fundo nem alterar código de autenticação nesta sessão: é uma área de alto risco (`AGENTS.md`) e a causa raiz ainda não está isolada o suficiente para uma correção segura.
+O novo `frontend/e2e/document-upload-rag.smoke.spec.ts` agora consegue autenticar e completar o upload real (confirmado via `GET /api/v1/documents/list`: arquivo presente, `status: "processing"`), mas a busca por similaridade nunca encontra o trecho porque a indexação nunca termina. Causa raiz isolada via consulta direta a `document_manifests` no Postgres (`chunks_total=0`, `chunks_indexed=0`, `completed_at=null`, sem `error_code`/`error_message`) e `docker inspect janus_api_pc1`: a env var `START_ORCHESTRATOR_WORKERS_ON_STARTUP=false` desliga todos os workers em processo (`backend/app/core/workers/orchestrator.py`), incluindo `document_ingestion`, neste ambiente local — não é um bug de código, é configuração local deliberada (provavelmente para não gastar cota de LLM/embeddings em uso casual). Não alterei essa env var: é infraestrutura compartilhada e uma mudança sem autorização explícita poderia ligar workers de custo real (LLM, treinamento) sem intenção.
 
 ### Alternativas Consideradas
 
-- Reportar a lacuna sem escrever o teste: rejeitado — o teste em si é válido e reutilizável assim que a flakiness for resolvida; não escrevê-lo adiaria o mesmo trabalho sem necessidade.
-- Tentar corrigir a suspeita de causa raiz (proxy do `ng serve`) às cegas: rejeitado — mudar infraestrutura de auth/proxy sem reprodução isolada (ex.: fora do Docker Desktop/Windows) arrisca mascarar um bug real em vez de corrigi-lo.
-- Rodar contra o frontend Docker já publicado (porta 4300) em vez de `ng serve`: tentado primeiro; mesmo sintoma, then descartado como pista (não é exclusivo do dev server).
+- Adicionar `EnvironmentInjector.runInContext` ou trocar `inject(AuthService)` por injeção lazy dentro do `authSessionInterceptor`: resolveria o mesmo sintoma, mas mudaria a superfície pública do interceptor (usado por outros specs) para um problema cuja causa real está no *timing* da chamada em `AuthService`, não no interceptor; rejeitado por não ser a causa raiz.
+- Envolver `this.http.get(...)` em `setTimeout(0)` em vez de `queueMicrotask`: funciona, mas microtask é a menor unidade de adiamento que ainda garante execução antes do próximo paint/IO, evitando um flash de estado não-autenticado perceptível.
+- Ligar `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true` para validar o smoke de upload/RAG até o fim: rejeitado nesta sessão — ambiente compartilhado, custo de LLM real, exige autorização explícita do usuário.
 
 ### Consequencias
 
-- Pro: lacuna de cobertura documentada há um mês (CHANGELOG Ciclo 37) agora tem um teste pronto; falta apenas destravar o harness de auth local para rodá-lo em CI/local.
-- Contra: não há evidência de runtime de que upload → indexação → busca RAG funcionam ponta a ponta; a alegação permanece não verificada.
-- Contra: a flakiness de sessão OIDC local em `ng serve` é um risco novo e não investigado a fundo — se reproduzir fora deste ambiente, bloqueia qualquer novo smoke autenticado, não só este.
+- Pro: bug de produção real e determinístico corrigido (não cosmético) — qualquer usuário que já teve uma sessão válida e recarrega a página era deslogado sem aviso; agora a sessão sobrevive normalmente.
+- Pro: 12 testes de `auth.service.spec.ts`/`auth.guard.spec.ts` + 178 testes da suíte completa do frontend + lint + build development permanecem verdes após a mudança.
+- Pro: `frontend/e2e/document-upload-rag.smoke.spec.ts` agora autentica e valida upload real de ponta a ponta; só falta a etapa de busca, bloqueada por config de ambiente documentada, não por bug.
+- Contra: a etapa final do smoke de upload/RAG (busca encontra o trecho) permanece não verificada nesta sessão — depende de `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`, decisão que requer autorização do usuário por ligar consumo real de LLM.
+- Contra: `auth-session-runtime.smoke.spec.ts` agora falha num ponto novo (403 em `POST /api/v1/chat/stream/...`), não investigado — pode ser escopo de token insuficiente do IdP de desenvolvimento local, não necessariamente um bug.

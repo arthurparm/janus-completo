@@ -53,11 +53,17 @@ test.describe.serial('Document upload + RAG retrieval smoke', () => {
     await page.getByRole('button', { name: /^Upload$|Enviando\.\.\./ }).click()
     await expect(page.getByText('Upload concluído.')).toBeVisible({ timeout: 60_000 })
 
+    // A indexacao (chunking + embeddings) roda apos o upload responder 200,
+    // entao a busca pode nao encontrar nada nos primeiros segundos.
     const searchInput = page.getByPlaceholder('Buscar por conteúdo/index...')
-    await searchInput.fill(marker)
-    await searchInput.press('Enter')
+    const searchButton = page.getByRole('button', { name: 'Buscar', exact: true })
+    await expect(async () => {
+      await searchInput.fill('')
+      await searchInput.fill(marker)
+      await searchButton.click()
+      await expect(page.locator('.doc-search-item').first()).toBeVisible({ timeout: 5_000 })
+    }).toPass({ timeout: 60_000, intervals: [2_000] })
 
-    await expect(page.locator('.doc-search-item').first()).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.doc-search-item')).toContainText(marker)
   })
 })

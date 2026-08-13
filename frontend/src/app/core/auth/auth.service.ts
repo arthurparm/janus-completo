@@ -49,7 +49,16 @@ export class AuthService {
   readonly isAdmin = computed(() => this._user()?.roles?.some(role => role.toUpperCase() === 'ADMIN') ?? false)
   readonly userEmail = computed(() => this._user()?.email ?? '')
 
-  constructor() { void this.initializeAuth() }
+  constructor() {
+    // Deferred to a microtask: authSessionInterceptor injects AuthService to
+    // handle 401s, so firing the initial http.get() synchronously from this
+    // constructor makes Angular's DI see AuthService as re-entered while
+    // still under construction (NG0200), which this catch swallowed
+    // silently — every fresh page load with a stored token was silently
+    // logged out. Yielding once first lets construction finish before the
+    // request (and its interceptor chain) runs.
+    queueMicrotask(() => void this.initializeAuth())
+  }
 
   get currentUserValue(): User | null { return this._user() }
 
