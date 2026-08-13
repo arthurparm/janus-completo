@@ -86,9 +86,11 @@ def render_ui_component(
     data: dict[str, Any] | list[Any],
     description: str | None = None,
 ) -> str:
-    """Return a deterministic UI render acknowledgement."""
-    _ = (data, description)
-    return json.dumps({"status": "accepted", "component_type": type, "title": title})
+    """Return the structured UI payload for the caller to attach to the message."""
+    payload: dict[str, Any] = {"status": "accepted", "type": type, "title": title, "data": data}
+    if description:
+        payload["description"] = description
+    return json.dumps(payload, ensure_ascii=False, default=str)
 
 
 APPROVED_TOOLS: tuple[BaseTool, ...] = (

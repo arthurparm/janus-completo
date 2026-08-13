@@ -25,6 +25,7 @@ import {
 import { Header } from '../../core/layout/header/header'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
+import { ChatUiBlockComponent } from '../../shared/components/chat-ui-block/chat-ui-block.component'
 import { JarvisAvatarComponent } from '../../shared/components/jarvis-avatar/jarvis-avatar.component'
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
 import { MarkdownPipe } from '../../shared/pipes/markdown.pipe'
@@ -72,7 +73,8 @@ import {
     UiBadgeComponent,
     JarvisAvatarComponent,
     SkeletonComponent,
-    MarkdownPipe
+    MarkdownPipe,
+    ChatUiBlockComponent
   ],
   templateUrl: './conversations.html',
   styleUrls: ['./conversations.scss'],
@@ -881,6 +883,7 @@ export class ConversationsComponent {
             timestamp: now,
             citations: resp.citations || [],
             citation_status: resp.citation_status,
+            ui: resp.ui,
             understanding: resp.understanding,
             confirmation: resp.confirmation ?? resp.understanding?.confirmation,
             agent_state: resp.agent_state,
@@ -967,6 +970,7 @@ export class ConversationsComponent {
         processing_notice: done.processing_notice || undefined,
         citations: done.citations || [],
         citation_status: done.citation_status,
+        ui: done.ui,
         understanding: done.understanding,
         confirmation: done.confirmation ?? done.understanding?.confirmation,
         agent_state: done.agent_state,
@@ -1071,6 +1075,7 @@ export class ConversationsComponent {
       timestamp: msg.timestamp,
       citations: msg.citations || [],
       citation_status: (raw['citation_status'] as CitationStatus | undefined),
+      ui: msg.ui,
       understanding: msg.understanding,
       confirmation: (raw['confirmation'] as ChatConfirmationState | undefined) ?? msg.understanding?.confirmation,
       agent_state: (raw['agent_state'] as ChatAgentState | undefined),
@@ -1188,6 +1193,7 @@ export class ConversationsComponent {
         text: finalText,
         citations: finalResponse.citations || [],
         citation_status: finalResponse.citation_status,
+        ui: finalResponse.ui,
         understanding: finalResponse.understanding,
         confirmation: finalResponse.confirmation ?? finalResponse.understanding?.confirmation,
         agent_state: finalResponse.agent_state,

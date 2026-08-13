@@ -1,3 +1,12 @@
+export type ChatUiComponentType = 'table' | 'list' | 'card' | 'chart' | 'code_block'
+
+export interface ChatUiPayload {
+  type: ChatUiComponentType
+  data: any
+  title?: string
+  description?: string
+}
+
 export interface ChatStartResponse {
   conversation_id: string
   created_at?: number
@@ -88,7 +97,7 @@ export interface ChatMessage {
   citations?: Citation[]
   citation_status?: CitationStatus;
   reasoning?: string;
-  ui?: { type: string; data: any };
+  ui?: ChatUiPayload;
   understanding?: ChatUnderstanding;
   confirmation?: ChatConfirmationState;
   agent_state?: ChatAgentState;
@@ -138,7 +147,7 @@ export interface ChatMessageResponse {
   gaps_or_conflicts?: string[];
   citations: Citation[];
   citation_status?: CitationStatus;
-  ui?: { type: string; data: any };
+  ui?: ChatUiPayload;
   understanding?: ChatUnderstanding;
   confirmation?: ChatConfirmationState;
   agent_state?: ChatAgentState;

@@ -512,6 +512,8 @@ class StreamingService:
                     )
                 )
                 assistant_text = str(grounded_result["response"])
+            assistant_text, ui = split_ui(assistant_text)
+            grounded_result["response"] = assistant_text
             first_token = True
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i : i + 256]
@@ -553,10 +555,13 @@ class StreamingService:
                 failure_classification=grounded_result.get("failure_classification"),
             )
             normalized_understanding = grounded_final.understanding
+            grounded_payload = grounded_final.to_payload()
+            if ui:
+                grounded_payload["ui"] = ui
             saved_message = await self._message_orchestration_service.persist_finalized_turn(
                 conversation_id=conversation_id,
                 user_message=message,
-                result=grounded_final.to_payload(),
+                result=grounded_payload,
                 user_id=user_id,
                 project_id=project_id,
                 identity_source=identity_source,
@@ -589,7 +594,6 @@ class StreamingService:
                 "source_scope": grounded_result.get("source_scope"),
                 "gaps_or_conflicts": grounded_result.get("gaps_or_conflicts") or [],
             }
-            _, ui = split_ui(assistant_text)
             if ui:
                 grounded_done_payload["ui"] = ui
             if normalized_understanding:
@@ -838,6 +842,7 @@ class StreamingService:
                     )
                     assistant_text = str(result["response"])
                     needs_study_job = True
+            assistant_text, ui = split_ui(assistant_text)
             execution.response = assistant_text
             execution.provider = str(result.get("provider") or execution.provider)
             execution.model = str(result.get("model") or execution.model)
@@ -875,7 +880,6 @@ class StreamingService:
             )
             normalized_understanding = finalized.understanding
             confirmation_payload = finalized.confirmation
-            _, ui = split_ui(assistant_text)
 
             for i in range(0, len(assistant_text), 256):
                 chunk = assistant_text[i : i + 256]
@@ -883,10 +887,13 @@ class StreamingService:
                 yield f"event: token\ndata: {tok}\n\n"
                 yield f"event: partial\ndata: {tok}\n\n"
 
+            finalized_payload = finalized.to_payload()
+            if ui:
+                finalized_payload["ui"] = ui
             saved_message = await self._message_orchestration_service.persist_finalized_turn(
                 conversation_id=conversation_id,
                 user_message=message,
-                result=finalized.to_payload(),
+                result=finalized_payload,
                 user_id=user_id,
                 project_id=project_id,
                 identity_source=identity_source,

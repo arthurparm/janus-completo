@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core'
 import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import { API_BASE_URL, SSE_MAX_RETRIES, SSE_RETRY_MAX_SECONDS } from './api.config'
-import { ChatAgentState, ChatConfirmationState, ChatUnderstanding, Citation, CitationStatus } from '../models'
+import { ChatAgentState, ChatConfirmationState, ChatUiPayload, ChatUnderstanding, Citation, CitationStatus } from '../models'
 import { AppLoggerService } from '../core/services/app-logger.service'
 import { buildChatStreamAuthHeaders, generateRequestId } from './chat-auth-headers.util'
 
@@ -23,6 +23,7 @@ export interface StreamDone {
   gaps_or_conflicts?: string[]
   citations?: Citation[]
   citation_status?: CitationStatus
+  ui?: ChatUiPayload
   understanding?: ChatUnderstanding
   confirmation?: ChatConfirmationState
   agent_state?: ChatAgentState

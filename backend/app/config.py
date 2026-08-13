@@ -27,6 +27,7 @@ CURRENT_RUNTIME_MODELS = frozenset(
         "qwen3.5:9b",
         "ministral-3:14b",
         "auto",
+        "janus-combo",
     }
 )
 

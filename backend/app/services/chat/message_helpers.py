@@ -1,5 +1,13 @@
+import json
 import re
 from typing import Any
+
+_UI_TAG_RE = re.compile(
+    r"<janus-ui(?P<attrs>[^>]*)>(?P<body>[\s\S]*?)</janus-ui>",
+    re.IGNORECASE,
+)
+_UI_ATTR_RE = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
+_UI_ALLOWED_TYPES = frozenset({"table", "chart", "list", "card", "code_block"})
 
 
 def estimate_tokens(prompt_service: Any, text: str) -> int:
@@ -15,7 +23,44 @@ def estimate_tokens(prompt_service: Any, text: str) -> int:
 
 
 def split_ui(text: str) -> tuple[str, dict[str, Any] | None]:
-    return (text or "", None)
+    """Extrai um bloco `<janus-ui type="..." title="...">DATA_JSON</janus-ui>` do texto.
+
+    O LLM é instruído (ver `backend/app/prompts/generative_ui.txt`) a emitir esse
+    marcador quando uma resposta se beneficia de visualização estruturada. Retorna
+    o texto sem o marcador e um dict `{type, title, data, description}` pronto para
+    persistir em `messages.ui_json` — ou `(text, None)` se nada válido for encontrado,
+    caso em que o texto original é preservado sem alteração.
+    """
+    if not text:
+        return (text or "", None)
+
+    match = _UI_TAG_RE.search(text)
+    if not match:
+        return (text, None)
+
+    attrs = dict(_UI_ATTR_RE.findall(match.group("attrs")))
+    ui_type = attrs.get("type", "").strip().lower()
+    if ui_type not in _UI_ALLOWED_TYPES:
+        return (text, None)
+
+    body = match.group("body").strip()
+    try:
+        data = json.loads(body) if body else None
+    except json.JSONDecodeError:
+        return (text, None)
+    if data is None:
+        return (text, None)
+
+    ui: dict[str, Any] = {"type": ui_type, "data": data}
+    title = attrs.get("title", "").strip()
+    if title:
+        ui["title"] = title
+    description = attrs.get("description", "").strip()
+    if description:
+        ui["description"] = description
+
+    clean_text = (text[: match.start()] + text[match.end() :]).strip()
+    return (clean_text, ui)
 
 
 def _build_question_summary(normalized: str) -> str:

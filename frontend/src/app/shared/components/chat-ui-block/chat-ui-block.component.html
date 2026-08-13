@@ -1,0 +1,56 @@
+<div class="chat-ui-block" [attr.data-ui-type]="type()">
+  @if (title()) {
+    <p class="chat-ui-title">{{ title() }}</p>
+  }
+  @if (description()) {
+    <p class="chat-ui-description">{{ description() }}</p>
+  }
+
+  @if (table(); as t) {
+    <div class="chat-ui-table-wrap">
+      <table class="chat-ui-table">
+        <thead>
+          <tr>
+            @for (col of t.columns; track col) {
+              <th>{{ col }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of t.rows; track $index) {
+            <tr>
+              @for (col of t.columns; track col) {
+                <td>{{ rowValue(row, col) }}</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else if (list(); as l) {
+    <ul class="chat-ui-list">
+      @for (item of l.items; track $index) {
+        <li>{{ itemText(item) }}</li>
+      }
+    </ul>
+  } @else if (card(); as c) {
+    <div class="chat-ui-card">{{ c.text }}</div>
+  } @else if (codeBlock(); as cb) {
+    <pre class="chat-ui-code"><code [attr.data-language]="cb.language">{{ cb.code }}</code></pre>
+  } @else if (chartBars(); as bars) {
+    <div class="chat-ui-chart">
+      @if (chartSeriesName()) {
+        <span class="chat-ui-chart-series">{{ chartSeriesName() }}</span>
+      }
+      <div class="chat-ui-chart-bars">
+        @for (bar of bars; track bar.label) {
+          <div class="chat-ui-chart-bar-col">
+            <div class="chat-ui-chart-bar" [style.height.%]="bar.heightPercent" [attr.title]="bar.value"></div>
+            <span class="chat-ui-chart-value">{{ bar.value }}</span>
+            <span class="chat-ui-chart-label">{{ bar.label }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

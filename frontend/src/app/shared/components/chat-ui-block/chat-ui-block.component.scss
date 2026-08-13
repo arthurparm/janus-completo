@@ -1,0 +1,139 @@
+@use 'styles/tokens' as *;
+
+:host {
+  display: block;
+}
+
+.chat-ui-block {
+  margin-top: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--janus-primary-rgb), 0.2);
+  background: rgba(var(--janus-primary-rgb), 0.05);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-ui-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.chat-ui-description {
+  color: $color-text-muted;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.chat-ui-table-wrap {
+  overflow-x: auto;
+}
+
+.chat-ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+
+  th,
+  td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(var(--janus-primary-rgb), 0.15);
+    white-space: nowrap;
+  }
+
+  th {
+    color: $color-text-muted;
+    font-weight: 600;
+  }
+
+  td {
+    color: $color-text-primary;
+  }
+}
+
+.chat-ui-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: $color-text-primary;
+  font-size: 0.85rem;
+
+  li {
+    margin-bottom: 4px;
+  }
+}
+
+.chat-ui-card {
+  color: $color-text-primary;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.chat-ui-code {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow-x: auto;
+  font-size: 0.82rem;
+
+  code {
+    color: $color-text-primary;
+    font-family: var(--font-mono, monospace);
+    white-space: pre;
+  }
+}
+
+.chat-ui-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-ui-chart-series {
+  font-size: 0.75rem;
+  color: $color-text-muted;
+}
+
+.chat-ui-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 120px;
+  padding-top: 8px;
+}
+
+.chat-ui-chart-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 0;
+  height: 100%;
+  min-width: 28px;
+}
+
+.chat-ui-chart-bar {
+  width: 100%;
+  max-width: 36px;
+  border-radius: 4px 4px 0 0;
+  background: rgba(var(--janus-primary-rgb), 0.65);
+  transition: height 0.2s ease;
+}
+
+.chat-ui-chart-value {
+  font-size: 0.72rem;
+  color: $color-text-primary;
+  margin-top: 4px;
+}
+
+.chat-ui-chart-label {
+  font-size: 0.7rem;
+  color: $color-text-muted;
+  margin-top: 2px;
+  text-align: center;
+  word-break: break-word;
+}

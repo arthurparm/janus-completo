@@ -828,3 +828,37 @@ Durante a implementação, encontrei um trabalho substancial já em andamento (n
 - Pro: nenhuma linha do trabalho pré-existente de OmniRoute (outra sessão) foi perdida na resolução do conflito.
 - Contra: `LLM_FAILOVER_MAX_PROVIDERS=4` é um teto arbitrário (evita loop infinito); se todos os provedores estiverem genuinamente indisponíveis, ainda assim falha após até 5 tentativas totais (1 primária + 4 de failover) — não há espera/retry entre elas além do que o circuit breaker/retry de cada client já aplica.
 - Contra: a extração de `reset_at` via regex no corpo textual do erro (fallback para gateways que só embutem o header em JSON aninhado) é frágil a mudanças de formato do provedor; se quebrar, o sistema volta ao comportamento conservador (bloqueio até meia-noite) ou ao circuit breaker padrão, nunca a um estado pior do que antes.
+
+## DEC-034 - UI generativa (`<janus-ui>`): parser real, persistência corrigida em 6 pontos, componente de renderização no frontend
+
+### Contexto
+
+A pedido do usuário ("Continue atacando ferramentas parciais e basicas do Janus"), investiguei a UI generativa do chat — o mecanismo pelo qual o LLM pode embutir tabelas/listas/cards/gráficos estruturados na resposta. Encontrei três problemas concretos:
+
+1. `split_ui()` (`backend/app/services/chat/message_helpers.py`) era um stub completo: `return (text or "", None)`. Nenhum marcador `<janus-ui>` era extraído; o teste unitário existente (`test_chat_ui_split.py`) codificava esse não-funcionamento como comportamento esperado.
+2. O prompt de sistema (`backend/app/prompts/generative_ui.txt`) ensinava o LLM uma sintaxe de chamada Python que não correspondia a nenhum parser real — o LLM nunca teria como emitir algo que o backend soubesse interpretar.
+3. A ferramenta LangChain `render_ui_component` (`safe_tools.py`, usada apenas pelo caminho MAS separado, não pelo chat principal) descartava os argumentos `data`/`description` recebidos.
+4. **Bug de persistência em 6 pontos**: mesmo após implementar o parser real, `ui` era computado em `message_orchestration_service.py` (3 sites) e `streaming_service.py` (2 sites) mas descartado (`_, ui = split_ui(...)`) — nunca era escrito no dict `metadata`/`result` repassado a `add_message`/`persist_finalized_turn`, então `messages.ui_json` permanecia `null` mesmo quando o SSE `done` trazia o `ui` correto.
+
+### Decisao
+
+1. Reescrevi `split_ui()` com um parser real: regex para o marcador `<janus-ui type="..." title="..." description="...">JSON</janus-ui>`, validação de `type` contra um whitelist (`table`, `chart`, `list`, `card`, `code_block`), parse seguro do corpo como JSON (falha suave — devolve o texto original se o JSON for inválido ou o tipo desconhecido), e remoção do marcador do texto visível.
+2. Reescrevi `generative_ui.txt` para ensinar a sintaxe real do marcador, com a forma de dados esperada por tipo.
+3. Corrigido `render_ui_component` para propagar `data`/`description` no payload retornado.
+4. Corrigidos os 6 sites de chamada (`message_orchestration_service.py`: comando, immediate-strategy, grounded/RAG, envio genérico; `streaming_service.py`: grounded e não-grounded) para usar o `clean_text` retornado (não o texto original com o marcador) e para propagar `ui` no `metadata`/`payload` final antes de persistir.
+5. Frontend: novo `ChatUiBlockComponent` (`frontend/src/app/shared/components/chat-ui-block/`) standalone, com `computed()` por tipo (tabela, lista, card, bloco de código, gráfico de barras via CSS), tipos `ChatUiPayload`/`ChatUiComponentType` em `chat.models.ts`, campo `ui` mapeado em `StreamDone`, `ChatMessageView` e nos 4 pontos de `conversations.ts` que constroem mensagens (streaming, SSE `done`, histórico, job assíncrono). Renderizado condicionalmente em `conversations.html` logo após o texto da mensagem do assistente.
+
+Durante a implementação, um bug próprio quase derrubou o ambiente: editar `safe_tools.py` mudou o hash SHA-256 do arquivo inteiro, verificado no boot do `Kernel` contra `production_tool_manifest.json` — `janus_control_plane_pc1` entrou em loop de restart (`RuntimeError: production tool source hash does not match homologated manifest`). Corrigido recalculando o hash e atualizando a versão do tool (`1.0.0` → `1.1.0`) no manifesto, validado localmente com `load_production_manifest()` antes de reiniciar os containers.
+
+### Validacao
+
+- 7 testes unitários novos/reescritos em `test_chat_ui_split.py` (extração, título, descrição, tipo desconhecido, JSON malformado, ausência de marcador, string vazia, atributo `type` ausente) — todos passam.
+- End-to-end real: mensagem forçada via SSE `/chat/stream` contra o container `janus_api_pc1` rodando; `SELECT ui_json FROM messages` no Postgres confirmou `{"type": "table", "title": "Teste", "data": {"columns": ["A","B"], "rows": [{"A":"1","B":"2"}]}}` persistido e `text` vazio (marcador totalmente removido).
+- `ng build` do frontend limpo (zero erros de tipo) após rebuild da imagem Docker e recriação do container `janus-frontend` na porta 4300.
+- Confirmação visual real no browser (Claude Browser, `read_page`/`get_page_text` contra `http://localhost:4300/conversations/20` autenticado via PKCE do dev IdP): a mensagem do assistente renderiza o título "Teste" seguido de uma tabela HTML real com colunas "A"/"B" e linha "1"/"2" — igual ao `ui_json` persistido, sem o marcador cru visível.
+
+### Consequencias
+
+- Pro: a UI generativa do chat principal (não o caminho MAS) agora funciona ponta a ponta: LLM emite o marcador → parser extrai e limpa o texto → persiste no Postgres → API expõe via `ui` → frontend renderiza um componente real.
+- Pro: causa raiz identificada e documentada — a ferramenta LangChain `render_ui_component` é inalcançável pelo chat principal (nenhum `bind_tools`/`tools=[` no caminho de LLM do chat de turno único); o mecanismo real e único usado pelo chat é o marcador em texto.
+- Contra: `render_ui_component` (caminho MAS) permanece funcionalmente órfão do fluxo de chat principal — corrigido por completude/consistência do manifesto homologado, mas sem consumidor comprovado no momento.

@@ -1,6 +1,7 @@
 import type {
   ChatAgentState,
   ChatConfirmationState,
+  ChatUiPayload,
   ChatUnderstanding,
   Citation,
   CitationStatus
@@ -19,6 +20,7 @@ export interface ChatMessageView {
   processing_profile?: string
   processing_notice?: string
   citations?: Citation[]
+  ui?: ChatUiPayload
   understanding?: ChatUnderstanding
   citation_status?: CitationStatus
   confirmation?: ChatConfirmationState

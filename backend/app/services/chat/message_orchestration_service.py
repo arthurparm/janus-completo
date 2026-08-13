@@ -1545,8 +1545,9 @@ class MessageOrchestrationService:
                     CHAT_ERRORS_TOTAL.labels(code="InvocationError").inc()
                     raise ChatServiceError("Static response unavailable") from exc
                 raise
-            assistant_text = execution.response
-            clean_text, ui = split_ui(assistant_text)
+            assistant_text, ui = split_ui(execution.response)
+            execution.response = assistant_text
+            clean_text = assistant_text
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             result = execution.to_payload()
@@ -1579,6 +1580,8 @@ class MessageOrchestrationService:
                 )
                 finalized_payload = finalized.to_payload()
                 finalized_payload["conversation_id"] = conversation_id
+                if ui:
+                    finalized_payload["ui"] = ui
                 try:
                     saved_message = await self.persist_finalized_turn(
                         conversation_id=conversation_id,
@@ -1604,6 +1607,7 @@ class MessageOrchestrationService:
                     conversation_id,
                     role="assistant",
                     text=assistant_text,
+                    metadata={"ui": ui} if ui else {},
                 )
             CHAT_TOKENS_TOTAL.labels(direction="out").inc(
                 estimate_tokens(self._prompt_service, assistant_text)
@@ -1644,6 +1648,7 @@ class MessageOrchestrationService:
             start_t = _time.time()
             assistant_text = str(grounded_result.get("response") or "")
             clean_text, ui = split_ui(assistant_text)
+            assistant_text = clean_text
             elapsed = max(0.0, _time.time() - start_t)
             CHAT_LATENCY_SECONDS.labels(role=role.value, outcome="success").observe(elapsed)
             CHAT_MESSAGES_TOTAL.labels(role="assistant", outcome="success").inc()
@@ -1671,6 +1676,7 @@ class MessageOrchestrationService:
                     "citation_status": grounded_result.get("citation_status"),
                     "provider": grounded_result.get("provider"),
                         "model": grounded_result.get("model"),
+                        "ui": ui,
                     },
                 )
             out_tokens = estimate_tokens(self._prompt_service, assistant_text)
@@ -1794,12 +1800,14 @@ class MessageOrchestrationService:
             user_id=resolved_user_id,
             conversation_id=conversation_id)
         clean_text, ui = split_ui(assistant_text)
+        assistant_text = clean_text
         if not defer_finalization:
             await asyncio.to_thread(
                 self._repo.add_message,
                 conversation_id,
                 role="assistant",
                 text=assistant_text,
+                metadata={"ui": ui} if ui else {},
             )
         out_tokens = estimate_tokens(self._prompt_service, assistant_text)
         CHAT_TOKENS_TOTAL.labels(direction="out").inc(out_tokens)

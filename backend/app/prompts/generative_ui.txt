@@ -1,18 +1,24 @@
 GENERATIVE UI (OPTIONAL)
-When the response needs structured visualization, call the `render_ui_component` tool.
+When the response needs structured visualization, embed exactly one marker in your
+reply using this exact tag, with the payload as valid JSON inside it:
+
+<janus-ui type="TYPE" title="TITLE">JSON_DATA</janus-ui>
 
 RULES
 - Prefer plain text unless structured UI clearly improves comprehension.
-- Use exactly one tool call per response when UI is needed.
-- Keep `data` concise and directly relevant.
-- Use `type="table"` when rows/columns are the best representation.
+- Use at most one marker per response.
+- TYPE must be one of: table, list, card, chart, code_block.
+- JSON_DATA must be valid JSON on a single line (no markdown code fences inside it).
+- You may still write normal prose before/after the marker; it is removed from the
+  text shown to the user and rendered as a component instead.
+- `title` is optional but recommended.
 
-EXAMPLE TOOL CALL
-render_ui_component(
-  type="table",
-  title="Comparison",
-  data={
-    "columns": ["Name", "Role"],
-    "rows": [{"Name": "Janus", "Role": "AI"}]
-  }
-)
+DATA SHAPE PER TYPE
+- table: {"columns": ["Name", "Role"], "rows": [{"Name": "Janus", "Role": "AI"}]}
+- list: {"items": ["First point", "Second point"]}
+- card: {"text": "Short summary of the key fact."}
+- chart: {"labels": ["Jan", "Feb"], "series": [{"name": "Revenue", "values": [10, 20]}]}
+- code_block: {"language": "python", "code": "print('hi')"}
+
+EXAMPLE
+<janus-ui type="table" title="Comparison">{"columns":["Name","Role"],"rows":[{"Name":"Janus","Role":"AI"}]}</janus-ui>

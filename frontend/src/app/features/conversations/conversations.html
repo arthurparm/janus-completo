@@ -155,6 +155,9 @@
                       </div>
                     }
                     <div class="message-text markdown-content" [innerHTML]="msg.text | markdown"></div>
+                    @if (msg.role === 'assistant' && msg.ui) {
+                      <app-chat-ui-block [payload]="msg.ui"></app-chat-ui-block>
+                    }
                     @if (msg.role === 'assistant' && msg.understanding?.summary) {
                       <div class="understanding-card">
                         <div class="understanding-head">
