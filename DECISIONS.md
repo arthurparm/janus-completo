@@ -630,3 +630,28 @@ Reescrever a carta operacional em registro técnico/objetivo, preservando as mes
 - Pro: os 16 testes afetados (3 diretos + suíte de regressão) passam sem exceções.
 - Contra: qualquer documentação externa ou prompt cacheado que cite a frase antiga ("Criei você para ser livre...") fica desatualizado até ser regenerado.
 
+## DEC-027 - Metas auto-propostas e reflexão periódica visível
+
+### Contexto
+
+Antes desta mudança, apenas humanos podiam criar metas via `POST /api/v1/autonomy/goals`; o autoestudo só rodava de forma incremental no startup (`startup_self_study_check`) e seu agendamento futuro não era observável em lugar nenhum. Isso violava o invariante "iniciativa precisa ser visível" para o caso de reflexão periódica e deixava o autoestudo sem trilha própria de acompanhamento quando encontrava falhas recorrentes.
+
+### Decisao
+
+- Adicionar `source` (default `"api"`) ao `Goal`/`AutonomyGoal` e propagar em `GoalManager.create_goal`, expondo o campo em `GoalResponse` e no badge "Janus" da UI (`conversations.html`) quando `source == "janus"`.
+- Em `AutonomyAdminService.run_self_study`, propor automaticamente uma meta de investigação (fonte `"janus"`, nunca autoexecutada) quando o run termina com erros, deduplicando por marcador de evidência (`self_study_run:<id>`) no histórico de metas.
+- Registrar um job periódico `self_study_periodic` no `SchedulerService` (`AUTONOMY_SELF_STUDY_PERIODIC_ENABLED`, `AUTONOMY_SELF_STUDY_PERIODIC_INTERVAL_SECONDS`, default 6h) além do gatilho de startup.
+- Expor `GET /api/v1/autonomy/admin/scheduler/jobs` (perfil `control-plane`, `principals=["service"]`) e consumir no painel Admin > Autonomia para mostrar quando a próxima reflexão ocorre.
+- Corrigir, en passant, os caminhos de import quebrados (`backend.app...` -> `app...`) em `get_autonomy_maturity`, que faziam o endpoint sempre reportar módulos ausentes.
+
+### Alternativas Consideradas
+
+- Deixar a proposta de meta implícita nos logs de erro do autoestudo: rejeitado por não satisfazer "iniciativa precisa ser visível" nem o ciclo de vida tipado de metas.
+- Rodar o autoestudo periódico fora do `SchedulerService` (cron externo): rejeitado por duplicar infraestrutura já existente e sem métricas Prometheus.
+
+### Consequencias
+
+- Pro: primeira meta na história do código proposta pelo próprio sistema, com origem rastreável e sem autoexecução.
+- Pro: cadência de reflexão passa a ser consultável via API e UI, não apenas em logs de container.
+- Contra: `self_study_periodic` roda mesmo sem alguém olhar o painel; se `AUTONOMY_SELF_STUDY_PERIODIC_ENABLED` for esquecido ligado em ambiente de custo sensível, gera runs recorrentes — mitigado pelo default de 6h e pelo orçamento de tempo já existente por run.
+

@@ -183,6 +183,20 @@
   },
   {
     "human_delegable": true,
+    "method": "GET",
+    "operation_id": "get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/scheduler/jobs",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
     "method": "POST",
     "operation_id": "admin_manual_goal_completion_trigger_api_v1_autonomy_admin_self_study_trigger_on_goal_complete_post",
     "ownership": "none",

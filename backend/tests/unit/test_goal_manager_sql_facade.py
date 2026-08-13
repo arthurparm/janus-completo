@@ -60,6 +60,7 @@ class _FakeGoalRepo:
         return pending[0] if pending else None
 
     def create_goal(self, **kwargs):
+        self.last_create_kwargs = kwargs
         now = datetime.utcnow()
         row = SimpleNamespace(
             id=kwargs["goal_id"],
@@ -109,3 +110,21 @@ def test_goal_manager_update_goal_status_persists_terminal_in_repo():
     assert manager.get_goal("g1") is not None
     assert manager.list_goals() == []
     assert [g.id for g in manager.list_goals(status=GoalStatus.FAILED)] == ["g1"]
+
+
+def test_goal_manager_create_goal_defaults_source_to_api():
+    repo = _FakeGoalRepo()
+    manager = GoalManager(memory_service=None, goal_repo=repo)
+
+    manager.create_goal(title="Nova meta", description="desc")
+
+    assert repo.last_create_kwargs["source"] == "api"
+
+
+def test_goal_manager_create_goal_forwards_janus_source_for_self_proposed_goals():
+    repo = _FakeGoalRepo()
+    manager = GoalManager(memory_service=None, goal_repo=repo)
+
+    manager.create_goal(title="Meta proposta pelo Janus", description="desc", source="janus")
+
+    assert repo.last_create_kwargs["source"] == "janus"

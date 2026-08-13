@@ -152,6 +152,7 @@ async def lifespan(app: FastAPI):
         app.state.autonomy_admin_service = AutonomyAdminService(
             llm_service=kernel.llm_service,
             knowledge_service=kernel.knowledge_service,
+            goal_manager=kernel.goal_manager,
         )
     except Exception as e:
         logger.warning("autonomy_admin_service_init_failed", error=str(e), exc_info=e)

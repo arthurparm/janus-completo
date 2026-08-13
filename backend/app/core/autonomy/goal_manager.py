@@ -2,6 +2,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from typing import Any
 
 import structlog
 from app.config import settings
@@ -31,10 +32,11 @@ class Goal:
     parent_id: str | None = None
     depth: int = 0
     estimated_cost_tokens: float | None = None
+    source: str = "api"
     created_at: float = field(default_factory=lambda: time.time())
     updated_at: float = field(default_factory=lambda: time.time())
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
@@ -96,6 +98,7 @@ class GoalManager:
             deadline_ts=deadline_ts,
             parent_id=parent_id_str,
             depth=depth,
+            source=str(getattr(row, "source", None) or "api"),
             created_at=created_at.timestamp() if isinstance(created_at, datetime) else time.time(),
             updated_at=updated_at.timestamp() if isinstance(updated_at, datetime) else time.time(),
         )
@@ -153,6 +156,7 @@ class GoalManager:
         priority: int = 5,
         success_criteria: str | None = None,
         deadline_ts: float | None = None,
+        source: str = "api",
     ) -> Goal:
         goal_id = uuid.uuid4().hex
         goal = Goal(
@@ -170,7 +174,7 @@ class GoalManager:
             priority=goal.priority,
             success_criteria=goal.success_criteria,
             deadline_ts=goal.deadline_ts,
-            source="api",
+            source=source,
         )
         goal = self._to_goal(row) or goal
         self._save_to_firestore(goal)

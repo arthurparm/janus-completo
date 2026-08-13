@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 import structlog
 from app.config import settings
+from app.core.autonomy.goal_manager import GoalManager
 from app.core.llm import ModelPriority, ModelRole
 from app.core.memory.memory_core import get_memory_db
 from app.db.graph import get_graph_db
@@ -66,10 +67,16 @@ class AutonomyAdminService:
         GraphRelationship.MENTIONS.value,
     )
 
-    def __init__(self, llm_service: LLMService, knowledge_service: KnowledgeService):
+    def __init__(
+        self,
+        llm_service: LLMService,
+        knowledge_service: KnowledgeService,
+        goal_manager: GoalManager | None = None,
+    ):
         self._repo = AutonomyAdminRepository()
         self._llm_service = llm_service
         self._knowledge_service = knowledge_service
+        self._goal_manager = goal_manager
         self._meta = get_meta_agent_service()
         self._max_run_seconds = int(
             getattr(settings, "AUTONOMY_SELF_STUDY_MAX_RUN_SECONDS", self.MAX_RUN_SECONDS)
@@ -1511,6 +1518,13 @@ class AutonomyAdminService:
         if final_status in {"completed", "partial"}:
             self._repo.update_self_study_state(last_studied_commit=target_commit, mark_success=True)
 
+        proposed_goal_id = self._propose_self_study_followup_goal(
+            run_id=run.id,
+            errors=errors,
+            files_processed=processed,
+            target_commit=target_commit,
+        )
+
         return {
             "run_id": run.id,
             "status": final_status,
@@ -1524,7 +1538,84 @@ class AutonomyAdminService:
             "run_budget_seconds": run_budget_seconds,
             "run_deadline_local": str(self._self_study_deadline_local or "").strip() or None,
             "local_only": self._self_study_local_only,
+            "proposed_goal_id": proposed_goal_id,
         }
+
+    def _propose_self_study_followup_goal(
+        self,
+        *,
+        run_id: Any,
+        errors: int,
+        files_processed: int,
+        target_commit: str | None,
+    ) -> str | None:
+        """Reflect on a finished self-study run and, if it found a genuine gap,
+        propose a bounded goal for human review.
+
+        This is the concrete implementation of philosophy invariant #6
+        ("reflexão precisa alterar decisões"): a self-study run is a reflective
+        cycle, and its only valid outputs are a decision — here, either "no
+        actionable gap" (no goal proposed) or a typed, evidence-backed goal
+        with origin=janus, a measurable success criterion and a bounded scope.
+        Creating the goal never authorizes running anything (invariant #3):
+        it is persisted as `pending` and only becomes visible for a human (or
+        a future authorized executor) to pick up from the goal list.
+        """
+        if errors <= 0:
+            return None
+
+        manager = self._goal_manager
+        if manager is None:
+            try:
+                from app.core.kernel import Kernel
+
+                manager = Kernel.get_instance().goal_manager
+            except Exception:
+                manager = None
+        if manager is None:
+            logger.warning("self_study_goal_proposal_skipped_no_goal_manager", run_id=str(run_id))
+            return None
+
+        evidence_marker = f"self_study_run:{run_id}"
+        try:
+            existing = manager.list_goals()
+        except Exception as e:
+            logger.warning("self_study_goal_proposal_list_failed", error=str(e))
+            existing = []
+        if any(evidence_marker in (g.description or "") for g in existing):
+            return None
+
+        title = f"Investigar {errors} arquivo(s) com falha no auto-estudo"
+        description = (
+            f"Auto-estudo processou {files_processed} arquivo(s) no commit "
+            f"{target_commit or 'desconhecido'} e {errors} falharam ao serem resumidos. "
+            f"Isso é uma lacuna real de autoconhecimento: arquivos sem resumo atualizado "
+            f"reduzem a qualidade de respostas sobre o próprio código.\n\n"
+            f"Evidência: {evidence_marker} (ver AutonomyAdminRepository.get_self_study_run_progress). "
+            f"Origem: janus (proposta automática, não executada)."
+        )
+        try:
+            goal = manager.create_goal(
+                title=title,
+                description=description,
+                priority=3,
+                success_criteria=(
+                    f"Os {errors} arquivo(s) apontados no run {run_id} processam sem erro "
+                    f"em uma nova execução de auto-estudo incremental."
+                ),
+                source="janus",
+            )
+        except Exception as e:
+            logger.warning("self_study_goal_proposal_failed", run_id=str(run_id), error=str(e))
+            return None
+
+        logger.info(
+            "self_study_goal_proposed",
+            run_id=str(run_id),
+            goal_id=goal.id,
+            errors=errors,
+        )
+        return goal.id
 
     def get_self_study_status(self) -> dict[str, Any]:
         state = self._repo.get_self_study_state()
@@ -1807,6 +1898,7 @@ def get_autonomy_admin_service(request: Request) -> AutonomyAdminService:
         service = AutonomyAdminService(
             llm_service=request.app.state.llm_service,
             knowledge_service=request.app.state.knowledge_service,
+            goal_manager=getattr(request.app.state, "goal_manager", None),
         )
         request.app.state.autonomy_admin_service = service
     return service

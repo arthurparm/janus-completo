@@ -44,15 +44,38 @@ def async_client(monkeypatch):
     from app.api.v1.endpoints import autonomy_history as autonomy_history_endpoint
     from app.config import settings
     from app.core.infrastructure.auth import get_actor_user_id
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
     from fastapi import FastAPI, Request
 
-    from qa.auth_test_support import actor_from_test_request, issue_test_actor_token
+    from qa.auth_test_support import decode_test_actor_id, issue_test_actor_token
 
     app = FastAPI()
 
+    def _service_actor_from_test_request(request: Request) -> ActorContext | None:
+        # Autonomy loop control (/start, /stop, /plan, /policy, /health, /maturity),
+        # goal metrics and the whole autonomy_admin router require a SERVICE actor
+        # (ver require_service_actor/require_service_actor_context). O helper
+        # compartilhado qa.auth_test_support.actor_from_test_request cria um ator
+        # HUMAN/USER, insuficiente aqui; goal CRUD não checa actor_type, então um
+        # único ator SERVICE cobre toda a suíte deste arquivo.
+        authorization = str(request.headers.get("Authorization") or "")
+        if not authorization.startswith("Bearer "):
+            return None
+        actor_id = decode_test_actor_id(authorization.removeprefix("Bearer "))
+        if actor_id is None:
+            return None
+        return ActorContext.authenticated(
+            actor_id=f"test-service-{actor_id}",
+            actor_type=ActorType.SERVICE,
+            roles=("SERVICE",),
+            auth_method=AuthMethod.CLIENT_CREDENTIALS,
+            trace_id="test-actor",
+            client_id=f"test-service-{actor_id}",
+        )
+
     @app.middleware("http")
     async def actor_binding(request: Request, call_next):
-        request.state.actor_context = actor_from_test_request(request)
+        request.state.actor_context = _service_actor_from_test_request(request)
         actor = get_actor_user_id(request)
         request.state.actor_user_id = str(actor) if actor is not None else None
         request.state.actor_project_id = (request.headers.get("X-Project-Id") or "").strip() or None
@@ -64,7 +87,6 @@ def async_client(monkeypatch):
 
     from app.api.v1.endpoints.autonomy_history import get_autonomy_repo
     from app.core.autonomy.goal_manager import GoalStatus, get_goal_manager
-    from app.repositories import user_repository
     from app.services.autonomy_admin_service import get_autonomy_admin_service
     from app.services.autonomy_service import get_autonomy_service
 
@@ -84,6 +106,7 @@ def async_client(monkeypatch):
                     status=GoalStatus.PENDING,
                     success_criteria=None,
                     deadline_ts=None,
+                    source="janus",
                     created_at=1.0,
                     updated_at=1.0,
                 )
@@ -117,6 +140,7 @@ def async_client(monkeypatch):
                 status=kwargs.get("status") or GoalStatus.PENDING,
                 success_criteria=kwargs.get("success_criteria"),
                 deadline_ts=kwargs.get("deadline_ts"),
+                source=kwargs.get("source") or "api",
                 created_at=kwargs.get("created_at") or 1.0,
                 updated_at=kwargs.get("updated_at") or 1.0,
             )
@@ -232,10 +256,10 @@ def async_client(monkeypatch):
     app.dependency_overrides[get_goal_manager] = lambda: DummyGoalManager()
     app.dependency_overrides[get_autonomy_repo] = lambda: DummyAutonomyRepo()
     class DummyAutonomyService:
-        async def start(self, _config):
+        async def start(self, _config, actor=None):
             return True
 
-        async def stop(self):
+        async def stop(self, actor=None):
             return True
 
         def get_status(self):
@@ -257,7 +281,7 @@ def async_client(monkeypatch):
                 "runtime_lock": None,
             }
 
-        def update_plan(self, plan):
+        def update_plan(self, plan, actor=None):
             return True
 
         def update_policy_config(self, **_kwargs):
@@ -266,8 +290,6 @@ def async_client(monkeypatch):
     app.dependency_overrides[get_autonomy_service] = lambda: DummyAutonomyService()
     app.dependency_overrides[get_autonomy_admin_service] = lambda: DummyAutonomyAdminService()
 
-    monkeypatch.setattr(user_repository.UserRepository, "is_admin", lambda _self, _user_id: True)
-    monkeypatch.setattr(user_repository.UserRepository, "has_role", lambda _self, _user_id, _role_name: False)
     monkeypatch.setattr(autonomy_endpoint, "record_audit_event_direct", lambda **_kwargs: None)
 
     headers = {"Authorization": f"Bearer {issue_test_actor_token(1)}"}
@@ -285,6 +307,8 @@ class TestAutonomyGoalsContract:
     async def test_goals_list_ok(self, async_client):
         resp = await async_client.get("/api/v1/autonomy/goals")
         assert resp.status_code == 200
+        # Provenance must survive serialization: iniciativa precisa ser visível.
+        assert resp.json()[0]["source"] == "janus"
 
     async def test_goals_create_ok(self, async_client):
         resp = await async_client.post(
@@ -292,10 +316,14 @@ class TestAutonomyGoalsContract:
             json={"title": "T2", "description": "D2", "priority": 5},
         )
         assert resp.status_code == 200
+        # Goals created through the public REST endpoint are always human/API-sourced;
+        # only the self-study reflection loop is allowed to set source=janus.
+        assert resp.json()["source"] == "api"
 
     async def test_goal_get_ok(self, async_client):
         resp = await async_client.get("/api/v1/autonomy/goals/g1")
         assert resp.status_code == 200
+        assert resp.json()["source"] == "janus"
 
     async def test_goal_get_404(self, async_client):
         resp = await async_client.get("/api/v1/autonomy/goals/missing")
@@ -423,3 +451,32 @@ class TestAutonomyAdminContract:
     async def test_admin_self_study_runs_ok(self, async_client):
         resp = await async_client.get("/api/v1/autonomy/admin/self-study/runs")
         assert resp.status_code == 200
+
+    async def test_admin_scheduler_jobs_ok(self, async_client):
+        resp = await async_client.get("/api/v1/autonomy/admin/scheduler/jobs")
+        assert resp.status_code == 200
+        assert "items" in resp.json()
+        assert isinstance(resp.json()["items"], list)
+
+    async def test_admin_scheduler_jobs_surfaces_registered_job(self, async_client):
+        from app.services.scheduler_service import ScheduleType, get_scheduler
+
+        scheduler = get_scheduler()
+
+        async def _noop():
+            return None
+
+        scheduler.register_job(
+            name="contract_test_probe_job",
+            callback=_noop,
+            schedule_type=ScheduleType.INTERVAL,
+            interval_seconds=123,
+        )
+        try:
+            resp = await async_client.get("/api/v1/autonomy/admin/scheduler/jobs")
+            assert resp.status_code == 200
+            names = {item["name"]: item for item in resp.json()["items"]}
+            assert "contract_test_probe_job" in names
+            assert names["contract_test_probe_job"]["schedule_type"] == "interval"
+        finally:
+            scheduler.unregister_job("contract_test_probe_job")

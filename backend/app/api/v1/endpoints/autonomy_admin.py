@@ -87,6 +87,18 @@ async def self_study_runs(
     return {"items": service.list_self_study_runs(limit=limit)}
 
 
+@router.get("/scheduler/jobs")
+async def get_scheduler_jobs():
+    """Expõe o estado dos jobs recorrentes (inclui o auto-estudo periódico).
+
+    Sem isso, saber "quando o Janus vai refletir de novo" exigia ler logs
+    brutos do container — violava o invariante de iniciativa visível.
+    """
+    from app.services.scheduler_service import get_scheduler
+
+    return {"items": get_scheduler().list_jobs()}
+
+
 @router.get("/self-study/neo4j-audit")
 async def self_study_neo4j_audit(
     orphan_limit: int = Query(default=25, ge=1, le=200),

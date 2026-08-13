@@ -435,6 +435,49 @@ async def initialize_default_jobs(scheduler: SchedulerService):
         },
     )
 
+    # Job: Periodic Self-Study (auto-estudo incremental, não só no startup)
+    async def self_study_periodic():
+        try:
+            from app.core.kernel import Kernel
+            from app.services.autonomy_admin_service import AutonomyAdminService
+
+            kernel = Kernel.get_instance()
+            service = AutonomyAdminService(
+                llm_service=kernel.llm_service,
+                knowledge_service=kernel.knowledge_service,
+                goal_manager=kernel.goal_manager,
+            )
+            result = await service.run_self_study(
+                mode="incremental",
+                reason="scheduled_periodic",
+                trigger_type="scheduled",
+            )
+            logger.info(
+                "self_study_periodic_completed",
+                status=result.get("status"),
+                files_processed=result.get("files_processed"),
+                errors=result.get("errors"),
+                proposed_goal_id=result.get("proposed_goal_id"),
+            )
+        except Exception as e:
+            logger.error("log_error", message=f"Periodic self-study failed: {e}")
+
+    scheduler.register_job(
+        name="self_study_periodic",
+        callback=self_study_periodic,
+        schedule_type=ScheduleType.INTERVAL,
+        interval_seconds=max(
+            300, int(getattr(settings, "AUTONOMY_SELF_STUDY_PERIODIC_INTERVAL_SECONDS", 21600))
+        ),
+        enabled=bool(getattr(settings, "AUTONOMY_SELF_STUDY_PERIODIC_ENABLED", True)),
+        metadata={
+            "description": (
+                "Auto-estudo incremental recorrente; reflete sobre o resultado e pode "
+                "propor uma meta própria (origin=janus) quando encontra lacunas reais."
+            ),
+        },
+    )
+
     async def data_purge_job():
         try:
             from app.services.data_purge_service import data_purge_service

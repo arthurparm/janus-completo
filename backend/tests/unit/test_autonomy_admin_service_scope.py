@@ -45,6 +45,14 @@ def _patch_meta(monkeypatch):
 
     monkeypatch.setattr(autonomy_admin_module, "get_memory_db", _fake_get_memory_db)
 
+    class _DummyHybridSearchService:
+        async def search(self, **kwargs):
+            return {"answer": "", "items": []}
+
+    monkeypatch.setattr(
+        autonomy_admin_module, "get_code_hybrid_search_service", lambda: _DummyHybridSearchService()
+    )
+
 
 def _new_service(citations, answer: str = "resposta"):
     return AutonomyAdminService(
@@ -716,46 +724,133 @@ def test_get_self_study_run_budget_uses_local_deadline(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_recall_self_study_memories_prefers_linked_code_summary(monkeypatch):
+async def test_recall_self_study_memories_filters_items_outside_allowlist(monkeypatch):
+    # _recall_self_study_memories delega para o hybrid search service (Qdrant)
+    # e depois filtra/normaliza os itens retornados pelo allowlist de paths.
     service = _new_service(citations=[])
-    filters_seen: list[dict[str, object]] = []
+    search_calls: list[dict[str, object]] = []
 
-    class _MemoryDb:
-        async def arecall_filtered(self, *, query, filters, limit, min_score):
-            del query, limit, min_score
-            filters_seen.append(filters)
-            if filters.get("neo4j_sync_status") == "linked":
-                return []
-            return [
-                SimpleNamespace(
-                    content="Resumo forte",
-                    metadata={
+    class _HybridSearchService:
+        async def search(self, **kwargs):
+            search_calls.append(kwargs)
+            return {
+                "answer": "",
+                "items": [
+                    {
                         "file_path": "backend/app/services/example.py",
-                        "captured_at": 123,
+                        "content": "Resumo forte",
+                        "score": 0.8,
+                        "source": "hybrid",
                     },
-                    score=0.8,
-                )
-            ]
+                    {
+                        "file_path": "backend/scripts/private.py",
+                        "content": "Fora do allowlist",
+                        "score": 0.7,
+                    },
+                    {
+                        "file_path": "backend/app/services/empty.py",
+                        "content": "",
+                        "score": 0.6,
+                    },
+                ],
+            }
 
-    async def _fake_get_memory_db():
-        return _MemoryDb()
-
-    monkeypatch.setattr(autonomy_admin_module, "get_memory_db", _fake_get_memory_db)
+    monkeypatch.setattr(
+        autonomy_admin_module, "get_code_hybrid_search_service", lambda: _HybridSearchService()
+    )
 
     rows = await service._recall_self_study_memories(question="example")
 
     assert len(rows) == 1
     assert rows[0]["file_path"] == "backend/app/services/example.py"
-    assert filters_seen[0] == {
-        "origin": "self_study",
-        "strong_memory": True,
-        "source_kind": "code_file",
-        "content_kind": "code_summary",
-        "neo4j_sync_status": "linked",
-    }
-    assert filters_seen[1] == {
-        "origin": "self_study",
-        "strong_memory": True,
-        "source_kind": "code_file",
-        "content_kind": "code_summary",
-    }
+    assert rows[0]["summary"] == "Resumo forte"
+    assert search_calls == [{"query": "example", "limit": 5, "min_score": 0.1, "user_id": None}]
+
+
+class _FakeGoal:
+    def __init__(self, goal_id: str, description: str):
+        self.id = goal_id
+        self.description = description
+
+
+class _FakeGoalManager:
+    def __init__(self, existing: list | None = None):
+        self.existing = existing or []
+        self.created: list[dict] = []
+
+    def list_goals(self):
+        return self.existing
+
+    def create_goal(self, *, title, description, priority, success_criteria, source):
+        goal = _FakeGoal(f"goal-{len(self.created) + 1}", description)
+        self.created.append(
+            {
+                "title": title,
+                "description": description,
+                "priority": priority,
+                "success_criteria": success_criteria,
+                "source": source,
+            }
+        )
+        self.existing.append(goal)
+        return goal
+
+
+def test_propose_self_study_followup_goal_noop_when_no_errors():
+    manager = _FakeGoalManager()
+    service = _new_service(citations=[])
+    service._goal_manager = manager
+
+    result = service._propose_self_study_followup_goal(
+        run_id="run-1", errors=0, files_processed=5, target_commit="abc123"
+    )
+
+    assert result is None
+    assert manager.created == []
+
+
+def test_propose_self_study_followup_goal_creates_typed_goal_from_evidence():
+    manager = _FakeGoalManager()
+    service = _new_service(citations=[])
+    service._goal_manager = manager
+
+    result = service._propose_self_study_followup_goal(
+        run_id="run-1", errors=2, files_processed=10, target_commit="abc123"
+    )
+
+    assert result == "goal-1"
+    assert len(manager.created) == 1
+    created = manager.created[0]
+    assert created["source"] == "janus"
+    assert "2 arquivo(s)" in created["title"]
+    assert "self_study_run:run-1" in created["description"]
+    assert "abc123" in created["description"]
+    assert "run-1" in created["success_criteria"]
+
+
+def test_propose_self_study_followup_goal_is_idempotent_per_run():
+    manager = _FakeGoalManager()
+    service = _new_service(citations=[])
+    service._goal_manager = manager
+
+    first = service._propose_self_study_followup_goal(
+        run_id="run-9", errors=1, files_processed=3, target_commit="c1"
+    )
+    second = service._propose_self_study_followup_goal(
+        run_id="run-9", errors=1, files_processed=3, target_commit="c1"
+    )
+
+    assert first is not None
+    assert second is None
+    assert len(manager.created) == 1
+
+
+def test_propose_self_study_followup_goal_noop_without_goal_manager():
+    service = _new_service(citations=[])
+    service._goal_manager = None
+
+    result = service._propose_self_study_followup_goal(
+        run_id="run-1", errors=3, files_processed=3, target_commit="abc123"
+    )
+
+    assert result is None

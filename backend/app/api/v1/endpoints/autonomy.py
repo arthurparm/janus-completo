@@ -141,6 +141,7 @@ class GoalResponse(BaseModel):
     status: str
     success_criteria: str | None
     deadline_ts: float | None
+    source: str = "api"
     created_at: float
     updated_at: float
 
@@ -451,31 +452,48 @@ async def get_autonomy_health(
 
 
 @router.get("/maturity", summary="Autonomy maturity score based on implemented phases")
-async def get_autonomy_maturity(request: Request):
-    components = {
-        "namespace_isolation": ("backend.app.core.tools.action_module", 10),
-        "governance": ("backend.app.core.autonomy.goal_conflict_detector", 10),
-        "resilience": ("backend.app.core.autonomy.domain_circuit_breaker", 10),
-        "observability": ("backend.app.core.autonomy.goal_metrics", 10),
-        "scale": ("backend.app.core.autonomy.knowledge_federation", 10),
-        "hardening": ("backend.app.core.autonomy.safety_plan_validator", 10),
-        "documentation": ("documentation.autonomy_architecture", 5),
-        "intelligence": ("backend.app.core.autonomy.decision_quality_tracker", 10),
-        "cost_governance": ("backend.app.core.autonomy.autonomy_cost_tracker", 5),
+async def get_autonomy_maturity(request: Request) -> dict[str, Any]:
+    module_components = {
+        "namespace_isolation": ("app.core.tools.action_module", 10),
+        "governance": ("app.core.autonomy.goal_conflict_detector", 10),
+        "resilience": ("app.core.autonomy.domain_circuit_breaker", 10),
+        "observability": ("app.core.autonomy.goal_metrics", 10),
+        "scale": ("app.core.autonomy.knowledge_federation", 10),
+        "hardening": ("app.core.autonomy.safety_plan_validator", 10),
+        "intelligence": ("app.core.autonomy.decision_quality_tracker", 10),
+        "cost_governance": ("app.core.autonomy.autonomy_cost_tracker", 5),
+    }
+    # Docs aren't Python modules; the canonical risk/architecture doc lives at repo root.
+    doc_components = {
+        "documentation": ("AUTONOMY_RISK.md", 5),
     }
 
     total = 0
-    max_score = sum(score for _, score in components.values())
+    max_score = sum(score for _, score in module_components.values()) + sum(
+        score for _, score in doc_components.values()
+    )
     breakdown = {}
 
     import importlib
-    for name, (module_path, score) in components.items():
+    import sys
+
+    for name, (module_path, score) in module_components.items():
         try:
-            importlib.import_module(module_path)
+            if module_path not in sys.modules:
+                importlib.import_module(module_path)
             present = True
             total += score
         except (ImportError, ModuleNotFoundError):
             present = False
+        breakdown[name] = {"present": present, "score": score if present else 0}
+
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[5]
+    for name, (relative_path, score) in doc_components.items():
+        present = (repo_root / relative_path).exists()
+        if present:
+            total += score
         breakdown[name] = {"present": present, "score": score if present else 0}
 
     return {

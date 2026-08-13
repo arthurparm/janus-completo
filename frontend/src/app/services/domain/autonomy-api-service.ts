@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { MetaAgentLatestReportResponse, MetaAgentHeartbeatStatus, Goal, GoalCreateRequest, AutonomyStartRequest, AutonomyStatusResponse, AutonomyPlanResponse, AutonomyPolicyUpdateRequest, AdminBacklogSyncResponse, AdminBacklogSprintType, SelfStudyRun, SelfStudyStatusResponse, AdminCodeQaResponse } from '../../models';
+import { MetaAgentLatestReportResponse, MetaAgentHeartbeatStatus, Goal, GoalCreateRequest, AutonomyStartRequest, AutonomyStatusResponse, AutonomyPlanResponse, AutonomyPolicyUpdateRequest, AdminBacklogSyncResponse, AdminBacklogSprintType, SelfStudyRun, SelfStudyStatusResponse, SchedulerJob, AdminCodeQaResponse } from '../../models';
 import { AdminActionsApiService } from './admin-actions-api-service';
 
 @Injectable({ providedIn: 'root' })
@@ -88,5 +88,9 @@ listAutonomyAdminSelfStudyRuns(limit: number = 20): Observable<{ items: SelfStud
 
 askAutonomyAdminCodeQa(req: { question: string; limit?: number; citation_limit?: number }): Observable<AdminCodeQaResponse> {
     return this.adminActions.execute<AdminCodeQaResponse>('code_qa_api_v1_autonomy_admin_code_qa_post', { payload: { ...req } })
+  }
+
+  getSchedulerJobs(): Observable<{ items: SchedulerJob[] }> {
+    return this.adminActions.execute<{ items: SchedulerJob[] }>('get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get')
   }
 }

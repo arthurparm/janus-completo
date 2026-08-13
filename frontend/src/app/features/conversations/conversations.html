@@ -1097,7 +1097,12 @@
                       <ul class="rail-list compact">
                         @for (goal of autonomyActiveGoals(); track goal.id) {
                           <li class="rail-item">
-                            <p class="item-title">{{ goal.title }}</p>
+                            <p class="item-title">
+                              {{ goal.title }}
+                              @if (goal.source === 'janus') {
+                                <ui-badge variant="info" title="Meta proposta pelo próprio Janus, a partir de auto-estudo">Janus</ui-badge>
+                              }
+                            </p>
                             <span class="muted">{{ autonomyFlow.goalStatusLabel(goal) }}</span>
                             <div class="goal-actions">
                               <button ui-button variant="ghost" size="sm" type="button" (click)="autonomyFlow.markGoalStatus(goal, 'in_progress')" [disabled]="autonomySaving()">Andamento</button>

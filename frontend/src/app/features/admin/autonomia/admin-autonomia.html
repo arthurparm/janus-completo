@@ -111,6 +111,20 @@
         <p><strong>Ultimo commit estudado:</strong> {{ selfStudyStatus()?.last_studied_commit || 'n/a' }}</p>
         <p><strong>Ultimo sucesso:</strong> {{ selfStudyStatus()?.last_success_at || 'n/a' }}</p>
         <p><strong>Run em andamento:</strong> {{ selfStudyStatus()?.running ? ('#' + selfStudyStatus()?.running?.id + ' - ' + selfStudyStatus()?.running?.status) : 'nao' }}</p>
+        @if (selfStudySchedulerJob(); as job) {
+          <p>
+            <strong>Reflexao periodica:</strong>
+            <ui-badge [variant]="job.enabled ? 'success' : 'neutral'">{{ job.enabled ? 'ativa' : 'desativada' }}</ui-badge>
+            @if (job.enabled) {
+              proxima em {{ job.next_run || 'n/a' }} · {{ job.run_count }} execucao(oes)
+              @if (job.error_count > 0) {
+                <span class="error-text">· {{ job.error_count }} falha(s): {{ job.last_error }}</span>
+              }
+            }
+          </p>
+        } @else {
+          <p class="muted">Reflexao periodica: sem informacao do scheduler.</p>
+        }
         @if (selfStudyStatus()?.running) {
           <p class="study-progress">
             <strong>Progresso:</strong>

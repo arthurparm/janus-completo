@@ -51,6 +51,7 @@ export interface Goal {
   status: 'pending' | 'in_progress' | 'completed' | 'failed'
   success_criteria?: string
   deadline_ts?: number
+  source?: string
   created_at: number
   updated_at: number
 }
@@ -182,6 +183,17 @@ export interface SelfStudyStatusResponse {
     current_file_index?: number | null
   } | null
   recent_runs: SelfStudyRun[]
+}
+
+export interface SchedulerJob {
+  name: string
+  schedule_type: string
+  enabled: boolean
+  last_run?: string | null
+  next_run?: string | null
+  run_count: number
+  error_count: number
+  last_error?: string | null
 }
 
 export interface AdminCodeQaResponse {

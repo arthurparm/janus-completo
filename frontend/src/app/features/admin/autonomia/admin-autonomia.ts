@@ -4,7 +4,7 @@ import { catchError, finalize, firstValueFrom, of } from 'rxjs'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
 
 import { BackendApiService } from '../../../services/backend-api.service'
-import { AdminBacklogSprintType, AdminBacklogTask, AdminCodeQaResponse, Citation, SelfStudyRun, SelfStudyStatusResponse } from '../../../models'
+import { AdminBacklogSprintType, AdminBacklogTask, AdminCodeQaResponse, Citation, SchedulerJob, SelfStudyRun, SelfStudyStatusResponse } from '../../../models'
 import { Header } from '../../../core/layout/header/header'
 import { UiBadgeComponent } from '../../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../../shared/components/ui/button/button.component'
@@ -51,6 +51,7 @@ export class AdminAutonomiaComponent {
   readonly board = signal<AdminBacklogSprintType[]>([])
   readonly selfStudyStatus = signal<SelfStudyStatusResponse | null>(null)
   readonly selfStudyRuns = signal<SelfStudyRun[]>([])
+  readonly schedulerJobs = signal<SchedulerJob[]>([])
 
   readonly question = signal('')
   readonly answer = signal('')
@@ -99,6 +100,7 @@ export class AdminAutonomiaComponent {
 
   refreshSelfStudy() {
     this.refreshSelfStudyStatus()
+    this.refreshSchedulerJobs()
     this.api.autonomy.listAutonomyAdminSelfStudyRuns(20)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -109,6 +111,19 @@ export class AdminAutonomiaComponent {
       )
       .subscribe((resp) => this.selfStudyRuns.set(resp.items || []))
   }
+
+  refreshSchedulerJobs() {
+    this.api.autonomy.getSchedulerJobs()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => of({ items: [] as SchedulerJob[] }))
+      )
+      .subscribe((resp) => this.schedulerJobs.set(resp.items || []))
+  }
+
+  readonly selfStudySchedulerJob = computed(() =>
+    this.schedulerJobs().find((job) => job.name === 'self_study_periodic') || null
+  )
 
   private refreshSelfStudyStatus() {
     this.api.autonomy.getAutonomyAdminSelfStudyStatus()
