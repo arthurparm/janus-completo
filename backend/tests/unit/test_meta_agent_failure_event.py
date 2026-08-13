@@ -31,7 +31,7 @@ async def test_process_failure_event_persists_and_triggers_cycle(monkeypatch):
 
     # Capture publish_meta_agent_cycle calls
     capture = Capture()
-    async def fake_publish(mode: str = "single", priority: int = 5):
+    async def fake_publish(mode: str = "single", priority: int = 5, payload_extra: dict | None = None):
         await capture.publish(mode)
         return "task-id"
     monkeypatch.setattr(maw, "publish_meta_agent_cycle", fake_publish)

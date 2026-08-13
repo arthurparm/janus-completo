@@ -118,8 +118,10 @@ def test_rag_search_snippets(client):
 
 
 def test_rag_search_exception_path(client):
+    # rag_search agora propaga falha de recuperação vetorial como 503
+    # em vez de mascarar com uma lista vazia (ver rag.py).
     resp = client.get("/api/v1/rag/search?query=raise")
-    assert resp.status_code == 200
+    assert resp.status_code == 503
 
 
 def test_rag_user_chat_fallback(monkeypatch):

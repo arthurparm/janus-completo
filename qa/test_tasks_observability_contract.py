@@ -35,11 +35,53 @@ OBS_ACTIVITY_USER_REF = "/api/v1/observability/activity/user"
 OBS_METRICS_UX_REF = "/api/v1/observability/metrics/ux"
 
 
+SERVICE_HEADERS = {"Authorization": "Bearer test-service"}
+USER_HEADERS = {"Authorization": "Bearer test-user"}
+
+
 @pytest.fixture
-def async_client():
+def async_client(monkeypatch):
+    from app.core.security import containment_middleware
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
     from app.main import app
     from app.services.observability_service import get_observability_service
     from app.services.task_service import get_task_service
+
+    def actor_for(request):
+        token = (request.headers.get("Authorization") or "").removeprefix("Bearer ")
+        if token == "test-user":
+            return ActorContext.authenticated(
+                actor_id=1,
+                roles=("USER",),
+                auth_method=AuthMethod.OIDC,
+                trace_id="test-user",
+                issuer="https://test-idp.invalid",
+                subject="user-1",
+            )
+        if token == "test-service":
+            return ActorContext.authenticated(
+                actor_id="janus-test-service",
+                actor_type=ActorType.SERVICE,
+                roles=("SERVICE",),
+                auth_method=AuthMethod.CLIENT_CREDENTIALS,
+                trace_id="test-service",
+                client_id="janus-test-service",
+                scopes=(
+                    "autonomy:admin",
+                    "deployment:write",
+                    "evaluation:ingest",
+                    "governance:write",
+                    "identity:admin",
+                    "observability:read",
+                    "ops:execute",
+                    "ops:read",
+                    "tools:admin",
+                    "workers:manage",
+                ),
+            )
+        return None
+
+    monkeypatch.setattr(containment_middleware, "get_actor_context", actor_for)
 
     class DummyTaskService:
         async def create_consolidation_task(self, **_kwargs):
@@ -188,7 +230,7 @@ def async_client():
 
     app.state.outbox_service = DummyOutbox()
 
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=SERVICE_HEADERS)
     yield client
 
     app.dependency_overrides.clear()
@@ -325,7 +367,7 @@ class TestObservabilityContract:
         assert resp.status_code == 200
 
     async def test_user_summary(self, async_client):
-        resp = await async_client.get("/api/v1/observability/user_summary")
+        resp = await async_client.get("/api/v1/observability/user_summary", headers=USER_HEADERS)
         assert resp.status_code == 200
 
     async def test_audit_events(self, async_client):
@@ -341,16 +383,17 @@ class TestObservabilityContract:
         assert resp.status_code == 200
 
     async def test_metrics_user(self, async_client):
-        resp = await async_client.get("/api/v1/observability/metrics/user")
+        resp = await async_client.get("/api/v1/observability/metrics/user", headers=USER_HEADERS)
         assert resp.status_code == 200
 
     async def test_activity_user(self, async_client):
-        resp = await async_client.get("/api/v1/observability/activity/user")
+        resp = await async_client.get("/api/v1/observability/activity/user", headers=USER_HEADERS)
         assert resp.status_code == 200
 
     async def test_metrics_ux(self, async_client):
         resp = await async_client.post(
             "/api/v1/observability/metrics/ux",
             json={"outcome": "ok", "timestamp": 1.0},
+            headers=USER_HEADERS,
         )
         assert resp.status_code == 200

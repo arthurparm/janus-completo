@@ -358,13 +358,13 @@ class TestSystemEndpointsContract:
         assert agent_service["status"] == "ok"
 
     async def test_get_user_status_unauthorized(self, async_client):
-        # Default header X-Actor-User-Id is missing or middleware defaults to "system"
-        # Since I'm using the int() override or the actor middleware, we need to pass it.
-        # But wait, if X-Actor-User-Id is absent, we might get 401 or it might use "system".
-        # Let's test with a valid user first
-        pass
+        # Sem Authorization e sem header de identidade: nenhum ActorContext é
+        # resolvido para a requisição. SecurityContainmentMiddleware bloqueia
+        # com 403 antes mesmo de chegar em require_authenticated_actor_id.
+        resp = await async_client.get("/api/v1/system/status/user")
+        assert resp.status_code == 403
 
-    async def test_get_user_status_success(self, async_client):
+    async def test_get_user_status_rejects_client_supplied_identity_header(self, async_client):
         resp = await async_client.get("/api/v1/system/status/user", headers={"X-Actor-User-Id": "1"})
         assert resp.status_code == 400
         assert resp.json()["code"] == "CLIENT_IDENTITY_FIELD_FORBIDDEN"

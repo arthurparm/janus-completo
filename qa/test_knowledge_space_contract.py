@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.knowledge import router
+from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.knowledge_service import get_knowledge_service
 from app.services.knowledge_space_service import get_knowledge_space_service
 
@@ -171,7 +172,14 @@ def _build_client(service: _DummyKnowledgeSpaceService) -> TestClient:
     async def _inject_actor(request: Request, call_next):
         actor = request.headers.get("X-Actor-User-Id")
         if actor:
-            request.state.actor_user_id = actor
+            request.state.actor_context = ActorContext.authenticated(
+                actor_id=actor,
+                roles=("USER",),
+                auth_method=AuthMethod.OIDC,
+                trace_id="test-actor",
+                issuer="https://test-idp.invalid",
+                subject=actor,
+            )
         return await call_next(request)
 
     return TestClient(app)

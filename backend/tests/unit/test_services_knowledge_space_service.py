@@ -2101,7 +2101,7 @@ def test_query_space_uses_extended_timeout_for_task_execution_queries():
     os.environ["KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS"] = "0.01"
     os.environ["KNOWLEDGE_SPACE_TASK_TIMEOUT_SECONDS"] = "0.2"
     try:
-        asyncio.run(
+        result = asyncio.run(
             service.query_space(
                 knowledge_space_id="ks-1",
                 question="Crie uma ficha completa usando as regras do livro.",
@@ -2109,6 +2109,10 @@ def test_query_space_uses_extended_timeout_for_task_execution_queries():
                 limit=5,
             )
         )
+        # fake_canonical dorme 0.05s: só completa sem timeout se o timeout
+        # de task (0.2s) foi de fato aplicado em vez do timeout canônico (0.01s).
+        assert result["mode_used"] == "canonical_answer"
+        assert result["answer"] == "artefato grounded"
     finally:
         if previous_timeout is None:
             os.environ.pop("KNOWLEDGE_SPACE_CANONICAL_TIMEOUT_SECONDS", None)

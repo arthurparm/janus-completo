@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.memory import router as memory_router
+from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.memory_service import get_memory_service
 
 
@@ -66,7 +67,14 @@ def client(monkeypatch):
 
     @app.middleware("http")
     async def bind_authenticated_actor(request, call_next):
-        request.state.actor_user_id = "42"
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id="42",
+            roles=("USER",),
+            auth_method=AuthMethod.OIDC,
+            trace_id="test-actor",
+            issuer="https://test-idp.invalid",
+            subject="42",
+        )
         return await call_next(request)
 
     app.include_router(memory_router, prefix="/api/v1/memory")

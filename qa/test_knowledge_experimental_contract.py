@@ -2,12 +2,13 @@ import os
 import sys
 from types import SimpleNamespace
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.knowledge import router
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
 
 
 class _DummyKnowledgeFacade:
@@ -42,6 +43,19 @@ class _DummyKnowledgeFacade:
 def _client() -> TestClient:
     app = FastAPI()
     app.state.knowledge_facade = _DummyKnowledgeFacade()
+
+    @app.middleware("http")
+    async def _inject_service_actor(request: Request, call_next):
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id="janus-test-service",
+            actor_type=ActorType.SERVICE,
+            roles=("SERVICE",),
+            auth_method=AuthMethod.CLIENT_CREDENTIALS,
+            trace_id="test-service",
+            client_id="janus-test-service",
+        )
+        return await call_next(request)
+
     app.include_router(router, prefix="/api/v1/knowledge")
     return TestClient(app)
 

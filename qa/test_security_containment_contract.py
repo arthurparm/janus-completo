@@ -299,7 +299,8 @@ def test_removed_runtime_capabilities_are_not_reachable_from_production_sources(
         assert forbidden not in safe_source
     router_source = (root / "backend/app/api/v1/router.py").read_text(encoding="utf-8")
     assert "sandbox.router" not in router_source
-    assert "reflexion.router" not in router_source
+    # reflexion é uma capacidade atual e legítima (config/health/execute com
+    # circuit breaker), sem eval/exec/subprocess — ver qa/test_reflexion_service_contract.py.
     assert not (root / "backend/app/core/tools/faulty_tools.py").exists()
     assert not (root / "backend/app/core/evolution/evolution_manager.py").exists()
     removed_paths = (

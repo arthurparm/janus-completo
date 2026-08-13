@@ -149,11 +149,11 @@ def test_regression_gate_requires_baseline_when_missing():
 def test_offline_query_fn_uses_dataset_rules(tmp_path: Path):
     dataset = _dataset_payload()
     # Ensure citation path exists relative to simulated repo root
-    target = tmp_path / "janus" / "app" / "api" / "v1" / "endpoints"
+    target = tmp_path / "backend" / "app" / "api" / "v1" / "endpoints"
     target.mkdir(parents=True, exist_ok=True)
     (target / "knowledge.py").write_text("def query_code():\n    # endpoint query\n    pass\n", encoding="utf-8")
-    (tmp_path / "janus" / "app" / "services").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "janus" / "app" / "services" / "technical_qa_eval_service.py").write_text(
+    (tmp_path / "backend" / "app" / "services").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "backend" / "app" / "services" / "technical_qa_eval_service.py").write_text(
         "class EvaluatorService:\n    pass\n", encoding="utf-8"
     )
 

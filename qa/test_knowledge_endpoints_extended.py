@@ -1,12 +1,53 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 
+SERVICE_HEADERS = {"Authorization": "Bearer test-service"}
+USER_HEADERS = {"Authorization": "Bearer test-user"}
+
 @pytest.fixture
-def async_client():
+def async_client(monkeypatch):
+    from app.core.security import containment_middleware
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
     from app.main import app
     from app.services.knowledge_service import get_knowledge_service
     from app.services.knowledge_space_service import get_knowledge_space_service
-    
+
+    def actor_for(request):
+        token = (request.headers.get("Authorization") or "").removeprefix("Bearer ")
+        if token == "test-user":
+            return ActorContext.authenticated(
+                actor_id=1,
+                roles=("USER",),
+                auth_method=AuthMethod.OIDC,
+                trace_id="test-user",
+                issuer="https://test-idp.invalid",
+                subject="user-1",
+            )
+        if token == "test-service":
+            return ActorContext.authenticated(
+                actor_id="janus-test-service",
+                actor_type=ActorType.SERVICE,
+                roles=("SERVICE",),
+                auth_method=AuthMethod.CLIENT_CREDENTIALS,
+                trace_id="test-service",
+                client_id="janus-test-service",
+                scopes=(
+                    "autonomy:admin",
+                    "deployment:write",
+                    "evaluation:ingest",
+                    "governance:write",
+                    "identity:admin",
+                    "observability:read",
+                    "ops:execute",
+                    "ops:read",
+                    "tools:admin",
+                    "workers:manage",
+                ),
+            )
+        return None
+
+    monkeypatch.setattr(containment_middleware, "get_actor_context", actor_for)
+
     class DummyKnowledgeService:
         async def index_codebase(self):
             return {"message": "ok", "summary": "indexed"}
@@ -17,7 +58,7 @@ def async_client():
         async def get_code_entities(self, file_path=None):
             return [{"id": "1", "name": "ClassA", "type": "class", "file_path": "a.py"}]
             
-        async def clear_graph(self):
+        async def clear_graph(self, user_id=None):
             # To test error handling, if a special flag is set, raise an exception
             # Actually, we can just test the happy path, but let's test an exception.
             if hasattr(self, "should_fail") and self.should_fail:
@@ -79,7 +120,7 @@ def async_client():
         
     mem_core.get_memory_db = mock_get_memory_db
     
-    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=SERVICE_HEADERS)
     yield client
     
     mem_core.get_memory_db = original_get_memory_db
@@ -112,7 +153,7 @@ class TestKnowledgeEndpointsExtended:
         from app.main import app
         
         class FailingKnowledgeService:
-            async def clear_graph(self):
+            async def clear_graph(self, user_id=None):
                 raise ValueError("Graph error")
                 
         app.dependency_overrides[ks.get_knowledge_service] = lambda: FailingKnowledgeService()
@@ -153,24 +194,32 @@ class TestKnowledgeEndpointsExtended:
                 
         app.dependency_overrides[ks.get_knowledge_service] = lambda: EmptyKnowledgeService()
         
-        resp = await async_client.post("/api/v1/knowledge/query/code", json={"question": "test"})
+        resp = await async_client.post(
+            "/api/v1/knowledge/query/code", json={"question": "test"}, headers=USER_HEADERS
+        )
         assert resp.status_code == 200
         assert "Nao encontrei citacoes" in resp.json()["answer"]
-        
+
         app.dependency_overrides.pop(ks.get_knowledge_service, None)
 
     async def test_query_knowledge(self, async_client):
-        resp = await async_client.post("/api/v1/knowledge/query", json={"query": "test"})
+        resp = await async_client.post(
+            "/api/v1/knowledge/query", json={"query": "test"}, headers=USER_HEADERS
+        )
         assert resp.status_code == 200
         assert resp.json()["answer"] == "Mocked answer"
 
     async def test_query_code_with_citations(self, async_client):
-        resp = await async_client.post("/api/v1/knowledge/query/code", json={"question": "test"})
+        resp = await async_client.post(
+            "/api/v1/knowledge/query/code", json={"question": "test"}, headers=USER_HEADERS
+        )
         assert resp.status_code == 200
         assert "citations" in resp.json()
 
     async def test_related_concepts(self, async_client):
-        resp = await async_client.post("/api/v1/knowledge/concepts/related", json={"concept": "A"})
+        resp = await async_client.post(
+            "/api/v1/knowledge/concepts/related", json={"concept": "A"}, headers=USER_HEADERS
+        )
         assert resp.status_code == 200
         assert "results" in resp.json()
 

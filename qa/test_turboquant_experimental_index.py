@@ -86,6 +86,12 @@ def test_load_index_raises_when_missing(tmp_path):
 
 @pytest.mark.asyncio
 async def test_experimental_backend_fails_clearly_when_index_missing(monkeypatch, tmp_path):
+    from app.planes.knowledge import adapters as adapters_module
+
+    async def _fake_embed(_query):
+        return [0.1, 0.2, 0.3]
+
+    monkeypatch.setattr(adapters_module, "aembed_text", _fake_embed)
     monkeypatch.setattr(
         "app.planes.knowledge.facade.settings",
         SimpleNamespace(

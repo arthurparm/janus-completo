@@ -51,57 +51,60 @@ def test_sandbox_evaluate_requires_authenticated_actor():
     assert exc.value.status_code == 401
 
 
-_os_tools_available = False
-_write_fn = None
-_read_fn = None
-_list_fn = None
-try:
-    from app.core.tools import os_tools as _ot
-    _write_fn = getattr(getattr(_ot, 'write_system_file', None), 'func', None) or getattr(_ot, 'write_system_file', None)
-    _read_fn = getattr(getattr(_ot, 'read_system_file', None), 'func', None) or getattr(_ot, 'read_system_file', None)
-    _list_fn = getattr(getattr(_ot, 'list_directory', None), 'func', None) or getattr(_ot, 'list_directory', None)
-    _os_tools_available = _write_fn is not None
-except ImportError:
-    pass
+import app.core.infrastructure.filesystem_manager as _fs
 
 
-@pytest.mark.skipif(not _os_tools_available, reason="os_tools requires langchain")
-def test_write_system_file_blocks_outside_workspace(monkeypatch):
-    monkeypatch.setattr(settings, "WORKSPACE_ROOT", "/app/workspace")
-    result = _write_fn("/etc/passwd", "hacker:1000:1000:root")
-    assert "Acesso negado" in result or "Erro" in result
+def _use_temp_workspace(monkeypatch, tmp_path):
+    """Redireciona APP_DIR/WORKSPACE_DIR do filesystem_manager para um diretório isolado."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(_fs, "APP_DIR", tmp_path)
+    monkeypatch.setattr(_fs, "WORKSPACE_DIR", workspace)
+    monkeypatch.setattr(_fs, "ALLOWED_WRITE_ROOTS", [workspace])
+    # O circuit breaker é estado global do módulo; isola cada teste dele.
+    monkeypatch.setattr(_fs, "_CB_FAILURES", 0)
+    monkeypatch.setattr(_fs, "_CB_OPEN_UNTIL", None)
+    return workspace
 
 
-@pytest.mark.skipif(not _os_tools_available, reason="os_tools requires langchain")
-def test_write_system_file_blocks_blocked_extensions(monkeypatch):
-    monkeypatch.setattr(settings, "WORKSPACE_ROOT", "/app/workspace")
-    result = _write_fn("/app/workspace/evil.sh", "#!/bin/bash\necho hacked")
-    assert "bloqueada" in result or "Erro" in result
+def test_write_file_blocks_path_traversal(monkeypatch, tmp_path):
+    _use_temp_workspace(monkeypatch, tmp_path)
+    result = _fs.write_file("../../etc/passwd", "hacker:1000:1000:root")
+    assert "path traversal" in result.lower() or "erro" in result.lower()
+    assert not (tmp_path / "etc" / "passwd").exists()
 
 
-@pytest.mark.skipif(not _os_tools_available, reason="os_tools requires langchain")
-def test_write_system_file_blocks_oversized_content(monkeypatch):
-    monkeypatch.setattr(settings, "WORKSPACE_ROOT", "/app/workspace")
-    result = _write_fn("/app/workspace/big.txt", "A" * 2_000_000)
-    assert "1MB" in result or "limite" in result or "Erro" in result
+def test_write_file_blocks_blocked_extensions(monkeypatch, tmp_path):
+    _use_temp_workspace(monkeypatch, tmp_path)
+    result = _fs.write_file("evil.sh", "#!/bin/bash\necho hacked")
+    assert "bloqueada" in result.lower() or "erro" in result.lower()
 
 
-@pytest.mark.skipif(not _os_tools_available, reason="os_tools requires langchain")
-def test_read_system_file_blocks_system_directories():
-    result = _read_fn("/etc/shadow")
-    assert "Acesso negado" in result or "Erro" in result
+def test_write_file_blocks_oversized_content(monkeypatch, tmp_path):
+    _use_temp_workspace(monkeypatch, tmp_path)
+    result = _fs.write_file("big.txt", "A" * 2_000_000)
+    assert "limite" in result.lower() or "erro" in result.lower()
 
 
-@pytest.mark.skipif(not _os_tools_available, reason="os_tools requires langchain")
-def test_read_system_file_blocks_git_and_env_files():
-    result = _read_fn("/app/workspace/.env")
-    assert "bloqueado" in result or "Acesso negado" in result or "Erro" in result or ".env" in result.lower()
+def test_write_file_requires_overwrite_flag_for_existing_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(_fs.settings, "DRY_RUN", False)
+    _use_temp_workspace(monkeypatch, tmp_path)
+    first = _fs.write_file("notes.txt", "v1")
+    assert "sucesso" in first.lower()
+    second = _fs.write_file("notes.txt", "v2")
+    assert "erro" in second.lower()
 
 
-@pytest.mark.skipif(not _os_tools_available, reason="os_tools requires langchain")
-def test_list_directory_blocks_system_directories():
-    result = _list_fn("/etc")
-    assert "Acesso negado" in result or "Erro" in result
+def test_read_file_blocks_path_outside_app_dir(monkeypatch, tmp_path):
+    _use_temp_workspace(monkeypatch, tmp_path)
+    result = _fs.read_file("../../../../../../../../../etc/shadow")
+    assert "erro" in result.lower()
+
+
+def test_list_directory_blocks_system_directories(monkeypatch, tmp_path):
+    _use_temp_workspace(monkeypatch, tmp_path)
+    result = _fs.list_directory("/etc")
+    assert "acesso" in result.lower() or "negado" in result.lower() or "erro" in result.lower()
 
 
 def test_x_user_id_is_never_an_authentication_source(monkeypatch):

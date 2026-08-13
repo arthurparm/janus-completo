@@ -327,28 +327,39 @@ class TestCircuitBreakerMonitoring:
 
 
 class TestCacheFallbackMechanism:
-    """Test cache fallback mechanisms when Qdrant is unavailable."""
+    """Testa a degradação graciosa do QdrantProvider quando o Qdrant está indisponível."""
 
     @pytest.mark.asyncio
-    async def test_cache_fallback_when_qdrant_fails(self):
-        """Test that system falls back to cache when Qdrant fails."""
-        # This would require mocking the MemoryCore class
-        # For now, we'll test the concept
+    async def test_search_returns_empty_and_marks_offline_when_qdrant_fails(self, monkeypatch):
+        from app.core.infrastructure import resilience
+        from app.core.infrastructure.resilience import CircuitBreaker
+        from app.core.memory.providers.qdrant_provider import QdrantProvider
 
-        # Simulate Qdrant failure
-        mock_qdrant_client = AsyncMock()
-        mock_qdrant_client.query_points.side_effect = ConnectionError("Qdrant unavailable")
+        client = AsyncMock()
+        client.query_points.side_effect = ConnectionError("Qdrant unavailable")
+        circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30)
+        provider = QdrantProvider(client=client, circuit_breaker=circuit_breaker)
+        monkeypatch.setattr(resilience.asyncio, "sleep", AsyncMock())
 
-        # The system should catch this and use cache fallback
-        # In real implementation, this would be tested with actual MemoryCore
-        pass
+        result = await provider.search(query_vector=[0.1], limit=5)
+
+        assert result == []
+        assert provider.is_offline is True
 
     @pytest.mark.asyncio
-    async def test_cache_fallback_logging(self):
-        """Test that cache fallback is properly logged."""
-        # Test that when Qdrant fails, appropriate logs are generated
-        # indicating fallback to cache
-        pass
+    async def test_search_skips_real_call_when_offline_and_revive_recently_attempted(self, monkeypatch):
+        from app.core.memory.providers.qdrant_provider import QdrantProvider
+
+        client = AsyncMock()
+        provider = QdrantProvider(client=client)
+        provider._offline = True
+        provider._last_revive_attempt = time.time()  # dentro da janela de 10s de throttle
+
+        result = await provider.search(query_vector=[0.1], limit=5)
+
+        assert result == []
+        client.get_collection.assert_not_called()
+        client.query_points.assert_not_called()
 
 
 class TestCircuitBreakerIntegration:

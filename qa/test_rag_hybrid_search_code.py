@@ -1,13 +1,14 @@
 import os
 import sys
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.rag import router as rag_router
 from app.core.routing import RouteDecision, RouteTarget
+from app.core.security.actor_context import ActorContext, AuthMethod
 
 
 class _FakePolicy:
@@ -51,6 +52,19 @@ class _FakeHybridService:
 
 def _client(monkeypatch) -> TestClient:
     app = FastAPI()
+
+    @app.middleware("http")
+    async def _inject_actor(request: Request, call_next):
+        request.state.actor_context = ActorContext.authenticated(
+            actor_id=1,
+            roles=("USER",),
+            auth_method=AuthMethod.OIDC,
+            trace_id="test-user",
+            issuer="https://test-idp.invalid",
+            subject="user-1",
+        )
+        return await call_next(request)
+
     app.include_router(rag_router, prefix="/api/v1/rag")
 
     import app.api.v1.endpoints.rag as rag_module

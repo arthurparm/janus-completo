@@ -53,20 +53,13 @@ def helper():
     assert ("runner", "helper") in call_pairs
 
 
-def test_parse_python_file_handles_utf8_bom():
+def test_parse_python_file_handles_utf8_bom(tmp_path):
     source = "\ufeffdef hello():\n    return 42\n"
-    file_path = "tests/unit/_tmp_bom_file.py"
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(source)
+    file_path = tmp_path / "_tmp_bom_file.py"
+    file_path.write_text(source, encoding="utf-8")
 
-    try:
-        service = CodeAnalysisService()
-        parser = service.parse_python_file(file_path)
+    service = CodeAnalysisService()
+    parser = service.parse_python_file(str(file_path))
 
-        assert parser is not None
-        assert any(item["name"] == "hello" for item in parser.functions)
-    finally:
-        import os
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
+    assert parser is not None
+    assert any(item["name"] == "hello" for item in parser.functions)
