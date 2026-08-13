@@ -81,7 +81,7 @@ services:
       - OPENROUTER_MODELS=${OPENROUTER_MODELS:-["poolside/laguna-s-2.1:free","nvidia/nemotron-3-ultra-550b-a55b:free","cohere/north-mini-code:free","google/gemma-4-31b-it:free","openai/gpt-oss-20b:free"]}
       - OMNIROUTE_API_KEY=${OMNIROUTE_API_KEY:-}
       - OMNIROUTE_ENABLED=${OMNIROUTE_ENABLED:-false}
-      - OMNIROUTE_BASE_URL=${OMNIROUTE_BASE_URL:-http://localhost:20128/v1}
+      - OMNIROUTE_BASE_URL=${OMNIROUTE_BASE_URL:-http://omniroute:20128/v1}
       - OMNIROUTE_MODEL_NAME=${OMNIROUTE_MODEL_NAME:-auto}
       - OMNIROUTE_MODELS=${OMNIROUTE_MODELS:-["auto"]}
       - START_ORCHESTRATOR_WORKERS_ON_STARTUP=${START_ORCHESTRATOR_WORKERS_ON_STARTUP:-true}
@@ -232,6 +232,47 @@ services:
     networks:
       - janus-pc1-net
 
+  omniroute:
+    image: diegosouzapw/omniroute:latest
+    container_name: janus_omniroute_pc1
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:20128:20128"
+    environment:
+      - JWT_SECRET=${OMNIROUTE_JWT_SECRET:?Set OMNIROUTE_JWT_SECRET in .env.pc1}
+      - API_KEY_SECRET=${OMNIROUTE_API_KEY_SECRET:?Set OMNIROUTE_API_KEY_SECRET in .env.pc1}
+      - STORAGE_ENCRYPTION_KEY=${OMNIROUTE_STORAGE_ENCRYPTION_KEY:?Set OMNIROUTE_STORAGE_ENCRYPTION_KEY in .env.pc1}
+      - STORAGE_ENCRYPTION_KEY_VERSION=v1
+      - MACHINE_ID_SALT=${OMNIROUTE_MACHINE_ID_SALT:?Set OMNIROUTE_MACHINE_ID_SALT in .env.pc1}
+      - OMNIROUTE_WS_BRIDGE_SECRET=${OMNIROUTE_WS_BRIDGE_SECRET:?Set OMNIROUTE_WS_BRIDGE_SECRET in .env.pc1}
+      - INITIAL_PASSWORD=${OMNIROUTE_INITIAL_PASSWORD:?Set OMNIROUTE_INITIAL_PASSWORD in .env.pc1}
+      - PORT=20128
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - DATA_DIR=/app/data
+      - AUTH_COOKIE_SECURE=false
+      - REQUIRE_API_KEY=true
+      - BASE_URL=http://localhost:20128
+      - NEXT_PUBLIC_BASE_URL=http://localhost:20128
+    volumes:
+      - janus_omniroute_data:/app/data
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20128/api/monitoring/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - janus-pc1-net
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: janus_postgres_pc1
@@ -331,3 +372,4 @@ volumes:
   janus_rabbitmq_data:
   janus_app_data:
   janus_workspace:
+  janus_omniroute_data:
