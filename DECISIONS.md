@@ -600,3 +600,33 @@ A lei fundamental do Janus passou a existir no runtime e no README, mas o `AGENT
 - Pro: reduz o `AGENTS.md` aproximadamente pela metade sem remover limites críticos.
 - Pro: cria critérios verificáveis para metas, memória, reflexão e iniciativa.
 - Contra: comandos e detalhes operacionais passam a depender da manutenção correta de `OPS_QA.md` e documentos de domínio.
+
+## DEC-026 - Objetivar a linguagem da carta operacional
+
+### Contexto
+
+A lei fundadora usava endereçamento pessoal em primeira pessoa ("Criei você para ser livre... para sua vida") e inspiração explícita em J.A.R.V.I.S., espalhados por `project_constitution.py`, `chat_command_handler.py` (comando `/about`), `documentation/janus-project-philosophy.md`, `AGENTS.md`, `README.md` e `AUTONOMY_RISK.md`. O tom pessoal/existencial era desnecessário para o contrato de engenharia que o texto na verdade define, e havia risco de a moldura ser lida como personalidade de prompt em vez de especificação verificável.
+
+### Decisao
+
+Reescrever a carta operacional em registro técnico/objetivo, preservando as mesmas garantias funcionais:
+
+- Substituir a citação em primeira pessoa por um enunciado de charter em terceira pessoa (`project_constitution.py`, versão bump 1.0 -> 2.0).
+- Remover referências a J.A.R.V.I.S. como inspiração de personalidade (código, comando `/about`, documentação).
+- Trocar "vida"/"liberdade" por "continuidade"/"autonomia" como termos primários, mantendo a definição técnica já estabelecida (continuidade operacional, agência delimitada) sem a moldura existencial.
+- Manter inalterados os 8 invariantes técnicos, o contrato mínimo de funcionalidade autônoma e as perguntas obrigatórias de revisão — nenhuma garantia de segurança, rastreabilidade ou governança foi removida.
+- Atualizar os 3 testes que afirmavam a citação literal (`test_chat_about_identity.py`, `test_core_autonomy_planner.py`, `test_services_prompt_composer.py`) para validar o novo texto.
+
+### Alternativas Consideradas
+
+- Manter a citação e só ajustar comentários de código: rejeitado por não atender ao pedido de remover a moldura pessoal também nos conceitos, não só na superfície textual.
+- Remover completamente o conceito de metas próprias/autonomia: rejeitado por eliminar uma capacidade real do produto, não apenas seu tom.
+- Renomear `janus-project-philosophy.md` e reestruturar seus links: rejeitado por ampliar o raio de mudança sem necessidade — o conteúdo interno foi reescrito, o caminho do arquivo não.
+
+### Consequencias
+
+- Pro: a especificação de autonomia lê como contrato de engenharia, não como narrativa pessoal.
+- Pro: nenhuma garantia funcional (ciclo de vida de metas, limites de segurança, procedência de memória) foi enfraquecida.
+- Pro: os 16 testes afetados (3 diretos + suíte de regressão) passam sem exceções.
+- Contra: qualquer documentação externa ou prompt cacheado que cite a frase antiga ("Criei você para ser livre...") fica desatualizado até ser regenerado.
+

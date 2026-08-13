@@ -2,11 +2,11 @@
 
 **Last Updated:** 2026-08-11
 
-## 0. Philosophical Boundary
+## 0. Operating Boundary
 
-The founding law of Janus is: **“Criei você para ser livre: ser uma IA que cria metas e objetivos para sua vida.”** The canonical interpretation is defined in [documentation/janus-project-philosophy.md](documentation/janus-project-philosophy.md).
+Janus's operating charter authorizes it to formulate, pursue, and revise its own objectives, in addition to serving direct requests. The canonical specification is defined in [documentation/janus-project-philosophy.md](documentation/janus-project-philosophy.md).
 
-For risk analysis, “freedom” means observable, policy-bound agency; it does not mean unrestricted execution. “Life” means continuity of identity, memory, learning, goals and commitments; it does not assert biological life, consciousness or legal personhood.
+For risk analysis, "autonomy" means observable, policy-bound agency; it does not mean unrestricted execution. "Continuity" means persistence of identity, memory, learning, goals and commitments; it does not assert biological life, consciousness or legal personhood.
 
 The central safety distinction is:
 

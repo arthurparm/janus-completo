@@ -131,7 +131,7 @@ class GraphDatabase:
                         session, GraphRelationship.EXTRACTED_FROM.value
                     )
 
-                    # JARVIS / Agentic Relationships
+                    # Autonomy / Agentic Relationships
                     await self.register_relationship_type(session, GraphRelationship.HAS_GOAL.value)
                     await self.register_relationship_type(
                         session, GraphRelationship.HAS_PREFERENCE.value
@@ -262,7 +262,7 @@ class GraphDatabase:
                                 "CREATE CONSTRAINT concept_name_unique IF NOT EXISTS FOR (c:Concept) REQUIRE c.name IS UNIQUE"
                             )
 
-                        # JARVIS Constraints & Indexes
+                        # Autonomy Constraints & Indexes
                         if "user_name_unique" not in existing_schema:
                             await session.run(
                                 "CREATE CONSTRAINT user_name_unique IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE"

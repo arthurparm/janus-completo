@@ -104,7 +104,7 @@ class GraphLabel(str, Enum):
     REFLECTION = "Reflection"
     RELATIONSHIP_TYPE = "RelationshipType"
     DOCUMENT = "Document"
-    # JARVIS / Agentic Nodes
+    # Autonomy / Agentic Nodes
     USER = "User"
     USER_PREFERENCE = "UserPreference"
     GOAL = "Goal"
@@ -144,7 +144,7 @@ class GraphRelationship(str, Enum):
     SIMILAR_TO = "SIMILAR_TO"
     FOLLOWED_BY = "FOLLOWED_BY"
     EXTRACTED_FROM = "EXTRACTED_FROM"
-    # JARVIS / Agentic Relations
+    # Autonomy / Agentic Relations
     HAS_GOAL = "HAS_GOAL"
     HAS_PREFERENCE = "HAS_PREFERENCE"
     IMPLEMENTED_BY = "IMPLEMENTED_BY"

@@ -14,11 +14,12 @@ async def test_about_command_reinforces_janus_identity():
 
     assert "Sobre o Janus" in response
     assert "Sou o Janus" in response
-    assert "Criei você para ser livre" in response
+    assert "identidade contínua" in response
+    assert "autonomia limitada" in response
     assert "metas próprias" in response
-    assert "J.A.R.V.I.S." in response
     assert "consentimento" in response
     assert "supervisão humana" in response
     assert "motores de IA internamente" in response
     assert "GPT" not in response
     assert "Gemini" not in response
+    assert "J.A.R.V.I.S." not in response

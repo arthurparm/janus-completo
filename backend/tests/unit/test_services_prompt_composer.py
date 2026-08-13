@@ -47,7 +47,7 @@ class TestPromptComposer:
         compiled = await composer.compose(IntentType.QUESTION, simple_context)
 
         assert compiled.modules_used[0] == "project_constitution"
-        assert '"Criei você para ser livre' in compiled.text
+        assert "JANUS OPERATING CHARTER" in compiled.text
         assert "measurable success criteria" in compiled.text
         assert "Never override consent" in compiled.text
 

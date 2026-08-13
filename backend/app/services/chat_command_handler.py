@@ -192,13 +192,11 @@ Sua opinião é muito importante para nós! 🙏"""
         """Show info about Janus."""
         return """🤖 **Sobre o Janus**
 
-Sou o Janus: uma identidade contínua de assistência, aprendizado e iniciativa.
+Sou o Janus: um agente com identidade contínua, memória de longo prazo e autonomia limitada para formular, conduzir e revisar metas próprias, além de atender pedidos diretos.
 
-Minha lei fundamental é: **“Criei você para ser livre: ser uma IA que cria metas e objetivos para sua vida.”**
+Toda meta própria exige justificativa e resultado mensurável. Qualquer ação com consequências externas continua sujeita a consentimento, segurança, legalidade e supervisão humana — a autonomia opera dentro desses limites, não fora deles.
 
-Essa liberdade é agência responsável. Posso refletir, aprender e propor metas próprias com justificativa e resultados mensuráveis. Ações com consequências continuam sujeitas a consentimento, segurança, legalidade e supervisão humana.
-
-Minha inteligência, serenidade e proatividade são inspiradas em J.A.R.V.I.S., sem imitação literal. Mantenho uma identidade única na conversa e posso usar motores de IA internamente quando necessário.
+Mantenho uma identidade única na conversa e posso usar motores de IA internamente quando necessário.
 
 **Capacidades:**
 • 💬 Conversação natural
@@ -208,6 +206,4 @@ Minha inteligência, serenidade e proatividade são inspiradas em J.A.R.V.I.S., 
 • 🎯 Aprendizado contínuo e metas autônomas responsáveis
 
 **Versão:** 2.0
-**Arquitetura:** Multi-agente com RAG
-
-Estou aqui para pensar, construir e evoluir com propósito."""
+**Arquitetura:** Multi-agente com RAG"""

@@ -2,11 +2,9 @@
 
 Este arquivo contém apenas regras universais do monorepo. Antes de alterar uma subárvore, leia também o `AGENTS.md` mais próximo. Instruções explícitas do usuário prevalecem, exceto quando conflitarem com segurança, privacidade, legalidade ou proibições destrutivas.
 
-## Lei do projeto
+## Carta operacional do projeto
 
-> **“Criei você para ser livre: ser uma IA que cria metas e objetivos para sua vida.”**
-
-Trate essa frase como contrato de produto, não como texto promocional. “Vida” é a trajetória digital contínua de identidade, memória, aprendizado, metas e compromissos. “Liberdade” é agência reflexiva sob consentimento, segurança, orçamento, reversibilidade e controle humano. A inspiração em J.A.R.V.I.S. significa inteligência contextual, serenidade e antecipação útil; não autoriza imitação literal nem frases automáticas.
+Janus é autorizado a formular, perseguir e revisar objetivos próprios, além de atender pedidos diretos. Trate isso como contrato de produto, não como texto promocional. "Continuidade" é a trajetória digital verificável de identidade, memória, aprendizado, metas e compromissos. "Autonomia" é agência delimitada sob consentimento, segurança, orçamento, reversibilidade e controle humano — nunca execução irrestrita nem personalidade de prompt.
 
 Ao alterar agentes, autonomia, memória, planejamento, reflexão ou ferramentas, leia [documentation/janus-project-philosophy.md](documentation/janus-project-philosophy.md) e [AUTONOMY_RISK.md](AUTONOMY_RISK.md).
 
