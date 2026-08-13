@@ -681,3 +681,31 @@ A dependência `mcp` não foi adicionada a `pyproject.toml`/`poetry.lock`/`requi
 - Pro: nenhuma mudança em auth, manifest ou build de produção; risco confinado a um módulo novo e opcional.
 - Contra: por rodar fora do processo da API, o servidor MCP não vê o estado do `SchedulerService`; quem precisar da cadência do autoestudo periódico ainda depende do endpoint HTTP ou da UI.
 - Contra: `mcp` não está no lock de produção; rodar o servidor exige `uv run --with mcp` (ou instalação manual), documentado no próprio módulo.
+
+## DEC-029 - Smoke de upload/RAG adicionado; flakiness de sessão OIDC local encontrada e não corrigida
+
+### Contexto
+
+`CHANGELOG.md` (Ciclo 37, "Risco Residual") registrava que upload/indexação de documentos e busca RAG nunca foram validados de ponta a ponta no smoke autenticado. Confirmei que a lacuna seguia real: nenhum teste em `qa/` (que mocka `KnowledgeService`) nem em `frontend/e2e/*.smoke.spec.ts` cobre `POST /api/v1/documents/upload` com infraestrutura real.
+
+### Decisao
+
+Adicionar `frontend/e2e/document-upload-rag.smoke.spec.ts`, seguindo o padrão de `admin-chat-real.smoke.spec.ts`: autentica com `JANUS_USER_ACCESS_TOKEN`, sobe um arquivo real com marcador único pela aba "Docs" da conversa, e confirma que a busca por similaridade retorna o trecho indexado.
+
+Para obter um token localmente sem depender de login manual, usei o IdP de desenvolvimento (`backend/app/dev_oidc.py`, `docker-compose.local-auth.yml`) via o fluxo Authorization Code + PKCE completo por script (`POST /authorize/confirm` com os parâmetros da querystring, depois `POST /token`) — o provedor local não exige senha, apenas confirma um usuário fixo (`local-user`).
+
+Não consegui validar uma execução verde: tanto o novo spec quanto o já existente `auth-session-runtime.smoke.spec.ts` falharam de forma intermitente logo após `page.goto('/')`/`page.reload()`, com `GET /api/v1/users/me` ora 200 ora 401 usando o mesmo token, via o proxy do `ng serve` (`--proxy-config proxy.conf.json`, backend Vite do Angular 20). O mesmo token, testado repetidamente via `curl` direto contra a mesma porta, respondeu 200 de forma consistente (10+ chamadas). Os logs do container `janus_api_pc1` não mostram nenhuma tentativa correspondente aos 401 observados no browser, o que aponta para o proxy do dev server (ou uma interação dele com o Docker Desktop no Windows) como origem mais provável, não o backend nem o token.
+
+Optei por não investigar mais fundo nem alterar código de autenticação nesta sessão: é uma área de alto risco (`AGENTS.md`) e a causa raiz ainda não está isolada o suficiente para uma correção segura.
+
+### Alternativas Consideradas
+
+- Reportar a lacuna sem escrever o teste: rejeitado — o teste em si é válido e reutilizável assim que a flakiness for resolvida; não escrevê-lo adiaria o mesmo trabalho sem necessidade.
+- Tentar corrigir a suspeita de causa raiz (proxy do `ng serve`) às cegas: rejeitado — mudar infraestrutura de auth/proxy sem reprodução isolada (ex.: fora do Docker Desktop/Windows) arrisca mascarar um bug real em vez de corrigi-lo.
+- Rodar contra o frontend Docker já publicado (porta 4300) em vez de `ng serve`: tentado primeiro; mesmo sintoma, then descartado como pista (não é exclusivo do dev server).
+
+### Consequencias
+
+- Pro: lacuna de cobertura documentada há um mês (CHANGELOG Ciclo 37) agora tem um teste pronto; falta apenas destravar o harness de auth local para rodá-lo em CI/local.
+- Contra: não há evidência de runtime de que upload → indexação → busca RAG funcionam ponta a ponta; a alegação permanece não verificada.
+- Contra: a flakiness de sessão OIDC local em `ng serve` é um risco novo e não investigado a fundo — se reproduzir fora deste ambiente, bloqueia qualquer novo smoke autenticado, não só este.
