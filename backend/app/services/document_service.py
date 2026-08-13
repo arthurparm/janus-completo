@@ -437,6 +437,7 @@ class DocumentIngestionService:
         filename: str,
         content_type: str,
         data: bytes,
+        user_id: str = "system",
         conversation_id: str | None = None,
         knowledge_space_id: str | None = None,
         source_type: str | None = None,
@@ -493,22 +494,22 @@ class DocumentIngestionService:
                 logger.debug("otel_chunk_count_failed", error=str(exc))
 
         if not chunks:
-            self._metrics.record_ingest_status("empty", "system")
+            self._metrics.record_ingest_status("empty", user_id)
             return {"doc_id": doc_id, "chunks": 0, "chunks_indexed": 0, "status": "empty"}
 
-        collection_name = await aget_or_create_collection(build_user_docs_collection_name("system"))
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         client = get_async_qdrant_client()
         qfilter_user = models.Filter(
             must=[
                 models.FieldCondition(key="metadata.type", match=models.MatchValue(value="doc_chunk")),
-                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value="system")),
+                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id)),
             ]
         )
         max_points_user = int(getattr(settings, "DOC_INDEX_MAX_POINTS_PER_USER", 500000) or 500000)
         try:
             current_points = await async_count_points(client, collection_name, qfilter_user, exact=True)
             if current_points + chunk_count > max_points_user:
-                self._metrics.record_ingest_status("quota_exceeded", "system")
+                self._metrics.record_ingest_status("quota_exceeded", user_id)
                 return {
                     "doc_id": doc_id,
                     "chunks": chunk_count,
@@ -519,7 +520,7 @@ class DocumentIngestionService:
         except Exception as exc:
             logger.warning("quota_check_failed", error=str(exc))
 
-        await self._delete_doc_points(doc_id=doc_id)
+        await self._delete_doc_points(doc_id=doc_id, user_id=user_id)
         if progress_cb is not None:
             await progress_cb(
                 chunks_total=chunk_count,
@@ -541,14 +542,14 @@ class DocumentIngestionService:
                 chunk_index = offset + batch_index
                 norm = re.sub(r"\s+", " ", batch_chunks[batch_index]).strip().lower()
                 content_hash = hashlib.sha256(norm.encode("utf-8")).hexdigest()
-                pid = build_deterministic_point_id("doc-chunk", "system", doc_id, chunk_index, content_hash)
+                pid = build_deterministic_point_id("doc-chunk", user_id, doc_id, chunk_index, content_hash)
                 payload = {
                     "type": "doc_chunk",
                     "ts_ms": ts_ms,
-                    "composite_id": f"doc:system:{doc_id}:{chunk_index}:{content_hash}",
+                    "composite_id": f"doc:{user_id}:{doc_id}:{chunk_index}:{content_hash}",
                     "metadata": {
                         "type": "doc_chunk",
-                        "user_id": "system",
+                        "user_id": user_id,
                         "doc_id": doc_id,
                         "file_name": filename,
                         "knowledge_space_id": knowledge_space_id,
@@ -586,11 +587,11 @@ class DocumentIngestionService:
                 )
 
         self._metrics.record_ingest_latency(time.perf_counter() - ingest_started_at)
-        self._metrics.record_ingest_success("indexed", indexed, "system")
+        self._metrics.record_ingest_success("indexed", indexed, user_id)
         try:
             record_audit_event_direct(
                 {
-                    "user_id": None,
+                    "user_id": user_id,
                     "endpoint": "doc:ingest",
                     "action": "ingest",
                     "tool": "documents",
@@ -610,12 +611,12 @@ class DocumentIngestionService:
             "semantic": semantic.to_dict(),
         }
 
-    async def _delete_doc_points(self, *, doc_id: str) -> None:
+    async def _delete_doc_points(self, *, doc_id: str, user_id: str = "system") -> None:
         client = get_async_qdrant_client()
-        collection_name = await aget_or_create_collection(build_user_docs_collection_name("system"))
+        collection_name = await aget_or_create_collection(build_user_docs_collection_name(user_id))
         qfilter = models.Filter(
             must=[
-                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value="system")),
+                models.FieldCondition(key="metadata.user_id", match=models.MatchValue(value=user_id)),
                 models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=str(doc_id))),
             ]
         )

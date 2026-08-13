@@ -717,3 +717,42 @@ O novo `frontend/e2e/document-upload-rag.smoke.spec.ts` agora consegue autentica
 - Pro: `frontend/e2e/document-upload-rag.smoke.spec.ts` agora autentica e valida upload real de ponta a ponta; só falta a etapa de busca, bloqueada por config de ambiente documentada, não por bug.
 - Contra: a etapa final do smoke de upload/RAG (busca encontra o trecho) permanece não verificada nesta sessão — depende de `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true`, decisão que requer autorização do usuário por ligar consumo real de LLM.
 - Contra: `auth-session-runtime.smoke.spec.ts` agora falha num ponto novo (403 em `POST /api/v1/chat/stream/...`), não investigado — pode ser escopo de token insuficiente do IdP de desenvolvimento local, não necessariamente um bug.
+
+## DEC-030 - Escopo de workers por nó reconectado; ingestão de documentos corrigida (bug de multi-tenancy)
+
+### Contexto
+
+O usuário pediu para resolver "com a melhor forma do mercado" o bloqueio residual do DEC-029 (upload de documento nunca termina de indexar). Investigando por que `START_ORCHESTRATOR_WORKERS_ON_STARTUP=false` estava desligado em `.env.pc1`: religar globalmente ligaria os 18 workers do orquestrador de uma vez (`backend/app/core/workers/orchestrator.py`), incluindo vários agentes autônomos caros (`neural_training`, `red_team_agent`, `professor_agent`, `thinker_agent`, `reflexion`, `meta_agent`, etc.) só para destravar `document_ingestion` — não é a forma correta de operar múltiplos tipos de processo (principio "web vs. worker" do 12-factor), e o próprio código já antecipa isso via `NODE_PROFILE_WORKERS` (dict que escopa workers por perfil de nó, ex. `INTELLIGENCE_AGILE` = `knowledge_consolidation` + `document_ingestion` + `distillation`).
+
+Ao tentar usar esse mecanismo (`JANUS_NODE_PROFILE=INTELLIGENCE_AGILE`), descobri que ele está morto: `orchestrator._get_active_node_profile()` lê `getattr(settings, "JANUS_NODE_PROFILE", None)`, mas `AppSettings` (`backend/app/config.py`) nunca declarava esse campo e usa `model_config = SettingsConfigDict(extra="ignore")` — qualquer env var não declarada é descartada silenciosamente pelo Pydantic antes de chegar ao objeto `settings`. Ou seja, `JANUS_NODE_PROFILE` nunca teve efeito nenhum, em nenhum ambiente, desde que foi escrito.
+
+Depois de destravar o profile e religar o worker de `document_ingestion` no `janus-control-plane` (o único container cujo `JANUS_API_PROFILE=control-plane` satisfaz o gate em `main.py` para iniciar o orquestrador), o upload de teste *ainda* ficava preso em `processing`. Rastreando pelo `doc_id` nos logs brutos do `janus_api_pc1` (a manifestação unívoca, não pelo texto "error"/"document" que a query estruturada do structlog nem sempre contém como substring), apareceu o erro real:
+
+```
+TypeError: DocumentIngestionService._ingest_payload() got an unexpected keyword argument 'user_id'
+# tratamento do erro acima TAMBÉM falhou:
+TypeError: DocumentIngestionService._delete_doc_points() got an unexpected keyword argument 'user_id'
+```
+
+`process_staged_document` (o caminho assíncrono usado pelo upload real) sempre chamou `_ingest_payload(..., user_id=...)` e, no `except`, `_delete_doc_points(user_id=..., doc_id=...)` — mas nenhum dos dois métodos aceitava `user_id` no momento; ambos hardcodavam a string literal `"system"` em todo lugar que precisava do identificador do usuário (nome da collection do Qdrant, filtro `metadata.user_id`, id determinístico do ponto, `composite_id`). Isso quebrava 100% das vezes que o worker realmente processava um documento (mascarado até agora porque nenhum worker rodava para chegar a esse código). Pior: mesmo sem o `TypeError`, o comportamento hardcoded era um bug de isolamento de dados — `search_documents` (usado por "Buscar em documentos" e RAG) já filtra corretamente pelo `user_id` real do ator autenticado (`backend/app/planes/knowledge/adapters.py:34`), então documentos ingeridos sob `"system"` nunca apareceriam nas buscas do usuário real (e, na direção oposta, se algum dia alguém buscasse literalmente como usuário "system", veria documentos de todo mundo).
+
+### Decisao
+
+1. Declarar `JANUS_NODE_PROFILE: str | None = None` em `AppSettings` (`backend/app/config.py`), reconectando o mecanismo de escopo de workers por nó que já existia em código morto.
+2. Em `.env.pc1` (arquivo local, não versionado): `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true` + `JANUS_NODE_PROFILE=INTELLIGENCE_AGILE`, ligando apenas os 3 workers relevantes (`document_ingestion`, `knowledge_consolidation`, `distillation`) no `janus-control-plane`, sem tocar nos outros containers nem ligar os agentes autônomos caros.
+3. Em `backend/app/services/document_service.py`: adicionar `user_id: str = "system"` como parâmetro de `_ingest_payload` e `_delete_doc_points`, e substituir todo literal `"system"` no corpo desses dois métodos pelo `user_id` recebido. O default `"system"` preserva o comportamento existente do único outro chamador (`ingest_file`, usado por `/documents/link-url`), que não foi tocado — fora de escopo desta correção.
+
+### Alternativas Consideradas
+
+- Ligar `START_ORCHESTRATOR_WORKERS_ON_STARTUP=true` sem usar `JANUS_NODE_PROFILE`: rejeitado — ligaria 18 workers, vários autônomos e caros, para resolver um problema que precisa só de 1.
+- Fazer `ingest_file()` também passar `user_id` real: fora de escopo — não foi o caminho que quebrou (não usa `user_id`, usa `build_doc_id("system")` deliberadamente) e mudar seu comportamento de isolamento é uma decisão de produto separada, não uma correção de bug.
+- Tornar `user_id` obrigatório (sem default) em `_ingest_payload`/`_delete_doc_points`: rejeitado — quebraria `ingest_file()` sem necessidade; o default `"system"` é explícito e documenta a exceção em vez de escondê-la.
+
+### Consequencias
+
+- Pro: mecanismo de escopo de workers por nó (`NODE_PROFILE_WORKERS`) passa a funcionar pela primeira vez; documentado e validado em runtime real (logs mostram `node_profile: INTELLIGENCE_AGILE` e os 15 workers fora do perfil corretamente desativados).
+- Pro: bug de `TypeError` 100%-reprodutível na ingestão de documentos corrigido — confirmado por `mypy` (os dois erros `Unexpected keyword argument "user_id"` desaparecem) e por execução real: 3 execuções consecutivas de `document-upload-rag.smoke.spec.ts` passaram, com `document_manifests.status=indexed`, `chunks_total=1`, `chunks_indexed=1`, `completed_at` preenchido — confirmado direto no Postgres, não só no teste.
+- Pro: corrige também um bug de isolamento de dados (documentos deixam de ser gravados sob um namespace `"system"` compartilhado, alinhando com o que a busca já esperava).
+- Pro: 13 testes unitários de `document_service`/`documents`/`orchestrator profiles` + suíte completa permanecem verdes.
+- Contra: documentos enviados antes desta correção (com `doc_id` já criado) ficaram órfãos permanentemente em `status=processing` no Postgres — nenhum reprocessamento automático foi adicionado; são registros de teste, sem impacto de produção real neste ambiente.
+- Contra: `.env.pc1` foi alterado localmente (não versionado) para ligar workers; se o usuário reiniciar o stack sem saber disso, voltará ao estado anterior — comportamento aceitável pois é justamente a configuração default documentada em `.env.pc1.example`.

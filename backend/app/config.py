@@ -57,6 +57,7 @@ class AppSettings(BaseSettings):
     AUTO_INDEX_ON_STARTUP: bool = True  # Indexar automaticamente se o grafo estiver vazio
     INIT_MAS_AGENTS_ON_STARTUP: bool = True  # Inicializar agentes do MAS no startup
     START_ORCHESTRATOR_WORKERS_ON_STARTUP: bool = True  # Iniciar workers de fila no boot do API
+    JANUS_NODE_PROFILE: str | None = None  # Escopa quais workers rodam neste nó (ver NODE_PROFILE_WORKERS); None = todos
     OUTBOX_LEASE_SECONDS: int = Field(default=300, ge=30, le=3600)
     ENABLE_GOOGLE_PRODUCTIVITY_WORKER: bool = False  # Mantem worker opcional em modo disabled por padrao
 
