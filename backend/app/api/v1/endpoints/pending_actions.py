@@ -382,6 +382,29 @@ def _extract_langgraph_pending_context(state: Any) -> dict[str, str | None]:
     }
 
 
+def _extract_langgraph_pending_action_details(state: Any) -> tuple[str | None, str | None]:
+    """Extrai o worker alvo e o input pendente do state do graph (AgentState).
+
+    Usado para substituir o risk_level hardcoded "medium" por uma avaliacao real,
+    reaproveitando `_summarize_action_risk` com os mesmos dados que o supervisor_node
+    usou para decidir a interrupcao de aprovacao humana.
+    """
+    values = getattr(state, "values", None)
+    if not isinstance(values, dict):
+        return None, None
+
+    tool_name = values.get("current_worker")
+    tool_name = str(tool_name).strip() if isinstance(tool_name, str) and tool_name.strip() else None
+
+    worker_input = values.get("worker_input")
+    args_json = (
+        json.dumps({"worker_input": worker_input}, ensure_ascii=False)
+        if isinstance(worker_input, str) and worker_input.strip()
+        else None
+    )
+    return tool_name, args_json
+
+
 def _assert_langgraph_pending_action_access(
     *,
     thread_id: str,
@@ -767,15 +790,24 @@ async def list_pending(
                     if exc.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND):
                         continue
                     raise
+                tool_name, args_json = _extract_langgraph_pending_action_details(state)
+                safe_args_json = _sanitize_pending_args_json(args_json)
+                risk_level, risk_summary = _summarize_action_risk(tool_name, safe_args_json)
                 graph_items.append(
                     PendingActionDTO(
                         source="langgraph",
                         thread_id=tid,
                         status="pending",
-                        message="Waiting for approval",
+                        message=(
+                            f"Waiting approval for worker: {tool_name}"
+                            if tool_name
+                            else "Waiting for approval"
+                        ),
                         user_id=access_context.get("owner_user_id"),
-                        risk_level="medium",
-                        risk_summary="Risco moderado: acao aguardando aprovacao humana.",
+                        tool_name=tool_name,
+                        args_json=safe_args_json,
+                        risk_level=risk_level,
+                        risk_summary=risk_summary,
                     )
                 )
             return items + graph_items
@@ -840,14 +872,19 @@ async def approve(
         # Schedule resume execution in background
         background_tasks.add_task(_resume_graph_execution, thread_id, "approved")
 
+        tool_name, args_json = _extract_langgraph_pending_action_details(state)
+        safe_args_json = _sanitize_pending_args_json(args_json)
+        risk_level, risk_summary = _summarize_action_risk(tool_name, safe_args_json)
         return PendingActionDTO(
             source="langgraph",
             thread_id=thread_id,
             status="approved",
             message="Action approved. Execution resuming in background.",
             user_id=access_context.get("owner_user_id"),
-            risk_level="medium",
-            risk_summary="Acao aprovada e retomada em background.",
+            tool_name=tool_name,
+            args_json=safe_args_json,
+            risk_level=risk_level,
+            risk_summary=risk_summary,
         )
     except HTTPException:
         raise
@@ -1104,14 +1141,19 @@ async def reject(
         # Schedule resume execution in background
         background_tasks.add_task(_resume_graph_execution, thread_id, "rejected")
 
+        tool_name, args_json = _extract_langgraph_pending_action_details(state)
+        safe_args_json = _sanitize_pending_args_json(args_json)
+        risk_level, risk_summary = _summarize_action_risk(tool_name, safe_args_json)
         return PendingActionDTO(
             source="langgraph",
             thread_id=thread_id,
             status="rejected",
             message="Action rejected. Cleanup running in background.",
             user_id=access_context.get("owner_user_id"),
-            risk_level="medium",
-            risk_summary="Acao rejeitada e cleanup em background.",
+            tool_name=tool_name,
+            args_json=safe_args_json,
+            risk_level=risk_level,
+            risk_summary=risk_summary,
         )
     except HTTPException:
         raise

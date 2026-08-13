@@ -862,3 +862,31 @@ Durante a implementação, um bug próprio quase derrubou o ambiente: editar `sa
 - Pro: a UI generativa do chat principal (não o caminho MAS) agora funciona ponta a ponta: LLM emite o marcador → parser extrai e limpa o texto → persiste no Postgres → API expõe via `ui` → frontend renderiza um componente real.
 - Pro: causa raiz identificada e documentada — a ferramenta LangChain `render_ui_component` é inalcançável pelo chat principal (nenhum `bind_tools`/`tools=[` no caminho de LLM do chat de turno único); o mecanismo real e único usado pelo chat é o marcador em texto.
 - Contra: `render_ui_component` (caminho MAS) permanece funcionalmente órfão do fluxo de chat principal — corrigido por completude/consistência do manifesto homologado, mas sem consumidor comprovado no momento.
+
+## DEC-035 - Approval Center: risco real (nao mais hardcoded) para acoes pendentes de origem LangGraph
+
+### Contexto
+
+Continuando o ataque a ferramentas parciais, investiguei `backend/app/api/v1/endpoints/pending_actions.py`: os itens de origem `source="sql"` calculam `risk_level`/`risk_summary` reais via `_summarize_action_risk(tool_name, args_json)`, mas os itens de origem `source="langgraph"` (3 pontos: listagem, aprovar, rejeitar) tinham `risk_level="medium"` hardcoded e `tool_name`/`args_json` sempre `None`, com uma mensagem generica ("Waiting for approval").
+
+Investigando a causa raiz em `backend/app/core/agents/graph_orchestrator.py`, confirmei que o grafo LangGraph (`AgentState`) e um supervisor/worker simples: `supervisor_node` decide `next_step="human_approval"` com deteccao de palavras-chave no proprio texto da mensagem do usuario (`"delete" in content or "deploy" in content`) e grava `current_worker` (ex.: `"sysadmin"`) e `worker_input` (o texto original) no state. Ou seja, o dado necessario para uma avaliacao real de risco **ja existia no `state.values`** exposto por `_get_state(graph, config)` em todos os 3 pontos — so nunca era lido nem repassado ao DTO.
+
+### Decisao
+
+Adicionado `_extract_langgraph_pending_action_details(state)` que le `current_worker`/`worker_input` de `state.values` e monta um `args_json` equivalente ao formato usado pelo caminho SQL. Os 3 pontos (`list_pending` graph branch, `approve`, `reject`) agora chamam essa funcao e reaproveitam `_summarize_action_risk`/`_sanitize_pending_args_json` — os mesmos helpers ja usados e testados no caminho SQL — em vez do valor fixo `"medium"`. A mensagem da listagem tambem passou a citar o worker alvo quando disponivel.
+
+### Alternativas Consideradas
+
+- Redesenhar o grafo para carregar tool_name/args estruturados como o caminho MAS: rejeitado por escopo — o grafo `graph_orchestrator.py` e uma implementacao propositalmente simples (supervisor/worker por palavra-chave, sem chamadas de tool reais); reformula-lo e um trabalho de arquitetura maior, nao uma correcao pontual de UI hardcoded.
+- Deixar `risk_level="medium"` fixo por ser "seguro por padrao": rejeitado — mascarava tanto casos de alto risco reais (`"delete"`/`"deploy"` no `worker_input`, que o proprio supervisor ja usa para decidir a interrupcao) quanto casos sem worker_input, dando uma falsa sensacao de uniformidade ao operador humano que aprova a acao.
+
+### Validacao
+
+- 2 testes novos em `qa/test_pending_actions_contract.py` (`test_list_pending_graph_reflects_real_worker_risk`, `test_approve_thread_reflects_real_worker_risk`) com uma thread fake cujo `state.values` contem `current_worker="sysadmin"` e `worker_input="please delete the production database"` — confirmam `tool_name="sysadmin"`, `risk_level="high"` e o texto do `worker_input` propagado em `args_json`; e uma thread sem esses campos confirma fallback correto para `tool_name=None`/`risk_level="low"` (nao mais "medium" arbitrario).
+- Suite completa: `qa/test_pending_actions_contract.py` (17), `qa/test_pending_actions_line_coverage.py` + `qa/test_observability_pending_actions_legacy_residue_contract.py` + `qa/test_tool_executor_policy_guards.py` (28) — todos passam, sem regressao nos casos existentes de owner/acesso.
+
+### Consequencias
+
+- Pro: o Approval Center agora mostra risco calculado a partir de dados reais do state para acoes LangGraph, igual ao que ja acontecia para acoes SQL — paridade entre as duas origens.
+- Pro: nenhuma mudanca de contrato publico que quebre consumidores existentes — `tool_name`/`args_json` ja existiam no `PendingActionDTO`, so eram sempre `None` para `source="langgraph"`.
+- Contra: a fidelidade da avaliacao de risco para o caminho LangGraph continua limitada a heuristica de palavras-chave sobre o texto livre do `worker_input` (mesma limitacao que o caminho SQL ja tinha para `args_json` livre) — nao ha estrutura de tool call real nesse grafo para uma avaliacao mais precisa.

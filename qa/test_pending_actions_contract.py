@@ -61,6 +61,14 @@ def async_client(monkeypatch):
             return DummyState()
         if thread_id == "thread-finished":
             return DummyState(next_value="")
+        if thread_id == "thread-owner-1-highrisk":
+            return DummyState(
+                metadata={"owner_user_id": "1"},
+                values={
+                    "current_worker": "sysadmin",
+                    "worker_input": "please delete the production database",
+                },
+            )
         return DummyState(metadata={"owner_user_id": "1"})
 
     async def mock_update_state(_graph, _config, _values):
@@ -92,6 +100,7 @@ def async_client(monkeypatch):
                     ("thread-owner-2",),
                     ("thread-conv-owner-1",),
                     ("thread-no-owner",),
+                    ("thread-owner-1-highrisk",),
                 ]
             )
 
@@ -251,6 +260,24 @@ class TestPendingActionsContract:
         assert "thread-owner-2" not in thread_ids
         assert "thread-no-owner" not in thread_ids
 
+    async def test_list_pending_graph_reflects_real_worker_risk(self, async_client):
+        resp = await async_client.get(
+            "/api/v1/pending_actions/?include_graph=true&include_sql=false",
+            headers=_auth_headers("1"),
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        by_thread = {item["thread_id"]: item for item in payload}
+
+        highrisk = by_thread["thread-owner-1-highrisk"]
+        assert highrisk["tool_name"] == "sysadmin"
+        assert "delete the production database" in highrisk["args_json"]
+        assert highrisk["risk_level"] == "high"
+
+        no_worker = by_thread["thread-owner-1"]
+        assert no_worker["tool_name"] is None
+        assert no_worker["risk_level"] == "low"
+
     async def test_approve_thread_requires_bearer(self, async_client):
         resp = await async_client.post("/api/v1/pending_actions/thread-owner-1/approve")
         assert resp.status_code == 401
@@ -261,6 +288,16 @@ class TestPendingActionsContract:
             headers=_auth_headers("1"),
         )
         assert resp.status_code == 202
+
+    async def test_approve_thread_reflects_real_worker_risk(self, async_client):
+        resp = await async_client.post(
+            "/api/v1/pending_actions/thread-owner-1-highrisk/approve",
+            headers=_auth_headers("1"),
+        )
+        assert resp.status_code == 202
+        payload = resp.json()
+        assert payload["tool_name"] == "sysadmin"
+        assert payload["risk_level"] == "high"
 
     async def test_approve_thread_denies_other_user(self, async_client):
         resp = await async_client.post(
