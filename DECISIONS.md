@@ -776,3 +776,23 @@ Nenhuma alteração de código. Documentar a causa para não re-investigar: para
 - Pro: nenhum código de produto alterado para um "bug" que não existe; a checagem de origem no streaming continua intacta.
 - Pro: economiza reinvestigação futura — qualquer smoke de chat/stream rodado via `ng serve` (porta 4200) vai reproduzir este mesmo 403, e agora está documentado por quê.
 - Contra: `auth-session-runtime.smoke.spec.ts` continua sem uma execução verde completa nesta sessão — o teste em si está correto, só precisa rodar contra a origem certa (4300, com imagem reconstruída) ou com `.env.pc1` ajustado para incluir 4200 quando o objetivo for testar contra `ng serve`.
+
+## DEC-032 - Validação final: sessão e chat/stream funcionam ponta a ponta; único bloqueio restante é cota do provedor LLM
+
+### Contexto
+
+Para fechar o DEC-031 com evidência (não só diagnóstico), reconstruí a imagem Docker do frontend (`docker compose ... build janus-frontend`, refletindo `auth.service.ts` do DEC-029) e recriei o container na porta 4300 — a origem que `.env.pc1` realmente autoriza. Rodei `auth-session-runtime.smoke.spec.ts` contra essa origem correta.
+
+Resultado: a asserção de sessão restaurada e a de `streamResponseStatus === 200` (linha 90 e 112) **passaram** — confirmação definitiva, com imagem/origem de produção-local, de que o fix do DEC-029 (NG0200) e o `ensure_origin_allowed` (DEC-031) funcionam juntos como esperado. O teste só falha depois disso, esperando o texto "OK smoke frontend" aparecer no histórico da conversa.
+
+Causa: `openai.RateLimitError: Error code: 429 - 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day'` no provedor OpenRouter (visível no traceback completo nos logs do `janus_api_pc1`), seguido de fallback para DeepSeek que também falha e abre o circuit breaker (`llm_send_deepseek`). É esgotamento de cota do free tier da chave de API configurada neste ambiente — não um bug de código, autenticação, roteamento ou do circuit breaker (que, aliás, funcionou exatamente como projetado: abriu após 3 falhas, evitando martelar um provedor já limitado).
+
+### Decisao
+
+Nenhuma ação de código. Esta é uma dependência externa (cota de API) que só o usuário pode resolver — aguardar o reset diário (`X-RateLimit-Reset`), adicionar créditos ao OpenRouter, ou trocar a chave/provedor configurado em `.env.pc1`. Registrado para não reinvestigar: se `auth-session-runtime.smoke.spec.ts` falhar novamente com "Circuit Breaker ABERTO", o problema é cota do provedor, não sessão/origem/streaming.
+
+### Consequencias
+
+- Pro: os dois bugs reais corrigidos nesta sessão (DEC-029 sessão, DEC-030 ingestão de documentos) agora tem confirmação end-to-end contra a origem/imagem corretamente configurada, não só contra `ng serve`.
+- Pro: fronteira de responsabilidade clara — tudo que é código/config do Janus está validado; o que resta é uma decisão de conta/cota do usuário.
+- Contra: nenhum smoke test que dependa de uma resposta real do LLM (chat, memória generativa) vai passar até a cota resetar ou ser ampliada.
