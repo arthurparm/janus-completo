@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import re
 import sys
@@ -320,6 +321,106 @@ async def test_issue_endpoint_awaits_fresh_detection() -> None:
     service.get_detected_issues.assert_awaited_once_with("MEDIUM", "SLOW_RESPONSE")
 
 
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_cycle_recovers_after_missing_metrics() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+    calls = 0
+
+    async def run_cycle() -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise self_optimization.OptimizationMetricsUnavailableError(
+                "sem amostras"
+            )
+        cycle.stop()
+        return {"success": True}
+
+    cycle.run_cycle = run_cycle
+
+    await cycle.run_continuous(interval_seconds=0.001)
+
+    assert calls == 2
+    assert cycle._running is False
+    assert cycle._stop_event is None
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_cycle_recovers_after_transient_failure() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+    calls = 0
+
+    async def run_cycle() -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("falha transitória")
+        cycle.stop()
+        return {"success": True}
+
+    cycle.run_cycle = run_cycle
+
+    await cycle.run_continuous(interval_seconds=0.001)
+
+    assert calls == 2
+    assert cycle._running is False
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_stop_interrupts_continuous_cycle_wait() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+    first_cycle_finished = asyncio.Event()
+
+    async def run_cycle() -> dict[str, object]:
+        first_cycle_finished.set()
+        return {"success": True}
+
+    cycle.run_cycle = run_cycle
+    task = asyncio.create_task(cycle.run_continuous(interval_seconds=60))
+    await asyncio.wait_for(first_cycle_finished.wait(), timeout=1)
+
+    cycle.stop()
+    await asyncio.wait_for(task, timeout=1)
+
+    assert cycle._running is False
+    assert cycle._stop_event is None
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_cancellation_clears_continuous_cycle_status() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+    cycle_started = asyncio.Event()
+    release_cycle = asyncio.Event()
+
+    async def run_cycle() -> dict[str, object]:
+        cycle_started.set()
+        await release_cycle.wait()
+        return {"success": True}
+
+    cycle.run_cycle = run_cycle
+    task = asyncio.create_task(cycle.run_continuous(interval_seconds=60))
+    await asyncio.wait_for(cycle_started.wait(), timeout=1)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert cycle._running is False
+    assert cycle._stop_event is None
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_cycle_rejects_invalid_or_duplicate_start() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+
+    with pytest.raises(ValueError, match="maior que zero"):
+        await cycle.run_continuous(interval_seconds=0)
+
+    cycle._running = True
+    with pytest.raises(RuntimeError, match="já está em execução"):
+        await cycle.run_continuous(interval_seconds=1)
+
+
 def test_repository_status_reports_operational_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -494,9 +595,10 @@ async def test_zero_tool_calls_are_unavailable_instead_of_failed_or_healthy(
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
 async def test_metrics_unavailable_maps_to_http_503() -> None:
-    from app.api.exception_handlers import add_exception_handlers
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
+
+    from app.api.exception_handlers import add_exception_handlers
 
     app = FastAPI()
     add_exception_handlers(app)

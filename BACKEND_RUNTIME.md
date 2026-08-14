@@ -218,3 +218,8 @@ verified adapter exists.
 `GET /api/v1/optimization/issues` collects a current telemetry sample before running
 detection. A fresh process without observed tool calls therefore returns `503` rather
 than an empty list that could be mistaken for proof that no issue exists.
+
+The optional continuous planner survives transient telemetry and cycle failures, waits
+between attempts, and exposes an interruptible stop event. Stop requests and task
+cancellation always clear the runtime `running` flag; duplicate starts and non-positive
+intervals are rejected explicitly.

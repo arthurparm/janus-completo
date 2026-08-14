@@ -355,6 +355,9 @@ class SystemMonitor:
                 )
 
         # 6. Exaustão de recursos (memória do sistema muito alta ou processo grande)
+        proc_mem_mb: float | None
+        sys_mem_percent: float | None
+        sys_mem_total_mb: float | None
         try:
             import os
 
@@ -641,6 +644,7 @@ class SelfOptimizationCycle:
         self.planner = ImprovementPlanner()
         self.executor = ImprovementExecutor()
         self._running = False
+        self._stop_event: asyncio.Event | None = None
 
     async def run_cycle(
         self, enable_auto_execution: bool = False, max_improvements: int | None = None
@@ -713,24 +717,64 @@ class SelfOptimizationCycle:
             _OPTIMIZATION_CYCLES.labels("error").inc()
             raise
 
-    async def run_continuous(self, interval_seconds: int = 300) -> None:
+    async def run_continuous(self, interval_seconds: float = 300) -> None:
         """
         Executa ciclo de auto-otimização continuamente.
 
         Args:
             interval_seconds: Intervalo entre ciclos (padrão: 5 minutos)
         """
+        if interval_seconds <= 0:
+            raise ValueError("interval_seconds deve ser maior que zero")
+        if self._running:
+            raise RuntimeError("O ciclo contínuo de otimização já está em execução.")
+
         self._running = True
-        logger.info("log_info", message=f"[SelfOptimization] Iniciando execução contínua (intervalo: {interval_seconds}s)"
+        self._stop_event = asyncio.Event()
+        logger.info(
+            "log_info",
+            message=(
+                "[SelfOptimization] Iniciando execução contínua "
+                f"(intervalo: {interval_seconds}s)"
+            ),
         )
 
-        while self._running:
-            await self.run_cycle()
-            await asyncio.sleep(interval_seconds)
+        try:
+            while self._running:
+                try:
+                    await self.run_cycle()
+                except asyncio.CancelledError:
+                    raise
+                except OptimizationMetricsUnavailableError as exc:
+                    logger.warning(
+                        "self_optimization_metrics_unavailable",
+                        error=str(exc),
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "self_optimization_cycle_failed",
+                        error=str(exc),
+                        exc_info=True,
+                    )
+
+                if not self._running:
+                    break
+                try:
+                    await asyncio.wait_for(
+                        self._stop_event.wait(), timeout=interval_seconds
+                    )
+                except TimeoutError:
+                    pass
+        finally:
+            self._running = False
+            self._stop_event = None
+            logger.info("[SelfOptimization] Execução contínua encerrada")
 
     def stop(self) -> None:
         """Para execução contínua."""
         self._running = False
+        if self._stop_event is not None:
+            self._stop_event.set()
         logger.info("[SelfOptimization] Parando execução contínua")
 
 
