@@ -161,11 +161,14 @@ class MessageOrchestrationService:
         *,
         strategy: TurnStrategy,
         role: ModelRole,
+        conversation_id: str = "",
+        user_id: str | None = None,
     ) -> TurnExecutionResult:
-        return await asyncio.to_thread(
-            self._turn_executor.execute_static,
+        return await self._turn_executor.execute_static(
             strategy=strategy,
             role=role,
+            conversation_id=conversation_id,
+            user_id=user_id,
         )
 
     async def execute_command_turn(
@@ -1538,6 +1541,8 @@ class MessageOrchestrationService:
                     execution = await self.execute_static_turn(
                         strategy=immediate_strategy,
                         role=role,
+                        conversation_id=conversation_id,
+                        user_id=resolved_user_id,
                     )
             except Exception as exc:
                 if immediate_strategy in STATIC_RESPONSE_STRATEGIES:

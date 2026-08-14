@@ -295,11 +295,13 @@ class ChatTurnExecutor:
         self._prompt = prompt_service
         self._tools = tool_service
 
-    def execute_static(
+    async def execute_static(
         self,
         *,
         strategy: TurnStrategy,
         role: ModelRole,
+        conversation_id: str = "",
+        user_id: str | None = None,
     ) -> "TurnExecutionResult":
         if strategy is TurnStrategy.HIGH_RISK_CONFIRMATION:
             return TurnExecutionResult(
@@ -320,6 +322,25 @@ class ChatTurnExecutor:
             )
             response = static_response.text
             model = static_response.model
+            # STATIC_DOCS is reference documentation (like /help): kept exact.
+            # STATIC_DISCOVERY/STATIC_CAPABILITIES are conversational replies, so
+            # they go through the same "responder" layer as chat commands -
+            # real facts, phrased fresh each time, preferring OmniRoute.
+            if strategy in (TurnStrategy.STATIC_DISCOVERY, TurnStrategy.STATIC_CAPABILITIES):
+                from app.services.chat.natural_response import respond_naturally
+
+                instruction = (
+                    "Responda a pergunta do usuário sobre o que você faz/pode fazer, "
+                    "usando os fatos abaixo."
+                )
+                response = await respond_naturally(
+                    self._llm,
+                    facts=f"- {response}",
+                    instruction=instruction,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    fallback=response,
+                )
         elif strategy is TurnStrategy.BLOCKED_TOOL_CREATION:
             from app.core.security.security_alerts import emit_security_alert
 

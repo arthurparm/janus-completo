@@ -241,6 +241,8 @@ class StreamingService:
                         execution = await self._message_orchestration_service.execute_static_turn(
                             strategy=immediate_strategy,
                             role=role,
+                            conversation_id=conversation_id,
+                            user_id=str(user_id) if user_id is not None else None,
                         )
                     base_understanding = (
                         normalize_command_understanding(understanding, command=message)
@@ -358,6 +360,8 @@ class StreamingService:
             execution = await self._message_orchestration_service.execute_static_turn(
                 strategy=immediate_strategy,
                 role=role,
+                conversation_id=conversation_id,
+                user_id=str(user_id) if user_id is not None else None,
             )
             result_understanding = build_routed_understanding(
                 understanding,

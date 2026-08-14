@@ -220,7 +220,7 @@ class _FakeMessageOrchestration:
             default_role=request.role,
         )
 
-    async def execute_static_turn(self, *, strategy, role):
+    async def execute_static_turn(self, *, strategy, role, conversation_id="", user_id=None):
         response_by_strategy = {
             TurnStrategy.HIGH_RISK_CONFIRMATION: (
                 "Pedido classificado como alto risco. "

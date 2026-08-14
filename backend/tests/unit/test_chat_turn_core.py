@@ -100,7 +100,8 @@ def test_command_is_an_immediate_non_indexed_turn() -> None:
     }
 
 
-def test_static_executor_blocks_high_risk_without_calling_model() -> None:
+@pytest.mark.asyncio
+async def test_static_executor_blocks_high_risk_without_calling_model() -> None:
     executor = ChatTurnExecutor(
         llm_service=object(),
         agent_loop=object(),
@@ -108,7 +109,7 @@ def test_static_executor_blocks_high_risk_without_calling_model() -> None:
         tool_service=None,
     )
 
-    result = executor.execute_static(
+    result = await executor.execute_static(
         strategy=TurnStrategy.HIGH_RISK_CONFIRMATION,
         role=ModelRole.ORCHESTRATOR,
     )
@@ -368,7 +369,8 @@ async def test_prompt_builder_rejects_invalid_compiled_prompt(monkeypatch) -> No
         (TurnStrategy.STATIC_CAPABILITIES, "capabilities", "analisar código"),
     ],
 )
-def test_group2_static_execution_has_canonical_completed_shape(
+@pytest.mark.asyncio
+async def test_group2_static_execution_has_canonical_completed_shape(
     strategy: TurnStrategy,
     model: str,
     expected_text: str,
@@ -378,7 +380,7 @@ def test_group2_static_execution_has_canonical_completed_shape(
         docs="canonical docs",
     )
 
-    execution = _static_executor(catalog).execute_static(
+    execution = await _static_executor(catalog).execute_static(
         strategy=strategy,
         role=ModelRole.ORCHESTRATOR,
     )
@@ -406,10 +408,11 @@ def test_group2_static_execution_has_canonical_completed_shape(
     }
 
 
-def test_docs_delegates_once_without_placeholder_and_preserves_empty_catalog_text() -> None:
+@pytest.mark.asyncio
+async def test_docs_delegates_once_without_placeholder_and_preserves_empty_catalog_text() -> None:
     catalog = _ToolCatalog(docs="# Homologated production tools\n\nNo tools registered.")
 
-    result = _static_executor(catalog).execute_static(
+    result = await _static_executor(catalog).execute_static(
         strategy=TurnStrategy.STATIC_DOCS,
         role=ModelRole.ORCHESTRATOR,
     )
@@ -420,11 +423,12 @@ def test_docs_delegates_once_without_placeholder_and_preserves_empty_catalog_tex
 
 
 @pytest.mark.parametrize("documentation", [None, "", "   "])
-def test_docs_rejects_missing_or_empty_canonical_documentation(documentation: Any) -> None:
+@pytest.mark.asyncio
+async def test_docs_rejects_missing_or_empty_canonical_documentation(documentation: Any) -> None:
     catalog = _ToolCatalog(docs=documentation)
 
     with pytest.raises(RuntimeError, match="documentation is empty"):
-        _static_executor(catalog).execute_static(
+        await _static_executor(catalog).execute_static(
             strategy=TurnStrategy.STATIC_DOCS,
             role=ModelRole.ORCHESTRATOR,
         )
@@ -493,12 +497,13 @@ def test_canonical_tool_documentation_propagates_repository_failure() -> None:
         ToolService(FailingRepository([])).generate_documentation()
 
 
-def test_discovery_skips_invalid_metadata_without_losing_valid_catalog_items() -> None:
+@pytest.mark.asyncio
+async def test_discovery_skips_invalid_metadata_without_losing_valid_catalog_items() -> None:
     catalog = _ToolCatalog(
         tools=[SimpleNamespace(description="missing name"), SimpleNamespace(name="alpha")]
     )
 
-    result = _static_executor(catalog).execute_static(
+    result = await _static_executor(catalog).execute_static(
         strategy=TurnStrategy.STATIC_DISCOVERY,
         role=ModelRole.ORCHESTRATOR,
     )
@@ -506,8 +511,9 @@ def test_discovery_skips_invalid_metadata_without_losing_valid_catalog_items() -
     assert "alpha" in result.response
 
 
-def test_discovery_distinguishes_empty_catalog_from_repository_failure() -> None:
-    empty = _static_executor(_ToolCatalog()).execute_static(
+@pytest.mark.asyncio
+async def test_discovery_distinguishes_empty_catalog_from_repository_failure() -> None:
+    empty = await _static_executor(_ToolCatalog()).execute_static(
         strategy=TurnStrategy.STATIC_DISCOVERY,
         role=ModelRole.ORCHESTRATOR,
     )
@@ -518,14 +524,15 @@ def test_discovery_distinguishes_empty_catalog_from_repository_failure() -> None
 
     assert "catálogo homologado de ferramentas está vazio" in empty.response
     with pytest.raises(RuntimeError, match="repository unavailable"):
-        _static_executor(FailingCatalog()).execute_static(
+        await _static_executor(FailingCatalog()).execute_static(
             strategy=TurnStrategy.STATIC_DISCOVERY,
             role=ModelRole.ORCHESTRATOR,
         )
 
 
-def test_static_finalizer_reports_completion_even_when_understanding_is_low_confidence() -> None:
-    execution = _static_executor(_ToolCatalog()).execute_static(
+@pytest.mark.asyncio
+async def test_static_finalizer_reports_completion_even_when_understanding_is_low_confidence() -> None:
+    execution = await _static_executor(_ToolCatalog()).execute_static(
         strategy=TurnStrategy.STATIC_CAPABILITIES,
         role=ModelRole.ORCHESTRATOR,
     )

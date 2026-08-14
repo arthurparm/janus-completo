@@ -14,7 +14,7 @@ from typing import Any
 
 import structlog
 
-from app.core.llm import ModelPriority, ModelRole
+from app.services.chat.natural_response import respond_naturally
 
 logger = structlog.get_logger(__name__)
 
@@ -117,48 +117,15 @@ class ChatCommandHandler:
         user_id: str | None,
         fallback: str,
     ) -> str:
-        """
-        Phrase a response grounded in `facts`, preferring the OmniRoute provider.
-
-        This is the "responder" layer only: it never invents facts, it just
-        phrases the ones it's given. `facts` must already be computed from real
-        state before calling this. Falls back to `fallback` (a static,
-        fact-accurate string) when no LLM service is wired or generation fails,
-        so a command always returns something instead of raising.
-        """
-        if not self.llm_service:
-            return fallback
-
-        prompt = (
-            f"{instruction}\n\n"
-            "Fatos reais (use exatamente estes; nao invente nem altere numeros ou fatos "
-            f"que nao estejam listados aqui):\n{facts}\n\n"
-            "Responda em portugues do Brasil, tom natural e caloroso, sem repetir um "
-            "formato de template fixo a cada vez."
+        """Shared "responder" layer - see app.services.chat.natural_response."""
+        return await respond_naturally(
+            self.llm_service,
+            facts=facts,
+            instruction=instruction,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            fallback=fallback,
         )
-        try:
-            result = await self.llm_service.invoke_llm(
-                prompt=prompt,
-                role=ModelRole.ORCHESTRATOR,
-                priority=ModelPriority.FAST_AND_CHEAP,
-                timeout_seconds=12,
-                policy_overrides={
-                    "provider": "omniroute",
-                    "role": "orchestrator",
-                    "priority": "fast_and_cheap",
-                },
-                user_id=user_id,
-                objective_id=conversation_id,
-            )
-            response = str((result or {}).get("response") or "").strip()
-            return response or fallback
-        except Exception as e:
-            logger.warning(
-                "command_natural_response_failed",
-                error=str(e),
-                conversation_id=conversation_id,
-            )
-            return fallback
 
     async def _handle_help(self, args: str, conversation_id: str, user_id: str | None) -> str:
         """Show available commands. Reference text, kept static by design."""
