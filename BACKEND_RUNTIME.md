@@ -158,6 +158,11 @@ The Evolution module ([core/evolution/](file:///h:/repos/janus-completo/backend/
 
 **Immutable Audit Ledger**: `ObservabilityRepository` writes immutable audit events for tool executions, auth operations, LLM calls, and system actions. Direct writers return whether the ledger accepted the event; callers that guard consequential effects can require persistence, while non-blocking telemetry remains explicitly best-effort. Security denials and blocked egress use a redacted, fsync-backed local outbox when the primary ledger is disabled or unavailable, without weakening the deny decision. Events include timestamp, actor_id, operation, status, and metadata. The service and repository reject purge requests; any future retention mechanism requires a separate, explicitly authorized archival contract rather than in-place deletion.
 
+The service-only audit listing and export support bounded pagination and consistent
+filters for tool, status, endpoint, action, and timestamp range. The same filters are
+applied to the returned page and its total count so operators can supervise a specific
+runtime workflow without scanning unrelated ledger entries.
+
 ## 11. Tool Executor & Sandbox
 
 The ToolExecutorService ([tool_executor_service.py](file:///h:/repos/janus-completo/backend/app/services/tool_executor_service.py), 671 lines) handles tool lifecycle from request to execution.

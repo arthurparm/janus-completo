@@ -45,6 +45,157 @@
         "title": "AddArtifactRequest",
         "type": "object"
       },
+      "AuditEventResponse": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "details_json": {
+            "title": "Details Json"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "entry_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Hash"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "justification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Justification"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "prev_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Hash"
+          },
+          "signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signature"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "endpoint",
+          "action",
+          "status"
+        ],
+        "title": "AuditEventResponse",
+        "type": "object"
+      },
+      "AuditEventsResponse": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "events"
+        ],
+        "title": "AuditEventsResponse",
+        "type": "object"
+      },
       "AutoAnalysisResponse": {
         "properties": {
           "fun_fact": {
@@ -10909,6 +11060,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 100,
                   "type": "string"
                 },
                 {
@@ -10925,6 +11077,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 20,
                   "type": "string"
                 },
                 {
@@ -10936,11 +11089,46 @@
           },
           {
             "in": "query",
+            "name": "endpoint",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endpoint"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
             "name": "start_ts",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
@@ -10957,6 +11145,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
@@ -10972,6 +11161,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -10982,6 +11173,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }
@@ -10991,7 +11183,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEventsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -11039,6 +11233,7 @@
             "required": false,
             "schema": {
               "default": "csv",
+              "pattern": "^(csv|json)$",
               "title": "Format",
               "type": "string"
             }
@@ -11050,6 +11245,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 1000,
                   "type": "string"
                 },
                 {
@@ -11066,6 +11262,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 100,
                   "type": "string"
                 },
                 {
@@ -11082,6 +11279,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 20,
                   "type": "string"
                 },
                 {
@@ -11093,11 +11291,46 @@
           },
           {
             "in": "query",
+            "name": "endpoint",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Endpoint"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
             "name": "start_ts",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
@@ -11114,6 +11347,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
@@ -11129,6 +11363,8 @@
             "required": false,
             "schema": {
               "default": 1000,
+              "maximum": 10000,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -11139,6 +11375,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }

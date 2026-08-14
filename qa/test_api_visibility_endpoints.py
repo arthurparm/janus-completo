@@ -3,6 +3,7 @@ import sys
 import types
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Any, ClassVar
 
 import pytest
 from fastapi import FastAPI
@@ -68,7 +69,15 @@ class DummyToolService:
 
 
 class DummyObservabilityService:
+    audit_events_calls: ClassVar[
+        list[tuple[tuple[Any, ...], dict[str, Any]]]
+    ] = []
+    audit_count_calls: ClassVar[
+        list[tuple[tuple[Any, ...], dict[str, Any]]]
+    ] = []
+
     def get_audit_events(self, *args, **kwargs):
+        self.audit_events_calls.append((args, kwargs))
         return [
             {
                 "id": 1,
@@ -83,6 +92,7 @@ class DummyObservabilityService:
         ]
 
     def get_audit_events_count(self, *args, **kwargs):
+        self.audit_count_calls.append((args, kwargs))
         return 1
 
     def get_request_pipeline_dashboard(self, request_id: str, limit: int = 2000, include_details: bool = False):
@@ -268,11 +278,46 @@ def test_tools_stats_endpoint(client):
 
 
 def test_audit_events_endpoint(client):
-    resp = client.get("/api/v1/observability/audit/events")
+    DummyObservabilityService.audit_events_calls.clear()
+    DummyObservabilityService.audit_count_calls.clear()
+    resp = client.get(
+        "/api/v1/observability/audit/events"
+        "?endpoint=optimization_continuous&action=continuous_cycle_completed"
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
     assert data["events"][0]["tool"] == "codex_exec"
+    _, event_kwargs = DummyObservabilityService.audit_events_calls[-1]
+    _, count_kwargs = DummyObservabilityService.audit_count_calls[-1]
+    assert event_kwargs["endpoint"] == "optimization_continuous"
+    assert event_kwargs["action"] == "continuous_cycle_completed"
+    assert count_kwargs["endpoint"] == "optimization_continuous"
+    assert count_kwargs["action"] == "continuous_cycle_completed"
+
+
+def test_audit_events_endpoint_validates_bounds_and_time_range(client):
+    assert client.get("/api/v1/observability/audit/events?limit=0").status_code == 422
+    assert client.get("/api/v1/observability/audit/events?offset=-1").status_code == 422
+    assert (
+        client.get("/api/v1/observability/audit/events?start_ts=20&end_ts=10").status_code
+        == 422
+    )
+
+
+def test_audit_export_uses_same_workflow_filters(client):
+    DummyObservabilityService.audit_events_calls.clear()
+    response = client.get(
+        "/api/v1/observability/audit/export"
+        "?format=json&endpoint=optimization_continuous"
+        "&action=continuous_cycle_completed"
+    )
+
+    assert response.status_code == 200
+    _, event_kwargs = DummyObservabilityService.audit_events_calls[-1]
+    assert event_kwargs["endpoint"] == "optimization_continuous"
+    assert event_kwargs["action"] == "continuous_cycle_completed"
+    assert client.get("/api/v1/observability/audit/export?format=xml").status_code == 422
 
 
 def test_request_pipeline_dashboard_endpoint(client):

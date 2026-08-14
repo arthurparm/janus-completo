@@ -910,6 +910,7 @@ class ObservabilityService:
         start_ts: float | None,
         end_ts: float | None,
         endpoint: str | None = None,
+        action: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -921,6 +922,7 @@ class ObservabilityService:
             tool=tool,
             status=status,
             endpoint=endpoint,
+            action=action,
             limit=limit,
             offset=offset,
         )
@@ -934,7 +936,15 @@ class ObservabilityService:
             )
             try:
                 result = self._repo.get_audit_events(
-                    user_id, tool, status, start_ts, end_ts, endpoint, limit, offset
+                    user_id=user_id,
+                    tool=tool,
+                    status=status,
+                    start_ts=start_ts,
+                    end_ts=end_ts,
+                    endpoint=endpoint,
+                    action=action,
+                    limit=limit,
+                    offset=offset,
                 )
                 self._set_span_attrs(span, **{"observability.event_count": len(result)})
                 self._observe_result_size(op, "events", len(result))
@@ -956,6 +966,8 @@ class ObservabilityService:
         status: str | None,
         start_ts: float | None,
         end_ts: float | None,
+        endpoint: str | None = None,
+        action: str | None = None,
     ) -> int:
         op = "audit_events_count"
         op_start = self._observe_operation_start(op)
@@ -964,11 +976,21 @@ class ObservabilityService:
             operation="audit_events_count",
             tool=tool,
             status=status,
+            endpoint=endpoint,
+            action=action,
         )
         with self._span_context("observability.service.audit_events_count") as span:
             self._set_span_attrs(span, **{"observability.operation": op})
             try:
-                count = self._repo.get_audit_events_count(user_id, tool, status, start_ts, end_ts)
+                count = self._repo.get_audit_events_count(
+                    user_id=user_id,
+                    tool=tool,
+                    status=status,
+                    start_ts=start_ts,
+                    end_ts=end_ts,
+                    endpoint=endpoint,
+                    action=action,
+                )
                 self._set_span_attrs(span, **{"observability.event_count": count})
                 self._observe_result_size(op, "rows", count)
                 self._observe_operation_success(op, op_start)

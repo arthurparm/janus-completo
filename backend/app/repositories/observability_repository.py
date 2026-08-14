@@ -402,6 +402,7 @@ class ObservabilityRepository:
         start_ts: float | None,
         end_ts: float | None,
         endpoint: str | None = None,
+        action: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -419,6 +420,8 @@ class ObservabilityRepository:
                 q = q.filter(AuditLedgerEvent.status == str(status))
             if endpoint is not None:
                 q = q.filter(AuditLedgerEvent.endpoint == str(endpoint))
+            if action is not None:
+                q = q.filter(AuditLedgerEvent.action == str(action))
             if start_ts is not None:
                 from datetime import datetime
 
@@ -456,6 +459,7 @@ class ObservabilityRepository:
                 tool=tool,
                 status=status,
                 endpoint=endpoint,
+                action=action,
                 limit=limit,
                 offset=offset,
                 error=str(e),
@@ -517,6 +521,8 @@ class ObservabilityRepository:
         status: str | None,
         start_ts: float | None,
         end_ts: float | None,
+        endpoint: str | None = None,
+        action: str | None = None,
     ) -> int:
         s = db.get_session_direct()
         try:
@@ -530,6 +536,10 @@ class ObservabilityRepository:
                 q = q.filter(AuditLedgerEvent.tool == str(tool))
             if status is not None:
                 q = q.filter(AuditLedgerEvent.status == str(status))
+            if endpoint is not None:
+                q = q.filter(AuditLedgerEvent.endpoint == str(endpoint))
+            if action is not None:
+                q = q.filter(AuditLedgerEvent.action == str(action))
             if start_ts is not None:
                 from datetime import datetime
 
@@ -545,6 +555,8 @@ class ObservabilityRepository:
                 user_id=user_id,
                 tool=tool,
                 status=status,
+                endpoint=endpoint,
+                action=action,
                 error=str(e),
             )
             raise ObservabilityRepositoryError("Falha ao contar eventos de auditoria.") from e

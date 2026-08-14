@@ -4,7 +4,7 @@ from io import StringIO
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from app.api.exception_handlers import get_error_taxonomy_catalog
@@ -296,6 +296,28 @@ class UserMetricsResponse(BaseModel):
     vector_points: int
 
 
+class AuditEventResponse(BaseModel):
+    id: int
+    user_id: int | None = None
+    endpoint: str
+    action: str
+    tool: str | None = None
+    status: str
+    latency_ms: float | None = None
+    trace_id: str | None = None
+    justification: str | None = None
+    created_at: float | None = None
+    details_json: Any = None
+    prev_hash: str | None = None
+    entry_hash: str | None = None
+    signature: str | None = None
+
+
+class AuditEventsResponse(BaseModel):
+    total: int
+    events: list[AuditEventResponse]
+
+
 def _normalize_export_value(value: object) -> str:
     if value is None:
         return ""
@@ -310,33 +332,68 @@ def _filter_event_fields(event: dict[str, Any], fields: list[str] | None) -> dic
     return {field: event.get(field) for field in fields}
 
 
-@router.get("/audit/events", summary="Lista eventos de auditoria")
+def _validate_audit_time_range(start_ts: float | None, end_ts: float | None) -> None:
+    if start_ts is not None and end_ts is not None and start_ts > end_ts:
+        raise HTTPException(
+            status_code=422,
+            detail="start_ts deve ser menor ou igual a end_ts.",
+        )
+
+
+@router.get(
+    "/audit/events",
+    response_model=AuditEventsResponse,
+    summary="Lista eventos de auditoria",
+)
 async def audit_events(
-    tool: str | None = None,
-    status: str | None = None,
-    start_ts: float | None = None,
-    end_ts: float | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    tool: str | None = Query(default=None, max_length=100),
+    status: str | None = Query(default=None, max_length=20),
+    endpoint: str | None = Query(default=None, max_length=200),
+    action: str | None = Query(default=None, max_length=100),
+    start_ts: float | None = Query(default=None, ge=0),
+    end_ts: float | None = Query(default=None, ge=0),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     service: ObservabilityService = Depends(get_observability_service),
-):
+) -> AuditEventsResponse:
+    _validate_audit_time_range(start_ts, end_ts)
     logger.info(
         "observability_endpoint_audit_events_requested",
         operation="audit_events_query",
         tool=tool,
         status=status,
+        endpoint=endpoint,
+        action=action,
         limit=limit,
         offset=offset,
     )
-    events = service.get_audit_events(None, tool, status, start_ts, end_ts, limit=limit, offset=offset)
-    total = service.get_audit_events_count(None, tool, status, start_ts, end_ts)
+    events = service.get_audit_events(
+        user_id=None,
+        tool=tool,
+        status=status,
+        start_ts=start_ts,
+        end_ts=end_ts,
+        endpoint=endpoint,
+        action=action,
+        limit=limit,
+        offset=offset,
+    )
+    total = service.get_audit_events_count(
+        user_id=None,
+        tool=tool,
+        status=status,
+        start_ts=start_ts,
+        end_ts=end_ts,
+        endpoint=endpoint,
+        action=action,
+    )
     logger.info(
         "observability_endpoint_audit_events_completed",
         operation="audit_events_query",
         total=total,
         row_count=len(events),
     )
-    return {"total": total, "events": events}
+    return AuditEventsResponse(total=total, events=events)
 
 
 @router.get(
@@ -660,26 +717,41 @@ async def request_pipeline_dashboard(
 
 @router.get("/audit/export", summary="Exporta eventos de auditoria")
 async def export_audit_events(
-    format: str = "csv",
-    fields: str | None = None,
-    tool: str | None = None,
-    status: str | None = None,
-    start_ts: float | None = None,
-    end_ts: float | None = None,
-    limit: int = 1000,
-    offset: int = 0,
+    format: str = Query(default="csv", pattern=r"^(csv|json)$"),
+    fields: str | None = Query(default=None, max_length=1000),
+    tool: str | None = Query(default=None, max_length=100),
+    status: str | None = Query(default=None, max_length=20),
+    endpoint: str | None = Query(default=None, max_length=200),
+    action: str | None = Query(default=None, max_length=100),
+    start_ts: float | None = Query(default=None, ge=0),
+    end_ts: float | None = Query(default=None, ge=0),
+    limit: int = Query(default=1000, ge=1, le=10000),
+    offset: int = Query(default=0, ge=0),
     service: ObservabilityService = Depends(get_observability_service),
 ):
+    _validate_audit_time_range(start_ts, end_ts)
     logger.info(
         "observability_endpoint_audit_export_requested",
         operation="audit_export",
         format=format,
         tool=tool,
         status=status,
+        endpoint=endpoint,
+        action=action,
         limit=limit,
         offset=offset,
     )
-    events = service.get_audit_events(None, tool, status, start_ts, end_ts, limit=limit, offset=offset)
+    events = service.get_audit_events(
+        user_id=None,
+        tool=tool,
+        status=status,
+        start_ts=start_ts,
+        end_ts=end_ts,
+        endpoint=endpoint,
+        action=action,
+        limit=limit,
+        offset=offset,
+    )
     field_list = [f.strip() for f in fields.split(",")] if fields else []
     field_list = [f for f in field_list if f]
     if not field_list:
