@@ -255,3 +255,6 @@ REST-only plan that disappears after the response.
 Every cycle and proposed improvement receives a UUID before serialization, so operators
 can correlate a persisted cycle and refer to an individual proposal without relying on
 array position or descriptive text.
+`GET /api/v1/optimization/cycles/{cycle_id}` retrieves the typed, immutable planning
+record for service actors with `ops:read`; it does not approve, schedule, or execute the
+proposal and returns `404` when the ledger has no matching confirmed cycle.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -79,3 +80,22 @@ def test_explicit_runtime_openapi_is_labeled_and_fail_closed(
     monkeypatch.setattr(generator, "fetch_runtime_openapi", fail)
     with pytest.raises(RuntimeError, match="runtime indisponível"):
         generator.load_endpoints("http://runtime/openapi.json")
+
+
+def test_test_reference_discovery_includes_relative_optimization_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    generator = importlib.import_module("tooling.generate_api_matrix")
+    tests_dir = tmp_path / "backend" / "tests"
+    tests_dir.mkdir(parents=True)
+    (tests_dir / "test_optimization.py").write_text(
+        'PATH = "/optimization/cycles/example-cycle"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "qa").mkdir()
+    monkeypatch.setattr(generator, "ROOT", tmp_path)
+
+    references = generator.discover_test_endpoint_refs()
+
+    assert "/api/v1/optimization/cycles/example-cycle" in references

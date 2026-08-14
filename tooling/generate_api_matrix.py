@@ -152,7 +152,7 @@ def discover_test_endpoint_refs() -> set[str]:
     )
     p_api = re.compile(r"['\"](/api/v1/[^'\"\s]+)['\"]")
     p_rel = re.compile(
-        r"['\"]/(system|knowledge|chat|auth|workers|observability|llm|autonomy|tools|tasks|documents|rag|context|profiles|users|feedback|pending_actions|consents|deployment|evaluation|productivity|collaboration|assistant|resources|learning|meta-agent|meta_agent)[^'\"\s]*['\"]"
+        r"['\"]/(system|knowledge|chat|auth|workers|observability|llm|autonomy|optimization|tools|tasks|documents|rag|context|profiles|users|feedback|pending_actions|consents|deployment|evaluation|productivity|collaboration|assistant|resources|learning|meta-agent|meta_agent)[^'\"\s]*['\"]"
     )
     for f in files:
         try:

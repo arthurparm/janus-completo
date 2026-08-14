@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-08-14T18:30:33.244310+00:00",
+    "generated_at": "2026-08-14T19:12:01.201150+00:00",
     "source": "openapi_in_process",
     "openapi_runtime_validated": false,
     "inputs": {
@@ -9,10 +9,10 @@
     }
   },
   "statistics": {
-    "total_endpoints": 260,
+    "total_endpoints": 261,
     "by_method": {
       "DELETE": 5,
-      "GET": 144,
+      "GET": 145,
       "PATCH": 3,
       "POST": 105,
       "PUT": 3
@@ -157,10 +157,10 @@
         "in_tests": 25
       },
       "Optimization": {
-        "total": 8,
+        "total": 9,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 0
+        "in_tests": 8
       },
       "PendingActions": {
         "total": 5,
@@ -230,7 +230,7 @@
       }
     },
     "smoke_results_loaded": 6,
-    "test_path_refs": 287
+    "test_path_refs": 299
   },
   "endpoints": [
     {
@@ -2332,7 +2332,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2343,7 +2343,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2354,7 +2354,18 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/optimization/cycles/{cycle_id}",
+      "module": "Optimization",
+      "summary": "Recupera um ciclo de otimização persistido",
+      "operation_id": "get_persisted_optimization_cycle_api_v1_optimization_cycles__cycle_id__get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2376,7 +2387,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2387,7 +2398,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "POST",
@@ -2398,7 +2409,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2409,7 +2420,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",

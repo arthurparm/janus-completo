@@ -9,6 +9,8 @@ from app.core.optimization.self_optimization import (
     SystemMetrics,
     self_optimization_cycle,
 )
+from app.db import db
+from app.models.audit_ledger_models import AuditLedgerEvent
 
 logger = structlog.get_logger(__name__)
 
@@ -105,6 +107,51 @@ class OptimizationRepository:
             "module": "self_optimization",
             "continuous_running": self_optimization_cycle._running,
         }
+
+    def get_persisted_cycle(self, cycle_id: str) -> dict[str, Any] | None:
+        """Recupera um ciclo confirmado pelo ledger imutável."""
+        session = db.get_session_direct()
+        try:
+            query = session.query(AuditLedgerEvent).filter(
+                AuditLedgerEvent.action.in_(
+                    ("manual_cycle_completed", "continuous_cycle_completed")
+                ),
+                AuditLedgerEvent.status == "planned",
+                AuditLedgerEvent.payload_json["cycle"]["cycle_id"].astext
+                == cycle_id,
+            )
+            row = query.order_by(AuditLedgerEvent.created_at.desc()).first()
+            if row is None:
+                return None
+            payload = row.payload_json
+            cycle = payload.get("cycle") if isinstance(payload, dict) else None
+            if not isinstance(cycle, dict) or cycle.get("cycle_id") != cycle_id:
+                raise OptimizationRepositoryError(
+                    "O evento persistido do ciclo possui payload inválido."
+                )
+            created_at = getattr(row, "created_at", None)
+            return {
+                "audit_event_id": int(row.id),
+                "persisted_at": created_at.timestamp() if created_at else None,
+                "source": payload.get("source"),
+                "actor_id": payload.get("actor_id"),
+                "interval_seconds": payload.get("interval_seconds"),
+                "trace_id": row.trace_id,
+                "cycle": cycle,
+            }
+        except OptimizationRepositoryError:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Falha ao recuperar ciclo de otimização persistido",
+                cycle_id=cycle_id,
+                error=str(exc),
+            )
+            raise OptimizationRepositoryError(
+                "Falha ao recuperar o ciclo de otimização persistido."
+            ) from exc
+        finally:
+            session.close()
 
 
 # Padrão de Injeção de Dependência: Getter para o repositório

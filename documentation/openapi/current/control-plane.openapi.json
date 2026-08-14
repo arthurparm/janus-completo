@@ -3039,6 +3039,57 @@
         "title": "OptimizationCycleResponse",
         "type": "object"
       },
+      "OptimizationCycleResult": {
+        "properties": {
+          "cycle_id": {
+            "format": "uuid",
+            "title": "Cycle Id",
+            "type": "string"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "improvements_applied": {
+            "title": "Improvements Applied",
+            "type": "integer"
+          },
+          "improvements_planned": {
+            "title": "Improvements Planned",
+            "type": "integer"
+          },
+          "issues_detected": {
+            "title": "Issues Detected",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedImprovementResponse"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cycle_id",
+          "success",
+          "issues_detected",
+          "improvements_planned",
+          "improvements_applied",
+          "elapsed_seconds",
+          "message"
+        ],
+        "title": "OptimizationCycleResult",
+        "type": "object"
+      },
       "OptimizationStatusResponse": {
         "properties": {
           "automatic_execution_available": {
@@ -3249,6 +3300,80 @@
           }
         },
         "title": "OutboxStatsResponse",
+        "type": "object"
+      },
+      "PersistedOptimizationCycleResponse": {
+        "properties": {
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "audit_event_id": {
+            "title": "Audit Event Id",
+            "type": "integer"
+          },
+          "cycle": {
+            "$ref": "#/components/schemas/OptimizationCycleResult"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "persisted_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persisted At"
+          },
+          "source": {
+            "enum": [
+              "manual_rest",
+              "continuous_runtime"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "audit_event_id",
+          "persisted_at",
+          "source",
+          "actor_id",
+          "interval_seconds",
+          "trace_id",
+          "cycle"
+        ],
+        "title": "PersistedOptimizationCycleResponse",
         "type": "object"
       },
       "PlanUpdateRequest": {
@@ -12885,6 +13010,68 @@
         ],
         "x-janus-scopes": [
           "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/optimization/cycles/{cycle_id}": {
+      "get": {
+        "operationId": "get_persisted_optimization_cycle_api_v1_optimization_cycles__cycle_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersistedOptimizationCycleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Ciclo não encontrado."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:read"
+            ]
+          }
+        ],
+        "summary": "Recupera um ciclo de otimização persistido",
+        "tags": [
+          "Optimization"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:read"
         ],
         "x-janus-security-profile": "control-plane"
       }

@@ -50,6 +50,10 @@ class OptimizationContinuousNotRunningError(OptimizationServiceError):
     """Não existe planejador contínuo ativo para interromper."""
 
 
+class OptimizationCycleNotFoundError(OptimizationServiceError):
+    """O ledger não contém o ciclo solicitado."""
+
+
 class OptimizationAnalysisType(str, Enum):
     """Tipos de análise que possuem implementação verificável."""
 
@@ -181,6 +185,32 @@ class OptimizationService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Forbidden",
             )
+
+    @staticmethod
+    def _authorize_read(actor: ActorContext) -> None:
+        resolved = authorization_service.require_service(actor=actor)
+        if not resolved.has_scopes(("ops:read",)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden",
+            )
+
+    def get_persisted_cycle(
+        self, *, cycle_id: str, actor: ActorContext
+    ) -> dict[str, Any]:
+        """Recupera um planejamento durável sem autorizar sua execução."""
+        self._authorize_read(actor)
+        try:
+            persisted = self._repo.get_persisted_cycle(cycle_id)
+        except OptimizationRepositoryError as exc:
+            raise OptimizationServiceError(
+                "Falha ao recuperar o ciclo de otimização persistido."
+            ) from exc
+        if persisted is None:
+            raise OptimizationCycleNotFoundError(
+                "Ciclo de otimização não encontrado no ledger."
+            )
+        return persisted
 
     def _on_continuous_task_done(self, task: asyncio.Task[None]) -> None:
         outcome = "stopped"

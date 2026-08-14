@@ -7646,6 +7646,42 @@
                     "additionalProperties": false,
                     "properties": {
                       "operation_id": {
+                        "const": "get_persisted_optimization_cycle_api_v1_optimization_cycles__cycle_id__get",
+                        "type": "string"
+                      },
+                      "path_params": {
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        },
+                        "default": {},
+                        "type": "object"
+                      },
+                      "payload": {
+                        "default": {},
+                        "type": "object"
+                      },
+                      "query_params": {
+                        "additionalProperties": true,
+                        "default": {},
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "operation_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation_id": {
                         "const": "get_poison_pill_stats_api_v1_observability_poison_pills_stats_get",
                         "type": "string"
                       },
@@ -11739,6 +11775,7 @@
           "get_node_types_api_v1_knowledge_node_types_get",
           "get_optimization_status_api_v1_optimization_status_get",
           "get_outbox_stats_api_v1_tasks_outbox_stats_get",
+          "get_persisted_optimization_cycle_api_v1_optimization_cycles__cycle_id__get",
           "get_poison_pill_stats_api_v1_observability_poison_pills_stats_get",
           "get_post_sprint_summary_api_v1_reflexion_summary_post_sprint_get",
           "get_quarantined_messages_api_v1_observability_poison_pills_quarantined_get",

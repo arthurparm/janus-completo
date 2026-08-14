@@ -13,6 +13,7 @@ from app.services.optimization_service import (
     OptimizationAnalysisType,
     OptimizationContinuousAlreadyRunningError,
     OptimizationContinuousNotRunningError,
+    OptimizationCycleNotFoundError,
     OptimizationExecutionUnavailableError,
     OptimizationService,
     get_optimization_service,
@@ -43,7 +44,7 @@ class PlannedImprovementResponse(BaseModel):
     requires_human_approval: bool
 
 
-class OptimizationCycleResponse(BaseModel):
+class OptimizationCycleResult(BaseModel):
     cycle_id: UUID
     success: bool
     issues_detected: int
@@ -52,7 +53,20 @@ class OptimizationCycleResponse(BaseModel):
     elapsed_seconds: float
     plans: list[PlannedImprovementResponse] = Field(default_factory=list)
     message: str
+
+
+class OptimizationCycleResponse(OptimizationCycleResult):
     audit_recorded: Literal[True]
+
+
+class PersistedOptimizationCycleResponse(BaseModel):
+    audit_event_id: int
+    persisted_at: float | None
+    source: Literal["manual_rest", "continuous_runtime"]
+    actor_id: str | None
+    interval_seconds: float | None
+    trace_id: str | None
+    cycle: OptimizationCycleResult
 
 
 class SystemHealthResponse(BaseModel):
@@ -164,6 +178,27 @@ async def run_optimization_cycle(
             detail=str(exc),
         ) from exc
     return OptimizationCycleResponse(**result)
+
+
+@router.get(
+    "/cycles/{cycle_id}",
+    response_model=PersistedOptimizationCycleResponse,
+    summary="Recupera um ciclo de otimização persistido",
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Ciclo não encontrado."}},
+)
+async def get_persisted_optimization_cycle(
+    cycle_id: UUID,
+    actor: ActorContext = Depends(require_service_actor_context),
+    service: OptimizationService = Depends(get_optimization_service),
+) -> PersistedOptimizationCycleResponse:
+    try:
+        result = service.get_persisted_cycle(cycle_id=str(cycle_id), actor=actor)
+    except OptimizationCycleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    return PersistedOptimizationCycleResponse(**result)
 
 
 @router.get(

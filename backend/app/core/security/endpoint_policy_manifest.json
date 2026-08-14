@@ -1983,6 +1983,20 @@
   {
     "human_delegable": true,
     "method": "GET",
+    "operation_id": "get_persisted_optimization_cycle_api_v1_optimization_cycles__cycle_id__get",
+    "ownership": "none",
+    "path": "/api/v1/optimization/cycles/{cycle_id}",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:read"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
     "operation_id": "get_system_health_api_v1_optimization_health_get",
     "ownership": "none",
     "path": "/api/v1/optimization/health",

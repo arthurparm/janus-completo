@@ -4,6 +4,8 @@ import re
 import sys
 import threading
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
@@ -29,6 +31,29 @@ def _optimizer_actor(*, scopes: tuple[str, ...] = ("ops:execute",)) -> ActorCont
         trace_id="trace-optimization",
         scopes=scopes,
     )
+
+
+def _persisted_cycle_payload(
+    cycle_id: str = "d993a9ae-3185-494c-b588-6c5f4de64551",
+) -> dict[str, object]:
+    return {
+        "audit_event_id": 41,
+        "persisted_at": 1_723_650_000.0,
+        "source": "manual_rest",
+        "actor_id": "optimizer-control",
+        "interval_seconds": None,
+        "trace_id": "trace-optimization",
+        "cycle": {
+            "cycle_id": cycle_id,
+            "success": True,
+            "issues_detected": 0,
+            "improvements_planned": 0,
+            "improvements_applied": 0,
+            "elapsed_seconds": 0.1,
+            "plans": [],
+            "message": "Nenhum problema detectado na amostra atual.",
+        },
+    }
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -330,6 +355,152 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
     assert body["cycle_id"] == "d993a9ae-3185-494c-b588-6c5f4de64551"
     assert body["plans"][0]["plan_id"] == "ba6e3104-e92d-4764-ae52-22e7bfa29821"
     assert body["audit_recorded"] is True
+
+
+def test_repository_recovers_typed_cycle_from_immutable_ledger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cycle_id = "d993a9ae-3185-494c-b588-6c5f4de64551"
+    row = SimpleNamespace(
+        id=41,
+        created_at=datetime.fromtimestamp(1_723_650_000.0, tz=UTC),
+        trace_id="trace-optimization",
+        payload_json={
+            "source": "manual_rest",
+            "actor_id": "optimizer-control",
+            "interval_seconds": None,
+            "cycle": _persisted_cycle_payload(cycle_id)["cycle"],
+        },
+    )
+    query = Mock()
+    query.filter.return_value = query
+    query.order_by.return_value = query
+    query.first.return_value = row
+    session = Mock()
+    session.query.return_value = query
+    monkeypatch.setattr(
+        optimization_repository.db,
+        "get_session_direct",
+        lambda: session,
+    )
+
+    result = optimization_repository.OptimizationRepository().get_persisted_cycle(
+        cycle_id
+    )
+
+    assert result == _persisted_cycle_payload(cycle_id)
+    assert query.filter.call_count == 1
+    session.close.assert_called_once_with()
+
+
+def test_repository_rejects_corrupt_persisted_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    query = Mock()
+    query.filter.return_value = query
+    query.order_by.return_value = query
+    query.first.return_value = SimpleNamespace(
+        id=42,
+        payload_json={"source": "manual_rest", "cycle": "invalid"},
+        created_at=None,
+        trace_id=None,
+    )
+    session = Mock()
+    session.query.return_value = query
+    monkeypatch.setattr(
+        optimization_repository.db,
+        "get_session_direct",
+        lambda: session,
+    )
+
+    with pytest.raises(
+        optimization_repository.OptimizationRepositoryError,
+        match="payload inválido",
+    ):
+        optimization_repository.OptimizationRepository().get_persisted_cycle(
+            "d993a9ae-3185-494c-b588-6c5f4de64551"
+        )
+
+    session.close.assert_called_once_with()
+
+
+def test_persisted_cycle_service_requires_read_scope_and_reports_not_found() -> None:
+    repository = type(
+        "Repository",
+        (),
+        {"get_persisted_cycle": Mock(return_value=None)},
+    )()
+    service = optimization_service.OptimizationService(repository)
+
+    with pytest.raises(HTTPException) as forbidden:
+        service.get_persisted_cycle(
+            cycle_id="d993a9ae-3185-494c-b588-6c5f4de64551",
+            actor=_optimizer_actor(scopes=("ops:execute",)),
+        )
+    assert forbidden.value.status_code == 403
+    repository.get_persisted_cycle.assert_not_called()
+
+    with pytest.raises(
+        optimization_service.OptimizationCycleNotFoundError,
+        match="não encontrado",
+    ):
+        service.get_persisted_cycle(
+            cycle_id="d993a9ae-3185-494c-b588-6c5f4de64551",
+            actor=_optimizer_actor(scopes=("ops:read",)),
+        )
+
+    repository.get_persisted_cycle.side_effect = (
+        optimization_repository.OptimizationRepositoryError("banco indisponível")
+    )
+    with pytest.raises(
+        optimization_service.OptimizationServiceError,
+        match="Falha ao recuperar",
+    ):
+        service.get_persisted_cycle(
+            cycle_id="d993a9ae-3185-494c-b588-6c5f4de64551",
+            actor=_optimizer_actor(scopes=("ops:read",)),
+        )
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_persisted_cycle_endpoint_is_typed_and_validates_uuid() -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    cycle_id = "d993a9ae-3185-494c-b588-6c5f4de64551"
+    service = type(
+        "Service",
+        (),
+        {"get_persisted_cycle": Mock(return_value=_persisted_cycle_payload(cycle_id))},
+    )()
+    app = FastAPI()
+    app.include_router(optimization_endpoint.router, prefix="/optimization")
+    app.dependency_overrides[
+        optimization_endpoint.get_optimization_service
+    ] = lambda: service
+    app.dependency_overrides[
+        optimization_endpoint.require_service_actor_context
+    ] = lambda: _optimizer_actor(scopes=("ops:read",))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(f"/optimization/cycles/{cycle_id}")
+        invalid = await client.get("/optimization/cycles/not-a-uuid")
+        service.get_persisted_cycle.side_effect = (
+            optimization_service.OptimizationCycleNotFoundError(
+                "Ciclo de otimização não encontrado no ledger."
+            )
+        )
+        missing = await client.get(
+            "/optimization/cycles/ba6e3104-e92d-4764-ae52-22e7bfa29821"
+        )
+
+    assert response.status_code == 200
+    assert response.json()["cycle"]["cycle_id"] == cycle_id
+    assert response.json()["source"] == "manual_rest"
+    assert invalid.status_code == 422
+    assert missing.status_code == 404
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

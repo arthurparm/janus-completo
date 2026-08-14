@@ -1,22 +1,22 @@
 # API Endpoint Matrix
 
-- Generated at: `2026-08-14T18:30:33.244310+00:00`
+- Generated at: `2026-08-14T19:12:01.201150+00:00`
 - Source: `openapi_in_process`
 - OpenAPI runtime validated: `no`
 - Regenerate command: `python tooling/generate_api_matrix.py`
 
 ## Summary
 
-- Total endpoints: `260`
+- Total endpoints: `261`
 - Smoke results loaded: `6`
-- Test path references: `287`
+- Test path references: `299`
 
 ### By Method
 
 | Method | Count |
 |---|---:|
 | DELETE | 5 |
-| GET | 144 |
+| GET | 145 |
 | PATCH | 3 |
 | POST | 105 |
 | PUT | 3 |
@@ -48,7 +48,7 @@
 | LLM | 12 | 0 | 0 | 0 |
 | Meta-Agent | 6 | 0 | 0 | 6 |
 | Observability | 31 | 0 | 0 | 25 |
-| Optimization | 8 | 0 | 0 | 0 |
+| Optimization | 9 | 0 | 0 | 8 |
 | PendingActions | 5 | 0 | 0 | 5 |
 | Productivity | 11 | 0 | 0 | 11 |
 | Profiles | 2 | 0 | 0 | 2 |
@@ -255,14 +255,15 @@
 | GET | `/api/v1/observability/requests/{request_id}/dashboard` | Observability | N/A | yes |
 | GET | `/api/v1/observability/slo/domains` | Observability | N/A | yes |
 | GET | `/api/v1/observability/user_summary` | Observability | N/A | yes |
-| POST | `/api/v1/optimization/analyze` | Optimization | N/A | no |
-| POST | `/api/v1/optimization/continuous/start` | Optimization | N/A | no |
-| POST | `/api/v1/optimization/continuous/stop` | Optimization | N/A | no |
+| POST | `/api/v1/optimization/analyze` | Optimization | N/A | yes |
+| POST | `/api/v1/optimization/continuous/start` | Optimization | N/A | yes |
+| POST | `/api/v1/optimization/continuous/stop` | Optimization | N/A | yes |
+| GET | `/api/v1/optimization/cycles/{cycle_id}` | Optimization | N/A | yes |
 | GET | `/api/v1/optimization/health` | Optimization | N/A | no |
-| GET | `/api/v1/optimization/issues` | Optimization | N/A | no |
-| GET | `/api/v1/optimization/metrics/history` | Optimization | N/A | no |
-| POST | `/api/v1/optimization/run-cycle` | Optimization | N/A | no |
-| GET | `/api/v1/optimization/status` | Optimization | N/A | no |
+| GET | `/api/v1/optimization/issues` | Optimization | N/A | yes |
+| GET | `/api/v1/optimization/metrics/history` | Optimization | N/A | yes |
+| POST | `/api/v1/optimization/run-cycle` | Optimization | N/A | yes |
+| GET | `/api/v1/optimization/status` | Optimization | N/A | yes |
 | GET | `/api/v1/pending_actions/` | PendingActions | N/A | yes |
 | POST | `/api/v1/pending_actions/action/{action_id}/approve` | PendingActions | N/A | yes |
 | POST | `/api/v1/pending_actions/action/{action_id}/reject` | PendingActions | N/A | yes |
