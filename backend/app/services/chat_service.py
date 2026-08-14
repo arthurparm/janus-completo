@@ -81,7 +81,7 @@ class ChatService:
         else:
             self._rag_service = None
 
-        self._command_handler = ChatCommandHandler(tool_service, memory_service)
+        self._command_handler = ChatCommandHandler(tool_service, memory_service, llm_service)
         self._event_publisher = ChatEventPublisher(db_logger=event_logger)
         self._agent_loop = ChatAgentLoop(
             llm_service=llm_service,
