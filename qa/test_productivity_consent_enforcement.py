@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -58,12 +59,16 @@ async def test_external_productivity_effects_require_consent_before_queueing(
     original_overrides = dict(app.dependency_overrides)
     original_observability = getattr(app.state, "observability_service", None)
     consent = _ConsentRepository(False)
+    speculative_index = AsyncMock()
     app.dependency_overrides[get_consent_repo] = lambda: consent
-    app.dependency_overrides[get_knowledge_facade] = lambda: object()
+    app.dependency_overrides[get_knowledge_facade] = lambda: SimpleNamespace(
+        index_memory_event=speculative_index
+    )
     app.state.observability_service = _Observability()
 
     calendar_payload = {
-        "event": {"title": "reunião", "start_ts": 10.0, "end_ts": 20.0}
+        "event": {"title": "reunião", "start_ts": 10.0, "end_ts": 20.0},
+        "index": True,
     }
     mail_payload = {
         "message": {"to": "dest@example.com", "subject": "S", "body": "B"}
@@ -131,6 +136,7 @@ async def test_external_productivity_effects_require_consent_before_queueing(
     assert failed_mail.json()["detail"] == "e-mail não enfileirado"
     assert calendar_publish.await_count == 2
     assert mail_publish.await_count == 2
+    speculative_index.assert_not_awaited()
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

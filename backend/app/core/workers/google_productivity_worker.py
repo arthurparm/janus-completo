@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
@@ -10,6 +10,7 @@ import structlog
 from app.core.infrastructure.logging_config import TRACE_ID
 from app.core.infrastructure.message_broker import get_broker
 from app.core.security.egress_policy import enforce_worker_http_egress
+from app.db.vector_store import build_deterministic_point_id
 from app.models.schemas import TaskMessage
 from app.planes.knowledge import get_knowledge_facade
 from app.repositories.observability_repository import record_audit_event_direct
@@ -51,6 +52,14 @@ except Exception:
     _tracer = None
 
 logger = structlog.get_logger(__name__)
+
+
+def _google_utc_datetime(timestamp: object) -> str:
+    return (
+        datetime.fromtimestamp(float(timestamp), UTC)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 class ProductivityQueueUnavailableError(Exception):
@@ -219,16 +228,10 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                         req = {
                             "summary": ev.get("title"),
                             "start": {
-                                "dateTime": datetime.utcfromtimestamp(
-                                    float(ev.get("start_ts"))
-                                ).isoformat()
-                                + "Z"
+                                "dateTime": _google_utc_datetime(ev.get("start_ts"))
                             },
                             "end": {
-                                "dateTime": datetime.utcfromtimestamp(
-                                    float(ev.get("end_ts"))
-                                ).isoformat()
-                                + "Z"
+                                "dateTime": _google_utc_datetime(ev.get("end_ts"))
                             },
                             "location": ev.get("location") or None,
                             "description": ev.get("notes") or None,
@@ -300,7 +303,11 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     title = str(ev.get("title", ""))
                     loc = str(ev.get("location", ""))
                     content = f"{title} @ {loc}"
-                    pid = f"calendar:{user_id}:{int(ev.get('start_ts', 0))}:{int(ev.get('end_ts', 0))}"
+                    pid = build_deterministic_point_id(
+                        "google-calendar-event",
+                        user_id,
+                        task.task_id,
+                    )
                     payload_q = {
                         "content": content,
                         "type": "calendar_event",
@@ -310,6 +317,7 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                             "type": "calendar_event",
                             "origin": "google",
                             "scope": "calendar.write",
+                            "task_id": task.task_id,
                             "user_id": str(user_id),
                             "timestamp": int(ev.get("start_ts") or 0),
                             "ts_ms": int(ev.get("start_ts") or 0),
@@ -353,7 +361,20 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                         _PROD_WORKER_ERRORS.labels("calendar_index", e.__class__.__name__).inc()
                     except Exception:
                         pass
-                    pass
+                    try:
+                        record_audit_event_direct(
+                            {
+                                "user_id": int(user_id),
+                                "endpoint": "productivity:google_calendar",
+                                "action": "index_add_event",
+                                "tool": "google_calendar",
+                                "status": "error",
+                                "latency_ms": None,
+                                "trace_id": TRACE_ID.get(),
+                            }
+                        )
+                    except Exception:
+                        pass
         if task.task_type == "google_mail_send" and user_id is not None:
             try:
                 require_productivity_consent(
@@ -464,9 +485,37 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                             ).observe(__import__("time").perf_counter() - _t0)
                         except Exception:
                             pass
+                        try:
+                            record_audit_event_direct(
+                                {
+                                    "user_id": int(user_id),
+                                    "endpoint": "productivity:google_mail",
+                                    "action": "index_sent_mail",
+                                    "tool": "google_mail",
+                                    "status": "indexed",
+                                    "latency_ms": None,
+                                    "trace_id": TRACE_ID.get(),
+                                }
+                            )
+                        except Exception:
+                            pass
                     except Exception as e:
                         try:
                             _PROD_WORKER_ERRORS.labels("mail_index", e.__class__.__name__).inc()
+                        except Exception:
+                            pass
+                        try:
+                            record_audit_event_direct(
+                                {
+                                    "user_id": int(user_id),
+                                    "endpoint": "productivity:google_mail",
+                                    "action": "index_sent_mail",
+                                    "tool": "google_mail",
+                                    "status": "error",
+                                    "latency_ms": None,
+                                    "trace_id": TRACE_ID.get(),
+                                }
+                            )
                         except Exception:
                             pass
             except Exception as e:

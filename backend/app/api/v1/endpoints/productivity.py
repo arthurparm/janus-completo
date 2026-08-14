@@ -248,7 +248,6 @@ async def calendar_add_event(
     payload: CalendarAddRequest,
     request: Request,
     repo: ConsentRepository = Depends(get_consent_repo),
-    knowledge = Depends(get_knowledge_facade),
 ):
     actor = require_authenticated_actor_id(request)
     _require_consent(repo, actor, "calendar.write")
@@ -306,39 +305,6 @@ async def calendar_add_event(
             ).inc()
         except Exception:
             pass
-    try:
-        if bool(payload.index):
-            evt = payload.event.model_dump()
-            content = f"{evt.get('title', '')} @ {evt.get('location', '')}"
-            pid = f"calendar:{actor}:{int(evt.get('start_ts', 0))}:{int(evt.get('end_ts', 0))}"
-            payload_q = {
-                "content": content,
-                "type": "calendar_event",
-                "ts_ms": int(evt.get("start_ts") or 0),
-                "composite_id": pid,
-                "metadata": {
-                    "type": "calendar_event",
-                    "user_id": actor,
-                    "timestamp": int(evt.get("start_ts") or 0),
-                    "ts_ms": int(evt.get("start_ts") or 0),
-                    "origin": "productivity.calendar.endpoint",
-                },
-            }
-            await knowledge.index_memory_event(
-                user_id=actor,
-                content=content,
-                point_id=pid,
-                payload=payload_q,
-            )
-            try:
-                _PROD_REQUESTS_TOTAL.labels("calendar_index", "ok").inc()
-                _PROD_REQUESTS_USER_TOTAL.labels(
-                    "[REDACTED_PII]", "calendar_index", "ok"
-                ).inc()
-            except Exception:
-                pass
-    except Exception:
-        pass
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
@@ -466,7 +432,6 @@ async def mail_send(
             _PROD_REQUESTS_USER_TOTAL.labels("[REDACTED_PII]", "mail_send", "queued").inc()
         except Exception:
             pass
-    # Indexação opcional será tratada pelo worker em uma versão futura
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(

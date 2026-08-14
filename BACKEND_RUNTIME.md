@@ -347,3 +347,8 @@ Provider rejection is HTTP 400, outbound policy unavailability is HTTP 503, prov
 payload failure is HTTP 502, and timeout is HTTP 504. Only a validated token payload can
 reach the atomic connection persistence service; the one-time state remains consumed on
 every attempted exchange so retry requires a new authorization start.
+
+Calendar and Mail requests with `index=true` are indexed only by the productivity worker
+after the corresponding Google API effect succeeds. The enqueueing REST endpoint never
+writes speculative knowledge. Indexing uses deterministic point identifiers and reports a
+separate worker audit error without rewriting a confirmed Google effect as failed.
