@@ -174,7 +174,15 @@ class ChatCommandHandler:
 Digite qualquer comando para mais detalhes!"""
 
     async def _handle_status(self, args: str, conversation_id: str, user_id: str | None) -> str:
-        """Show real system status (LLM router health, memory/tools reachability, uptime)."""
+        """
+        Show live system status: per-provider circuit breakers, real spend today,
+        a direct ping to OmniRoute (not just its circuit-breaker history), plus
+        memory/tools reachability and real uptime/version. Everything here is
+        queried at call time - nothing is cached or assumed.
+        """
+        from app.config import settings
+        from app.core.llm.pricing import get_provider_spend_snapshot
+        from app.core.llm.resilience import get_circuit_breaker_snapshot
         from app.core.monitoring.health_monitor import check_llm_router_health
         from app.services.system_status_service import system_status_service
 
@@ -184,6 +192,43 @@ Digite qualquer comando para mais detalhes!"""
             llm_health = await check_llm_router_health()
         except Exception as e:
             llm_health = {"status": "unknown", "message": f"falha ao verificar: {e}"}
+
+        try:
+            cb_snapshot = get_circuit_breaker_snapshot()
+        except Exception:
+            cb_snapshot = {}
+        providers_down = sorted(
+            provider
+            for provider, cb in cb_snapshot.items()
+            if cb.get("state") == "OPEN"
+        )
+        providers_detail = (
+            f"{len(providers_down)} com circuito aberto ({', '.join(providers_down)})"
+            if providers_down
+            else f"todos os {len(cb_snapshot)} provedores com circuito fechado"
+        )
+
+        try:
+            spend_snapshot = await get_provider_spend_snapshot()
+            spend_detail = (
+                f"${spend_snapshot.get('total_spend_usd', 0):.4f} gasto hoje de "
+                f"${spend_snapshot.get('total_budget_usd', 0):.2f} de orçamento"
+            )
+        except Exception as e:
+            spend_detail = f"não disponível ({e})"
+
+        omniroute_live = "não configurado"
+        if getattr(settings, "OMNIROUTE_ENABLED", False):
+            try:
+                import httpx
+
+                base = str(settings.OMNIROUTE_BASE_URL or "").rstrip("/")
+                health_url = base[: -len("/v1")] if base.endswith("/v1") else base
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    r = await client.get(f"{health_url}/api/monitoring/health")
+                omniroute_live = "respondendo agora" if r.status_code == 200 else f"HTTP {r.status_code}"
+            except Exception as e:
+                omniroute_live = f"não respondeu agora ({e})"
 
         memory_ok = self.memory_service is not None
         memory_detail = "não configurado"
@@ -209,35 +254,53 @@ Digite qualquer comando para mais detalhes!"""
         status_word = "Online" if overall_ok else "Degradado"
         status_icon = "✅" if overall_ok else "⚠️"
 
+        # Gasto/orçamento nunca passa pelo LLM: alguns provedores do OmniRoute (ex.:
+        # Antigravity, ferramenta corporativa do Google) aplicam um filtro de DLP que
+        # mascara padrões de valor monetário na saída, mesmo com instrução explícita
+        # para não fazer isso - substituindo o número real por um placeholder tipo
+        # "[informação interna]". Anexar essa linha de forma determinística evita
+        # depender de um comportamento de terceiros que não controlamos.
+        budget_line = f"💰 Gasto - {spend_detail}"
+
         fallback = (
             "⚡ **Status do Sistema**\n\n"
             f"{status_icon} **{status_word}**\n"
             f"🧠 Memória - {memory_detail}\n"
             f"🛠️ Ferramentas - {tools_detail}\n"
             f"💬 LLM Router - {llm_health.get('message', 'desconhecido')}\n"
+            f"🔌 Provedores - {providers_detail}\n"
+            f"{budget_line}\n"
+            f"🧭 OmniRoute (ping ao vivo) - {omniroute_live}\n"
             f"⏱️ Uptime: {int(sys_status.get('uptime_seconds', 0))}s\n\n"
             "Use `/memory` para ver estatísticas detalhadas."
         )
 
         facts = (
             f"- Status geral: {'operacional' if overall_ok else 'degradado'}\n"
-            f"- LLM Router: {llm_health.get('status')} ({llm_health.get('message')})\n"
+            f"- LLM Router (agregado): {llm_health.get('status')} ({llm_health.get('message')})\n"
+            f"- Provedores por circuit breaker agora: {providers_detail}\n"
+            f"- OmniRoute, ping direto agora (nao e historico): {omniroute_live}\n"
             f"- Memória: {memory_detail}\n"
             f"- Ferramentas: {tools_detail}\n"
             f"- Uptime: {int(sys_status.get('uptime_seconds', 0))} segundos\n"
             f"- Versão do Janus: {sys_status.get('version')}\n"
         )
-        return await self._respond_naturally(
+        natural = await self._respond_naturally(
             facts=facts,
             instruction=(
-                "O usuário pediu /status. Informe o estado real do sistema. "
-                "Se algo estiver degradado ou com falha, diga isso claramente, sem minimizar "
-                "nem inventar que está tudo bem quando não está."
+                "O usuário pediu /status. Informe o estado real e atual do sistema, "
+                "consultado agora mesmo (não é um cache). Se algo estiver degradado, com "
+                "circuito aberto, ou não responder, diga isso claramente, sem minimizar "
+                "nem inventar que está tudo bem quando não está. Não mencione gasto ou "
+                "orçamento - essa informação é reportada separadamente."
             ),
             conversation_id=conversation_id,
             user_id=user_id,
             fallback=fallback,
         )
+        if natural == fallback:
+            return natural
+        return f"{natural}\n\n{budget_line}"
 
     async def _handle_memory(self, args: str, conversation_id: str, user_id: str | None) -> str:
         """Show real memory statistics."""
