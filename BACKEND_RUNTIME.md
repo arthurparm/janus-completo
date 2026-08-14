@@ -328,3 +328,11 @@ The Google OAuth callback persists the protected token and every consent derived
 verified capability in one database transaction. Repositories flush without committing
 when enlisted in this unit of work; any token or consent failure rolls back the complete
 connection before the callback can report success or audit completion.
+
+`POST /api/v1/productivity/oauth/google/disconnect` is actor-scoped and revokes all local
+Google productivity consents before external I/O. It then calls Google's revocation
+endpoint with the stored refresh token (or access token), treating HTTP 200 and the
+provider's `invalid_token` response as already revoked. Confirmed revocation deletes the
+encrypted local token transactionally. Provider or egress failure returns the typed
+`local_disconnected` state with `retry_required=true`; Janus effects remain blocked while
+the encrypted token is retained only so a later disconnect request can retry revocation.

@@ -9,6 +9,10 @@ import pytest
 from app.api.v1.endpoints import productivity
 from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.oauth_token_security_service import OAuthTokenProtectionError
+from app.services.productivity_oauth_disconnect_service import (
+    GoogleDisconnectPersistenceError,
+    GoogleDisconnectResult,
+)
 from app.services.productivity_oauth_state_registry_service import (
     OAuthStateAlreadyConsumedError,
     OAuthStateRegistryUnavailableError,
@@ -297,3 +301,56 @@ def test_manual_refresh_fails_closed_when_persisted_token_cannot_be_decrypted(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "OAuth token protection unavailable"
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "result",
+    [
+        GoogleDisconnectResult(
+            status="disconnected",
+            provider_revoked=True,
+            retry_required=False,
+        ),
+        GoogleDisconnectResult(
+            status="local_disconnected",
+            provider_revoked=False,
+            retry_required=True,
+            warning="retry provider revocation",
+        ),
+    ],
+)
+def test_disconnect_returns_truthful_full_or_partial_state(
+    monkeypatch: pytest.MonkeyPatch,
+    result: GoogleDisconnectResult,
+) -> None:
+    disconnect = AsyncMock(return_value=result)
+    monkeypatch.setattr(productivity, "disconnect_google_productivity", disconnect)
+
+    response = _client(actor_id=7).post(
+        "/api/v1/productivity/oauth/google/disconnect"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": result.status,
+        "provider_revoked": result.provider_revoked,
+        "retry_required": result.retry_required,
+        "warning": result.warning,
+    }
+    disconnect.assert_awaited_once_with(user_id=7)
+
+
+def test_disconnect_reports_local_persistence_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        productivity,
+        "disconnect_google_productivity",
+        AsyncMock(side_effect=GoogleDisconnectPersistenceError("database unavailable")),
+    )
+
+    response = _client(actor_id=7).post(
+        "/api/v1/productivity/oauth/google/disconnect"
+    )
+
+    assert response.status_code == 503

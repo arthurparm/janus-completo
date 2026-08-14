@@ -335,14 +335,19 @@ class ConsentRepository:
             if not self._session:
                 s.close()
 
-    def revoke_consent(self, user_id: int, scope: str) -> bool:
+    def revoke_consent(
+        self, user_id: int, scope: str, *, commit: bool = True
+    ) -> bool:
         s = self._get_session()
         try:
             c = s.query(Consent).filter(Consent.user_id == user_id, Consent.scope == scope).first()
             if c is None:
                 return False
             s.delete(c)
-            s.commit()
+            if commit:
+                s.commit()
+            else:
+                s.flush()
             return True
         finally:
             if not self._session:
@@ -456,6 +461,28 @@ class OAuthTokenRepository:
             tok.access_token = access_token or ""
             tok.refresh_token = refresh_token
             return tok
+        finally:
+            if not self._session:
+                s.close()
+
+    def delete(
+        self, user_id: int, provider: str, *, commit: bool = True
+    ) -> bool:
+        s = self._get_session()
+        try:
+            tok = (
+                s.query(OAuthToken)
+                .filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider)
+                .first()
+            )
+            if tok is None:
+                return False
+            s.delete(tok)
+            if commit:
+                s.commit()
+            else:
+                s.flush()
+            return True
         finally:
             if not self._session:
                 s.close()

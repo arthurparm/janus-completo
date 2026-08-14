@@ -2895,6 +2895,51 @@
         "title": "FeedbackTypeEnum",
         "type": "string"
       },
+      "GoogleDisconnectResponse": {
+        "properties": {
+          "provider_revoked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Revoked"
+          },
+          "retry_required": {
+            "title": "Retry Required",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "disconnected",
+              "local_disconnected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "status",
+          "provider_revoked",
+          "retry_required"
+        ],
+        "title": "GoogleDisconnectResponse",
+        "type": "object"
+      },
       "GoogleOAuthCallbackRequest": {
         "properties": {
           "code": {
@@ -16275,6 +16320,39 @@
           }
         ],
         "summary": "Google Oauth Callback",
+        "tags": [
+          "Productivity"
+        ],
+        "x-janus-human-delegable": false,
+        "x-janus-ownership": "actor",
+        "x-janus-principals": [
+          "user"
+        ],
+        "x-janus-scopes": [],
+        "x-janus-security-profile": "user"
+      }
+    },
+    "/api/v1/productivity/oauth/google/disconnect": {
+      "post": {
+        "operationId": "google_oauth_disconnect_api_v1_productivity_oauth_google_disconnect_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleDisconnectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCUser": []
+          }
+        ],
+        "summary": "Google Oauth Disconnect",
         "tags": [
           "Productivity"
         ],

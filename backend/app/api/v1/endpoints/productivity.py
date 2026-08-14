@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -29,6 +29,10 @@ from app.services.productivity_consent_service import (
 from app.services.productivity_oauth_connection_service import (
     OAuthConnectionPersistenceError,
     persist_google_oauth_connection,
+)
+from app.services.productivity_oauth_disconnect_service import (
+    GoogleDisconnectPersistenceError,
+    disconnect_google_productivity,
 )
 from app.services.productivity_oauth_state_registry_service import (
     OAuthStateAlreadyConsumedError,
@@ -105,6 +109,13 @@ class OAuthStartRequest(BaseModel):
 class OAuthStartResponse(BaseModel):
     authorize_url: str
     state: str
+
+
+class GoogleDisconnectResponse(BaseModel):
+    status: Literal["disconnected", "local_disconnected"]
+    provider_revoked: bool | None
+    retry_required: bool
+    warning: str | None = None
 
 
 class OAuthCallbackRequest(BaseModel):
@@ -837,3 +848,60 @@ async def google_oauth_refresh(request: Request):
     except Exception:
         pass
     return {"status": "ok"}
+
+
+@router.post("/oauth/google/disconnect")
+async def google_oauth_disconnect(request: Request) -> GoogleDisconnectResponse:
+    actor = require_authenticated_actor_id(request)
+    try:
+        result = await disconnect_google_productivity(user_id=int(actor))
+    except (OAuthTokenProtectionError, GoogleDisconnectPersistenceError) as exc:
+        try:
+            _PROD_OAUTH_EVENTS_TOTAL.labels("google", "disconnect", "error").inc()
+        except Exception:
+            pass
+        try:
+            error_observability: ObservabilityService = (
+                request.app.state.observability_service
+            )
+            error_observability.record_audit_event(
+                {
+                    "user_id": actor,
+                    "tool": "google_oauth_disconnect",
+                    "status": "error",
+                    "detail": {"reason": "local_persistence_unavailable"},
+                }
+            )
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google disconnect persistence unavailable",
+        ) from exc
+    try:
+        _PROD_OAUTH_EVENTS_TOTAL.labels(
+            "google", "disconnect", result.status
+        ).inc()
+    except Exception:
+        pass
+    try:
+        svc: ObservabilityService = request.app.state.observability_service
+        svc.record_audit_event(
+            {
+                "user_id": actor,
+                "tool": "google_oauth_disconnect",
+                "status": result.status,
+                "detail": {
+                    "provider_revoked": result.provider_revoked,
+                    "retry_required": result.retry_required,
+                },
+            }
+        )
+    except Exception:
+        pass
+    return GoogleDisconnectResponse(
+        status=result.status,
+        provider_revoked=result.provider_revoked,
+        retry_required=result.retry_required,
+        warning=result.warning,
+    )

@@ -3408,6 +3408,18 @@
   {
     "human_delegable": false,
     "method": "POST",
+    "operation_id": "google_oauth_disconnect_api_v1_productivity_oauth_google_disconnect_post",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/oauth/google/disconnect",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
+    "method": "POST",
     "operation_id": "google_oauth_refresh_api_v1_productivity_oauth_google_refresh_post",
     "ownership": "actor",
     "path": "/api/v1/productivity/oauth/google/refresh",
