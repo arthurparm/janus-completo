@@ -787,6 +787,17 @@
             ],
             "title": "Interval Seconds"
           },
+          "last_cycle_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cycle At"
+          },
           "last_error": {
             "anyOf": [
               {
@@ -797,6 +808,28 @@
               }
             ],
             "title": "Last Error"
+          },
+          "last_improvements_planned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Improvements Planned"
+          },
+          "last_issues_detected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Issues Detected"
           },
           "last_started_at": {
             "anyOf": [
@@ -858,6 +891,9 @@
           "last_started_at",
           "last_stopped_at",
           "last_error",
+          "last_cycle_at",
+          "last_issues_detected",
+          "last_improvements_planned",
           "audit_recorded"
         ],
         "title": "ContinuousOptimizationStartResponse",
@@ -900,6 +936,17 @@
             ],
             "title": "Interval Seconds"
           },
+          "last_cycle_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cycle At"
+          },
           "last_error": {
             "anyOf": [
               {
@@ -910,6 +957,28 @@
               }
             ],
             "title": "Last Error"
+          },
+          "last_improvements_planned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Improvements Planned"
+          },
+          "last_issues_detected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Issues Detected"
           },
           "last_started_at": {
             "anyOf": [
@@ -975,6 +1044,9 @@
           "last_started_at",
           "last_stopped_at",
           "last_error",
+          "last_cycle_at",
+          "last_issues_detected",
+          "last_improvements_planned",
           "stopped",
           "forced",
           "audit_recorded"
@@ -2833,6 +2905,17 @@
             ],
             "title": "Interval Seconds"
           },
+          "last_cycle_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cycle At"
+          },
           "last_error": {
             "anyOf": [
               {
@@ -2843,6 +2926,28 @@
               }
             ],
             "title": "Last Error"
+          },
+          "last_improvements_planned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Improvements Planned"
+          },
+          "last_issues_detected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Issues Detected"
           },
           "last_started_at": {
             "anyOf": [
@@ -2903,7 +3008,10 @@
           "last_started_by",
           "last_started_at",
           "last_stopped_at",
-          "last_error"
+          "last_error",
+          "last_cycle_at",
+          "last_issues_detected",
+          "last_improvements_planned"
         ],
         "title": "OptimizationStatusResponse",
         "type": "object"

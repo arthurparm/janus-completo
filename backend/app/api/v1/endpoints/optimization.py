@@ -93,6 +93,9 @@ class OptimizationStatusResponse(BaseModel):
     last_started_at: float | None
     last_stopped_at: float | None
     last_error: str | None
+    last_cycle_at: float | None
+    last_issues_detected: int | None
+    last_improvements_planned: int | None
 
 
 class ContinuousOptimizationStartResponse(OptimizationStatusResponse):

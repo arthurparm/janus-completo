@@ -1,12 +1,13 @@
-from typing import Any, cast
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import structlog
 
-from app.core.optimization import self_optimization_cycle
 from app.core.optimization.self_optimization import (
     DetectedIssue,
     OptimizationMetricsUnavailableError,
     SystemMetrics,
+    self_optimization_cycle,
 )
 
 logger = structlog.get_logger(__name__)
@@ -34,12 +35,9 @@ class OptimizationRepository:
         """Executa o ciclo de otimização através da infraestrutura core."""
         logger.debug("Executando ciclo de otimização via repositório.")
         try:
-            return cast(
-                dict[str, Any],
-                await self_optimization_cycle.run_cycle(
-                    enable_auto_execution=enable_auto_execution,
-                    max_improvements=max_improvements,
-                ),
+            return await self_optimization_cycle.run_cycle(
+                enable_auto_execution=enable_auto_execution,
+                max_improvements=max_improvements,
             )
         except OptimizationMetricsUnavailableError as e:
             raise OptimizationMetricsUnavailableRepositoryError(str(e)) from e
@@ -47,10 +45,17 @@ class OptimizationRepository:
             logger.error("Erro no repositório ao executar ciclo de otimização", exc_info=e)
             raise OptimizationRepositoryError("Falha ao executar o ciclo de otimização.") from e
 
-    async def run_continuous(self, interval_seconds: float) -> None:
+    async def run_continuous(
+        self,
+        interval_seconds: float,
+        on_cycle_completed: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> None:
         """Executa o planejador contínuo até uma solicitação explícita de parada."""
         try:
-            await self_optimization_cycle.run_continuous(interval_seconds=interval_seconds)
+            await self_optimization_cycle.run_continuous(
+                interval_seconds=interval_seconds,
+                on_cycle_completed=on_cycle_completed,
+            )
         except Exception as e:
             logger.error("Falha no loop contínuo de otimização", exc_info=e)
             raise OptimizationRepositoryError(
@@ -76,18 +81,13 @@ class OptimizationRepository:
 
     def get_health_score(self, metrics: SystemMetrics) -> float:
         """Calcula o score de saúde a partir das métricas."""
-        return cast(
-            float, self_optimization_cycle.monitor._calculate_health_score(metrics)
-        )
+        return self_optimization_cycle.monitor._calculate_health_score(metrics)
 
     def find_issues(self) -> list[DetectedIssue]:
         """Detecta problemas no sistema a partir das métricas."""
         logger.debug("Detectando problemas no repositório de otimização.")
         try:
-            return cast(
-                list[DetectedIssue],
-                self_optimization_cycle.monitor.detect_issues(),
-            )
+            return self_optimization_cycle.monitor.detect_issues()
         except Exception as e:
             logger.error("Erro ao detectar problemas de otimização", exc_info=e)
             raise OptimizationRepositoryError(
@@ -96,9 +96,7 @@ class OptimizationRepository:
 
     def get_metrics_history(self) -> list[SystemMetrics]:
         """Retorna o histórico de métricas."""
-        return cast(
-            list[SystemMetrics], self_optimization_cycle.monitor._metrics_history
-        )
+        return self_optimization_cycle.monitor._metrics_history
 
     def get_status(self) -> dict[str, Any]:
         """Retorna o status de execução do ciclo contínuo."""

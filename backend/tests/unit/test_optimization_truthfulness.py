@@ -2,6 +2,8 @@ import asyncio
 import importlib
 import re
 import sys
+import threading
+from collections.abc import Awaitable, Callable
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -353,7 +355,13 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
         "last_started_at": 1.0,
         "last_stopped_at": None,
         "last_error": None,
+        "last_cycle_at": 2.0,
+        "last_issues_detected": 1,
+        "last_improvements_planned": 1,
         "audit_recorded": True,
+    }
+    status_payload = {
+        key: value for key, value in control_status.items() if key != "audit_recorded"
     }
     service = type(
         "Service",
@@ -373,6 +381,7 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
                     "forced": False,
                 }
             ),
+            "get_status": Mock(return_value=status_payload),
         },
     )()
     actor = ActorContext.authenticated(
@@ -414,6 +423,7 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
             "/optimization/continuous/start", json={"interval_seconds": 30}
         )
         control_stopped = await client.post("/optimization/continuous/stop")
+        current_status = await client.get("/optimization/status")
 
     assert invalid_severity.status_code == 422
     assert fuzzy_category.status_code == 422
@@ -424,6 +434,8 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
     assert control_started.json()["automatic_execution_available"] is False
     assert control_stopped.status_code == 200
     assert control_stopped.json()["stopped"] is True
+    assert current_status.status_code == 200
+    assert current_status.json()["last_improvements_planned"] == 1
     assert valid_history.json() == {
         "count": 1,
         "metrics": [
@@ -518,6 +530,34 @@ async def test_continuous_cycle_recovers_after_transient_failure() -> None:
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_cycle_delivers_result_before_waiting_again() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+    result = {
+        "issues_detected": 1,
+        "improvements_planned": 1,
+        "plans": [{"description": "persistir"}],
+    }
+    delivered: list[dict[str, object]] = []
+
+    async def run_cycle() -> dict[str, object]:
+        return result
+
+    async def on_cycle_completed(cycle_result: dict[str, object]) -> None:
+        delivered.append(cycle_result)
+        cycle.stop()
+
+    cycle.run_cycle = run_cycle
+
+    await cycle.run_continuous(
+        interval_seconds=60,
+        on_cycle_completed=on_cycle_completed,
+    )
+
+    assert delivered == [result]
+    assert cycle._running is False
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
 async def test_stop_interrupts_continuous_cycle_wait() -> None:
     cycle = self_optimization.SelfOptimizationCycle()
     first_cycle_finished = asyncio.Event()
@@ -581,10 +621,25 @@ async def test_continuous_control_is_authorized_audited_and_interruptible(
     class Repository:
         running = False
 
-        async def run_continuous(self, interval_seconds: float) -> None:
+        async def run_continuous(
+            self,
+            interval_seconds: float,
+            on_cycle_completed: Callable[[dict[str, object]], Awaitable[None]],
+        ) -> None:
             assert interval_seconds == 10
             self.running = True
             try:
+                await on_cycle_completed(
+                    {
+                        "success": True,
+                        "issues_detected": 1,
+                        "improvements_planned": 1,
+                        "improvements_applied": 0,
+                        "elapsed_seconds": 0.1,
+                        "plans": [{"description": "plano persistido"}],
+                        "message": "planejado",
+                    }
+                )
                 await release.wait()
             finally:
                 self.running = False
@@ -664,8 +719,24 @@ async def test_continuous_control_is_authorized_audited_and_interruptible(
     actions = [str(event["action"]) for event in events]
     assert "continuous_start_requested" in actions
     assert "continuous_started" in actions
+    assert "continuous_cycle_completed" in actions
     assert "continuous_stop_requested" in actions
     assert "continuous_stopped" in actions
+    persisted_cycle = next(
+        event
+        for event in events
+        if event.get("action") == "continuous_cycle_completed"
+    )
+    persisted_details = persisted_cycle["details_json"]
+    assert isinstance(persisted_details, dict)
+    assert persisted_details["actor_id"] == "optimizer-control"
+    persisted_result = persisted_details["cycle"]
+    assert isinstance(persisted_result, dict)
+    assert persisted_result["plans"] == [
+        {"description": "plano persistido"}
+    ]
+    assert stopped["last_issues_detected"] == 1
+    assert stopped["last_improvements_planned"] == 1
     assert all(
         event.get("user_id") == "optimizer-control"
         for event in events
@@ -684,9 +755,24 @@ async def test_continuous_shutdown_stops_owned_task_without_external_actor(
     class Repository:
         running = False
 
-        async def run_continuous(self, _interval_seconds: float) -> None:
+        async def run_continuous(
+            self,
+            _interval_seconds: float,
+            on_cycle_completed: Callable[[dict[str, object]], Awaitable[None]],
+        ) -> None:
             self.running = True
             try:
+                await on_cycle_completed(
+                    {
+                        "success": True,
+                        "issues_detected": 0,
+                        "improvements_planned": 0,
+                        "improvements_applied": 0,
+                        "elapsed_seconds": 0.1,
+                        "plans": [],
+                        "message": "sem problemas",
+                    }
+                )
                 await release.wait()
             finally:
                 self.running = False
@@ -779,6 +865,87 @@ async def test_continuous_start_requires_durable_audit_before_task_creation(
 
     repository.run_continuous.assert_not_awaited()
     assert service.get_status()["continuous_task_active"] is False
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_cycle_stops_when_result_cannot_be_persisted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+
+    cycle_audit_started = threading.Event()
+    release_cycle_audit = threading.Event()
+
+    class Repository:
+        running = False
+
+        async def run_continuous(
+            self,
+            _interval_seconds: float,
+            on_cycle_completed: Callable[[dict[str, object]], Awaitable[None]],
+        ) -> None:
+            self.running = True
+            try:
+                await on_cycle_completed(
+                    {
+                        "issues_detected": 1,
+                        "improvements_planned": 1,
+                        "plans": [{"description": "não pode ser perdido"}],
+                    }
+                )
+            finally:
+                self.running = False
+
+        def stop_continuous(self) -> None:
+            self.running = False
+
+        def get_status(self) -> dict[str, object]:
+            return {
+                "status": "running" if self.running else "idle",
+                "module": "self_optimization",
+                "continuous_running": self.running,
+            }
+
+    def audit(**event: object) -> bool:
+        if event.get("action") == "continuous_cycle_completed":
+            cycle_audit_started.set()
+            release_cycle_audit.wait(timeout=1)
+            raise RuntimeError("ledger indisponível")
+        return True
+
+    monkeypatch.setattr(
+        optimization_service,
+        "record_audit_event_direct",
+        audit,
+    )
+    actor = ActorContext.authenticated(
+        actor_id="optimizer-control",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-optimization",
+        scopes=("ops:execute",),
+    )
+    service = optimization_service.OptimizationService(Repository())
+
+    await service.start_continuous(interval_seconds=10, actor=actor)
+    task = service._continuous_task
+    assert task is not None
+    assert cycle_audit_started.wait(timeout=1)
+    release_cycle_audit.set()
+
+    with pytest.raises(
+        optimization_service.OptimizationServiceError,
+        match="Falha ao persistir",
+    ):
+        await task
+    await asyncio.sleep(0)
+
+    status_payload = service.get_status()
+    assert status_payload["status"] == "idle"
+    assert status_payload["continuous_task_active"] is False
+    assert "Falha ao persistir" in str(status_payload["last_error"])
+    assert status_payload["last_cycle_at"] is None
 
 
 def test_repository_status_reports_operational_state(

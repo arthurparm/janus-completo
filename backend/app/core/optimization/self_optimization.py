@@ -14,6 +14,7 @@ Funcionalidades:
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -725,7 +726,11 @@ class SelfOptimizationCycle:
             _OPTIMIZATION_CYCLES.labels("error").inc()
             raise
 
-    async def run_continuous(self, interval_seconds: float = 300) -> None:
+    async def run_continuous(
+        self,
+        interval_seconds: float = 300,
+        on_cycle_completed: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    ) -> None:
         """
         Executa ciclo de auto-otimização continuamente.
 
@@ -750,7 +755,7 @@ class SelfOptimizationCycle:
         try:
             while self._running:
                 try:
-                    await self.run_cycle()
+                    cycle_result = await self.run_cycle()
                 except asyncio.CancelledError:
                     raise
                 except OptimizationMetricsUnavailableError as exc:
@@ -764,6 +769,9 @@ class SelfOptimizationCycle:
                         error=str(exc),
                         exc_info=True,
                     )
+                else:
+                    if on_cycle_completed is not None:
+                        await on_cycle_completed(cycle_result)
 
                 if not self._running:
                     break

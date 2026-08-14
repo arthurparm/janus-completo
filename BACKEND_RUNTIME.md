@@ -240,3 +240,7 @@ requires a durable audit record before task creation, and only plans improvement
 never enables automatic execution. Status exposes the owned task, runtime loop,
 interval, initiator, timestamps, last error, control availability, and the explicit
 absence of an automatic-execution adapter. Kernel shutdown interrupts any owned task.
+Every successful continuous cycle is redacted and appended to the immutable audit
+ledger with service-actor attribution before the next wait begins. Ledger failure
+terminates the owned task and is reported through `last_error`; status also reports the
+last persisted cycle timestamp, detected issue count, and planned improvement count.

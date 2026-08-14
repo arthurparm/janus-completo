@@ -71,9 +71,13 @@ class OptimizationService:
         self._continuous_task: asyncio.Task[None] | None = None
         self._continuous_interval_seconds: float | None = None
         self._continuous_started_by: str | None = None
+        self._continuous_trace_id: str | None = None
         self._continuous_started_at: float | None = None
         self._continuous_stopped_at: float | None = None
         self._continuous_last_error: str | None = None
+        self._continuous_last_cycle_at: float | None = None
+        self._continuous_last_issues_detected: int | None = None
+        self._continuous_last_improvements_planned: int | None = None
 
     async def run_optimization_cycle(
         self, enable_auto_execution: bool, max_improvements: int | None
@@ -173,7 +177,8 @@ class OptimizationService:
             error = task.exception()
             if error is not None:
                 outcome = "failed"
-                self._continuous_last_error = str(error)
+                if self._continuous_last_error is None:
+                    self._continuous_last_error = str(error)
                 logger.error(
                     "optimization_continuous_task_failed",
                     error=str(error),
@@ -188,9 +193,43 @@ class OptimizationService:
             status=outcome,
             user_id=self._continuous_started_by,
             details_json={
+                "actor_id": self._continuous_started_by,
                 "interval_seconds": self._continuous_interval_seconds,
                 "error": self._continuous_last_error,
             },
+        )
+
+    async def _persist_continuous_cycle(self, result: dict[str, Any]) -> None:
+        """Persiste cada resultado antes de o loop aguardar o próximo ciclo."""
+        try:
+            recorded = await asyncio.to_thread(
+                record_audit_event_direct,
+                endpoint="optimization_continuous",
+                action="continuous_cycle_completed",
+                status="planned",
+                user_id=self._continuous_started_by,
+                trace_id=self._continuous_trace_id,
+                details_json={
+                    "actor_id": self._continuous_started_by,
+                    "interval_seconds": self._continuous_interval_seconds,
+                    "cycle": result,
+                },
+                required=True,
+            )
+        except Exception as exc:
+            self._continuous_last_error = (
+                "Falha ao persistir o resultado do ciclo contínuo no ledger."
+            )
+            raise OptimizationServiceError(self._continuous_last_error) from exc
+        if not recorded:
+            self._continuous_last_error = (
+                "O ledger não confirmou a persistência do ciclo contínuo."
+            )
+            raise OptimizationServiceError(self._continuous_last_error)
+        self._continuous_last_cycle_at = time.time()
+        self._continuous_last_issues_detected = int(result["issues_detected"])
+        self._continuous_last_improvements_planned = int(
+            result["improvements_planned"]
         )
 
     async def start_continuous(
@@ -212,16 +251,26 @@ class OptimizationService:
             status="authorized",
             user_id=actor.actor_id,
             trace_id=actor.trace_id,
-            details_json={"interval_seconds": interval_seconds},
+            details_json={
+                "actor_id": actor.actor_id,
+                "interval_seconds": interval_seconds,
+            },
             required=True,
         )
         self._continuous_interval_seconds = interval_seconds
         self._continuous_started_by = actor.actor_id
+        self._continuous_trace_id = actor.trace_id
         self._continuous_started_at = time.time()
         self._continuous_stopped_at = None
         self._continuous_last_error = None
+        self._continuous_last_cycle_at = None
+        self._continuous_last_issues_detected = None
+        self._continuous_last_improvements_planned = None
         task = asyncio.create_task(
-            self._repo.run_continuous(interval_seconds),
+            self._repo.run_continuous(
+                interval_seconds,
+                on_cycle_completed=self._persist_continuous_cycle,
+            ),
             name="janus-self-optimization-continuous",
         )
         self._continuous_task = task
@@ -237,7 +286,10 @@ class OptimizationService:
             status="started",
             user_id=actor.actor_id,
             trace_id=actor.trace_id,
-            details_json={"interval_seconds": interval_seconds},
+            details_json={
+                "actor_id": actor.actor_id,
+                "interval_seconds": interval_seconds,
+            },
         )
         return {**self.get_status(), "audit_recorded": audit_recorded}
 
@@ -259,7 +311,7 @@ class OptimizationService:
             status="requested",
             user_id=actor_id,
             trace_id=trace_id,
-            details_json={"reason": reason},
+            details_json={"actor_id": actor_id, "reason": reason},
         )
         self._repo.stop_continuous()
         forced = False
@@ -285,7 +337,11 @@ class OptimizationService:
             status="forced" if forced else "stopped",
             user_id=actor_id,
             trace_id=trace_id,
-            details_json={"reason": reason, "forced": forced},
+            details_json={
+                "actor_id": actor_id,
+                "reason": reason,
+                "forced": forced,
+            },
         )
         return {
             **self.get_status(),
@@ -331,6 +387,11 @@ class OptimizationService:
                 "last_started_at": self._continuous_started_at,
                 "last_stopped_at": self._continuous_stopped_at,
                 "last_error": self._continuous_last_error,
+                "last_cycle_at": self._continuous_last_cycle_at,
+                "last_issues_detected": self._continuous_last_issues_detected,
+                "last_improvements_planned": (
+                    self._continuous_last_improvements_planned
+                ),
             }
         )
         return status_payload
@@ -371,18 +432,22 @@ class OptimizationService:
                 idx = max(0, min(len(s) - 1, round(p / 100.0 * (len(s) - 1))))
                 return s[idx]
 
-            trend = {
-                "avg_response_time_p95": round(percentile(resp_times, 95), 3),
+            avg_response_time_p95 = round(percentile(resp_times, 95), 3)
+            error_rate_avg = (
+                round(sum(error_rates) / len(error_rates), 3) if error_rates else 0.0
+            )
+            memory_usage_latest_mb = (
+                round(memory_usage[-1], 2) if memory_usage else None
+            )
+            memory_usage_max_mb = (
+                round(max(memory_usage), 2) if memory_usage else None
+            )
+            trend: dict[str, Any] = {
+                "avg_response_time_p95": avg_response_time_p95,
                 "avg_response_time_latest": round(resp_times[-1], 3),
-                "error_rate_avg": round(sum(error_rates) / len(error_rates), 3)
-                if error_rates
-                else 0.0,
-                "memory_usage_latest_mb": (
-                    round(memory_usage[-1], 2) if memory_usage else None
-                ),
-                "memory_usage_max_mb": (
-                    round(max(memory_usage), 2) if memory_usage else None
-                ),
+                "error_rate_avg": error_rate_avg,
+                "memory_usage_latest_mb": memory_usage_latest_mb,
+                "memory_usage_max_mb": memory_usage_max_mb,
             }
 
             issues_by_type: dict[str, int] = {}
@@ -391,13 +456,15 @@ class OptimizationService:
                 issues_by_type[key] = issues_by_type.get(key, 0) + 1
 
             insights: list[str] = []
-            if trend["avg_response_time_p95"] > 2.0:
+            if avg_response_time_p95 > 2.0:
                 insights.append("Latência p95 elevada (>2s). Considere otimizações de desempenho.")
-            if trend["error_rate_avg"] > 0.2:
+            if error_rate_avg > 0.2:
                 insights.append("Taxa média de erro alta (>20%). Investigue falhas recorrentes.")
             if (
                 len(memory_usage) > 10
-                and trend["memory_usage_latest_mb"] >= trend["memory_usage_max_mb"] * 0.95
+                and memory_usage_latest_mb is not None
+                and memory_usage_max_mb is not None
+                and memory_usage_latest_mb >= memory_usage_max_mb * 0.95
             ):
                 insights.append(
                     "Uso de memória em alta persistente. Possível vazamento de memória."
