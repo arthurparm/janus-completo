@@ -3,7 +3,7 @@ Repositório para gerenciar prompts dinâmicos.
 Permite que o Meta-Agent atualize prompts baseado em análises de performance.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from app.db import db
@@ -11,6 +11,11 @@ from app.models.config_models import Prompt
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+
+
+def generate_prompt_version() -> str:
+    """Gera um identificador cronológico compatível com a coluna de 20 caracteres."""
+    return datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
 
 
 class PromptRepository:

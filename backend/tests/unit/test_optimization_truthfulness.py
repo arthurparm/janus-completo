@@ -1,4 +1,5 @@
 import importlib
+import re
 import sys
 from unittest.mock import AsyncMock, Mock
 
@@ -134,6 +135,41 @@ def test_repository_status_reports_operational_state(
 
     monkeypatch.setattr(cycle, "_running", True)
     assert repository.get_status()["status"] == "running"
+
+
+def test_optimization_service_persists_prompt_with_repository_contract() -> None:
+    from app.core.agents import AgentRole
+
+    prompt_repository = type(
+        "PromptRepository",
+        (),
+        {
+            "create_prompt_version": Mock(
+                return_value=type("Prompt", (), {"prompt_version": "persistida"})()
+            )
+        },
+    )()
+    service = optimization_service.OptimizationService(object())
+    service._prompt_repo = prompt_repository
+
+    result = service.update_agent_prompt(
+        AgentRole.CODER,
+        "prompt real",
+        language="pt-BR",
+        activate=True,
+    )
+
+    call = prompt_repository.create_prompt_version.call_args
+    assert call.kwargs["prompt_name"] == "agent_prompt_coder"
+    assert call.kwargs["prompt_text"] == "prompt real"
+    assert re.fullmatch(r"\d{20}", call.kwargs["version"])
+    assert call.kwargs["language"] == "pt-BR"
+    assert call.kwargs["activate"] is True
+    assert result == {
+        "name": "agent_prompt_coder",
+        "version": "persistida",
+        "activated": True,
+    }
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

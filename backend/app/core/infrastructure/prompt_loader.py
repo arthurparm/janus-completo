@@ -1,14 +1,13 @@
 import string
 import time
 from collections import OrderedDict
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, cast
 
 import structlog
 from prometheus_client import Counter
 
-from app.repositories.prompt_repository import PromptRepository
+from app.repositories.prompt_repository import PromptRepository, generate_prompt_version
 
 PROMPTS: dict[str, str] = {}
 _file_prompts_cache: dict[str, str] = {}
@@ -335,7 +334,7 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
         return False
 
     try:
-        version = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
+        version = generate_prompt_version()
         # Criar nova versão do prompt
         new_prompt = prompt_loader._prompt_repo.create_prompt_version(
             prompt_name=prompt_name,

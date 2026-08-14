@@ -9,7 +9,7 @@ from app.repositories.optimization_repository import (
     OptimizationRepositoryError,
     SystemMetrics,
 )
-from app.repositories.prompt_repository import PromptRepository
+from app.repositories.prompt_repository import PromptRepository, generate_prompt_version
 from fastapi import Request
 
 logger = structlog.get_logger(__name__)
@@ -229,8 +229,6 @@ class OptimizationService:
         *,
         name: str | None = None,
         language: str | None = None,
-        tags: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
         activate: bool = True,
     ) -> dict[str, Any]:
         """Cria nova versão de prompt para um agente e ativa opcionalmente.
@@ -241,23 +239,18 @@ class OptimizationService:
         logger.info("Atualizando prompt de agente", role=role.value, prompt_name=prompt_name)
         try:
             version_obj = self._prompt_repo.create_prompt_version(
-                prompt_name,
-                content=content,
-                language=language,
-                tags=tags,
-                metadata=metadata,
+                prompt_name=prompt_name,
+                prompt_text=content,
+                version=generate_prompt_version(),
+                language=language or "en",
+                created_by="optimization-service",
+                activate=activate,
             )
-            version_number = getattr(version_obj, "version", None) or getattr(
-                version_obj, "version_number", None
-            )
-            activated = False
-            if activate and version_number is not None:
-                self._prompt_repo.activate_prompt_version(prompt_name, version_number)
-                activated = True
+            version_number = getattr(version_obj, "prompt_version", None)
             result = {
                 "name": prompt_name,
                 "version": version_number,
-                "activated": activated,
+                "activated": activate,
             }
             logger.info("Prompt de agente atualizado com sucesso", **result)
             return result

@@ -106,3 +106,11 @@ def test_update_prompt_supplies_auditable_version(
     assert re.fullmatch(r"\d{20}", version)
     assert repository.create_prompt_version.call_args.kwargs["activate"] is True
     invalidate.assert_called_once()
+
+
+def test_prompt_version_generator_fits_persistent_contract() -> None:
+    from app.repositories.prompt_repository import generate_prompt_version
+
+    version = generate_prompt_version()
+
+    assert re.fullmatch(r"\d{20}", version)
