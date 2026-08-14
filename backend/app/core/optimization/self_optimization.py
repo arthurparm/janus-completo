@@ -14,6 +14,7 @@ Funcionalidades:
 
 import asyncio
 import time
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -120,12 +121,14 @@ class PlannedImprovement:
     success_criteria: list[str]
     implementation_steps: list[str]
     risk_level: float  # 0.0 (seguro) a 1.0 (arriscado)
+    plan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     priority_score: float = 0.0
     requires_human_approval: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         """Serializa o plano sem expor enums ou objetos internos."""
         return {
+            "plan_id": self.plan_id,
             "improvement_type": self.improvement_type.value,
             "target_component": self.target_component,
             "description": self.description,
@@ -659,6 +662,7 @@ class SelfOptimizationCycle:
         self, enable_auto_execution: bool = False, max_improvements: int | None = None
     ) -> dict[str, Any]:
         """Executa um ciclo completo de auto-otimização."""
+        cycle_id = str(uuid.uuid4())
         if enable_auto_execution:
             raise NotImplementedError(
                 "Execução automática de melhorias não possui adaptador auditável."
@@ -685,6 +689,7 @@ class SelfOptimizationCycle:
                 )
                 _OPTIMIZATION_CYCLES.labels("success_no_issues").inc()
                 return {
+                    "cycle_id": cycle_id,
                     "success": True,
                     "issues_detected": 0,
                     "improvements_planned": 0,
@@ -712,6 +717,7 @@ class SelfOptimizationCycle:
             _OPTIMIZATION_CYCLES.labels("success_planned_no_exec").inc()
 
             return {
+                "cycle_id": cycle_id,
                 "success": True,
                 "issues_detected": len(issues),
                 "improvements_planned": len(improvements),

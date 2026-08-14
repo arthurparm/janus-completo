@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from typing import Any, Literal
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,6 +30,7 @@ class OptimizationCycleRequest(BaseModel):
 
 
 class PlannedImprovementResponse(BaseModel):
+    plan_id: UUID
     improvement_type: str
     target_component: str
     description: str
@@ -42,6 +44,7 @@ class PlannedImprovementResponse(BaseModel):
 
 
 class OptimizationCycleResponse(BaseModel):
+    cycle_id: UUID
     success: bool
     issues_detected: int
     improvements_planned: int

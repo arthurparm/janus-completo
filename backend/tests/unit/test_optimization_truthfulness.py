@@ -5,6 +5,7 @@ import sys
 import threading
 from collections.abc import Awaitable, Callable
 from unittest.mock import AsyncMock, Mock
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -198,6 +199,8 @@ async def test_core_planning_cycle_never_claims_or_runs_application() -> None:
     assert result["improvements_planned"] == 1
     assert result["improvements_applied"] == 0
     assert result["plans"] == [improvement.to_dict()]
+    assert UUID(result["cycle_id"])
+    assert UUID(result["plans"][0]["plan_id"])
     assert result["plans"][0]["requires_human_approval"] is True
     assert "70%" not in str(result["plans"])
     cycle.executor.execute_improvement.assert_not_awaited()
@@ -207,6 +210,7 @@ async def test_core_planning_cycle_never_claims_or_runs_application() -> None:
         audit_recorded=True,
     )
     assert response.plans[0].hypothesis == "cache pode ajudar, ainda sem confirmação"
+    assert response.plans[0].plan_id == UUID(improvement.plan_id)
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -257,6 +261,7 @@ async def test_cycle_without_issues_reports_sample_not_global_health() -> None:
     result = await cycle.run_cycle(enable_auto_execution=False)
 
     assert result["plans"] == []
+    assert UUID(result["cycle_id"])
     assert result["improvements_planned"] == 0
     assert result["message"] == "Nenhum problema detectado na amostra atual."
     assert "saudável" not in result["message"].lower()
@@ -273,6 +278,7 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
         {
             "run_optimization_cycle": AsyncMock(
                 return_value={
+                    "cycle_id": "d993a9ae-3185-494c-b588-6c5f4de64551",
                     "success": True,
                     "issues_detected": 1,
                     "improvements_planned": 1,
@@ -280,6 +286,7 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
                     "elapsed_seconds": 0.01,
                     "plans": [
                         {
+                            "plan_id": "ba6e3104-e92d-4764-ae52-22e7bfa29821",
                             "improvement_type": "investigate",
                             "target_component": "tool",
                             "description": "Investigar latência",
@@ -320,6 +327,8 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
     assert body["improvements_applied"] == 0
     assert body["plans"][0]["evidence"] == {"avg_duration": 3.0}
     assert body["plans"][0]["requires_human_approval"] is True
+    assert body["cycle_id"] == "d993a9ae-3185-494c-b588-6c5f4de64551"
+    assert body["plans"][0]["plan_id"] == "ba6e3104-e92d-4764-ae52-22e7bfa29821"
     assert body["audit_recorded"] is True
 
 

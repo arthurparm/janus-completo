@@ -2989,6 +2989,11 @@
             "title": "Audit Recorded",
             "type": "boolean"
           },
+          "cycle_id": {
+            "format": "uuid",
+            "title": "Cycle Id",
+            "type": "string"
+          },
           "elapsed_seconds": {
             "title": "Elapsed Seconds",
             "type": "number"
@@ -3022,6 +3027,7 @@
           }
         },
         "required": [
+          "cycle_id",
           "success",
           "issues_detected",
           "improvements_planned",
@@ -3288,6 +3294,11 @@
             "title": "Improvement Type",
             "type": "string"
           },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
           "priority_score": {
             "title": "Priority Score",
             "type": "number"
@@ -3315,6 +3326,7 @@
           }
         },
         "required": [
+          "plan_id",
           "improvement_type",
           "target_component",
           "description",
