@@ -289,7 +289,7 @@ NACKs the task with `requeue=false` and routes it to the configured DLX/DLQ inst
 acknowledging a silently lost effect. Optional post-success knowledge indexing remains
 non-terminal so it cannot duplicate a calendar or mail effect that already completed.
 
-Google OAuth start endpoints accept only the canonical `calendar`, `mail`, or `notes`
+Google OAuth start endpoints accept only the canonical `calendar` or `mail`
 capability and return the exact state placed in the authorization URL. State is a
 versioned HMAC-SHA256 envelope containing actor, capability, issuance time, and a random
 nonce; callbacks reject tampering, cross-user use, future issuance, and age above ten
@@ -297,8 +297,9 @@ minutes before token exchange. OAuth `SecretStr` values are unwrapped only at th
 client boundary, never serialized or audited, and callback audit records contain the
 verified capability rather than the state token.
 The callback derives Janus consent from the exact provider capability: Calendar grants
-read/write, Drive-file notes grant read/write, and the Mail capability requests both
-Gmail read-only metadata and send before granting `mail.read` and `mail.send`.
+read/write, and the Mail capability requests both Gmail read-only metadata and send before
+granting `mail.read` and `mail.send`. Notes remain an actor-scoped local capability and are
+not advertised as Google Drive integration because no Drive runtime exists.
 
 Calendar and mail read endpoints call Google for the authenticated actor after checking
 `calendar.read` or `mail.read`; they never read shared workspace JSON or convert provider,

@@ -25,7 +25,7 @@ getProductivityLimitsStatusSelf(): Observable<ProductivityLimitsStatusResponse> 
     )
   }
 
-googleOAuthStart(scope: 'calendar' | 'mail' | 'notes' = 'calendar'): Observable<GoogleOAuthStartResponse> {
+googleOAuthStart(scope: 'calendar' | 'mail' = 'calendar'): Observable<GoogleOAuthStartResponse> {
     const headers = this.apiContext.headersFor()
     const qs = new URLSearchParams({ scope })
     return this.http.get<GoogleOAuthStartResponse>(this.apiContext.buildUrl(`/api/v1/productivity/oauth/google/start?${qs.toString()}`), { headers })

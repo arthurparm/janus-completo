@@ -66,11 +66,15 @@ def test_oauth_start_returns_the_signed_state_used_in_authorize_url(
     invalid_scope = _client().get(
         "/api/v1/productivity/oauth/google/start?scope=administrator"
     )
+    disconnected_notes_scope = _client().get(
+        "/api/v1/productivity/oauth/google/start?scope=notes"
+    )
     legacy_body = _client().post(
         "/api/v1/productivity/oauth/google/start",
         json={"scopes": ["https://www.googleapis.com/auth/calendar"]},
     )
     assert invalid_scope.status_code == 422
+    assert disconnected_notes_scope.status_code == 422
     assert legacy_body.status_code == 422
 
 

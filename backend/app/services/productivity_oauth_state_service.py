@@ -9,19 +9,17 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-GoogleProductivityScope = Literal["calendar", "mail", "notes"]
+GoogleProductivityScope = Literal["calendar", "mail"]
 GOOGLE_PRODUCTIVITY_SCOPES: dict[GoogleProductivityScope, str] = {
     "calendar": "https://www.googleapis.com/auth/calendar.events",
     "mail": (
         "https://www.googleapis.com/auth/gmail.readonly "
         "https://www.googleapis.com/auth/gmail.send"
     ),
-    "notes": "https://www.googleapis.com/auth/drive.file",
 }
 GOOGLE_PRODUCTIVITY_CONSENTS: dict[GoogleProductivityScope, tuple[str, ...]] = {
     "calendar": ("calendar.read", "calendar.write"),
     "mail": ("mail.read", "mail.send"),
-    "notes": ("notes.read", "notes.write"),
 }
 
 

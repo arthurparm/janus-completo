@@ -4007,8 +4007,7 @@
           "scope": {
             "enum": [
               "calendar",
-              "mail",
-              "notes"
+              "mail"
             ],
             "title": "Scope",
             "type": "string"
@@ -16331,8 +16330,7 @@
               "default": "calendar",
               "enum": [
                 "calendar",
-                "mail",
-                "notes"
+                "mail"
               ],
               "title": "Scope",
               "type": "string"
