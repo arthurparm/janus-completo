@@ -236,6 +236,8 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                                 refresh_token=tok.refresh_token,
                                 expires_at=exp_at,
                             )
+                if not access:
+                    raise RuntimeError("OAuth access token unavailable for Google Calendar")
                 if access:
                     _t0 = __import__("time").perf_counter()
                     calendar_url = (
@@ -324,6 +326,7 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     ).inc()
                 except Exception:
                     pass
+                raise
             if do_index and user_id is not None:
                 try:
                     _t0 = __import__("time").perf_counter()
@@ -438,6 +441,8 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                                 refresh_token=tok.refresh_token,
                                 expires_at=exp_at,
                             )
+                if not access:
+                    raise RuntimeError("OAuth access token unavailable for Gmail")
                 if access:
                     _t0 = __import__("time").perf_counter()
                     to = str(msg.get("to", ""))
@@ -559,12 +564,13 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     ).inc()
                 except Exception:
                     pass
+                raise
         try:
             getattr(__import__("builtins"), "app", None)
         except Exception:
             pass
     except Exception:
-        return
+        raise
 
 
 class GoogleProductivityWorker:

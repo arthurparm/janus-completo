@@ -282,3 +282,9 @@ an error audit event.
 Broker publication now returns an explicit delivery boolean. Productivity effects treat
 an offline broker or publish exception as `503` and never emit a `queued` response or
 queued audit record unless RabbitMQ accepted the message.
+
+The Google productivity consumer re-raises denied consent, missing OAuth credentials,
+egress failures, and provider failures after recording the error. The broker therefore
+NACKs the task with `requeue=false` and routes it to the configured DLX/DLQ instead of
+acknowledging a silently lost effect. Optional post-success knowledge indexing remains
+non-terminal so it cannot duplicate a calendar or mail effect that already completed.

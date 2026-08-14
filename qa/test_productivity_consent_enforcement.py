@@ -148,6 +148,9 @@ async def test_worker_rechecks_revoked_consent_before_external_effect(
 ) -> None:
     from app.core.workers import google_productivity_worker as worker
     from app.models.schemas import TaskMessage
+    from app.services.productivity_consent_service import (
+        ProductivityConsentRequiredError,
+    )
 
     class _RevokedConsentRepository:
         def has_consent(self, _user_id: int, _scope: str) -> bool:
@@ -163,6 +166,45 @@ async def test_worker_rechecks_revoked_consent_before_external_effect(
         timestamp=1.0,
     )
 
-    await worker._handle_google_productivity_task(task)
+    with pytest.raises(ProductivityConsentRequiredError):
+        await worker._handle_google_productivity_task(task)
 
     oauth_repository.assert_not_called()
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    ("task_type", "payload", "provider"),
+    [
+        ("google_calendar_add_event", {"event": {}}, "Google Calendar"),
+        ("google_mail_send", {"message": {}}, "Gmail"),
+    ],
+)
+async def test_worker_sends_missing_oauth_token_to_failure_path(
+    monkeypatch: pytest.MonkeyPatch,
+    task_type: str,
+    payload: dict[str, object],
+    provider: str,
+) -> None:
+    from app.core.workers import google_productivity_worker as worker
+    from app.models.schemas import TaskMessage
+
+    class _AllowedConsentRepository:
+        def has_consent(self, _user_id: int, _scope: str) -> bool:
+            return True
+
+    class _MissingTokenRepository:
+        def get(self, *, user_id: int, provider: str) -> None:
+            return None
+
+    monkeypatch.setattr(worker, "ConsentRepository", _AllowedConsentRepository)
+    monkeypatch.setattr(worker, "OAuthTokenRepository", _MissingTokenRepository)
+    task = TaskMessage(
+        task_id="missing-token",
+        task_type=task_type,
+        payload={"user_id": 7, **payload},
+        timestamp=1.0,
+    )
+
+    with pytest.raises(RuntimeError, match=provider):
+        await worker._handle_google_productivity_task(task)
