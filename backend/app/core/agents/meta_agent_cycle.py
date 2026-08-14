@@ -1,6 +1,6 @@
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any
 
@@ -39,13 +39,18 @@ _MAX_CONSECUTIVE_FAILURES = 10
 _PHASE_TIMEOUT = getattr(settings, "META_AGENT_PHASE_TIMEOUT", 180)
 
 
-def request_stop_current_cycle():
+def request_stop_current_cycle() -> None:
     global _interrupt_event
     if _interrupt_event is not None:
         _interrupt_event.set()
 
 
-async def _run_phase(phase: Phase, func: Callable, *args, **kwargs) -> dict[str, Any]:
+async def _run_phase(
+    phase: Phase,
+    func: Callable[..., Awaitable[Any]],
+    *args: Any,
+    **kwargs: Any,
+) -> dict[str, Any]:
     phase_name = phase.value
     start = time.perf_counter()
     try:
@@ -74,7 +79,7 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
     iteration = shared.get("iteration", 0)
 
     async def _phase_plan() -> dict[str, Any]:
-        prompt = prompt_loader.get("meta_agent_plan")
+        prompt = await prompt_loader.get("meta_agent_plan")
         result = await agent_manager.arun_agent(
             question=prompt, request=None, agent_type=AgentType.META_AGENT
         )
@@ -107,7 +112,7 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
             return {"analysis": analysis, "has_issue": False}
 
         reflections_str = "\n- ".join(reflections)
-        prompt = prompt_loader.get(
+        prompt = await prompt_loader.get(
             "meta_agent_act", variables={"learning_lessons": reflections_str}
         )
 
@@ -187,7 +192,7 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
     return True
 
 
-async def run_meta_agent_cycle():
+async def run_meta_agent_cycle() -> None:
     logger.info("Ciclo de vida do Meta-Agente iniciado.")
     global _interrupt_event
     consecutive_failures = 0
@@ -203,7 +208,7 @@ async def run_meta_agent_cycle():
             logger.info("=" * 80)
             logger.info("META-AGENTE: Iniciando ciclo de auto-análise...")
             start_cycle = time.perf_counter()
-            shared = {
+            shared: dict[str, Any] = {
                 "hypothesis": None,
                 "actions": [],
                 "observations": [],
@@ -211,7 +216,7 @@ async def run_meta_agent_cycle():
                 "iteration": 0,
             }
 
-            async def protected_cycle():
+            async def protected_cycle() -> int:
                 iteration = 0
                 while (
                     iteration < settings.META_AGENT_MAX_ITERATIONS
