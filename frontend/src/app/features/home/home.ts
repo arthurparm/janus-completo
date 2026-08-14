@@ -4,14 +4,15 @@ import { RouterLink } from '@angular/router'
 import { FormControl, ReactiveFormsModule } from '@angular/forms'
 import { of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop'
 import { Router } from '@angular/router'
 
 import { AuthService } from '../../core/auth/auth.service'
 import { BackendApiService } from '../../services/backend-api.service'
-import { ConversationMeta } from '../../models'
+import { ConversationMeta, PendingAction } from '../../models'
 import { Header } from '../../core/layout/header/header'
 import { SkeletonComponent } from '../../shared/components/skeleton/skeleton.component'
+import { SystemStatusService } from '../../core/services/system-status.service'
 
 // Widgets
 import { KnowledgeWidget } from './widgets/knowledge-widget/knowledge-widget'
@@ -40,14 +41,20 @@ export class HomeComponent {
   private auth = inject(AuthService)
   private destroyRef = inject(DestroyRef)
   private router = inject(Router)
+  private systemStatus = inject(SystemStatusService)
 
   readonly prompt = new FormControl('', { nonNullable: true })
   readonly loading = signal(true)
   readonly actionLoading = signal(false)
   readonly error = signal('')
   readonly notice = signal('')
-  
+
   readonly conversations = signal<ConversationMeta[]>([])
+  readonly pendingActions = signal<PendingAction[]>([])
+
+  readonly isHealthy = toSignal(this.systemStatus.isSystemHealthy$, { initialValue: true })
+  readonly healthLabel = computed(() => this.isHealthy() ? 'Sistemas operando normalmente' : 'Degradacao detectada')
+  readonly pendingCount = computed(() => this.pendingActions().length)
 
   readonly user = this.auth.user
   readonly suggestions = [
@@ -64,6 +71,7 @@ export class HomeComponent {
 
   constructor() {
     this.loadRecentConversations()
+    this.loadPendingActions()
   }
 
   applySuggestion(value: string) {
@@ -108,6 +116,14 @@ export class HomeComponent {
     this.router.navigate(['/conversations', conversationId])
   }
 
+  openPendingActions() {
+    this.router.navigate(['/tools'])
+  }
+
+  pendingActionLabel(action: PendingAction): string {
+    return action.tool_name || action.message || 'Acao aguardando aprovacao'
+  }
+
   private loadRecentConversations() {
     this.api.chat.listConversations({ limit: 4 })
       .pipe(
@@ -118,6 +134,15 @@ export class HomeComponent {
         this.conversations.set(convs)
         this.loading.set(false)
       })
+  }
+
+  private loadPendingActions() {
+    this.api.observability.listPendingActions({ include_sql: true, include_graph: false, limit: 3 })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError(() => of([]))
+      )
+      .subscribe(actions => this.pendingActions.set(actions || []))
   }
 
   private normalizeConversationTimestamps(conv: ConversationMeta): ConversationMeta {

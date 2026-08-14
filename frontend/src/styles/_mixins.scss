@@ -18,6 +18,15 @@
     box-shadow: 0 18px 45px rgba(7, 10, 18, 0.35), 0 0 24px rgba(var(--janus-secondary-rgb), 0.08);
 }
 
+// Sober surface — fundacao da reconstrucao "console serio" (sem blur/glow).
+// Superficie plana, borda de 1px discreta, sombra rasa. Usar em vez de glass-panel
+// nas paginas ja migradas para a nova direcao visual (comecando pela Home).
+@mixin sober-card {
+    background: var(--janus-surface-1);
+    border: 1px solid var(--janus-border);
+    border-radius: var(--janus-radius-md);
+}
+
 @mixin ambient-background {
     background:
         radial-gradient(circle at 15% 35%, rgba(var(--janus-secondary-rgb), 0.08), transparent 40%),

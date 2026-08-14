@@ -2,112 +2,94 @@
   <app-header></app-header>
 
   <div class="home-shell">
-    <!-- HERO SECTION: O Centro de Comando -->
-    <header class="home-hero relative overflow-hidden">
-      <!-- Background Abstract Elements -->
-      <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div class="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[100px]"></div>
-        <div class="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[100px]"></div>
+    <header class="home-hero">
+      <div class="status-line" role="status">
+        <span class="status-dot" [class.warn]="!isHealthy()"></span>
+        <span>{{ healthLabel() }}</span>
+        @if (pendingCount() > 0) {
+          <span class="divider">/</span>
+          <button type="button" class="pending-link" (click)="openPendingActions()">
+            {{ pendingCount() }} {{ pendingCount() === 1 ? 'ação pendente' : 'ações pendentes' }} de aprovação
+          </button>
+        }
       </div>
 
-      <div class="hero-content relative z-10 max-w-4xl mx-auto text-center pt-12 pb-8">
-        <p class="eyebrow mb-4 inline-block px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono tracking-widest text-gray-400">
-          JANUS // COCKPIT
-        </p>
-        
-        <h1 class="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight">
-          Olá, {{ displayName() }}
-        </h1>
-        
-        <p class="sub text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
-          O que vamos criar, analisar ou explorar hoje? O sistema está pronto.
-        </p>
+      <p class="eyebrow">JANUS</p>
+      <h1>Olá, {{ displayName() }}</h1>
+      <p class="sub">O que vamos criar, analisar ou explorar hoje?</p>
 
-        <!-- Main Input -->
-        <div class="max-w-2xl mx-auto mb-8 relative group">
-          <div class="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
-          <div class="relative flex items-center bg-gray-900 rounded-lg border border-gray-700 shadow-2xl">
-            <input 
-              type="text" 
-              [formControl]="prompt"
-              (keyup.enter)="startChat()"
-              placeholder="Descreva sua tarefa... (Ex: 'Criar um novo agente', 'Analisar logs')" 
-              class="w-full bg-transparent border-none text-white px-6 py-4 text-lg focus:ring-0 placeholder-gray-500"
-            />
-            <button 
-              (click)="startChat()"
-              [disabled]="actionLoading()"
-              class="mr-2 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[44px]"
-            >
-              <span class="material-icons" *ngIf="!actionLoading()">arrow_forward</span>
-              <span class="animate-spin h-5 w-5 border-2 border-white/30 border-t-white rounded-full" *ngIf="actionLoading()"></span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Quick Actions / Suggestions -->
-        <div class="flex flex-wrap justify-center gap-2">
-          @for (suggestion of suggestions; track suggestion) {
-            <button 
-              (click)="applySuggestion(suggestion)"
-              class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-full text-sm text-gray-400 hover:text-white transition-all cursor-pointer"
-            >
-              {{ suggestion }}
-            </button>
+      <form class="composer" (ngSubmit)="startChat()">
+        <input
+          type="text"
+          [formControl]="prompt"
+          placeholder="Descreva sua tarefa..."
+          aria-label="Descreva sua tarefa"
+        />
+        <button type="submit" [disabled]="actionLoading()">
+          @if (actionLoading()) {
+            <span class="spinner" aria-hidden="true"></span>
+          } @else {
+            Enviar
           }
-        </div>
+        </button>
+      </form>
+
+      @if (error()) {
+        <p class="hero-error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="suggestions">
+        @for (suggestion of suggestions; track suggestion) {
+          <button type="button" class="suggestion" (click)="applySuggestion(suggestion)">
+            {{ suggestion }}
+          </button>
+        }
       </div>
     </header>
 
-    <!-- DASHBOARD GRID: Inteligência Ativa -->
-    <div class="home-grid">
-      <h2 class="section-title">Sistema & Inteligência</h2>
-      
-      <div class="widgets-row">
-        <!-- Widget 1: Conhecimento (Grafo) -->
-        <app-knowledge-widget class="h-full"></app-knowledge-widget>
+    <section class="metrics-strip" aria-label="Estado do sistema">
+      <app-knowledge-widget></app-knowledge-widget>
+      <app-autonomy-widget></app-autonomy-widget>
+      <app-learning-widget></app-learning-widget>
+    </section>
 
-        <!-- Widget 2: Autonomia (Agentes) -->
-        <app-autonomy-widget class="h-full"></app-autonomy-widget>
-
-        <!-- Widget 3: Aprendizado (Reflexion) -->
-        <app-learning-widget class="h-full"></app-learning-widget>
+    <section class="continuity">
+      <div class="continuity-head">
+        <h2>Continuidade</h2>
+        <a routerLink="/conversations">Ver todas</a>
       </div>
 
-      <!-- RECENT ACTIVITY SECTION -->
-      <div class="mt-12">
-        <div class="flex items-center justify-between mb-6 px-2">
-           <h2 class="section-title !mb-0">Conversas Recentes</h2>
-           <button routerLink="/conversations" class="text-xs text-blue-400 hover:text-blue-300 font-mono uppercase tracking-wider">Ver todas</button>
-        </div>
-
-        <div class="activity-grid">
-          @if (loading()) {
-            <app-skeleton variant="card" [count]="2"></app-skeleton>
-          } @else if (conversations().length) {
-            @for (conv of conversations(); track conv.conversation_id) {
-              <div 
-                (click)="openConversation(conv.conversation_id)"
-                class="activity-card"
-              >
-                <div class="flex justify-between items-start mb-2">
-                  <h3>
-                    {{ conv.title || 'Conversa sem título' }}
-                  </h3>
-                  <span class="meta">{{ conv.updated_at | date:'short' }}</span>
-                </div>
-                <p>
-                  {{ conv.last_message?.text || 'Iniciar conversa...' }}
-                </p>
-              </div>
-            }
-          } @else {
-            <div class="col-span-2 text-center py-8 border border-dashed border-gray-800 rounded-lg">
-              <p class="text-gray-500 text-sm">Nenhuma conversa recente.</p>
-            </div>
+      @if (loading()) {
+        <app-skeleton variant="card" [count]="3"></app-skeleton>
+      } @else {
+        <ul class="continuity-list">
+          @for (action of pendingActions(); track (action.action_id || action.thread_id || action.message)) {
+            <li class="continuity-item is-pending">
+              <button type="button" (click)="openPendingActions()">
+                <span class="item-icon" aria-hidden="true">!</span>
+                <span class="item-body">
+                  <span class="item-title">{{ pendingActionLabel(action) }}</span>
+                  <span class="item-meta">Aguardando aprovação</span>
+                </span>
+              </button>
+            </li>
           }
-        </div>
-      </div>
-    </div>
+          @for (conv of conversations(); track conv.conversation_id) {
+            <li class="continuity-item">
+              <button type="button" (click)="openConversation(conv.conversation_id)">
+                <span class="item-body">
+                  <span class="item-title">{{ conv.title || 'Conversa sem título' }}</span>
+                  <span class="item-preview">{{ conv.last_message?.text || 'Iniciar conversa...' }}</span>
+                </span>
+                <span class="item-meta">{{ conv.updated_at | date:'short' }}</span>
+              </button>
+            </li>
+          }
+          @if (!pendingActions().length && !conversations().length) {
+            <li class="continuity-empty">Nenhuma conversa recente.</li>
+          }
+        </ul>
+      }
+    </section>
   </div>
 </section>

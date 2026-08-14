@@ -933,3 +933,40 @@ Rodando a suite de testes durante a validacao, o resumo de warnings do pytest mo
 - Pro: dois `DeprecationWarning` eliminados da saida de teste (regra dura do usuario), com correcao de um bug latente de valor incorreto de timestamp em sistemas fora de UTC.
 - Contra: ~40 ocorrencias de `datetime.utcnow()` permanecem no restante do backend ate a tarefa separada ser executada — nao sao um erro introduzido nesta sessao, mas o `DeprecationWarning` ainda aparecera se a suite completa for rodada, ate essa tarefa ser concluida.
 - Contra: scaffolding de CLI externo (Codex/Jules) desabilitado permanece no backend (`config.py`, `policy_engine.py`, `mas_validator.py`) — decisao deliberada de nao remover nesta rodada, ver "Alternativas Consideradas".
+
+## DEC-037 - Reconstrucao da Home ("Cockpit"): visual sobrio no lugar de glow/vidro sci-fi, ligacao com Approval Center
+
+### Contexto
+
+Pedido do usuario: "melhora esse frontend, como se fosse para voce, ja que Janus e uma IA". Apos duas rodadas de alinhamento (registradas na conversa, nao repetidas aqui em detalhe), a direcao final foi: nao futurista — o visual atual de glow/vidro/blob animado ja e um padrao generico de template que o proprio usuario disse ter em outros sites; o Janus deve ser representado como o que ele realmente e (autonomia delimitada, metas tipadas, nunca "personagem de prompt", conforme `AGENTS.md`/`documentation/janus-project-philosophy.md`) — um console que mostra estado real com clareza, nao uma performance visual. Escopo combinado: 1 pagina (Home) por enquanto, sobre uma base de tokens/mixins reaproveitavel depois para o resto do site.
+
+Investigacao confirmou bugs reais, nao so uma questao de gosto: `home.scss`, `knowledge-widget.scss` e `learning-widget.scss` referenciavam por volta de uma dezena de variaveis CSS que nunca foram definidas em `_tokens.scss` (`--janus-bg-app`, `--janus-border-rgb`, `--janus-text-muted-rgb`, `--janus-surface-1/2/3[-rgb]`, `--janus-primary-light`, `--janus-accent-light`, `--janus-success[-rgb]`, `--janus-warning[-rgb]`) — nomes que nunca existiram (os reais sao `--success`, `--warning`, `--error`, sem o prefixo `janus-`, e sem variantes `-light`). Isso fazia `rgba(var(--indefinida), X)` falhar silenciosamente: o indicador verde pulsante de "ativo" em cada widget, bordas e fundos de varios elementos simplesmente nao renderizavam.
+
+### Decisao
+
+1. `frontend/src/styles/_tokens.scss`: adicionados os tokens que faltavam, de forma aditiva (nao alteram nenhum token existente, zero risco para paginas nao tocadas) — `--janus-bg-app` (alias de `--janus-bg-dark`), `--janus-border-rgb`, `--janus-text-muted-rgb`, `--janus-surface-1/2/3[-rgb]`.
+2. `frontend/src/styles/_mixins.scss`: adicionado `@mixin sober-card` (superficie plana, borda de 1px, sem `backdrop-filter`/glow) — tambem aditivo; `glass-panel`/`ambient-background` continuam intactos e em uso pelas paginas ainda nao migradas (Ferramentas, Conversas, Admin, Login).
+3. `frontend/src/app/features/home/`: `home.html`/`home.scss` reconstruidos — hero com Tailwind cru (`bg-blue-600`, `text-gray-400` etc., sem nenhuma relacao com a identidade real do app) substituido por uma linha de status compacta (saude do sistema + link direto para acoes pendentes de aprovacao), composer sobrio (borda de 1px, sem glow gradiente), faixa de 3 cards de metrica densos (`.metrics-strip`, era `.widgets-row` com 3 caixas de vidro separadas) e uma lista unica de continuidade (acoes pendentes + conversas recentes, era uma "activity-grid" de dashboard isolada). Os 3 widgets (`knowledge-widget`, `autonomy-widget`, `learning-widget`) tiveram o SCSS reescrito para uma base compartilhada (`knowledge-widget.scss` vira a base real que `autonomy`/`learning` reusam via `@use`, eliminando a triplicacao de CSS de card), usando so tokens que de fato existem, sem `glow-bg`/blur/transform-on-hover.
+4. `home.ts`: adicionado `pendingActions` (via `ObservabilityApiService.listPendingActions`, o mesmo metodo ja usado em `tools.ts` — DEC-035) e `isHealthy`/`healthLabel` (via `SystemStatusService.isSystemHealthy$`, o mesmo servico ja usado por `SystemHud` no header) — nenhuma logica nova, so reaproveitamento de servicos existentes. Isso conecta a Home ao Approval Center: uma acao pendente de aprovacao agora aparece na Home com link direto para `/tools`, antes so visivel entrando na tela de Ferramentas.
+
+### Alternativas Consideradas
+
+- Manter a linguagem visual atual (glow/vidro) e so consertar os tokens quebrados: rejeitado explicitamente pelo usuario — o problema nao era so o bug, era a direcao visual em si.
+- Clonar um unico template pronto de `front-novo/Design Systems/`: rejeitado pelo usuario ("misturar" e pensar a partir de quem o Janus e, nao copiar um design system de terceiros).
+- Redesenhar o site inteiro de uma vez: rejeitado por escopo — usuario pediu explicitamente 1 pagina por enquanto, expansivel depois.
+
+### Validacao
+
+- `ng build`: bundle limpo, chunk `home` gerado sem erros.
+- `vitest run` em `autonomy-widget.spec.ts`, `knowledge-widget.spec.ts`, `learning-widget.spec.ts`: 7/7 passam sem alteracao de asserção.
+- `eslint` em `frontend/src/app/features/home/`: limpo.
+- Confirmacao real no browser (fluxo OIDC dev PKCE, `http://localhost:4300`, apos rebuild da imagem Docker + recreate do container): pagina renderiza com dados reais (grafo com 9.150 nos/21.358 arestas, autonomy loop, conversas recentes); inspecao de estilos computados via JS confirma `backdrop-filter: none` nos cards (era `blur(14px)` no padrao antigo) e resolucao correta dos tokens novos (`--janus-bg-app` → `rgb(10, 15, 19)`, `--janus-surface-1` → `rgb(16, 22, 28)`); verificado por comparacao que `/tools` continua com o visual antigo intacto (`blur(14px)`), confirmando que a mudanca ficou restrita a Home, sem regressao em paginas ainda nao migradas.
+- Screenshot pixel-a-pixel nao foi possivel nesta sessao (limitacao do ambiente de browser — "pane nao exibida para composicao de frames"); validacao feita via arvore de acessibilidade (`read_page`), texto renderizado (`get_page_text`) e estilos computados (`getComputedStyle` via JS) — suficiente para confirmar estrutura, dados e ausencia do efeito de vidro/glow, mas sem confirmacao visual de espacamento/alinhamento pixel-perfect.
+
+### Consequencias
+
+- Pro: bug real de tokens indefinidos corrigido — indicadores de status e superficies que falhavam silenciosamente agora renderizam.
+- Pro: Home passa a mostrar acoes pendentes de aprovacao (antes so na tela de Ferramentas) — mais visibilidade para algo que literalmente exige atencao do usuario.
+- Pro: base (`sober-card` mixin, tokens de superficie) fica pronta para as proximas paginas migrarem quando chegar a vez, sem repetir a duplicacao de CSS encontrada nos 3 widgets.
+- Contra: resto do site (Conversas, Ferramentas, Observabilidade, Admin, Login) continua na linguagem visual antiga ate as proximas fases — a Home destoa visualmente do restante do app ate essas fases acontecerem.
+- Contra: validacao visual desta sessao ficou limitada a estrutura/dados/estilos computados, nao a um screenshot renderizado — risco residual de detalhe de espacamento/alinhamento que so um screenshot real revelaria.

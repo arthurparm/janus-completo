@@ -75,6 +75,17 @@
   --janus-transition-fast: 150ms ease;
   --janus-transition-normal: 300ms ease;
 
+  /* Sober surface scale (fundacao da reconstrucao "console serio" — comeca pela Home,
+     tokens novos e aditivos, nao alteram o visual das paginas ainda nao migradas) */
+  --janus-bg-app: var(--janus-bg-dark);
+  --janus-border-rgb: 255, 255, 255;
+  --janus-text-muted-rgb: 142, 162, 176;
+  --janus-surface-1: #10161c;
+  --janus-surface-1-rgb: 16, 22, 28;
+  --janus-surface-2: #161f27;
+  --janus-surface-2-rgb: 22, 31, 39;
+  --janus-surface-3: #1c2731;
+
   /* Shadcn/UI Compatibility (Mapped) */
   --background: var(--janus-bg-dark);
   --foreground: var(--janus-text-primary);
