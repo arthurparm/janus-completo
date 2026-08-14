@@ -309,7 +309,8 @@ jobs:
 
       - name: Generate API matrix and OQ-011 coverage report
         run: |
-          python tooling/generate_api_matrix.py
+          python tooling/generate_api_matrix.py \
+            --openapi-url http://localhost:8000/openapi.json
           python tooling/generate_api_coverage_report.py \
             --collect-docker-evidence \
             --output-json outputs/qa/api_coverage_report.json \

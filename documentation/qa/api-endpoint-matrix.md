@@ -1,22 +1,23 @@
-# API Endpoint Matrix (Live)
+# API Endpoint Matrix
 
-- Generated at: `2026-08-02T12:49:19.744553+00:00`
-- Source: `openapi_live`
+- Generated at: `2026-08-14T18:30:33.244310+00:00`
+- Source: `openapi_in_process`
+- OpenAPI runtime validated: `no`
 - Regenerate command: `python tooling/generate_api_matrix.py`
 
 ## Summary
 
-- Total endpoints: `255`
-- Smoke results loaded: `0`
-- Test path references: `274`
+- Total endpoints: `260`
+- Smoke results loaded: `6`
+- Test path references: `287`
 
 ### By Method
 
 | Method | Count |
 |---|---:|
 | DELETE | 5 |
-| GET | 140 |
-| PATCH | 2 |
+| GET | 144 |
+| PATCH | 3 |
 | POST | 105 |
 | PUT | 3 |
 
@@ -24,13 +25,14 @@
 
 | Module | Total | Smoke Pass | Smoke Fail | Referenced In Tests |
 |---|---:|---:|---:|---:|
-| Admin | 1 | 0 | 0 | 0 |
+| Admin | 2 | 0 | 0 | 0 |
+| Admin Actions | 1 | 0 | 0 | 0 |
 | Agent | 1 | 0 | 0 | 1 |
 | Assistant | 1 | 0 | 0 | 1 |
-| Auth | 7 | 0 | 0 | 7 |
+| Authentication | 1 | 0 | 0 | 1 |
 | Auto Analysis | 1 | 0 | 0 | 0 |
 | Autonomy | 14 | 0 | 0 | 14 |
-| AutonomyAdmin | 14 | 0 | 0 | 5 |
+| AutonomyAdmin | 15 | 0 | 0 | 6 |
 | AutonomyHistory | 4 | 0 | 0 | 4 |
 | Chat | 12 | 0 | 0 | 12 |
 | Collaboration | 11 | 0 | 0 | 11 |
@@ -38,40 +40,37 @@
 | Context | 6 | 0 | 0 | 6 |
 | Deployment | 4 | 0 | 0 | 0 |
 | Documents | 6 | 0 | 0 | 6 |
-| Evaluation | 5 | 0 | 0 | 0 |
+| Evaluation | 6 | 0 | 0 | 0 |
 | Feedback | 7 | 0 | 0 | 7 |
 | Governance | 2 | 0 | 0 | 0 |
-| Knowledge | 30 | 0 | 0 | 23 |
+| Knowledge | 30 | 0 | 2 | 23 |
 | Learning | 12 | 0 | 0 | 12 |
 | LLM | 12 | 0 | 0 | 0 |
 | Meta-Agent | 6 | 0 | 0 | 6 |
 | Observability | 31 | 0 | 0 | 25 |
-| Optimization | 6 | 0 | 0 | 0 |
+| Optimization | 8 | 0 | 0 | 0 |
 | PendingActions | 5 | 0 | 0 | 5 |
 | Productivity | 11 | 0 | 0 | 11 |
-| Profiles | 2 | 0 | 0 | 1 |
-| RAG | 5 | 0 | 0 | 5 |
-| System | 5 | 0 | 0 | 5 |
+| Profiles | 2 | 0 | 0 | 2 |
+| RAG | 4 | 0 | 0 | 4 |
+| Reflexion | 5 | 0 | 0 | 5 |
+| System | 5 | 0 | 3 | 5 |
 | Tasks | 8 | 0 | 0 | 8 |
 | Tools | 5 | 0 | 0 | 5 |
-| unknown | 7 | 0 | 0 | 4 |
-| Users | 6 | 0 | 0 | 6 |
+| unknown | 7 | 0 | 1 | 4 |
+| Users | 7 | 0 | 0 | 7 |
 | Workers | 3 | 0 | 0 | 1 |
 
 ## Endpoint Matrix
 
 | Method | Path | Module | Smoke | In Tests |
 |---|---|---|---|---|
+| POST | `/api/v1/admin/checkpoints/purge-incompatible` | Admin | N/A | no |
 | PATCH | `/api/v1/admin/config` | Admin | N/A | no |
+| POST | `/api/v1/admin-actions` | Admin Actions | N/A | no |
 | POST | `/api/v1/agent/execute` | Agent | N/A | yes |
 | POST | `/api/v1/assistant/execute` | Assistant | N/A | yes |
-| POST | `/api/v1/auth/firebase/exchange` | Auth | N/A | yes |
-| POST | `/api/v1/auth/local/login` | Auth | N/A | yes |
-| GET | `/api/v1/auth/local/me` | Auth | N/A | yes |
-| POST | `/api/v1/auth/local/refresh` | Auth | N/A | yes |
-| POST | `/api/v1/auth/local/request-reset` | Auth | N/A | yes |
-| POST | `/api/v1/auth/local/reset` | Auth | N/A | yes |
-| POST | `/api/v1/auth/supabase/exchange` | Auth | N/A | yes |
+| GET | `/api/v1/auth/oidc-config` | Authentication | N/A | yes |
 | GET | `/api/v1/auto-analysis/health-check` | Auto Analysis | N/A | no |
 | GET | `/api/v1/autonomy/goals` | Autonomy | N/A | yes |
 | POST | `/api/v1/autonomy/goals` | Autonomy | N/A | yes |
@@ -92,6 +91,7 @@
 | POST | `/api/v1/autonomy/admin/code-qa` | AutonomyAdmin | N/A | no |
 | GET | `/api/v1/autonomy/admin/cost-report` | AutonomyAdmin | N/A | no |
 | POST | `/api/v1/autonomy/admin/knowledge/quarantine/review` | AutonomyAdmin | N/A | no |
+| GET | `/api/v1/autonomy/admin/scheduler/jobs` | AutonomyAdmin | N/A | yes |
 | GET | `/api/v1/autonomy/admin/self-study/neo4j-audit` | AutonomyAdmin | N/A | no |
 | POST | `/api/v1/autonomy/admin/self-study/neo4j-repair` | AutonomyAdmin | N/A | no |
 | POST | `/api/v1/autonomy/admin/self-study/run` | AutonomyAdmin | N/A | yes |
@@ -154,6 +154,7 @@
 | POST | `/api/v1/evaluation/experiments/{experiment_id}/arms` | Evaluation | N/A | no |
 | POST | `/api/v1/evaluation/experiments/{experiment_id}/results` | Evaluation | N/A | no |
 | GET | `/api/v1/evaluation/experiments/{experiment_id}/winner` | Evaluation | N/A | no |
+| POST | `/api/v1/evaluation/ingest` | Evaluation | N/A | no |
 | POST | `/api/v1/feedback/` | Feedback | N/A | yes |
 | GET | `/api/v1/feedback/conversation/{conversation_id}` | Feedback | N/A | yes |
 | GET | `/api/v1/feedback/report` | Feedback | N/A | yes |
@@ -176,8 +177,8 @@
 | POST | `/api/v1/knowledge/experimental/index/build` | Knowledge | N/A | yes |
 | GET | `/api/v1/knowledge/files/importing` | Knowledge | N/A | no |
 | GET | `/api/v1/knowledge/functions/calling` | Knowledge | N/A | no |
-| GET | `/api/v1/knowledge/health` | Knowledge | N/A | yes |
-| GET | `/api/v1/knowledge/health/detailed` | Knowledge | N/A | yes |
+| GET | `/api/v1/knowledge/health` | Knowledge | FAIL (404) | yes |
+| GET | `/api/v1/knowledge/health/detailed` | Knowledge | FAIL (404) | yes |
 | POST | `/api/v1/knowledge/health/reset-circuit-breaker` | Knowledge | N/A | yes |
 | POST | `/api/v1/knowledge/index` | Knowledge | N/A | yes |
 | GET | `/api/v1/knowledge/node-types` | Knowledge | N/A | yes |
@@ -255,6 +256,8 @@
 | GET | `/api/v1/observability/slo/domains` | Observability | N/A | yes |
 | GET | `/api/v1/observability/user_summary` | Observability | N/A | yes |
 | POST | `/api/v1/optimization/analyze` | Optimization | N/A | no |
+| POST | `/api/v1/optimization/continuous/start` | Optimization | N/A | no |
+| POST | `/api/v1/optimization/continuous/stop` | Optimization | N/A | no |
 | GET | `/api/v1/optimization/health` | Optimization | N/A | no |
 | GET | `/api/v1/optimization/issues` | Optimization | N/A | no |
 | GET | `/api/v1/optimization/metrics/history` | Optimization | N/A | no |
@@ -277,16 +280,20 @@
 | GET | `/api/v1/productivity/oauth/google/start` | Productivity | N/A | yes |
 | POST | `/api/v1/productivity/oauth/google/start` | Productivity | N/A | yes |
 | POST | `/api/v1/profiles/` | Profiles | N/A | yes |
-| GET | `/api/v1/profiles/me` | Profiles | N/A | no |
+| GET | `/api/v1/profiles/me` | Profiles | N/A | yes |
 | GET | `/api/v1/rag/hybrid_search` | RAG | N/A | yes |
 | GET | `/api/v1/rag/productivity` | RAG | N/A | yes |
 | GET | `/api/v1/rag/search` | RAG | N/A | yes |
 | GET | `/api/v1/rag/user-chat` | RAG | N/A | yes |
-| GET | `/api/v1/rag/user_chat` | RAG | N/A | yes |
+| GET | `/api/v1/reflexion/config` | Reflexion | N/A | yes |
+| POST | `/api/v1/reflexion/execute` | Reflexion | N/A | yes |
+| GET | `/api/v1/reflexion/health` | Reflexion | N/A | yes |
+| POST | `/api/v1/reflexion/reset-circuit-breaker` | Reflexion | N/A | yes |
+| GET | `/api/v1/reflexion/summary/post_sprint` | Reflexion | N/A | yes |
 | POST | `/api/v1/system/db/migrate` | System | N/A | yes |
-| GET | `/api/v1/system/db/validate` | System | N/A | yes |
-| GET | `/api/v1/system/health/services` | System | N/A | yes |
-| GET | `/api/v1/system/status` | System | N/A | yes |
+| GET | `/api/v1/system/db/validate` | System | FAIL (404) | yes |
+| GET | `/api/v1/system/health/services` | System | FAIL (404) | yes |
+| GET | `/api/v1/system/status` | System | FAIL (404) | yes |
 | GET | `/api/v1/system/status/user` | System | N/A | yes |
 | POST | `/api/v1/tasks/consolidation` | Tasks | N/A | yes |
 | GET | `/api/v1/tasks/health/rabbitmq` | Tasks | N/A | yes |
@@ -302,11 +309,12 @@
 | GET | `/api/v1/tools/stats/usage` | Tools | N/A | yes |
 | GET | `/api/v1/tools/{tool_name}` | Tools | N/A | yes |
 | POST | `/api/v1/users/` | Users | N/A | yes |
+| GET | `/api/v1/users/me` | Users | N/A | yes |
+| PATCH | `/api/v1/users/me` | Users | N/A | yes |
 | GET | `/api/v1/users/{target_actor_id}` | Users | N/A | yes |
 | GET | `/api/v1/users/{target_actor_id}/consents` | Users | N/A | yes |
 | POST | `/api/v1/users/{target_actor_id}/consents` | Users | N/A | yes |
 | DELETE | `/api/v1/users/{target_actor_id}/consents/{scope}` | Users | N/A | yes |
-| POST | `/api/v1/users/{target_actor_id}/roles` | Users | N/A | yes |
 | POST | `/api/v1/workers/start-all` | Workers | N/A | no |
 | GET | `/api/v1/workers/status` | Workers | N/A | yes |
 | POST | `/api/v1/workers/stop-all` | Workers | N/A | no |
@@ -316,4 +324,4 @@
 | GET | `/api/v1/memory/secrets` | unknown | N/A | yes |
 | POST | `/api/v1/memory/secrets` | unknown | N/A | yes |
 | GET | `/api/v1/memory/timeline` | unknown | N/A | yes |
-| GET | `/api/v1/system/overview` | unknown | N/A | yes |
+| GET | `/api/v1/system/overview` | unknown | FAIL (404) | yes |

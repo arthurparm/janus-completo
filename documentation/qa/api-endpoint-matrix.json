@@ -1,24 +1,30 @@
 {
   "metadata": {
-    "generated_at": "2026-08-02T12:49:19.744553+00:00",
-    "source": "openapi_live",
-    "openapi_url": "http://localhost:8000/openapi.json",
+    "generated_at": "2026-08-14T18:30:33.244310+00:00",
+    "source": "openapi_in_process",
+    "openapi_runtime_validated": false,
     "inputs": {
       "inventory_fallback": "outputs\\qa\\api_inventory.json",
       "smoke_results": "outputs\\qa\\api_test_results.json"
     }
   },
   "statistics": {
-    "total_endpoints": 255,
+    "total_endpoints": 260,
     "by_method": {
       "DELETE": 5,
-      "GET": 140,
-      "PATCH": 2,
+      "GET": 144,
+      "PATCH": 3,
       "POST": 105,
       "PUT": 3
     },
     "by_module": {
       "Admin": {
+        "total": 2,
+        "smoke_pass": 0,
+        "smoke_fail": 0,
+        "in_tests": 0
+      },
+      "Admin Actions": {
         "total": 1,
         "smoke_pass": 0,
         "smoke_fail": 0,
@@ -36,11 +42,11 @@
         "smoke_fail": 0,
         "in_tests": 1
       },
-      "Auth": {
-        "total": 7,
+      "Authentication": {
+        "total": 1,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 7
+        "in_tests": 1
       },
       "Auto Analysis": {
         "total": 1,
@@ -55,10 +61,10 @@
         "in_tests": 14
       },
       "AutonomyAdmin": {
-        "total": 14,
+        "total": 15,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 5
+        "in_tests": 6
       },
       "AutonomyHistory": {
         "total": 4,
@@ -103,7 +109,7 @@
         "in_tests": 6
       },
       "Evaluation": {
-        "total": 5,
+        "total": 6,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 0
@@ -123,7 +129,7 @@
       "Knowledge": {
         "total": 30,
         "smoke_pass": 0,
-        "smoke_fail": 0,
+        "smoke_fail": 2,
         "in_tests": 23
       },
       "Learning": {
@@ -151,7 +157,7 @@
         "in_tests": 25
       },
       "Optimization": {
-        "total": 6,
+        "total": 8,
         "smoke_pass": 0,
         "smoke_fail": 0,
         "in_tests": 0
@@ -172,9 +178,15 @@
         "total": 2,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 1
+        "in_tests": 2
       },
       "RAG": {
+        "total": 4,
+        "smoke_pass": 0,
+        "smoke_fail": 0,
+        "in_tests": 4
+      },
+      "Reflexion": {
         "total": 5,
         "smoke_pass": 0,
         "smoke_fail": 0,
@@ -183,7 +195,7 @@
       "System": {
         "total": 5,
         "smoke_pass": 0,
-        "smoke_fail": 0,
+        "smoke_fail": 3,
         "in_tests": 5
       },
       "Tasks": {
@@ -201,14 +213,14 @@
       "unknown": {
         "total": 7,
         "smoke_pass": 0,
-        "smoke_fail": 0,
+        "smoke_fail": 1,
         "in_tests": 4
       },
       "Users": {
-        "total": 6,
+        "total": 7,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 6
+        "in_tests": 7
       },
       "Workers": {
         "total": 3,
@@ -217,16 +229,38 @@
         "in_tests": 1
       }
     },
-    "smoke_results_loaded": 0,
-    "test_path_refs": 274
+    "smoke_results_loaded": 6,
+    "test_path_refs": 287
   },
   "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/checkpoints/purge-incompatible",
+      "module": "Admin",
+      "summary": "Purge Incompatible Checkpoints",
+      "operation_id": "purge_incompatible_checkpoints_api_v1_admin_checkpoints_purge_incompatible_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
     {
       "method": "PATCH",
       "path": "/api/v1/admin/config",
       "module": "Admin",
       "summary": "Atualiza configurações do sistema em tempo de execução (Hot-Reload)",
       "operation_id": "update_config_api_v1_admin_config_patch",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin-actions",
+      "module": "Admin Actions",
+      "summary": "Execute Admin Action",
+      "operation_id": "execute_admin_action",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -255,77 +289,11 @@
       "referenced_in_tests": true
     },
     {
-      "method": "POST",
-      "path": "/api/v1/auth/firebase/exchange",
-      "module": "Auth",
-      "summary": "Firebase Exchange",
-      "operation_id": "firebase_exchange_api_v1_auth_firebase_exchange_post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/local/login",
-      "module": "Auth",
-      "summary": "Local Login",
-      "operation_id": "local_login_api_v1_auth_local_login_post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
       "method": "GET",
-      "path": "/api/v1/auth/local/me",
-      "module": "Auth",
-      "summary": "Local Me",
-      "operation_id": "local_me_api_v1_auth_local_me_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/local/refresh",
-      "module": "Auth",
-      "summary": "Local Refresh",
-      "operation_id": "local_refresh_api_v1_auth_local_refresh_post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/local/request-reset",
-      "module": "Auth",
-      "summary": "Local Request Reset",
-      "operation_id": "local_request_reset_api_v1_auth_local_request_reset_post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/local/reset",
-      "module": "Auth",
-      "summary": "Local Reset Password",
-      "operation_id": "local_reset_password_api_v1_auth_local_reset_post",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/supabase/exchange",
-      "module": "Auth",
-      "summary": "Supabase Exchange",
-      "operation_id": "supabase_exchange_api_v1_auth_supabase_exchange_post",
+      "path": "/api/v1/auth/oidc-config",
+      "module": "Authentication",
+      "summary": "Get Oidc Config",
+      "operation_id": "get_oidc_config",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -550,6 +518,17 @@
       "smoke_status_code": null,
       "smoke_error": null,
       "referenced_in_tests": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/autonomy/admin/scheduler/jobs",
+      "module": "AutonomyAdmin",
+      "summary": "Get Scheduler Jobs",
+      "operation_id": "get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -1235,6 +1214,17 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/evaluation/ingest",
+      "module": "Evaluation",
+      "summary": "Ingest Automated Result",
+      "operation_id": "ingest_evaluation_result",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/feedback/",
       "module": "Feedback",
       "summary": "Record Feedback",
@@ -1481,8 +1471,8 @@
       "module": "Knowledge",
       "summary": "Health check da memória semântica",
       "operation_id": "knowledge_health_api_v1_knowledge_health_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
+      "smoke_success": false,
+      "smoke_status_code": 404,
       "smoke_error": null,
       "referenced_in_tests": true
     },
@@ -1492,8 +1482,8 @@
       "module": "Knowledge",
       "summary": "Status detalhado do sistema de memória",
       "operation_id": "detailed_health_check_api_v1_knowledge_health_detailed_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
+      "smoke_success": false,
+      "smoke_status_code": 404,
       "smoke_error": null,
       "referenced_in_tests": true
     },
@@ -2345,6 +2335,28 @@
       "referenced_in_tests": false
     },
     {
+      "method": "POST",
+      "path": "/api/v1/optimization/continuous/start",
+      "module": "Optimization",
+      "summary": "Inicia o planejamento contínuo de otimizações",
+      "operation_id": "start_continuous_optimization_api_v1_optimization_continuous_start_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/optimization/continuous/stop",
+      "module": "Optimization",
+      "summary": "Interrompe o planejamento contínuo de otimizações",
+      "operation_id": "stop_continuous_optimization_api_v1_optimization_continuous_stop_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": false
+    },
+    {
       "method": "GET",
       "path": "/api/v1/optimization/health",
       "module": "Optimization",
@@ -2595,7 +2607,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
@@ -2643,10 +2655,54 @@
     },
     {
       "method": "GET",
-      "path": "/api/v1/rag/user_chat",
-      "module": "RAG",
-      "summary": "Busca semântica em mensagens pessoais de chat",
-      "operation_id": "user_chat_v2_api_v1_rag_user_chat_get",
+      "path": "/api/v1/reflexion/config",
+      "module": "Reflexion",
+      "summary": "Obtém configuração padrão do Reflexion",
+      "operation_id": "get_reflexion_config_api_v1_reflexion_config_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/reflexion/execute",
+      "module": "Reflexion",
+      "summary": "Executa tarefa com o ciclo Reflexion",
+      "operation_id": "execute_with_reflexion_api_v1_reflexion_execute_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reflexion/health",
+      "module": "Reflexion",
+      "summary": "Verifica saúde do módulo Reflexion",
+      "operation_id": "reflexion_health_api_v1_reflexion_health_get",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/reflexion/reset-circuit-breaker",
+      "module": "Reflexion",
+      "summary": "Reseta o circuit breaker dos agentes",
+      "operation_id": "reset_circuit_breaker_api_v1_reflexion_reset_circuit_breaker_post",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reflexion/summary/post_sprint",
+      "module": "Reflexion",
+      "summary": "Resumo pós-sprint: lições e estado do sistema",
+      "operation_id": "get_post_sprint_summary_api_v1_reflexion_summary_post_sprint_get",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -2669,8 +2725,8 @@
       "module": "System",
       "summary": "Valida schema Database (users/sessions/messages/profiles)",
       "operation_id": "validate_db_schema_api_v1_system_db_validate_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
+      "smoke_success": false,
+      "smoke_status_code": 404,
       "smoke_error": null,
       "referenced_in_tests": true
     },
@@ -2680,8 +2736,8 @@
       "module": "System",
       "summary": "Saude dos microsservicos",
       "operation_id": "get_services_health_api_v1_system_health_services_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
+      "smoke_success": false,
+      "smoke_status_code": 404,
       "smoke_error": null,
       "referenced_in_tests": true
     },
@@ -2691,8 +2747,8 @@
       "module": "System",
       "summary": "Verifica o estado da aplicacao",
       "operation_id": "get_system_status_api_v1_system_status_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
+      "smoke_success": false,
+      "smoke_status_code": 404,
       "smoke_error": null,
       "referenced_in_tests": true
     },
@@ -2863,6 +2919,28 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/users/me",
+      "module": "Users",
+      "summary": "Get Current User",
+      "operation_id": "get_current_user",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/me",
+      "module": "Users",
+      "summary": "Update Current User",
+      "operation_id": "update_current_user",
+      "smoke_success": null,
+      "smoke_status_code": null,
+      "smoke_error": null,
+      "referenced_in_tests": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/users/{target_actor_id}",
       "module": "Users",
       "summary": "Get User",
@@ -2900,17 +2978,6 @@
       "module": "Users",
       "summary": "Revoke Consent",
       "operation_id": "revoke_consent_api_v1_users__target_actor_id__consents__scope__delete",
-      "smoke_success": null,
-      "smoke_status_code": null,
-      "smoke_error": null,
-      "referenced_in_tests": true
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/users/{target_actor_id}/roles",
-      "module": "Users",
-      "summary": "Assign Role",
-      "operation_id": "assign_role_api_v1_users__target_actor_id__roles_post",
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
@@ -3021,8 +3088,8 @@
       "module": "unknown",
       "summary": "System overview",
       "operation_id": "get_system_overview_api_v1_system_overview_get",
-      "smoke_success": null,
-      "smoke_status_code": null,
+      "smoke_success": false,
+      "smoke_status_code": 404,
       "smoke_error": null,
       "referenced_in_tests": true
     }

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate live API endpoint matrix and governance artifacts.
+Generate the API endpoint matrix and governance artifacts.
 
 Inputs:
-- OpenAPI from running backend (preferred) or outputs/qa/api_inventory.json fallback
+- OpenAPI built in-process from the executable FastAPI app, or api_inventory fallback
 - outputs/qa/api_test_results.json (smoke/scenario execution results)
 - endpoint references found in qa/*.py and backend/tests/*.py
 
@@ -14,19 +14,18 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import requests
 
-
 ROOT = Path(__file__).resolve().parents[1]
-OPENAPI_URL = "http://localhost:8000/openapi.json"
 INVENTORY_FALLBACK = ROOT / "outputs" / "qa" / "api_inventory.json"
 SMOKE_RESULTS = ROOT / "outputs" / "qa" / "api_test_results.json"
 OUT_JSON = ROOT / "documentation" / "qa" / "api-endpoint-matrix.json"
@@ -55,14 +54,29 @@ def normalize_path(path: str) -> str:
     return "/api/v1/" + p
 
 
-def fetch_openapi() -> dict[str, Any] | None:
+def build_openapi_in_process() -> dict[str, Any] | None:
+    """Build the schema from current source without claiming a running-server probe."""
     try:
         from app.main import app
-        return app.openapi()
-    except Exception as e:
+
+        return cast(dict[str, Any], app.openapi())
+    except (ImportError, OSError, RuntimeError, ValueError):
         import traceback
+
         traceback.print_exc()
         return None
+
+
+def fetch_runtime_openapi(
+    openapi_url: str, timeout_seconds: float = 10.0
+) -> dict[str, Any]:
+    """Fetch a schema from an explicitly selected runtime or fail the command."""
+    response = requests.get(openapi_url, timeout=timeout_seconds)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or not isinstance(payload.get("paths"), dict):
+        raise TypeError("Runtime OpenAPI response has no valid paths object")
+    return payload
 
 
 def extract_endpoints_from_openapi(spec: dict[str, Any]) -> list[dict[str, Any]]:
@@ -87,14 +101,18 @@ def extract_endpoints_from_openapi(spec: dict[str, Any]) -> list[dict[str, Any]]
     return endpoints
 
 
-def load_endpoints() -> tuple[list[dict[str, Any]], str]:
-    spec = fetch_openapi()
-    if spec:
-        return extract_endpoints_from_openapi(spec), "openapi_live"
+def load_endpoints(openapi_url: str | None = None) -> tuple[list[dict[str, Any]], str]:
+    if openapi_url:
+        runtime_spec = fetch_runtime_openapi(openapi_url)
+        return extract_endpoints_from_openapi(runtime_spec), "openapi_runtime"
+
+    source_spec = build_openapi_in_process()
+    if source_spec:
+        return extract_endpoints_from_openapi(source_spec), "openapi_in_process"
 
     if not INVENTORY_FALLBACK.exists():
         raise FileNotFoundError(
-            "No openapi live response and outputs/qa/api_inventory.json not found."
+            "No in-process OpenAPI and outputs/qa/api_inventory.json not found."
         )
 
     payload = json.loads(INVENTORY_FALLBACK.read_text(encoding="utf-8"))
@@ -129,7 +147,9 @@ def load_smoke_results() -> dict[EndpointKey, dict[str, Any]]:
 
 def discover_test_endpoint_refs() -> set[str]:
     refs: set[str] = set()
-    files = list((ROOT / "qa").rglob("*.py")) + list((ROOT / "backend" / "tests").rglob("*.py"))
+    files = list((ROOT / "qa").rglob("*.py")) + list(
+        (ROOT / "backend" / "tests").rglob("*.py")
+    )
     p_api = re.compile(r"['\"](/api/v1/[^'\"\s]+)['\"]")
     p_rel = re.compile(
         r"['\"]/(system|knowledge|chat|auth|workers|observability|llm|autonomy|tools|tasks|documents|rag|context|profiles|users|feedback|pending_actions|consents|deployment|evaluation|productivity|collaboration|assistant|resources|learning|meta-agent|meta_agent)[^'\"\s]*['\"]"
@@ -137,7 +157,7 @@ def discover_test_endpoint_refs() -> set[str]:
     for f in files:
         try:
             txt = f.read_text(encoding="utf-8")
-        except Exception:
+        except (OSError, UnicodeError):
             continue
         for m in p_api.finditer(txt):
             refs.add(normalize_path(m.group(1)))
@@ -152,8 +172,8 @@ def template_path_to_regex(path: str) -> re.Pattern[str]:
     return re.compile(rf"^{escaped}$")
 
 
-def build_matrix() -> dict[str, Any]:
-    endpoints, source = load_endpoints()
+def build_matrix(openapi_url: str | None = None) -> dict[str, Any]:
+    endpoints, source = load_endpoints(openapi_url)
     smoke = load_smoke_results()
     test_refs = discover_test_endpoint_refs()
     test_refs_list = sorted(test_refs)
@@ -199,7 +219,7 @@ def build_matrix() -> dict[str, Any]:
         }
         rows.append(row)
 
-        module = row["module"]
+        module = str(row["module"])
         module_stats[module]["total"] += 1
         if smoke_success is True:
             module_stats[module]["smoke_pass"] += 1
@@ -217,16 +237,19 @@ def build_matrix() -> dict[str, Any]:
         "smoke_results_loaded": len(smoke),
         "test_path_refs": len(test_refs),
     }
-    return {
-        "metadata": {
-            "generated_at": now_iso(),
-            "source": source,
-            "openapi_url": OPENAPI_URL,
-            "inputs": {
-                "inventory_fallback": str(INVENTORY_FALLBACK.relative_to(ROOT)),
-                "smoke_results": str(SMOKE_RESULTS.relative_to(ROOT)),
-            },
+    metadata: dict[str, Any] = {
+        "generated_at": now_iso(),
+        "source": source,
+        "openapi_runtime_validated": source == "openapi_runtime",
+        "inputs": {
+            "inventory_fallback": str(INVENTORY_FALLBACK.relative_to(ROOT)),
+            "smoke_results": str(SMOKE_RESULTS.relative_to(ROOT)),
         },
+    }
+    if openapi_url:
+        metadata["openapi_url"] = openapi_url
+    return {
+        "metadata": metadata,
         "statistics": stats,
         "endpoints": rows,
     }
@@ -238,10 +261,14 @@ def render_markdown(matrix: dict[str, Any]) -> str:
     stats = matrix["statistics"]
     rows = matrix["endpoints"]
 
-    md.append("# API Endpoint Matrix (Live)")
+    md.append("# API Endpoint Matrix")
     md.append("")
     md.append(f"- Generated at: `{meta['generated_at']}`")
     md.append(f"- Source: `{meta['source']}`")
+    md.append(
+        "- OpenAPI runtime validated: "
+        f"`{'yes' if meta['openapi_runtime_validated'] else 'no'}`"
+    )
     md.append("- Regenerate command: `python tooling/generate_api_matrix.py`")
     md.append("")
     md.append("## Summary")
@@ -279,15 +306,25 @@ def render_markdown(matrix: dict[str, Any]) -> str:
             code = r["smoke_status_code"] if r["smoke_status_code"] is not None else "-"
             smoke = f"FAIL ({code})"
         in_tests = "yes" if r["referenced_in_tests"] else "no"
-        md.append(f"| {r['method']} | `{r['path']}` | {r['module']} | {smoke} | {in_tests} |")
+        md.append(
+            f"| {r['method']} | `{r['path']}` | {r['module']} | {smoke} | {in_tests} |"
+        )
     md.append("")
     return "\n".join(md)
 
 
 def main() -> None:
-    matrix = build_matrix()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--openapi-url",
+        help="Fetch OpenAPI from this runtime; failures do not fall back to source imports.",
+    )
+    args = parser.parse_args()
+    matrix = build_matrix(openapi_url=args.openapi_url)
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(json.dumps(matrix, indent=2, ensure_ascii=False), encoding="utf-8")
+    OUT_JSON.write_text(
+        json.dumps(matrix, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     OUT_MD.write_text(render_markdown(matrix), encoding="utf-8")
     print(f"[ok] wrote {OUT_JSON.relative_to(ROOT)}")
     print(f"[ok] wrote {OUT_MD.relative_to(ROOT)}")
