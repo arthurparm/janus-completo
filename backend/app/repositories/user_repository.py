@@ -287,7 +287,13 @@ class ConsentRepository:
         return db.get_session_direct()
 
     def add_consent(
-        self, user_id: int, scope: str, granted: bool = True, expires_at: Any | None = None
+        self,
+        user_id: int,
+        scope: str,
+        granted: bool = True,
+        expires_at: Any | None = None,
+        *,
+        commit: bool = True,
     ) -> Consent:
         s = self._get_session()
         try:
@@ -298,7 +304,10 @@ class ConsentRepository:
             else:
                 c.granted = granted
                 c.expires_at = expires_at
-            s.commit()
+            if commit:
+                s.commit()
+            else:
+                s.flush()
             s.refresh(c)
             return c
         finally:
@@ -374,6 +383,8 @@ class OAuthTokenRepository:
         access_token: str,
         refresh_token: str | None,
         expires_at: Any | None,
+        *,
+        commit: bool = True,
     ) -> OAuthToken:
         s = self._get_session()
         try:
@@ -401,7 +412,10 @@ class OAuthTokenRepository:
                     protected_refresh if protected_refresh is not None else tok.refresh_token
                 )
                 tok.expires_at = expires_at
-            s.commit()
+            if commit:
+                s.commit()
+            else:
+                s.flush()
             s.refresh(tok)
             s.expunge(tok)
             tok.access_token = access_token

@@ -26,8 +26,11 @@ from app.services.productivity_consent_service import (
     ProductivityConsentRequiredError,
     require_productivity_consent,
 )
+from app.services.productivity_oauth_connection_service import (
+    OAuthConnectionPersistenceError,
+    persist_google_oauth_connection,
+)
 from app.services.productivity_oauth_state_service import (
-    GOOGLE_PRODUCTIVITY_CONSENTS,
     GOOGLE_PRODUCTIVITY_SCOPES,
     GoogleProductivityScope,
     OAuthConfigurationError,
@@ -733,31 +736,20 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
         if expires_in
         else None
     )
-    # persiste token
-    repo_tok = OAuthTokenRepository()
     try:
-        repo_tok.upsert(
-            user_id=actor,
-            provider="google",
+        persist_google_oauth_connection(
+            user_id=int(actor),
+            scope=verified_state.scope,
             access_token=access_token,
             refresh_token=str(refresh_token or "") if refresh_token else None,
             expires_at=expires_at,
         )
-    except OAuthTokenProtectionError as exc:
+    except (OAuthTokenProtectionError, OAuthConnectionPersistenceError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OAuth token protection unavailable",
+            detail="OAuth connection persistence unavailable",
         ) from exc
-    # registra consentimento para o escopo indicado no state
     scope = verified_state.scope
-    cons_repo = ConsentRepository()
-    for consent_scope in GOOGLE_PRODUCTIVITY_CONSENTS[scope]:
-        cons_repo.add_consent(
-            user_id=actor,
-            scope=consent_scope,
-            granted=True,
-            expires_at=None,
-        )
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(

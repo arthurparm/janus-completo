@@ -89,6 +89,7 @@ class _Session:
     def __init__(self, current: Any = None) -> None:
         self.current = current
         self.commits: list[tuple[str, str | None]] = []
+        self.flushes = 0
 
     def query(self, _model: object) -> _Query:
         return _Query(self)
@@ -98,6 +99,9 @@ class _Session:
 
     def commit(self) -> None:
         self.commits.append((self.current.access_token, self.current.refresh_token))
+
+    def flush(self) -> None:
+        self.flushes += 1
 
     def refresh(self, _token: object) -> None:
         return None
@@ -157,3 +161,31 @@ def test_oauth_repository_lazily_migrates_legacy_plaintext(
     assert loaded is not None
     assert loaded.access_token == "legacy-access"
     assert loaded.refresh_token == "legacy-refresh"
+
+
+def test_oauth_repository_can_join_an_outer_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _Session()
+    monkeypatch.setattr(
+        user_repository,
+        "protect_oauth_token",
+        lambda value: f"protected:{value}",
+    )
+    monkeypatch.setattr(
+        user_repository,
+        "reveal_oauth_token",
+        lambda value: value.removeprefix("protected:") if value else None,
+    )
+
+    OAuthTokenRepository(session).upsert(
+        user_id=7,
+        provider="google",
+        access_token="access",
+        refresh_token="refresh",
+        expires_at=None,
+        commit=False,
+    )
+
+    assert session.commits == []
+    assert session.flushes == 1

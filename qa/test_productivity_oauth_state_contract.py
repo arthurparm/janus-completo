@@ -110,8 +110,7 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
-    token_writes: list[dict[str, object]] = []
-    consent_writes: list[str] = []
+    connection_writes: list[dict[str, object]] = []
 
     class _Response:
         def raise_for_status(self) -> None:
@@ -135,17 +134,12 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
             captured.update(kwargs)
             return _Response()
 
-    class _OAuthRepository:
-        def upsert(self, **kwargs: object) -> None:
-            token_writes.append(kwargs)
-
-    class _ConsentRepository:
-        def add_consent(self, *, scope: str, **_kwargs: object) -> None:
-            consent_writes.append(scope)
-
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: _Client())
-    monkeypatch.setattr(productivity, "OAuthTokenRepository", _OAuthRepository)
-    monkeypatch.setattr(productivity, "ConsentRepository", _ConsentRepository)
+    monkeypatch.setattr(
+        productivity,
+        "persist_google_oauth_connection",
+        lambda **kwargs: connection_writes.append(kwargs),
+    )
     monkeypatch.setattr(
         "app.core.security.egress_policy.enforce_worker_http_egress",
         lambda url, **_kwargs: url,
@@ -169,8 +163,9 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
         "redirect_uri": "https://janus.example/oauth/google/callback",
         "grant_type": "authorization_code",
     }
-    assert token_writes[0]["access_token"] == "access"
-    assert consent_writes == ["mail.read", "mail.send"]
+    assert connection_writes[0]["user_id"] == 1
+    assert connection_writes[0]["scope"] == "mail"
+    assert connection_writes[0]["access_token"] == "access"
 
 
 def test_manual_refresh_uses_shared_actor_scoped_service(

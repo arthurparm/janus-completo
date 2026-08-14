@@ -319,3 +319,8 @@ backed by the existing Fernet keyring or Vault Transit provider. Writes fail clo
 encryption is unavailable; reads reject malformed or undecryptable envelopes. Legacy
 plaintext rows are migrated transactionally on their next repository read, then callers
 receive a detached plaintext value that cannot be committed back accidentally.
+
+The Google OAuth callback persists the protected token and every consent derived from the
+verified capability in one database transaction. Repositories flush without committing
+when enlisted in this unit of work; any token or consent failure rolls back the complete
+connection before the callback can report success or audit completion.
