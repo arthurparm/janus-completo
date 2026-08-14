@@ -278,3 +278,7 @@ active `mail.send` consent. The API checks before publishing and the productivit
 worker checks again immediately before reading OAuth tokens or contacting Google, so a
 revocation that occurs while a task is queued prevents the external effect and produces
 an error audit event.
+
+Broker publication now returns an explicit delivery boolean. Productivity effects treat
+an offline broker or publish exception as `503` and never emit a `queued` response or
+queued audit record unless RabbitMQ accepted the message.

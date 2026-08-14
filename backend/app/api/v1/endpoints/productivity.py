@@ -167,15 +167,26 @@ async def calendar_add_event(
         raise
     except Exception:
         pass
-    from app.core.workers.google_productivity_worker import publish_google_calendar_add_event
+    from app.core.workers.google_productivity_worker import (
+        ProductivityQueueUnavailableError,
+        publish_google_calendar_add_event,
+    )
 
     cm = (
         _tracer.start_as_current_span("productivity.calendar_add_event") if _OTEL else nullcontext()
     )
     with cm:  # type: ignore
-        task_id = await publish_google_calendar_add_event(
-            user_id=actor, event=payload.event.model_dump(), index=bool(payload.index)
-        )
+        try:
+            task_id = await publish_google_calendar_add_event(
+                user_id=actor,
+                event=payload.event.model_dump(),
+                index=bool(payload.index),
+            )
+        except ProductivityQueueUnavailableError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
         try:
             _PROD_REQUESTS_TOTAL.labels("calendar_add_event", "queued").inc()
             _PROD_REQUESTS_USER_TOTAL.labels(
@@ -321,13 +332,24 @@ async def mail_send(
         raise
     except Exception:
         pass
-    from app.core.workers.google_productivity_worker import publish_google_mail_send
+    from app.core.workers.google_productivity_worker import (
+        ProductivityQueueUnavailableError,
+        publish_google_mail_send,
+    )
 
     cm = _tracer.start_as_current_span("productivity.mail_send") if _OTEL else nullcontext()
     with cm:  # type: ignore
-        task_id = await publish_google_mail_send(
-            user_id=actor, message=payload.message.model_dump(), index=bool(payload.index)
-        )
+        try:
+            task_id = await publish_google_mail_send(
+                user_id=actor,
+                message=payload.message.model_dump(),
+                index=bool(payload.index),
+            )
+        except ProductivityQueueUnavailableError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
         try:
             _PROD_REQUESTS_TOTAL.labels("mail_send", "queued").inc()
             _PROD_REQUESTS_USER_TOTAL.labels("[REDACTED_PII]", "mail_send", "queued").inc()

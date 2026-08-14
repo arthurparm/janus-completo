@@ -48,6 +48,10 @@ except Exception:
 
 logger = structlog.get_logger(__name__)
 
+
+class ProductivityQueueUnavailableError(Exception):
+    """The broker did not durably accept a requested external effect."""
+
 QUEUE_GOOGLE_CALENDAR = "janus.productivity.google.calendar"
 QUEUE_GOOGLE_MAIL = "janus.productivity.google.mail"
 _GOOGLE_PROD_EVENTS_PUBLISHED = Counter(
@@ -87,17 +91,27 @@ async def publish_google_calendar_add_event(
     )
     try:
         cm = _tracer.start_as_current_span("google.calendar.publish") if _OTEL else nullcontext()
-        async with cm:  # type: ignore
+        with cm:  # type: ignore
             broker = await get_broker()
-            await broker.publish(
+            delivered = await broker.publish(
                 QUEUE_GOOGLE_CALENDAR, msg.to_msgpack(), use_msgpack=True, priority=5
             )
+            if not delivered:
+                raise ProductivityQueueUnavailableError(
+                    "Broker indisponível; evento de calendário não foi enfileirado."
+                )
         try:
             _GOOGLE_PROD_EVENTS_PUBLISHED.labels("google_calendar_add_event").inc()
         except Exception:
             pass
-    except Exception:
+    except ProductivityQueueUnavailableError:
         logger.warning("Broker offline", task_id=task_id)
+        raise
+    except Exception as exc:
+        logger.error("Falha ao publicar evento de calendário", task_id=task_id, exc_info=exc)
+        raise ProductivityQueueUnavailableError(
+            "Falha ao enfileirar evento de calendário."
+        ) from exc
     try:
         record_audit_event_direct(
             {
@@ -125,15 +139,25 @@ async def publish_google_mail_send(user_id: int, message: dict[str, Any], index:
     )
     try:
         cm = _tracer.start_as_current_span("google.mail.publish") if _OTEL else nullcontext()
-        async with cm:  # type: ignore
+        with cm:  # type: ignore
             broker = await get_broker()
-            await broker.publish(QUEUE_GOOGLE_MAIL, msg.to_msgpack(), use_msgpack=True, priority=5)
+            delivered = await broker.publish(
+                QUEUE_GOOGLE_MAIL, msg.to_msgpack(), use_msgpack=True, priority=5
+            )
+            if not delivered:
+                raise ProductivityQueueUnavailableError(
+                    "Broker indisponível; e-mail não foi enfileirado."
+                )
         try:
             _GOOGLE_PROD_EVENTS_PUBLISHED.labels("google_mail_send").inc()
         except Exception:
             pass
-    except Exception:
+    except ProductivityQueueUnavailableError:
         logger.warning("Broker offline", task_id=task_id)
+        raise
+    except Exception as exc:
+        logger.error("Falha ao publicar e-mail", task_id=task_id, exc_info=exc)
+        raise ProductivityQueueUnavailableError("Falha ao enfileirar e-mail.") from exc
     try:
         record_audit_event_direct(
             {

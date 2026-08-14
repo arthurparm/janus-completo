@@ -93,6 +93,26 @@ async def test_external_productivity_effects_require_consent_before_queueing(
                 json=mail_payload,
                 headers=_headers(),
             )
+            calendar_publish.side_effect = (
+                google_productivity_worker.ProductivityQueueUnavailableError(
+                    "calendário não enfileirado"
+                )
+            )
+            mail_publish.side_effect = (
+                google_productivity_worker.ProductivityQueueUnavailableError(
+                    "e-mail não enfileirado"
+                )
+            )
+            failed_calendar = await client.post(
+                "/api/v1/productivity/calendar/events/add",
+                json=calendar_payload,
+                headers=_headers(),
+            )
+            failed_mail = await client.post(
+                "/api/v1/productivity/mail/messages/send",
+                json=mail_payload,
+                headers=_headers(),
+            )
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
@@ -105,8 +125,12 @@ async def test_external_productivity_effects_require_consent_before_queueing(
     assert denied_mail.status_code == 403
     assert allowed_calendar.json() == {"status": "queued", "task_id": "calendar-task"}
     assert allowed_mail.json() == {"status": "queued", "task_id": "mail-task"}
-    calendar_publish.assert_awaited_once()
-    mail_publish.assert_awaited_once()
+    assert failed_calendar.status_code == 503
+    assert failed_calendar.json()["detail"] == "calendário não enfileirado"
+    assert failed_mail.status_code == 503
+    assert failed_mail.json()["detail"] == "e-mail não enfileirado"
+    assert calendar_publish.await_count == 2
+    assert mail_publish.await_count == 2
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

@@ -256,7 +256,7 @@ class MessageBroker:
         headers: dict[str, Any] | None = None,
         expiration: int | None = None,
         use_msgpack: bool | None = None,
-    ):
+    ) -> bool:
         """
         Publica uma mensagem em uma fila.
 
@@ -267,7 +267,7 @@ class MessageBroker:
         if self._connection is None:
             # Modo offline: ignora publicação
             logger.debug("Publicação ignorada (broker offline)", extra={"queue": queue_name})
-            return
+            return False
         fmt_msgpack = (
             use_msgpack
             if use_msgpack is not None
@@ -347,7 +347,7 @@ class MessageBroker:
                         await channel.default_exchange.publish(msg, routing_key=queue_name)
 
                     _MESSAGES_PUBLISHED.labels(queue_name).inc()
-                    return
+                    return True
                 except (
                     ChannelInvalidStateError,
                     ChannelClosed,
@@ -368,6 +368,7 @@ class MessageBroker:
                     if attempt == 0:
                         continue
                     raise
+        raise RuntimeError(f"Falha ao publicar na fila {queue_name} após retries.")
 
     def _get_queue_arguments(self, queue_name: str) -> dict[str, Any]:
         """Obtém argumentos esperados para a fila (TTL, max-length, DLX, prioridade)."""
