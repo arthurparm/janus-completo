@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, Index, Integer, String, func
+from sqlalchemy import Column, DateTime, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.config_models import Base
@@ -38,5 +38,13 @@ class AuditLedgerEvent(Base):
         Index("idx_audit_ledger_trace", "trace_id"),
         Index("idx_audit_ledger_actor", "actor_user_id", "created_at"),
         Index("idx_audit_ledger_action", "action", "created_at"),
+        Index(
+            "idx_audit_ledger_optimization_cycle",
+            text("((payload_json['cycle']) ->> 'cycle_id')"),
+            postgresql_where=text(
+                "action IN ('manual_cycle_completed', "
+                "'continuous_cycle_completed') AND status = 'planned'"
+            ),
+        ),
     )
 

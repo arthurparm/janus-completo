@@ -2,10 +2,11 @@ import json
 from typing import Any
 
 import structlog
-from app.db import db
-from app.models.user_models import Consent
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
+
+from app.db import db
+from app.models.user_models import Consent
 
 logger = structlog.get_logger(__name__)
 
@@ -472,6 +473,7 @@ class DBMigrationService:
         try:
             checks: list[dict[str, Any]] = []
             consent_table = Consent.__tablename__
+            dialect = self._dialect_name(s)
 
             def add(table: str, name: str, kind: str, exists: bool) -> None:
                 checks.append({"table": table, "name": name, "kind": kind, "exists": exists})
@@ -590,6 +592,17 @@ class DBMigrationService:
                 "index",
                 self._index_exists(s, "pending_actions", "idx_pending_actions_status_user"),
             )
+            if dialect in ("postgresql", "postgres"):
+                add(
+                    "audit_ledger_events",
+                    "idx_audit_ledger_optimization_cycle",
+                    "index",
+                    self._index_exists(
+                        s,
+                        "audit_ledger_events",
+                        "idx_audit_ledger_optimization_cycle",
+                    ),
+                )
             add(
                 "pending_actions",
                 "simulation_generated_at",
@@ -1576,6 +1589,13 @@ class DBMigrationService:
                     (
                         "CREATE INDEX IF NOT EXISTS idx_audit_ledger_action ON audit_ledger_events (action, created_at)",
                         "audit_ledger_events.idx_action",
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_audit_ledger_optimization_cycle "
+                        "ON audit_ledger_events (((payload_json['cycle']) ->> 'cycle_id')) "
+                        "WHERE action IN ('manual_cycle_completed', "
+                        "'continuous_cycle_completed') AND status = 'planned'",
+                        "audit_ledger_events.idx_optimization_cycle",
                     ),
                 ):
                     try:

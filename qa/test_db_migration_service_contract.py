@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import app.services.db_migration_service as migration_module
+import pytest
 from app.services.db_migration_service import DBMigrationService
 
 
@@ -54,6 +55,12 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
     assert any("ALTER TABLE user_privacy_consents ADD CONSTRAINT unique_user_privacy_scope_consent UNIQUE (user_id, scope)" in q for q in fake.executed_sql)
     assert any("CREATE INDEX idx_privacy_consent_user_scope ON user_privacy_consents (user_id, scope)" in q for q in fake.executed_sql)
     assert any("CREATE TABLE IF NOT EXISTS audit_ledger_events" in q for q in fake.executed_sql)
+    assert any(
+        "CREATE INDEX IF NOT EXISTS idx_audit_ledger_optimization_cycle" in q
+        and "payload_json['cycle']" in q
+        and "continuous_cycle_completed" in q
+        for q in fake.executed_sql
+    )
     assert any("CREATE TABLE IF NOT EXISTS data_governance_records" in q for q in fake.executed_sql)
     assert any("CREATE TABLE chat_stream_runs" in q for q in fake.executed_sql)
     assert any("CREATE TABLE chat_stream_events" in q for q in fake.executed_sql)
@@ -108,6 +115,42 @@ def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
         "uq_chat_stream_owner_session_request",
     ) in constraint_calls
     assert ("chat_stream_events", "idx_chat_stream_event_cursor") in index_calls
+    assert (
+        "audit_ledger_events",
+        "idx_audit_ledger_optimization_cycle",
+    ) in index_calls
+
+
+def test_validate_schema_skips_postgres_json_index_on_mysql(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    svc = DBMigrationService()
+    fake = _FakeSession("mysql")
+    monkeypatch.setattr(svc, "_get_session", lambda: fake)
+    index_calls: list[tuple[str, str]] = []
+
+    def _index(_s, table: str, name: str) -> bool:
+        index_calls.append((table, name))
+        return True
+
+    monkeypatch.setattr(svc, "_index_exists", _index)
+    monkeypatch.setattr(svc, "_constraint_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_column_exists", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(svc, "_column_nullable", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        svc,
+        "_count_null_pending_action_user_ids",
+        lambda *_args, **_kwargs: 0,
+    )
+    monkeypatch.setattr(svc, "_table_exists", lambda *_args, **_kwargs: True)
+
+    result = svc.validate_schema()
+
+    assert result["status"] == "ok"
+    assert (
+        "audit_ledger_events",
+        "idx_audit_ledger_optimization_cycle",
+    ) not in index_calls
 
 
 def test_migrate_schema_promotes_pending_actions_user_id_not_null_when_residue_zero(monkeypatch):

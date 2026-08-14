@@ -258,3 +258,7 @@ array position or descriptive text.
 `GET /api/v1/optimization/cycles/{cycle_id}` retrieves the typed, immutable planning
 record for service actors with `ops:read`; it does not approve, schedule, or execute the
 proposal and returns `404` when the ledger has no matching confirmed cycle.
+The PostgreSQL migration installs the partial expression index
+`idx_audit_ledger_optimization_cycle` for confirmed optimization events. Apply it during
+a maintenance window before treating lookup latency as runtime-validated on a large
+ledger; source-level schema validation does not prove that an active database has it.
