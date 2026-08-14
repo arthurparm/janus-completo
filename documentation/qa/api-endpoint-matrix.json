@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-08-14T19:12:01.201150+00:00",
+    "generated_at": "2026-08-14T19:27:48.545333+00:00",
     "source": "openapi_in_process",
     "openapi_runtime_validated": false,
     "inputs": {
@@ -160,7 +160,7 @@
         "total": 9,
         "smoke_pass": 0,
         "smoke_fail": 0,
-        "in_tests": 8
+        "in_tests": 9
       },
       "PendingActions": {
         "total": 5,
@@ -230,7 +230,7 @@
       }
     },
     "smoke_results_loaded": 6,
-    "test_path_refs": 299
+    "test_path_refs": 300
   },
   "endpoints": [
     {
@@ -2376,7 +2376,7 @@
       "smoke_success": null,
       "smoke_status_code": null,
       "smoke_error": null,
-      "referenced_in_tests": false
+      "referenced_in_tests": true
     },
     {
       "method": "GET",
