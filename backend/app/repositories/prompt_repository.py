@@ -4,14 +4,13 @@ Permite que o Meta-Agent atualize prompts baseado em análises de performance.
 """
 
 from datetime import datetime
-from typing import Any
-
-from sqlalchemy import and_, desc, select
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, cast
 
 from app.db import db
 from app.models.config_models import Prompt
+from sqlalchemy import and_, desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 
 class PromptRepository:
@@ -59,7 +58,7 @@ class PromptRepository:
     ) -> Prompt | None:
         """Obtém o prompt ativo para um nome específico."""
         session = await self._get_session_async()
-        
+
         # Async query
         stmt = (
             select(Prompt)
@@ -71,6 +70,28 @@ class PromptRepository:
                     Prompt.model_target == model_target,
                     Prompt.is_active,
                 )
+            )
+        )
+        result = await session.execute(stmt)
+        return result.scalars().first()
+
+    async def get_prompt_version(
+        self,
+        prompt_name: str,
+        version: str,
+        namespace: str = "default",
+        language: str = "en",
+        model_target: str = "general",
+    ) -> Prompt | None:
+        """Obtém uma versão exata de prompt, ativa ou inativa."""
+        session = await self._get_session_async()
+        stmt = select(Prompt).filter(
+            and_(
+                Prompt.prompt_name == prompt_name,
+                Prompt.prompt_version == version,
+                Prompt.namespace == namespace,
+                Prompt.language == language,
+                Prompt.model_target == model_target,
             )
         )
         result = await session.execute(stmt)
@@ -119,11 +140,12 @@ class PromptRepository:
         session = self._get_session_sync()
         owns_session = self._session is None
         try:
-            return (
+            return cast(
+                list[Prompt],
                 session.query(Prompt)
                 .filter(and_(Prompt.prompt_name == prompt_name, Prompt.namespace == namespace))
                 .order_by(desc(Prompt.created_at))
-                .all()
+                .all(),
             )
         finally:
             if owns_session:
@@ -192,7 +214,7 @@ class PromptRepository:
 
     def _deactivate_prompt(
         self, session: Session, prompt_name: str, namespace: str, language: str, model_target: str
-    ):
+    ) -> None:
         """Desativa prompt ativo atual."""
         current_active = (
             session.query(Prompt)
@@ -233,7 +255,9 @@ class PromptRepository:
             if active_only:
                 query = query.filter(Prompt.is_active)
 
-            return query.order_by(desc(Prompt.updated_at)).all()
+            return cast(
+                list[Prompt], query.order_by(desc(Prompt.updated_at)).all()
+            )
         finally:
             if owns_session:
                 session.close()

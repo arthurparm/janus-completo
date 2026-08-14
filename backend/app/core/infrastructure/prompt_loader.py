@@ -1,15 +1,16 @@
 import string
 import time
 from collections import OrderedDict
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import structlog
 from prometheus_client import Counter
 
 from app.repositories.prompt_repository import PromptRepository
 
-PROMPTS = {}
+PROMPTS: dict[str, str] = {}
 _file_prompts_cache: dict[str, str] = {}
 
 
@@ -88,7 +89,9 @@ class PromptLoader:
             (model or "any").lower(),
         )
 
-    def _validate_placeholders(self, template: str, variables: dict[str, Any] | None):
+    def _validate_placeholders(
+        self, template: str, variables: dict[str, Any] | None
+    ) -> None:
         if variables is None:
             return
         fmt = string.Formatter()
@@ -133,31 +136,35 @@ class PromptLoader:
         try:
             from app.db import get_db_session
 
-            # Usar gerenciador de sessão para injetar sessão no repositório
             async for session in get_db_session():
-                # Injetar sessão temporariamente
-                self._prompt_repo._async_session = session
-                try:
-                    if version:
-                        # Buscar versão específica (ainda não implementado async no repo, mas placeholder)
-                        # prompt = await self._prompt_repo.get_prompt_version_by_id(int(version))
-                        pass
-                    else:
-                        # Buscar versão ativa
-                        prompt = await self._prompt_repo.get_active_prompt(
-                            prompt_name=name,
-                            namespace=namespace or "default",
-                            language=lang or "en",
-                            model_target=model or "general",
-                        )
-                        if prompt:
-                            return prompt.prompt_text
-                finally:
-                    self._prompt_repo._async_session = None
+                repository = PromptRepository(session)
+                if version:
+                    prompt = await repository.get_prompt_version(
+                        prompt_name=name,
+                        version=version,
+                        namespace=namespace or "default",
+                        language=lang or "en",
+                        model_target=model or "general",
+                    )
+                    if prompt:
+                        return cast(str, prompt.prompt_text)
+                else:
+                    prompt = await repository.get_active_prompt(
+                        prompt_name=name,
+                        namespace=namespace or "default",
+                        language=lang or "en",
+                        model_target=model or "general",
+                    )
+                    if prompt:
+                        return cast(str, prompt.prompt_text)
                 break # Apenas uma sessão necessária
 
         except Exception as e:
             self._logger.error("log_error", message=f"Erro ao buscar prompt '{name}' do banco: {e}")
+            if version is not None:
+                raise RuntimeError(
+                    f"Falha ao consultar a versão '{version}' do prompt '{name}'."
+                ) from e
 
         return None
 
@@ -221,6 +228,15 @@ class PromptLoader:
             if template:
                 self._logger.debug("log_debug", message=f"Prompt '{name}' carregado do banco de dados")
 
+        if version is not None and template is None:
+            if not self.use_database:
+                raise RuntimeError(
+                    "Busca de versão específica requer o repositório de prompts."
+                )
+            raise KeyError(
+                f"Prompt '{name}' na versão '{version}' não encontrado no repositório."
+            )
+
         # 2. Tentar provider externo se banco falhou
         if template is None and self._external_provider is not None:
             try:
@@ -282,7 +298,7 @@ async def get_prompt(
         return None
 
 
-async def get_formatted_prompt(prompt_name: str, **format_kwargs) -> str:
+async def get_formatted_prompt(prompt_name: str, **format_kwargs: Any) -> str:
     """
     Carrega um prompt pela hierarquia canônica e aplica formatação.
 
@@ -319,10 +335,12 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
         return False
 
     try:
+        version = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
         # Criar nova versão do prompt
         new_prompt = prompt_loader._prompt_repo.create_prompt_version(
             prompt_name=prompt_name,
             prompt_text=new_text,
+            version=version,
             created_by=created_by,
             activate=True,  # Ativar automaticamente a nova versão
         )
@@ -333,7 +351,7 @@ def update_prompt(prompt_name: str, new_text: str, created_by: str = "meta-agent
         logger.info(
             "prompt_updated",
             prompt_name=prompt_name,
-            version=getattr(new_prompt, "version", None),
+            version=getattr(new_prompt, "prompt_version", version),
         )
         return True
     except Exception as e:
