@@ -1,16 +1,24 @@
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from app.core.infrastructure.filesystem_manager import read_file
 from app.db.vector_store import build_deterministic_point_id
 from app.repositories.productivity_repository import (
     ProductivityNotesRepository,
     ProductivityRepositoryError,
 )
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository, UserRepository
+from app.services.google_productivity_service import (
+    CalendarEventResult,
+    GoogleProductivityProviderError,
+    GoogleProductivityTokenUnavailableError,
+    MailMessageResult,
+    list_google_calendar_events,
+    list_google_mail_messages,
+)
 from app.services.observability_service import ObservabilityService
 from app.services.productivity_consent_service import (
     ProductivityConsentRequiredError,
@@ -168,6 +176,10 @@ class CalendarEvent(BaseModel):
     notes: str | None = None
 
 
+class CalendarEventsResponse(BaseModel):
+    events: list[CalendarEventResult]
+
+
 class CalendarAddRequest(BaseModel):
     event: CalendarEvent
     index: bool | None = False
@@ -299,19 +311,33 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
 
 @router.get("/calendar/events")
 async def calendar_list_events(
-    request: Request, repo: ConsentRepository = Depends(get_consent_repo)
-):
-    require_authenticated_actor_id(request)
-    path = "workspace/productivity/calendar_.json"
-    raw = read_file(path)
+    request: Request,
+    max_results: int = Query(default=25, ge=1, le=100),
+    repo: ConsentRepository = Depends(get_consent_repo),
+) -> CalendarEventsResponse:
+    actor = require_authenticated_actor_id(request)
+    _require_consent(repo, actor, "calendar.read")
     try:
-        if raw and not raw.startswith("Erro:"):
-            import json
-
-            return {"events": json.loads(raw)}
-    except Exception:
-        pass
-    return {"events": []}
+        events = await list_google_calendar_events(
+            user_id=int(actor), max_results=max_results
+        )
+    except GoogleProductivityTokenUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    except (httpx.TimeoutException, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Google Calendar timed out",
+        ) from exc
+    except (httpx.HTTPError, GoogleProductivityProviderError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Google Calendar unavailable",
+        ) from exc
+    return CalendarEventsResponse(events=events)
 
 
 class MailMessage(BaseModel):
@@ -323,6 +349,10 @@ class MailMessage(BaseModel):
 class MailSendRequest(BaseModel):
     message: MailMessage
     index: bool | None = False
+
+
+class MailMessagesResponse(BaseModel):
+    messages: list[MailMessageResult]
 
 
 @router.post("/mail/messages/send")
@@ -401,19 +431,33 @@ async def mail_send(
 
 @router.get("/mail/messages")
 async def mail_list(
-    request: Request, repo: ConsentRepository = Depends(get_consent_repo)
-):
-    require_authenticated_actor_id(request)
-    path = "workspace/productivity/mail_.json"
-    raw = read_file(path)
+    request: Request,
+    max_results: int = Query(default=20, ge=1, le=50),
+    repo: ConsentRepository = Depends(get_consent_repo),
+) -> MailMessagesResponse:
+    actor = require_authenticated_actor_id(request)
+    _require_consent(repo, actor, "mail.read")
     try:
-        if raw and not raw.startswith("Erro:"):
-            import json
-
-            return {"messages": json.loads(raw)}
-    except Exception:
-        pass
-    return {"messages": []}
+        messages = await list_google_mail_messages(
+            user_id=int(actor), max_results=max_results
+        )
+    except GoogleProductivityTokenUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    except (httpx.TimeoutException, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Gmail timed out",
+        ) from exc
+    except (httpx.HTTPError, GoogleProductivityProviderError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Gmail unavailable",
+        ) from exc
+    return MailMessagesResponse(messages=messages)
 
 
 class NoteItem(BaseModel):

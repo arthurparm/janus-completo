@@ -4,12 +4,14 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
 from app.config import settings
 from app.core.infrastructure.message_broker import MessageBroker
 from app.core.workers import google_productivity_worker as worker
+from app.services import google_productivity_service
 
 
 class _OfflineBroker:
@@ -127,9 +129,13 @@ async def test_worker_refreshes_google_token_with_unmasked_credentials(
         "GOOGLE_OAUTH_REDIRECT_URI",
         "https://janus.example/oauth/google/callback",
     )
-    monkeypatch.setattr(worker.httpx, "AsyncClient", lambda **_kwargs: _Client())
     monkeypatch.setattr(
-        worker,
+        httpx,
+        "AsyncClient",
+        lambda **_kwargs: _Client(),
+    )
+    monkeypatch.setattr(
+        google_productivity_service,
         "enforce_worker_http_egress",
         lambda url, **_kwargs: url,
     )
@@ -139,7 +145,7 @@ async def test_worker_refreshes_google_token_with_unmasked_credentials(
         expires_at=expires_at,
     )
 
-    access_token = await worker._resolve_google_access_token(
+    access_token = await google_productivity_service.resolve_google_access_token(
         repo=_Repository(),
         token=token,
         user_id=7,

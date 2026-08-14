@@ -297,5 +297,12 @@ minutes before token exchange. OAuth `SecretStr` values are unwrapped only at th
 client boundary, never serialized or audited, and callback audit records contain the
 verified capability rather than the state token.
 The callback derives Janus consent from the exact provider capability: Calendar grants
-read/write, Drive-file notes grant read/write, and Gmail send grants only `mail.send`;
-it never manufactures `mail.read` from a send-only Google authorization.
+read/write, Drive-file notes grant read/write, and the Mail capability requests both
+Gmail read-only metadata and send before granting `mail.read` and `mail.send`.
+
+Calendar and mail read endpoints call Google for the authenticated actor after checking
+`calendar.read` or `mail.read`; they never read shared workspace JSON or convert provider,
+token, egress, or timeout failures into empty success. Calendar responses expose a typed
+event summary. Mail responses fetch only metadata headers and snippets (not message bodies),
+with request bounds of 100 calendar events and 50 messages. Gmail metadata fetches use a
+five-request concurrency bound and a 30-second total deadline.

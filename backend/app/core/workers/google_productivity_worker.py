@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
@@ -14,8 +14,11 @@ from app.models.schemas import TaskMessage
 from app.planes.knowledge import get_knowledge_facade
 from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository
+from app.services.google_productivity_service import (
+    GoogleProductivityTokenUnavailableError,
+    resolve_google_access_token,
+)
 from app.services.productivity_consent_service import require_productivity_consent
-from app.services.productivity_oauth_state_service import resolve_google_oauth_config
 
 try:
     from prometheus_client import Counter, Histogram  # type: ignore
@@ -176,58 +179,6 @@ async def publish_google_mail_send(user_id: int, message: dict[str, Any], index:
     return task_id
 
 
-async def _resolve_google_access_token(*, repo: Any, token: Any, user_id: int) -> str | None:
-    access = token.access_token if token else None
-    should_refresh = bool(
-        token
-        and token.refresh_token
-        and (
-            not access
-            or (token.expires_at and token.expires_at <= datetime.now(UTC).replace(tzinfo=None))
-        )
-    )
-    if not should_refresh:
-        return str(access) if access else None
-
-    from app.config import settings
-
-    client_id, client_secret, _redirect_uri = resolve_google_oauth_config(settings)
-    token_url = "https://oauth2.googleapis.com/token"
-    allowed_token_url = enforce_worker_http_egress(token_url, tool="google_productivity_worker")
-    if not allowed_token_url:
-        raise RuntimeError("Egress blocked for google oauth token refresh")
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(
-            allowed_token_url,
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": token.refresh_token,
-                "grant_type": "refresh_token",
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        response.raise_for_status()
-        data = response.json()
-    refreshed = data.get("access_token")
-    if not isinstance(refreshed, str) or not refreshed:
-        raise RuntimeError("Google OAuth refresh response missing access_token")
-    expires_in = data.get("expires_in")
-    expires_at = (
-        datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=int(expires_in or 0))
-        if expires_in
-        else None
-    )
-    repo.upsert(
-        user_id=user_id,
-        provider="google",
-        access_token=refreshed,
-        refresh_token=token.refresh_token,
-        expires_at=expires_at,
-    )
-    return refreshed
-
-
 async def _handle_google_productivity_task(task: TaskMessage) -> None:
     try:
         payload = task.payload or {}
@@ -244,13 +195,16 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                 )
                 repo = OAuthTokenRepository()
                 tok = repo.get(user_id=int(user_id), provider="google")
-                access = await _resolve_google_access_token(
-                    repo=repo,
-                    token=tok,
-                    user_id=int(user_id),
-                )
-                if not access:
-                    raise RuntimeError("OAuth access token unavailable for Google Calendar")
+                try:
+                    access = await resolve_google_access_token(
+                        repo=repo,
+                        token=tok,
+                        user_id=int(user_id),
+                    )
+                except GoogleProductivityTokenUnavailableError as exc:
+                    raise RuntimeError(
+                        "OAuth access token unavailable for Google Calendar"
+                    ) from exc
                 if access:
                     _t0 = __import__("time").perf_counter()
                     calendar_url = (
@@ -409,13 +363,16 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                 )
                 repo = OAuthTokenRepository()
                 tok = repo.get(user_id=int(user_id), provider="google")
-                access = await _resolve_google_access_token(
-                    repo=repo,
-                    token=tok,
-                    user_id=int(user_id),
-                )
-                if not access:
-                    raise RuntimeError("OAuth access token unavailable for Gmail")
+                try:
+                    access = await resolve_google_access_token(
+                        repo=repo,
+                        token=tok,
+                        user_id=int(user_id),
+                    )
+                except GoogleProductivityTokenUnavailableError as exc:
+                    raise RuntimeError(
+                        "OAuth access token unavailable for Gmail"
+                    ) from exc
                 if access:
                     _t0 = __import__("time").perf_counter()
                     to = str(msg.get("to", ""))

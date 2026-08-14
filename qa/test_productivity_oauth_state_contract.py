@@ -163,4 +163,4 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
         "grant_type": "authorization_code",
     }
     assert token_writes[0]["access_token"] == "access"
-    assert consent_writes == ["mail.send"]
+    assert consent_writes == ["mail.read", "mail.send"]

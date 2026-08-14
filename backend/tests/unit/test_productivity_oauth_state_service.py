@@ -6,11 +6,21 @@ import pytest
 from pydantic import SecretStr
 
 from app.services.productivity_oauth_state_service import (
+    GOOGLE_PRODUCTIVITY_CONSENTS,
+    GOOGLE_PRODUCTIVITY_SCOPES,
     OAuthStateError,
     issue_google_oauth_state,
     resolve_google_oauth_config,
     verify_google_oauth_state,
 )
+
+
+def test_mail_capability_matches_read_and_send_consents() -> None:
+    assert GOOGLE_PRODUCTIVITY_SCOPES["mail"].split() == [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+    ]
+    assert GOOGLE_PRODUCTIVITY_CONSENTS["mail"] == ("mail.read", "mail.send")
 
 
 def test_oauth_config_extracts_secret_values_without_masking() -> None:
