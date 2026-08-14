@@ -970,3 +970,28 @@ Investigacao confirmou bugs reais, nao so uma questao de gosto: `home.scss`, `kn
 - Pro: base (`sober-card` mixin, tokens de superficie) fica pronta para as proximas paginas migrarem quando chegar a vez, sem repetir a duplicacao de CSS encontrada nos 3 widgets.
 - Contra: resto do site (Conversas, Ferramentas, Observabilidade, Admin, Login) continua na linguagem visual antiga ate as proximas fases — a Home destoa visualmente do restante do app ate essas fases acontecerem.
 - Contra: validacao visual desta sessao ficou limitada a estrutura/dados/estilos computados, nao a um screenshot renderizado — risco residual de detalhe de espacamento/alinhamento que so um screenshot real revelaria.
+
+## DEC-038 - Conversas: removido vidro/glow do painel principal (`.convo-panel`), sem tocar logica
+
+### Contexto
+
+Continuando a reconstrucao "console serio" iniciada na Home (DEC-037), a proxima pagina de maior uso e a de Conversas (`frontend/src/app/features/conversations/`). Investigando `conversations.scss` (1693 linhas) antes de mexer, encontrei que a pagina ja era bem menos "glow-heavy" do que a Home — a maioria dos elementos (bolhas de mensagem, badges de execucao, cards de entendimento/confirmacao) ja usa tintas translucidas e bordas finas de 1px, proximo do sobrio. O elemento mais visivel e mais "vidro/cockpit" que restava era `.convo-panel` — o container que envolve tanto a lista de conversas quanto o painel principal do chat — que usava `@include glass-panel` (`backdrop-filter: blur(14px)`) mais um pseudo-elemento `::after` com gradiente radial de glow.
+
+A pagina de Conversas tem ~4300 linhas entre `.ts`/`.html`/`.scss` e carrega funcionalidade critica ja validada em sessoes anteriores (persistencia de UI generativa, fluxo de confirmacao/aprovacao, citacoes, streaming SSE) — qualquer redesign amplo tem risco real de regressao. Antes de mexer, confirmei que `conversations.spec.ts`/`conversations-flows.spec.ts`/`admin-code-qa.util.spec.ts` testam a instancia do componente (via `TestBed`/`componentInstance`), nao fazem `querySelector` no DOM renderizado — ou seja, mudancas de classe/estrutura CSS nao arriscam quebrar esses testes, so mudancas em `conversations.ts` arriscariam.
+
+### Decisao
+
+Troquei `@include glass-panel` (blur) + o `::after` de glow radial em `.convo-panel` por `@include sober-card` (o mesmo mixin plano introduzido na Home, DEC-037), preservando o `border-radius` maior (`--janus-radius-lg`) que a proporcao do painel principal pedia. **Nenhuma outra mudanca** nesta rodada: nao toquei `conversations.ts`, nem `conversations.html`, nem os badges/chips/cards de entendimento-confirmacao-citacao (que ja estavam razoavelmente sobrios). O restante dos efeitos de gradiente/glow encontrados no arquivo (paineis avancados de autonomia/insights, por volta das linhas 750-1450) foram deliberadamente deixados para uma proxima rodada — sao secoes que eu ainda nao tinha mapeado em detalhe, e o ganho de mexer nelas agora nao justificava o risco adicional numa pagina ja grande.
+
+### Validacao
+
+- `ng build`: limpo.
+- `vitest run` em `conversations.spec.ts`/`conversations-flows.spec.ts`/`admin-code-qa.util.spec.ts`: 17/17 passam, identico ao baseline rodado antes da mudanca.
+- Confirmacao real no browser (fluxo OIDC dev PKCE, rebuild da imagem Docker + recreate do container): `getComputedStyle` em `.convo-panel` na conversa 20 confirma `background-color: rgb(16, 22, 28)` (o token sobrio), `backdrop-filter: none` (era `blur(14px)`), `border-radius: 16px` preservado; `get_page_text` confirma que a tabela de UI generativa (DEC-034), o card de entendimento com confianca 60%, o status de citacao e os botoes de feedback continuam renderizando e funcionando identicamente a antes — zero regressao funcional. Console sem erros.
+
+### Consequencias
+
+- Pro: elemento mais visivel de "vidro cockpit" removido da pagina de maior uso, com diff minimo (17 linhas) e risco minimo (so CSS, zero HTML/TS tocado).
+- Pro: baseline de testes preservado identico (17/17 antes e depois), confirmando que a mudanca foi puramente visual.
+- Contra: paineis avancados (autonomia/insights, dentro da mesma pagina) ainda tem gradientes/glow residuais — nao mapeados/tratados nesta rodada; proxima sessao de trabalho na pagina de Conversas deve cobrir isso.
+- Contra: mesma limitacao de validacao visual do DEC-037 — sem screenshot pixel-a-pixel, validado via estilos computados e conteudo renderizado.

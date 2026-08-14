@@ -66,28 +66,13 @@
 }
 
 .convo-panel {
-  @include glass-panel;
+  @include sober-card;
   border-radius: var(--janus-radius-lg);
   padding: clamp(16px, 1.4vw, 26px) clamp(16px, 1.5vw, 28px);
   display: flex;
   flex-direction: column;
   gap: clamp(14px, 1.2vw, 20px);
   position: relative;
-  overflow: hidden;
-}
-
-.convo-panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at top right, rgba(var(--janus-secondary-rgb), 0.14), transparent 55%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.convo-panel > * {
-  position: relative;
-  z-index: 1;
 }
 
 .panel-head {
