@@ -133,3 +133,42 @@ def test_repository_status_reports_operational_state(
 
     monkeypatch.setattr(cycle, "_running", True)
     assert repository.get_status()["status"] == "running"
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_metrics_failure_does_not_create_perfect_health_sample(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monitor = self_optimization.SystemMonitor()
+    monkeypatch.setattr(
+        self_optimization.action_registry,
+        "get_statistics",
+        Mock(side_effect=RuntimeError("telemetria offline")),
+    )
+
+    with pytest.raises(RuntimeError, match="Falha ao coletar métricas"):
+        await monitor.collect_metrics()
+
+    assert monitor._metrics_history == []
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_service_exposes_metrics_repository_failure() -> None:
+    repository = type(
+        "Repository",
+        (),
+        {
+            "get_metrics": AsyncMock(
+                side_effect=optimization_repository.OptimizationRepositoryError(
+                    "telemetria indisponível"
+                )
+            )
+        },
+    )()
+    service = optimization_service.OptimizationService(repository)
+
+    with pytest.raises(
+        optimization_service.OptimizationServiceError,
+        match="Falha ao buscar as métricas de saúde",
+    ):
+        await service.get_system_health()

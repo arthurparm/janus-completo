@@ -205,13 +205,7 @@ class SystemMonitor:
 
         except Exception as e:
             logger.error("log_error", message=f"[SelfOptimization] Erro ao coletar métricas: {e}", exc_info=True)
-            return SystemMetrics(
-                avg_response_time=0.0,
-                error_rate=0.0,
-                tool_success_rate=1.0,
-                memory_usage_mb=0.0,
-                active_tools_count=0,
-            )
+            raise RuntimeError("Falha ao coletar métricas de otimização.") from e
 
     def _calculate_health_score(self, metrics: SystemMetrics) -> float:
         """
@@ -587,7 +581,7 @@ class SelfOptimizationCycle:
         except Exception as e:
             logger.error("log_error", message=f"[SelfOptimization] Erro no ciclo: {e}", exc_info=True)
             _OPTIMIZATION_CYCLES.labels("error").inc()
-            return {"success": False, "error": str(e)}
+            raise
 
     async def run_continuous(self, interval_seconds: int = 300):
         """

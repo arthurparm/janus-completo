@@ -35,7 +35,13 @@ class OptimizationRepository:
     async def get_metrics(self) -> SystemMetrics:
         """Coleta as métricas de saúde atuais do sistema."""
         logger.debug("Coletando métricas no repositório de otimização.")
-        return await self_optimization_cycle.monitor.collect_metrics()
+        try:
+            return await self_optimization_cycle.monitor.collect_metrics()
+        except Exception as e:
+            logger.error("Erro ao coletar métricas de otimização", exc_info=e)
+            raise OptimizationRepositoryError(
+                "Falha ao coletar métricas de otimização."
+            ) from e
 
     def get_health_score(self, metrics: SystemMetrics) -> float:
         """Calcula o score de saúde a partir das métricas."""
