@@ -161,6 +161,24 @@
   align-items: center;
 }
 
+.google-capabilities,
+.google-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.disconnect-confirm {
+  border-radius: $radius-md;
+  padding: 12px 16px;
+  background: rgba(var(--warning-rgb), 0.12);
+  border: 1px solid rgba(var(--warning-rgb), 0.35);
+}
+
+.disconnect-confirm p {
+  margin-top: 0;
+}
+
 .risk-row {
   margin-top: 8px;
   display: flex;

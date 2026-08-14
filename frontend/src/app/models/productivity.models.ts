@@ -2,12 +2,17 @@ export interface TokenResponse { token: string }
 export interface ProductivityLimitUsage { max_per_day: number; used: number; remaining: number }
 export interface ProductivityLimitsStatusResponse { user_id: string; limits: Record<string, ProductivityLimitUsage> }
 export interface GoogleOAuthStartResponse { authorize_url: string; state: string }
-export interface GoogleOAuthCallbackResponse { status: string; state?: string }
+export interface GoogleOAuthCallbackResponse { status: 'ok' }
 export interface GoogleOAuthDisconnectResponse {
   status: 'disconnected' | 'local_disconnected'
   provider_revoked: boolean | null
   retry_required: boolean
   warning?: string | null
+}
+export interface GoogleConnectionStatusResponse {
+  local_status: 'disconnected' | 'configured' | 'inconsistent'
+  capabilities: Record<'calendar' | 'mail', boolean>
+  provider_verified: false
 }
 export interface CalendarEvent { title: string; start_ts: number; end_ts: number; location?: string; notes?: string }
 export interface CalendarAddRequest { event: CalendarEvent; index?: boolean }

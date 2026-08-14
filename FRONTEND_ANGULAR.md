@@ -121,3 +121,16 @@ The auth-session interceptor uses `HttpContextToken` to skip refresh for auth en
 **Docker Multi-Stage**: The [Dockerfile](file:///h:/repos/janus-completo/frontend/docker/Dockerfile) uses multi-stage build: Node.js 20 for building, nginx alpine for serving. The nginx config handles SPA routing (fallback to index.html) and reverse proxy to the backend.
 
 **Env Vars**: Environment variables are injected at build time via Angular's `define` and at runtime via the nginx template. The frontend uses `API_BASE_URL` from `api.config.ts` which reads from `process.env` polyfill or hardcoded defaults.
+
+## 10. Google productivity integration
+
+`/tools` exposes the actor-scoped Google connection workflow. It reads the backend's
+local status, starts Calendar or Mail authorization separately, requires an explicit
+second confirmation before disconnecting, and distinguishes local blocking from pending
+provider revocation. The UI never presents local persistence as remote verification.
+
+Google must be configured with `GOOGLE_OAUTH_REDIRECT_URI` pointing to the frontend route
+`/integrations/google/callback`. That dedicated route forwards only `code` and the opaque
+one-time `state` to the authenticated backend callback, then replaces the browser URL so
+those values do not remain in navigation history, including when the API rejects an expired
+Janus session.

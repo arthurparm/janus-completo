@@ -11,6 +11,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/oidc-callback/oidc-callback').then(m => m.OidcCallbackComponent)
   },
   {
+    path: 'integrations/google/callback',
+    loadComponent: () => import('./features/auth/google-oauth-callback/google-oauth-callback').then(m => m.GoogleOAuthCallbackComponent)
+  },
+  {
     path: 'conversations',
     loadComponent: () => import('./features/conversations/conversations').then(m => m.ConversationsComponent),
     canActivate: [AuthGuard],

@@ -19,6 +19,23 @@ describe('ToolsComponent', () => {
               getTools: () => of({ tools: [] }),
               getToolStats: () => of({ tool_usage: {}, total_calls: 0, success_rate: 0 }),
             },
+            productivity: {
+              googleOAuthStatus: () => of({
+                local_status: 'configured',
+                capabilities: { calendar: true, mail: false },
+                provider_verified: false,
+              }),
+              googleOAuthStart: () => of({
+                authorize_url: 'https://accounts.google.com/o/oauth2/v2/auth',
+                state: 'opaque-state',
+              }),
+              googleOAuthDisconnect: () => of({
+                status: 'disconnected',
+                provider_revoked: true,
+                retry_required: false,
+                warning: null,
+              }),
+            },
             observability: {
               listAuditEvents: () =>
                 of({
@@ -130,5 +147,28 @@ describe('ToolsComponent', () => {
     expect(legacySection?.textContent).toContain('Backlog administrativo sem owner')
     expect(legacySection?.textContent).toContain('Novos registros sem owner persistido sao rejeitados na origem')
     expect(legacySection?.querySelector('button')).toBeNull()
+  })
+
+  it('mostra o estado local Google sem alegar validação remota', () => {
+    const fixture = TestBed.createComponent(ToolsComponent)
+    fixture.detectChanges()
+    const section = fixture.nativeElement.querySelector('#google-integration') as HTMLElement
+
+    expect(section.textContent).toContain('Configuração local ativa')
+    expect(section.textContent).toContain('Agenda: autorizada')
+    expect(section.textContent).toContain('E-mail: não autorizado')
+    expect(section.textContent).toContain('validade no Google é verificada quando a capacidade é usada')
+  })
+
+  it('exige confirmação antes de desconectar o Google', () => {
+    const fixture = TestBed.createComponent(ToolsComponent)
+    const component = fixture.componentInstance
+    fixture.detectChanges()
+
+    component.requestGoogleDisconnect()
+    fixture.detectChanges()
+
+    expect(component.confirmGoogleDisconnect()).toBe(true)
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Confirmar desconexão')
   })
 })

@@ -38,6 +38,70 @@
     }
 
     <div class="tools-grid">
+      <section class="tools-card col-12" id="google-integration">
+        <div class="card-head">
+          <div>
+            <h3>Integração Google</h3>
+            <p class="muted">Agenda e e-mail com consentimentos separados e revogação sob seu controle.</p>
+          </div>
+          @if (!googleStatusLoading()) {
+            <ui-badge [variant]="googleStatus()?.local_status === 'configured' ? 'success' : googleStatus()?.local_status === 'inconsistent' ? 'warning' : 'neutral'">
+              {{ googleStatusLabel() }}
+            </ui-badge>
+          }
+        </div>
+
+        @if (googleStatusLoading()) {
+          <app-skeleton variant="text" [count]="2"></app-skeleton>
+        } @else if (googleError()) {
+          <div class="inline-alert" role="alert">
+            <span class="material-icons">error_outline</span>
+            <span>{{ googleError() }}</span>
+            <button ui-button size="sm" variant="ghost" (click)="loadGoogleStatus()">Tentar novamente</button>
+          </div>
+        } @else {
+          <div class="google-capabilities" aria-label="Permissões Google configuradas localmente">
+            <span class="chip" [class.ok]="googleStatus()?.capabilities?.calendar">
+              Agenda: {{ googleStatus()?.capabilities?.calendar ? 'autorizada' : 'não autorizada' }}
+            </span>
+            <span class="chip" [class.ok]="googleStatus()?.capabilities?.mail">
+              E-mail: {{ googleStatus()?.capabilities?.mail ? 'autorizado' : 'não autorizado' }}
+            </span>
+          </div>
+          <p class="muted">
+            Este estado confirma apenas a configuração protegida no Janus. A validade no Google é verificada quando a capacidade é usada.
+          </p>
+          <div class="action-row google-actions">
+            @if (!googleStatus()?.capabilities?.calendar) {
+              <button ui-button variant="default" (click)="connectGoogle('calendar')" [disabled]="!!googleAction()">
+                {{ googleAction() === 'calendar' ? 'Abrindo Google…' : 'Autorizar Agenda' }}
+              </button>
+            }
+            @if (!googleStatus()?.capabilities?.mail) {
+              <button ui-button variant="default" (click)="connectGoogle('mail')" [disabled]="!!googleAction()">
+                {{ googleAction() === 'mail' ? 'Abrindo Google…' : 'Autorizar E-mail' }}
+              </button>
+            }
+            @if (googleStatus()?.local_status !== 'disconnected') {
+              <button ui-button variant="ghost" (click)="requestGoogleDisconnect()" [disabled]="!!googleAction()">
+                Desconectar Google
+              </button>
+            }
+          </div>
+          @if (confirmGoogleDisconnect()) {
+            <div class="disconnect-confirm" role="alert">
+              <p>O Janus bloqueará Agenda e E-mail imediatamente e tentará revogar o token no Google.</p>
+              <div class="action-row">
+                <button ui-button variant="ghost" (click)="cancelGoogleDisconnect()" [disabled]="!!googleAction()">Cancelar</button>
+                <button ui-button variant="default" (click)="disconnectGoogle()" [disabled]="!!googleAction()">
+                  {{ googleAction() === 'disconnect' ? 'Desconectando…' : 'Confirmar desconexão' }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </section>
+
       <section class="tools-card col-8">
         <div class="card-head">
           <h3>Centro de aprovacoes</h3>

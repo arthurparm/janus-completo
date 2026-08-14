@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common'
-import { RouterLink } from '@angular/router'
+import { ActivatedRoute, RouterLink } from '@angular/router'
 import { forkJoin, of } from 'rxjs'
 import { catchError, map } from 'rxjs/operators'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop'
@@ -11,7 +11,8 @@ import {
   PendingAction,
   PendingActionLegacyResidueSummary,
   Tool,
-  ToolStats
+  ToolStats,
+  GoogleConnectionStatusResponse
 } from '../../models'
 import { UiBadgeComponent } from '../../shared/components/ui/ui-badge/ui-badge.component'
 import { UiButtonComponent } from '../../shared/components/ui/button/button.component'
@@ -48,11 +49,17 @@ export class ToolsComponent {
   private api = inject(BackendApiService)
   private auth = inject(AuthService)
   private destroyRef = inject(DestroyRef)
+  private route = inject(ActivatedRoute)
 
   readonly loading = signal(true)
   readonly actionLoading = signal(false)
   readonly error = signal('')
   readonly success = signal('')
+  readonly googleStatus = signal<GoogleConnectionStatusResponse | null>(null)
+  readonly googleStatusLoading = signal(true)
+  readonly googleError = signal('')
+  readonly googleAction = signal<'calendar' | 'mail' | 'disconnect' | null>(null)
+  readonly confirmGoogleDisconnect = signal(false)
   readonly riskFilter = signal<'all' | 'high' | 'medium' | 'low'>('all')
   readonly sourceFilter = signal<'all' | 'sql' | 'langgraph'>('all')
   readonly queryFilter = signal('')
@@ -148,11 +155,21 @@ export class ToolsComponent {
 
   constructor() {
     this.refresh()
+    const oauthResult = this.route.snapshot.queryParamMap.get('google_oauth')
+    if (oauthResult === 'connected') {
+      this.success.set('Integração Google salva. O acesso será validado no primeiro uso.')
+    } else if (oauthResult === 'error') {
+      this.googleError.set(
+        this.route.snapshot.queryParamMap.get('message') ||
+        'Não foi possível concluir a integração com o Google.'
+      )
+    }
   }
 
   refresh() {
     this.loading.set(true)
     this.error.set('')
+    this.loadGoogleStatus()
 
     const tools$ = this.api.tools.getTools()
       .pipe(
@@ -190,6 +207,103 @@ export class ToolsComponent {
           this.loading.set(false)
         }
       })
+  }
+
+  loadGoogleStatus() {
+    this.googleStatusLoading.set(true)
+    this.googleError.set('')
+    this.api.productivity.googleOAuthStatus()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err) => {
+          this.googleError.set(
+            this.extractApiErrorMessage(err, 'Falha ao consultar a integração Google.')
+          )
+          return of(null)
+        })
+      )
+      .subscribe((result) => {
+        this.googleStatus.set(result)
+        this.googleStatusLoading.set(false)
+      })
+  }
+
+  connectGoogle(scope: 'calendar' | 'mail') {
+    if (this.googleAction()) return
+    this.googleAction.set(scope)
+    this.googleError.set('')
+    this.api.productivity.googleOAuthStart(scope)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err) => {
+          this.googleError.set(
+            this.extractApiErrorMessage(err, 'Falha ao iniciar a autorização Google.')
+          )
+          this.googleAction.set(null)
+          return of(null)
+        })
+      )
+      .subscribe((result) => {
+        if (!result) return
+        if (!this.isTrustedGoogleAuthorizationUrl(result.authorize_url)) {
+          this.googleError.set('O backend retornou uma URL de autorização Google inválida.')
+          this.googleAction.set(null)
+          return
+        }
+        window.location.assign(result.authorize_url)
+      })
+  }
+
+  requestGoogleDisconnect() {
+    if (!this.googleAction()) this.confirmGoogleDisconnect.set(true)
+  }
+
+  cancelGoogleDisconnect() {
+    this.confirmGoogleDisconnect.set(false)
+  }
+
+  disconnectGoogle() {
+    if (this.googleAction()) return
+    this.googleAction.set('disconnect')
+    this.googleError.set('')
+    this.api.productivity.googleOAuthDisconnect()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        catchError((err) => {
+          this.googleError.set(
+            this.extractApiErrorMessage(err, 'Falha ao desconectar a integração Google.')
+          )
+          this.googleAction.set(null)
+          return of(null)
+        })
+      )
+      .subscribe((result) => {
+        if (!result) return
+        this.confirmGoogleDisconnect.set(false)
+        this.googleAction.set(null)
+        this.success.set(
+          result.retry_required
+            ? 'Acesso local bloqueado. A revogação no Google está pendente; tente desconectar novamente.'
+            : 'Integração Google desconectada.'
+        )
+        this.loadGoogleStatus()
+      })
+  }
+
+  googleStatusLabel(): string {
+    const status = this.googleStatus()?.local_status
+    if (status === 'configured') return 'Configuração local ativa'
+    if (status === 'inconsistent') return 'Acesso local bloqueado ou incompleto'
+    return 'Desconectado'
+  }
+
+  private isTrustedGoogleAuthorizationUrl(rawUrl: string): boolean {
+    try {
+      const url = new URL(rawUrl)
+      return url.protocol === 'https:' && url.hostname === 'accounts.google.com'
+    } catch {
+      return false
+    }
   }
 
   setRiskFilter(value: 'all' | 'high' | 'medium' | 'low') {
