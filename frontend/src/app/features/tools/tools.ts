@@ -54,6 +54,7 @@ export class ToolsComponent {
   readonly loading = signal(true)
   readonly actionLoading = signal(false)
   readonly error = signal('')
+  readonly loadFailures = signal<string[]>([])
   readonly success = signal('')
   readonly googleStatus = signal<GoogleConnectionStatusResponse | null>(null)
   readonly googleStatusLoading = signal(true)
@@ -169,24 +170,40 @@ export class ToolsComponent {
   refresh() {
     this.loading.set(true)
     this.error.set('')
+    this.loadFailures.set([])
     this.loadGoogleStatus()
 
     const tools$ = this.api.tools.getTools()
       .pipe(
         map((resp) => resp.tools || []),
-        catchError(() => of([]))
+        catchError(() => {
+          this.recordLoadFailure('catálogo de ferramentas')
+          return of([])
+        })
       )
     const toolStats$ = this.api.tools.getToolStats()
-      .pipe(catchError(() => of(null)))
+      .pipe(catchError(() => {
+        this.recordLoadFailure('métricas de ferramentas')
+        return of(null)
+      }))
     const auditEvents$ = this.api.observability.listAuditEvents({ limit: 100 })
       .pipe(
         map((resp) => resp.events || []),
-        catchError(() => of([]))
+        catchError(() => {
+          this.recordLoadFailure('trilha de auditoria')
+          return of([])
+        })
       )
     const pendingActions$ = this.api.observability.listPendingActions({ include_sql: true, include_graph: false })
-      .pipe(catchError(() => of([])))
+      .pipe(catchError(() => {
+        this.recordLoadFailure('aprovações pendentes')
+        return of([])
+      }))
     const legacyResidue$ = this.isAdmin()
-      ? this.api.observability.getPendingActionsLegacyResidue(10).pipe(catchError(() => of(null)))
+      ? this.api.observability.getPendingActionsLegacyResidue(10).pipe(catchError(() => {
+          this.recordLoadFailure('passivo histórico')
+          return of(null)
+        }))
       : of(null)
 
     forkJoin({
@@ -207,6 +224,15 @@ export class ToolsComponent {
           this.loading.set(false)
         }
       })
+  }
+
+  private recordLoadFailure(source: string) {
+    this.loadFailures.update((current) =>
+      current.includes(source) ? current : [...current, source]
+    )
+    this.error.set(
+      `Dados parciais: falha ao carregar ${this.loadFailures().join(', ')}. Os valores vazios dessas seções não foram confirmados pelo backend.`
+    )
   }
 
   loadGoogleStatus() {

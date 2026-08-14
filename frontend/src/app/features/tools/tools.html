@@ -26,7 +26,12 @@
     @if (error()) {
       <div class="inline-alert" role="alert">
         <span class="material-icons">error_outline</span>
-        {{ error() }}
+        <span>{{ error() }}</span>
+        @if (loadFailures().length) {
+          <button ui-button size="sm" variant="ghost" (click)="refresh()" [disabled]="loading()">
+            Tentar novamente
+          </button>
+        }
       </div>
     }
 

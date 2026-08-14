@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing'
 import { HttpClientTestingModule } from '@angular/common/http/testing'
 import { provideRouter } from '@angular/router'
-import { of } from 'rxjs'
+import { of, throwError } from 'rxjs'
+import { vi } from 'vitest'
 
 import { AuthService } from '../../core/auth/auth.service'
 import { BackendApiService } from '../../services/backend-api.service'
@@ -170,5 +171,18 @@ describe('ToolsComponent', () => {
 
     expect(component.confirmGoogleDisconnect()).toBe(true)
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Confirmar desconexão')
+  })
+
+  it('não apresenta falha do backend como catálogo realmente vazio', () => {
+    const api = TestBed.inject(BackendApiService)
+    vi.spyOn(api.tools, 'getTools').mockReturnValue(
+      throwError(() => new Error('backend unavailable'))
+    )
+    const fixture = TestBed.createComponent(ToolsComponent)
+    fixture.detectChanges()
+
+    expect(fixture.componentInstance.loadFailures()).toContain('catálogo de ferramentas')
+    expect(fixture.componentInstance.error()).toContain('Os valores vazios dessas seções não foram confirmados')
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Tentar novamente')
   })
 })
