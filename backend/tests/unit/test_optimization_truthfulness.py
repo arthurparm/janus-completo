@@ -99,10 +99,12 @@ async def test_core_planning_cycle_never_claims_or_runs_application() -> None:
         evidence={},
     )
     improvement = self_optimization.PlannedImprovement(
-        improvement_type=self_optimization.ImprovementType.ADD_CACHING,
+        improvement_type=self_optimization.ImprovementType.INVESTIGATE,
         target_component="tool",
         description="planejar cache",
-        expected_impact="reduzir latência",
+        hypothesis="cache pode ajudar, ainda sem confirmação",
+        evidence={"avg_response_time": 3.0},
+        success_criteria=["comparar baseline e amostra posterior"],
         implementation_steps=["medir"],
         risk_level=0.4,
     )
@@ -117,7 +119,122 @@ async def test_core_planning_cycle_never_claims_or_runs_application() -> None:
     assert result["success"] is True
     assert result["improvements_planned"] == 1
     assert result["improvements_applied"] == 0
+    assert result["plans"] == [improvement.to_dict()]
+    assert result["plans"][0]["requires_human_approval"] is True
+    assert "70%" not in str(result["plans"])
     cycle.executor.execute_improvement.assert_not_awaited()
+
+    response = optimization_endpoint.OptimizationCycleResponse(**result)
+    assert response.plans[0].hypothesis == "cache pode ajudar, ainda sem confirmação"
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_planner_covers_every_detected_issue_without_invented_percentages() -> None:
+    metrics = self_optimization.SystemMetrics(
+        avg_response_time=3.0,
+        error_rate=0.25,
+        tool_success_rate=0.75,
+        memory_usage_mb=512.0,
+        active_tools_count=2,
+    )
+    issues = [
+        self_optimization.DetectedIssue(
+            issue_type=issue_type,
+            severity=0.8,
+            description=issue_type.value,
+            affected_component="component",
+            evidence={"observed": True},
+        )
+        for issue_type in self_optimization.IssueType
+    ]
+
+    plans = await self_optimization.ImprovementPlanner().plan_improvements(
+        issues, metrics
+    )
+
+    assert len(plans) == len(issues)
+    assert all(plan.evidence["observed"] is True for plan in plans)
+    assert all(plan.success_criteria for plan in plans)
+    assert all(plan.requires_human_approval is True for plan in plans)
+    assert not any("%" in plan.hypothesis for plan in plans)
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_cycle_without_issues_reports_sample_not_global_health() -> None:
+    cycle = self_optimization.SelfOptimizationCycle()
+    metrics = self_optimization.SystemMetrics(
+        avg_response_time=0.2,
+        error_rate=0.0,
+        tool_success_rate=1.0,
+        memory_usage_mb=128.0,
+        active_tools_count=1,
+    )
+    cycle.monitor.collect_metrics = AsyncMock(return_value=metrics)
+    cycle.monitor.detect_issues = Mock(return_value=[])
+    cycle.monitor._calculate_health_score = Mock(return_value=1.0)
+
+    result = await cycle.run_cycle(enable_auto_execution=False)
+
+    assert result["plans"] == []
+    assert result["improvements_planned"] == 0
+    assert result["message"] == "Nenhum problema detectado na amostra atual."
+    assert "saudável" not in result["message"].lower()
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_planning_endpoint_returns_observable_plan_contract() -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    service = type(
+        "Service",
+        (),
+        {
+            "run_optimization_cycle": AsyncMock(
+                return_value={
+                    "success": True,
+                    "issues_detected": 1,
+                    "improvements_planned": 1,
+                    "improvements_applied": 0,
+                    "elapsed_seconds": 0.01,
+                    "plans": [
+                        {
+                            "improvement_type": "investigate",
+                            "target_component": "tool",
+                            "description": "Investigar latência",
+                            "hypothesis": "A causa ainda precisa ser confirmada.",
+                            "evidence": {"avg_duration": 3.0},
+                            "success_criteria": ["Comparar baseline e nova amostra."],
+                            "implementation_steps": ["Medir"],
+                            "risk_level": 0.4,
+                            "priority_score": 0.68,
+                            "requires_human_approval": True,
+                        }
+                    ],
+                    "message": "Planos gerados para revisão humana; nenhuma melhoria foi aplicada.",
+                }
+            )
+        },
+    )()
+    app = FastAPI()
+    app.include_router(optimization_endpoint.router, prefix="/optimization")
+    app.dependency_overrides[
+        optimization_endpoint.get_optimization_service
+    ] = lambda: service
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/optimization/run-cycle",
+            json={"enable_auto_execution": False, "max_improvements": 1},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["improvements_applied"] == 0
+    assert body["plans"][0]["evidence"] == {"avg_duration": 3.0}
+    assert body["plans"][0]["requires_human_approval"] is True
 
 
 def test_repository_status_reports_operational_state(

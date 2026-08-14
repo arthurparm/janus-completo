@@ -200,3 +200,17 @@ collectors are reported as `insufficient_data` or `unavailable`; they never
 become a healthy result. The legacy `fun_fact` response field remains as a
 deprecated `null` compatibility field and no generated achievement claim is
 returned.
+
+## 15. Evidence-backed Optimization Planning
+
+`POST /api/v1/optimization/run-cycle` is a planning operation. With
+`enable_auto_execution=false`, it collects real tool telemetry, detects issues and
+returns every bounded plan with its observed evidence, unconfirmed hypothesis,
+measurable success criteria, risk score, ordered diagnostic steps and mandatory
+human-review flag. A plan never becomes proof of impact: the response always reports
+`improvements_applied=0` and does not publish estimated percentage gains.
+
+If the current sample contains no detected issue, the endpoint reports that bounded
+fact instead of claiming global system health. Missing telemetry returns `503`; asking
+for automatic execution returns `501` until an authorized, audited and post-condition-
+verified adapter exists.

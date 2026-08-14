@@ -67,6 +67,7 @@ class ImprovementType(Enum):
     REDUCE_COMPLEXITY = "reduce_complexity"
     FIX_CONFIGURATION = "fix_configuration"
     REFACTOR_LOGIC = "refactor_logic"
+    INVESTIGATE = "investigate"
 
 
 # ==================== DATACLASSES ====================
@@ -105,9 +106,28 @@ class PlannedImprovement:
     improvement_type: ImprovementType
     target_component: str
     description: str
-    expected_impact: str
+    hypothesis: str
+    evidence: dict[str, Any]
+    success_criteria: list[str]
     implementation_steps: list[str]
     risk_level: float  # 0.0 (seguro) a 1.0 (arriscado)
+    priority_score: float = 0.0
+    requires_human_approval: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializa o plano sem expor enums ou objetos internos."""
+        return {
+            "improvement_type": self.improvement_type.value,
+            "target_component": self.target_component,
+            "description": self.description,
+            "hypothesis": self.hypothesis,
+            "evidence": self.evidence,
+            "success_criteria": self.success_criteria,
+            "implementation_steps": self.implementation_steps,
+            "risk_level": self.risk_level,
+            "priority_score": self.priority_score,
+            "requires_human_approval": self.requires_human_approval,
+        }
 
 
 @dataclass
@@ -135,7 +155,7 @@ class SystemMonitor:
     - Padrões de falha
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._metrics_history: list[SystemMetrics] = []
         self._max_history = 100  # Últimas 100 medições
 
@@ -182,7 +202,7 @@ class SystemMonitor:
             try:
                 import os
 
-                import psutil  # type: ignore
+                import psutil
 
                 process = psutil.Process(os.getpid())
                 memory_usage_mb = round(process.memory_info().rss / (1024**2), 2)
@@ -245,7 +265,7 @@ class SystemMonitor:
         Returns:
             Lista de problemas detectados
         """
-        issues = []
+        issues: list[DetectedIssue] = []
 
         if not self._metrics_history:
             return issues
@@ -338,7 +358,7 @@ class SystemMonitor:
         try:
             import os
 
-            import psutil  # type: ignore
+            import psutil
 
             vm = psutil.virtual_memory()
             process = psutil.Process(os.getpid())
@@ -401,83 +421,170 @@ class ImprovementPlanner:
         Returns:
             Lista de melhorias planejadas
         """
-        improvements = []
+        improvements: list[PlannedImprovement] = []
 
         for issue in issues:
+            evidence = {
+                **issue.evidence,
+                "issue_type": issue.issue_type.value,
+                "issue_severity": issue.severity,
+                "system_error_rate": metrics.error_rate,
+                "system_avg_response_time": metrics.avg_response_time,
+                "system_memory_usage_mb": metrics.memory_usage_mb,
+            }
             if issue.issue_type == IssueType.TOOL_FAILURE:
-                # Ferramenta falhando -> investigar e ajustar configuração
                 improvements.append(
                     PlannedImprovement(
-                        improvement_type=ImprovementType.FIX_CONFIGURATION,
+                        improvement_type=ImprovementType.INVESTIGATE,
                         target_component=issue.affected_component,
-                        description=f"Ajustar configuração da ferramenta '{issue.affected_component}'",
-                        expected_impact="Reduzir taxa de falha em 50%",
+                        description=f"Investigar falhas da ferramenta '{issue.affected_component}'",
+                        hypothesis=(
+                            "Configuração, timeout ou argumentos podem explicar as falhas; "
+                            "a causa ainda não foi confirmada."
+                        ),
+                        evidence=evidence,
+                        success_criteria=[
+                            "Identificar causa raiz reproduzível com erro e entrada redigidos.",
+                            "Validar a correção em novas chamadas sem elevar a taxa de erro do sistema.",
+                        ],
                         implementation_steps=[
                             f"Analisar últimas falhas de '{issue.affected_component}'",
                             "Identificar causa raiz (timeout, parâmetros incorretos, etc)",
-                            "Ajustar configuração apropriadamente",
-                            "Validar com testes",
+                            "Propor correção sujeita a revisão humana",
+                            "Validar com testes e telemetria posterior",
                         ],
-                        risk_level=0.3,  # Baixo risco
+                        risk_level=0.3,
                     )
                 )
 
             elif issue.issue_type == IssueType.SLOW_RESPONSE:
-                # Ferramenta lenta -> adicionar caching ou otimizar
                 improvements.append(
                     PlannedImprovement(
-                        improvement_type=ImprovementType.ADD_CACHING,
+                        improvement_type=ImprovementType.INVESTIGATE,
                         target_component=issue.affected_component,
-                        description=f"Adicionar caching para '{issue.affected_component}'",
-                        expected_impact="Reduzir tempo de resposta em 70%",
-                        implementation_steps=[
-                            f"Identificar resultados cacheaveis de '{issue.affected_component}'",
-                            "Implementar cache LRU com TTL apropriado",
-                            "Validar que cache não afeta correção",
-                            "Monitorar hit rate",
+                        description=f"Investigar latência de '{issue.affected_component}'",
+                        hypothesis=(
+                            "Trabalho repetido, dependência lenta ou falta de cache podem explicar "
+                            "a latência; nenhuma causa foi confirmada."
+                        ),
+                        evidence=evidence,
+                        success_criteria=[
+                            "Obter perfil reproduzível com baseline e principal gargalo.",
+                            "Demonstrar redução de latência em amostra posterior sem alterar resultados.",
                         ],
-                        risk_level=0.4,  # Risco moderado-baixo
+                        implementation_steps=[
+                            f"Medir operações internas de '{issue.affected_component}'",
+                            "Classificar gargalo antes de escolher cache ou refatoração",
+                            "Propor mudança sujeita a revisão humana",
+                            "Comparar baseline e amostra posterior",
+                        ],
+                        risk_level=0.4,
                     )
                 )
 
             elif issue.issue_type == IssueType.HIGH_ERROR_RATE:
-                # Taxa de erro alta -> refatorar lógica
                 improvements.append(
                     PlannedImprovement(
-                        improvement_type=ImprovementType.REFACTOR_LOGIC,
-                        target_component=issue.affected_component,
-                        description="Refatorar lógica de tratamento de erros",
-                        expected_impact="Reduzir taxa de erro geral em 30%",
+                        improvement_type=ImprovementType.INVESTIGATE,
+                        target_component="system",
+                        description="Investigar aumento da taxa de erro",
+                        hypothesis=(
+                            "Uma ou mais classes de falha recorrente podem explicar a taxa observada."
+                        ),
+                        evidence=evidence,
+                        success_criteria=[
+                            "Identificar classes de erro responsáveis e sua frequência.",
+                            "Comprovar redução da taxa de erro em nova janela com volume informado.",
+                        ],
                         implementation_steps=[
                             "Analisar padrões de erro mais comuns",
-                            "Implementar retry logic com backoff",
-                            "Melhorar validação de inputs",
-                            "Adicionar fallbacks apropriados",
+                            "Separar causas transitórias de defeitos determinísticos",
+                            "Propor correção específica sujeita a revisão humana",
+                            "Comparar a taxa de erro antes e depois",
                         ],
-                        risk_level=0.6,  # Risco moderado
+                        risk_level=0.6,
                     )
                 )
 
             elif issue.issue_type == IssueType.PERFORMANCE_DEGRADATION:
-                # Performance degradada -> otimizar componentes
                 improvements.append(
                     PlannedImprovement(
-                        improvement_type=ImprovementType.REDUCE_COMPLEXITY,
+                        improvement_type=ImprovementType.INVESTIGATE,
                         target_component=issue.affected_component,
-                        description="Otimizar componentes com performance degradada",
-                        expected_impact="Restaurar performance ao nível histórico",
+                        description="Investigar degradação de performance",
+                        hypothesis=(
+                            "Uma regressão recente pode explicar a diferença entre a amostra atual "
+                            "e o baseline histórico."
+                        ),
+                        evidence=evidence,
+                        success_criteria=[
+                            "Localizar o gargalo com perfil e baseline reproduzíveis.",
+                            "Demonstrar que a amostra posterior não excede o baseline histórico validado.",
+                        ],
                         implementation_steps=[
                             "Profiling para identificar gargalos",
-                            "Otimizar queries/operações mais pesadas",
-                            "Reduzir complexidade algorítmica onde possível",
-                            "Adicionar índices/otimizações de BD",
+                            "Relacionar a regressão a mudança ou dependência específica",
+                            "Propor correção sujeita a revisão humana",
+                            "Executar comparação antes/depois",
                         ],
-                        risk_level=0.5,  # Risco moderado
+                        risk_level=0.5,
                     )
                 )
 
-        # Ordena por severidade do problema e risco da solução
-        improvements.sort(key=lambda imp: self._priority_score(imp, issues), reverse=True)
+            elif issue.issue_type == IssueType.MEMORY_LEAK:
+                improvements.append(
+                    PlannedImprovement(
+                        improvement_type=ImprovementType.INVESTIGATE,
+                        target_component="system",
+                        description="Investigar crescimento persistente de memória",
+                        hypothesis=(
+                            "Retenção não intencional pode explicar o crescimento observado; "
+                            "cinco amostras ascendentes ainda não provam vazamento."
+                        ),
+                        evidence=evidence,
+                        success_criteria=[
+                            "Reproduzir crescimento com carga e horizonte documentados.",
+                            "Confirmar estabilização da memória após a correção proposta.",
+                        ],
+                        implementation_steps=[
+                            "Coletar perfil de alocações em ambiente controlado",
+                            "Identificar objetos ou caches responsáveis pela retenção",
+                            "Propor correção sujeita a revisão humana",
+                            "Repetir a carga e comparar a curva de memória",
+                        ],
+                        risk_level=0.5,
+                    )
+                )
+
+            elif issue.issue_type == IssueType.RESOURCE_EXHAUSTION:
+                improvements.append(
+                    PlannedImprovement(
+                        improvement_type=ImprovementType.INVESTIGATE,
+                        target_component="system",
+                        description="Investigar exaustão de recursos",
+                        hypothesis=(
+                            "Carga, retenção ou dimensionamento podem explicar o limite observado."
+                        ),
+                        evidence=evidence,
+                        success_criteria=[
+                            "Identificar recurso, consumidor e carga associados ao limite.",
+                            "Validar margem operacional posterior sem relaxar limites de segurança.",
+                        ],
+                        implementation_steps=[
+                            "Correlacionar consumo com carga e processos ativos",
+                            "Distinguir pico transitório de crescimento persistente",
+                            "Propor mitigação sujeita a revisão humana",
+                            "Validar consumo e margem após a mudança",
+                        ],
+                        risk_level=0.7,
+                    )
+                )
+
+        for improvement in improvements:
+            improvement.priority_score = round(
+                self._priority_score(improvement, issues), 4
+            )
+        improvements.sort(key=lambda imp: imp.priority_score, reverse=True)
 
         return improvements
 
@@ -526,11 +633,10 @@ class SelfOptimizationCycle:
     1. MONITOR: Coleta métricas do sistema
     2. DETECT: Identifica problemas e gargalos
     3. PLAN: Planeja melhorias específicas
-    4. EXECUTE: Aplica melhorias de forma autônoma
-    5. LEARN: Avalia resultado e atualiza conhecimento
+    4. REVIEW: Expõe propostas para revisão humana
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.monitor = SystemMonitor()
         self.planner = ImprovementPlanner()
         self.executor = ImprovementExecutor()
@@ -560,13 +666,19 @@ class SelfOptimizationCycle:
             logger.info("log_info", message=f"[SelfOptimization] Problemas detectados: {len(issues)}")
 
             if not issues:
-                logger.info("[SelfOptimization] ✓ Sistema saudável - nenhuma melhoria necessária")
+                elapsed = time.perf_counter() - cycle_start
+                logger.info(
+                    "[SelfOptimization] Nenhum problema detectado na amostra atual"
+                )
                 _OPTIMIZATION_CYCLES.labels("success_no_issues").inc()
                 return {
                     "success": True,
                     "issues_detected": 0,
+                    "improvements_planned": 0,
                     "improvements_applied": 0,
-                    "message": "Sistema saudável",
+                    "elapsed_seconds": round(elapsed, 2),
+                    "plans": [],
+                    "message": "Nenhum problema detectado na amostra atual.",
                 }
 
             # 3. PLAN
@@ -592,6 +704,8 @@ class SelfOptimizationCycle:
                 "improvements_planned": len(improvements),
                 "improvements_applied": 0,
                 "elapsed_seconds": round(elapsed, 2),
+                "plans": [improvement.to_dict() for improvement in improvements],
+                "message": "Planos gerados para revisão humana; nenhuma melhoria foi aplicada.",
             }
 
         except Exception as e:
@@ -599,7 +713,7 @@ class SelfOptimizationCycle:
             _OPTIMIZATION_CYCLES.labels("error").inc()
             raise
 
-    async def run_continuous(self, interval_seconds: int = 300):
+    async def run_continuous(self, interval_seconds: int = 300) -> None:
         """
         Executa ciclo de auto-otimização continuamente.
 
@@ -614,7 +728,7 @@ class SelfOptimizationCycle:
             await self.run_cycle()
             await asyncio.sleep(interval_seconds)
 
-    def stop(self):
+    def stop(self) -> None:
         """Para execução contínua."""
         self._running = False
         logger.info("[SelfOptimization] Parando execução contínua")

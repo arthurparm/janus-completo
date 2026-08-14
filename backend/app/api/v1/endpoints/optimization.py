@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -21,13 +22,27 @@ class OptimizationCycleRequest(BaseModel):
     max_improvements: int | None = Field(None, ge=1, le=10)
 
 
+class PlannedImprovementResponse(BaseModel):
+    improvement_type: str
+    target_component: str
+    description: str
+    hypothesis: str
+    evidence: dict[str, Any]
+    success_criteria: list[str]
+    implementation_steps: list[str]
+    risk_level: float = Field(ge=0.0, le=1.0)
+    priority_score: float
+    requires_human_approval: bool
+
+
 class OptimizationCycleResponse(BaseModel):
     success: bool
-    issues_detected: int | None = None
-    improvements_planned: int | None = None
-    improvements_applied: int | None = None
-    elapsed_seconds: float | None = None
-    message: str | None = None
+    issues_detected: int
+    improvements_planned: int
+    improvements_applied: int
+    elapsed_seconds: float
+    plans: list[PlannedImprovementResponse] = Field(default_factory=list)
+    message: str
 
 
 class SystemHealthResponse(BaseModel):
@@ -53,11 +68,11 @@ class SystemAnalysisResponse(BaseModel):
     score: float
     issues_count: int
     issues_by_type: dict[str, int]
-    metrics_snapshot: dict
-    trend: dict
+    metrics_snapshot: dict[str, Any]
+    trend: dict[str, Any]
     series: dict[str, list[float]]
     insights: list[str]
-    details: dict | None = None
+    details: dict[str, Any] | None = None
 
 
 # --- Endpoints ---
@@ -76,7 +91,7 @@ class SystemAnalysisResponse(BaseModel):
 async def run_optimization_cycle(
     request: OptimizationCycleRequest,
     service: OptimizationService = Depends(get_optimization_service),
-):
+) -> OptimizationCycleResponse:
     """Delega a execução do ciclo de auto-otimização para o OptimizationService."""
     # OptimizationServiceError é tratado pelo exception handler central -> 500
     try:
@@ -95,7 +110,9 @@ async def run_optimization_cycle(
 @router.get(
     "/health", response_model=SystemHealthResponse, summary="Verifica a saúde geral do sistema"
 )
-async def get_system_health(service: OptimizationService = Depends(get_optimization_service)):
+async def get_system_health(
+    service: OptimizationService = Depends(get_optimization_service),
+) -> SystemHealthResponse:
     """Delega a coleta de métricas de saúde para o OptimizationService."""
     health_data = await service.get_system_health()
     return SystemHealthResponse(**health_data)
@@ -110,7 +127,7 @@ async def get_detected_issues(
     service: OptimizationService = Depends(get_optimization_service),
     severity: str | None = None,
     category: str | None = None,
-):
+) -> list[DetectedIssueResponse]:
     """Delega a detecção e filtragem de problemas para o OptimizationService."""
     issues = service.get_detected_issues(severity, category)
     return [
@@ -128,16 +145,18 @@ async def get_detected_issues(
 @router.get("/metrics/history", summary="Retorna o histórico de métricas de saúde")
 async def get_metrics_history(
     limit: int = 20, service: OptimizationService = Depends(get_optimization_service)
-):
+) -> dict[str, Any]:
     """Delega a busca do histórico de métricas para o OptimizationService."""
     history = await service.get_metrics_history(limit)
     return {"count": len(history), "metrics": [asdict(h) for h in history]}
 
 
 @router.get("/status", summary="Status do módulo de auto-otimização")
-async def get_optimization_status(service: OptimizationService = Depends(get_optimization_service)):
+async def get_optimization_status(
+    service: OptimizationService = Depends(get_optimization_service),
+) -> dict[str, Any]:
     """Delega a busca de status do módulo para o OptimizationService."""
-    return service.get_status()
+    return cast(dict[str, Any], service.get_status())
 
 
 @router.post(
@@ -149,7 +168,7 @@ async def analyze_system(
     analysis_type: str = "performance",
     detailed: bool = True,
     service: OptimizationService = Depends(get_optimization_service),
-):
+) -> SystemAnalysisResponse:
     """Delega a análise agregada do sistema para o OptimizationService."""
     result = await service.analyze_system(analysis_type=analysis_type, detailed=detailed)
     return SystemAnalysisResponse(**result)
