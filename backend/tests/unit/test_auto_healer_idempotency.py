@@ -159,7 +159,6 @@ async def test_start_auto_healer_is_idempotent_for_running_task(monkeypatch):
     monkeypatch.setattr(auto_healer, "get_health_monitor", lambda: DummyMonitor())
     monkeypatch.setattr(auto_healer, "_heal_llm_router", noop)
     monkeypatch.setattr(auto_healer, "_maybe_trigger_meta_agent", noop)
-    monkeypatch.setattr(auto_healer, "_heal_with_codex", noop)
 
     task1 = await auto_healer.start_auto_healer(interval_seconds=3600)
     task2 = await auto_healer.start_auto_healer(interval_seconds=1)

@@ -65,11 +65,6 @@ export class ToolsComponent {
     legacyResidue: null
   })
 
-  readonly codexTools = computed(() => this.data().tools.filter((tool) => tool.name?.startsWith('codex_')))
-  readonly codexEvents = computed(() => {
-    const events = this.data().auditEvents || []
-    return events.filter((ev) => String(ev.tool || '').startsWith('codex_')).slice(0, 12)
-  })
   readonly criticalAuditEvents = computed(() => {
     const events = this.data().auditEvents || []
     return events
@@ -83,17 +78,6 @@ export class ToolsComponent {
         )
       })
       .slice(0, 12)
-  })
-  readonly codexUsage = computed(() => {
-    const usage = this.data().toolStats?.tool_usage || {}
-    const entries = Object.entries(usage).filter(([name]) => name.startsWith('codex_'))
-    const total = entries.reduce((sum, [, stats]) => sum + (stats?.total || 0), 0)
-    const success = entries.reduce((sum, [, stats]) => sum + (stats?.success || 0), 0)
-    const avgDuration = entries.length
-      ? Math.round(entries.reduce((sum, [, stats]) => sum + (stats?.avg_duration || 0), 0) / entries.length * 1000)
-      : 0
-    const successRate = total > 0 ? Math.round((success / total) * 100) : 0
-    return { total, success, successRate, avgDuration }
   })
   readonly pendingCount = computed(() => this.data().pendingActions.length)
   readonly legacyResidueSummary = computed(() => this.data().legacyResidue)

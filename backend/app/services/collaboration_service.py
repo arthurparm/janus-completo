@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -228,7 +228,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("professor", "review", "professor_agent", "curator"):
             queue = QueueName.TASKS_AGENT_PROFESSOR.value
@@ -236,7 +236,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("sandbox", "tester", "test"):
             queue = QueueName.TASKS_AGENT_SANDBOX.value
@@ -244,7 +244,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("red_team", "security", "auditor"):
             queue = QueueName.TASKS_AGENT_RED_TEAM.value
@@ -252,7 +252,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("blue_team", "defense", "remediator"):
             queue = QueueName.TASKS_AGENT_BLUE_TEAM.value
@@ -260,7 +260,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("security_judge", "judge", "security_gate"):
             queue = QueueName.TASKS_AGENT_SECURITY_JUDGE.value
@@ -268,7 +268,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("thinker", "thinker_agent", "architect", "reasoning"):
             queue = QueueName.TASKS_AGENT_THINKER.value
@@ -276,7 +276,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("debate_proponent", "proponent"):
             queue = QueueName.TASKS_AGENT_DEBATE_PROPONENT.value
@@ -284,7 +284,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("debate_critic", "critic"):
             queue = QueueName.TASKS_AGENT_DEBATE_CRITIC.value
@@ -292,7 +292,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         elif role in ("knowledge_consolidator", "knowledge", "consolidator", "librarian", "memory"):
             # Publicação especial para o pipeline de consolidação
@@ -320,7 +320,7 @@ class CollaborationService:
                 "origin": "router",
                 "source_agent": origin_agent,
                 "status": task_state.status,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             msg = TaskMessage(
                 task_id=task_state.task_id,
@@ -331,7 +331,7 @@ class CollaborationService:
                     "experience_content": content,
                     "metadata": meta,
                 },
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
         else:
             queue = QueueName.TASKS_ROUTER.value
@@ -339,7 +339,7 @@ class CollaborationService:
                 task_id=task_state.task_id,
                 task_type="task_state",
                 payload={"task_state": task_state.model_dump()},
-                timestamp=datetime.utcnow().timestamp(),
+                timestamp=datetime.now(UTC).timestamp(),
             ).model_dump_json()
 
         broker = await get_broker()

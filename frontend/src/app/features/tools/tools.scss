@@ -83,21 +83,12 @@
   grid-column: span 12;
 }
 
-.col-4 {
-  grid-column: span 4;
+.col-8 {
+  grid-column: span 8;
 }
 
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-
-  strong {
-    display: block;
-    font-family: $font-display;
-    font-size: 1.05rem;
-    color: $color-text-primary;
-  }
+.col-4 {
+  grid-column: span 4;
 }
 
 .chip-row {
@@ -116,11 +107,6 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-family: $font-mono;
-}
-
-.chip.subtle {
-  border-color: rgba(255, 255, 255, 0.08);
-  color: $color-text-muted;
 }
 
 .chip.danger {
@@ -252,7 +238,8 @@
 }
 
 @media (max-width: 1100px) {
-  .col-4 {
+  .col-4,
+  .col-8 {
     grid-column: span 12;
   }
 }

@@ -890,3 +890,46 @@ Adicionado `_extract_langgraph_pending_action_details(state)` que le `current_wo
 - Pro: o Approval Center agora mostra risco calculado a partir de dados reais do state para acoes LangGraph, igual ao que ja acontecia para acoes SQL — paridade entre as duas origens.
 - Pro: nenhuma mudanca de contrato publico que quebre consumidores existentes — `tool_name`/`args_json` ja existiam no `PendingActionDTO`, so eram sempre `None` para `source="langgraph"`.
 - Contra: a fidelidade da avaliacao de risco para o caminho LangGraph continua limitada a heuristica de palavras-chave sobre o texto livre do `worker_input` (mesma limitacao que o caminho SQL ja tinha para `args_json` livre) — nao ha estrutura de tool call real nesse grafo para uma avaliacao mais precisa.
+
+## DEC-036 - Removido card "Codex" morto do frontend e fila fantasma `janus.tasks.codex` do auto-healer; corrigido DeprecationWarning de `datetime.utcnow()` nos arquivos tocados
+
+### Contexto
+
+Continuando o ataque a ferramentas parciais, investiguei o card "Codex" em `frontend/src/app/features/tools/tools.ts`/`.html`, identificado anteriormente pelo agente de pesquisa como sempre mostrando 0 execucoes. Confirmei a causa raiz: `codexTools`/`codexUsage`/`codexEvents` filtravam por `name.startsWith('codex_')`, mas `APPROVED_TOOLS` (`backend/app/core/tools/safe_tools.py`) so tem 7 ferramentas reais, nenhuma com esse prefixo — busca exaustiva confirmou que nenhuma ferramenta `codex_exec`/`codex_review`/`codex_login`/`codex_fix` e de fato despachavel em lugar nenhum do backend.
+
+Investigando a extensao do problema, encontrei um efeito colateral ativo (nao so codigo morto): `backend/app/core/monitoring/auto_healer.py` reconciliava a cada ciclo (`_HEAL_INTERVAL`, default 30s) a politica de uma fila RabbitMQ chamada `janus.tasks.codex` (`QueueName.TASKS_CODEX_WORKER`), incluindo `declare_queue` quando havia divergencia — ou seja, o auto-healer estava ativamente criando/mantendo uma fila fantasma no broker, sem nenhum produtor ou consumidor real, indefinidamente. Havia tambem uma funcao placeholder `_heal_with_codex` (`pass` puro, "Implementacao futura") que nunca era chamada por nada.
+
+Distinto disso, `backend/app/config.py` (`TOOL_DAILY_QUOTAS` com `codex_exec`/`codex_review`/`jules_new`/`jules_pull`, `EXTERNAL_CLI_ENABLED=False`) e as listas de veto em `policy_engine.py`/`mas_validator.py` sao configuracao/guarda de seguranca inertes para uma feature de CLI externo (Codex/Jules) desabilitada por padrao e nunca implementada — nao causam efeito colateral ativo nem aparecem na UI como "funcionando". Deixados intactos: sao scaffolding legitimo para uma feature futura opcional, e remover entradas de uma lista de veto de seguranca e um risco desproporcional ao beneficio.
+
+Rodando a suite de testes durante a validacao, o resumo de warnings do pytest mostrou `DeprecationWarning: datetime.datetime.utcnow() is deprecated` em `backend/app/models/schemas.py` e `backend/app/services/collaboration_service.py` — proibido por regra explicita do usuario (memoria `feedback-no-deprecation-warnings`).
+
+### Decisao
+
+1. Frontend: removidos os computed signals `codexTools`/`codexEvents`/`codexUsage` (o ultimo nem era referenciado no template — morto desde a criacao) e a secao `<section class="tools-card col-4">Codex</section>` inteira do template. O card "Centro de aprovacoes" (que tinha mais conteudo: filtros, busca, lista) passou de `col-4` para `col-8` para preencher a grade de 12 colunas sem deixar vazio — a funcao de mostrar ferramentas reais ja e coberta pelo card existente "Ferramentas registradas" (`data().tools`), que nunca foi fake. Removidas as classes CSS `.metric-grid` e `.chip.subtle`, orfas apos a remocao.
+2. Backend: removida a entrada `QueueName.TASKS_CODEX_WORKER` do enum (`schemas.py`) e da lista de reconciliacao do auto-healer; removida a funcao placeholder `_heal_with_codex` (nunca chamada).
+3. Corrigido `datetime.utcnow()` -> `datetime.now(UTC)` nos 2 arquivos que geraram o warning durante esta sessao (`schemas.py`: 2 usos com `.timestamp()`; `collaboration_service.py`: 11 usos com `.timestamp()` + 1 com `.isoformat()`). Ambos os usos com `.timestamp()` sao estritamente uma correcao, nao so cosmetica: `datetime.utcnow().timestamp()` calcula o epoch assumindo que o datetime naive esta no fuso horario LOCAL do sistema (nao UTC) — um bug latente de valor incorreto em sistemas fora de UTC, corrigido pela troca para datetime aware.
+4. As ~40 outras ocorrencias de `datetime.utcnow()` no backend (repositories, workers, services que eu nao toquei nesta sessao) foram deliberadamente NAO alteradas em massa e sinalizadas como tarefa separada (`spawn_task`): trocar naive por aware pode quebrar comparacoes com datetimes vindos de colunas Postgres sem timezone, e mudar o formato de `.isoformat()` em campos serializados — risco real que exige validacao arquivo a arquivo, nao um find-replace as cegas dentro de um ciclo focado em outra coisa.
+
+### Alternativas Consideradas
+
+- Substituir o card "Codex" por um card novo com dados reais: rejeitado — o card "Ferramentas registradas" ja cobre essa funcao de forma generica e correta; um card adicional seria redundante.
+- Remover tambem `TOOL_DAILY_QUOTAS`/veto lists relacionados a Codex/Jules no backend: rejeitado nesta rodada — sao inertes (sem efeito colateral ativo, sem exposicao na UI) e misturar remocao de scaffolding de feature futura com guarda de seguranca em um mesmo diff aumenta risco sem beneficio claro.
+- Corrigir as ~40 ocorrencias restantes de `datetime.utcnow()` nesta mesma sessao: rejeitado — escopo desproporcional ao card Codex, com risco real de regressao (naive vs aware) que merece validacao dedicada; sinalizado como tarefa separada.
+
+### Validacao
+
+- `ng build`: bundle gerado sem erros; chunk `tools` gerado normalmente.
+- `vitest run tools.spec.ts`: 3/3 passam (nenhum teste dependia de `codexTools`/`codexUsage`/`codexEvents`; o fixture `codex_read_file` em audit events e apenas dado de preenchimento nao relacionado ao card).
+- `pytest backend/tests/unit/test_auto_healer_idempotency.py`: 6/6 passam apos remover o monkeypatch de `_heal_with_codex` (funcao deletada).
+- `pytest backend/tests/unit -k "healer or schemas or queue"`: 14 passed, 1 skipped (pre-existente, nao relacionado).
+- `pytest backend/tests/unit/test_autonomy_service_enqueue.py backend/tests/unit/test_security_workflow_contracts.py`: 9 passed; resumo de warnings do pytest confirmado sem `datetime.datetime.utcnow() is deprecated`.
+- Ruff nos arquivos alterados: limpo em `pending_actions.py`, `auto_healer.py`, `test_auto_healer_idempotency.py`; 1 achado pre-existente em `schemas.py` (linha 44, nao relacionado ao diff) e 3 pre-existentes em `collaboration_service.py` (import nao usado `uuid`, ordenacao de imports) confirmados via `git diff` como anteriores a esta mudanca — nao corrigidos, fora de escopo.
+- Mypy nos arquivos alterados: 1540 erros pre-existentes em 185 arquivos (mypy strict nunca foi de fato aplicado como gate no projeto); confirmado por numero de linha que nenhum erro reportado incide sobre `_extract_langgraph_pending_action_details` ou qualquer linha nova/alterada por mim.
+
+### Consequencias
+
+- Pro: a pagina de Ferramentas nao exibe mais um card que sempre mostra "0" para uma integracao inexistente, o que induzia o usuario a acreditar que havia uma feature Codex ativa e monitorada.
+- Pro: o auto-healer para de criar/manter uma fila RabbitMQ fantasma a cada ciclo de cura — reduz ruido operacional real no broker, nao so codigo morto.
+- Pro: dois `DeprecationWarning` eliminados da saida de teste (regra dura do usuario), com correcao de um bug latente de valor incorreto de timestamp em sistemas fora de UTC.
+- Contra: ~40 ocorrencias de `datetime.utcnow()` permanecem no restante do backend ate a tarefa separada ser executada — nao sao um erro introduzido nesta sessao, mas o `DeprecationWarning` ainda aparecera se a suite completa for rodada, ate essa tarefa ser concluida.
+- Contra: scaffolding de CLI externo (Codex/Jules) desabilitado permanece no backend (`config.py`, `policy_engine.py`, `mas_validator.py`) — decisao deliberada de nao remover nesta rodada, ver "Alternativas Consideradas".

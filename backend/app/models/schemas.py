@@ -195,7 +195,6 @@ class QueueName(str, Enum):
     # Debate System Queues
     TASKS_AGENT_DEBATE_PROPONENT = "janus.tasks.agent.debate.proponent"
     TASKS_AGENT_DEBATE_CRITIC = "janus.tasks.agent.debate.critic"
-    TASKS_CODEX_WORKER = "janus.tasks.codex"
     DOCUMENT_INGESTION = "janus.document.ingestion"
 
 
@@ -305,7 +304,7 @@ class TaskStateEvent(BaseModel):
     action: str
     notes: str | None = None
     reasoning: str | None = None  # Chain of Thought / Reasoning Trace
-    timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+    timestamp: float = Field(default_factory=lambda: datetime.now(UTC).timestamp())
 
 
 class SystemStatusResponse(BaseModel):
@@ -380,7 +379,7 @@ class TaskState(BaseModel):
     security_cycle_count: int = Field(default=0)
     security_decision: str | None = None
     blocked_reason: str | None = None
-    timestamp: float = Field(default_factory=lambda: datetime.utcnow().timestamp())
+    timestamp: float = Field(default_factory=lambda: datetime.now(UTC).timestamp())
     # Stateful Workers: Context Caching
     context_cached: bool = Field(default=False)
     static_context_hash: str | None = Field(default=None)
