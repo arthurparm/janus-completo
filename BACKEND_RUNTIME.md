@@ -214,3 +214,7 @@ If the current sample contains no detected issue, the endpoint reports that boun
 fact instead of claiming global system health. Missing telemetry returns `503`; asking
 for automatic execution returns `501` until an authorized, audited and post-condition-
 verified adapter exists.
+
+`GET /api/v1/optimization/issues` collects a current telemetry sample before running
+detection. A fresh process without observed tool calls therefore returns `503` rather
+than an empty list that could be mistaken for proof that no issue exists.

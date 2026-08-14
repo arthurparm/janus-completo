@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from app.core.optimization import self_optimization_cycle
@@ -33,8 +33,12 @@ class OptimizationRepository:
         """Executa o ciclo de otimização através da infraestrutura core."""
         logger.debug("Executando ciclo de otimização via repositório.")
         try:
-            return await self_optimization_cycle.run_cycle(
-                enable_auto_execution=enable_auto_execution, max_improvements=max_improvements
+            return cast(
+                dict[str, Any],
+                await self_optimization_cycle.run_cycle(
+                    enable_auto_execution=enable_auto_execution,
+                    max_improvements=max_improvements,
+                ),
             )
         except OptimizationMetricsUnavailableError as e:
             raise OptimizationMetricsUnavailableRepositoryError(str(e)) from e
@@ -57,16 +61,29 @@ class OptimizationRepository:
 
     def get_health_score(self, metrics: SystemMetrics) -> float:
         """Calcula o score de saúde a partir das métricas."""
-        return self_optimization_cycle.monitor._calculate_health_score(metrics)
+        return cast(
+            float, self_optimization_cycle.monitor._calculate_health_score(metrics)
+        )
 
     def find_issues(self) -> list[DetectedIssue]:
         """Detecta problemas no sistema a partir das métricas."""
         logger.debug("Detectando problemas no repositório de otimização.")
-        return self_optimization_cycle.monitor.detect_issues()
+        try:
+            return cast(
+                list[DetectedIssue],
+                self_optimization_cycle.monitor.detect_issues(),
+            )
+        except Exception as e:
+            logger.error("Erro ao detectar problemas de otimização", exc_info=e)
+            raise OptimizationRepositoryError(
+                "Falha ao detectar problemas de otimização."
+            ) from e
 
     def get_metrics_history(self) -> list[SystemMetrics]:
         """Retorna o histórico de métricas."""
-        return self_optimization_cycle.monitor._metrics_history
+        return cast(
+            list[SystemMetrics], self_optimization_cycle.monitor._metrics_history
+        )
 
     def get_status(self) -> dict[str, Any]:
         """Retorna o status de execução do ciclo contínuo."""

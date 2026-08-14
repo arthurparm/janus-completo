@@ -237,6 +237,89 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
     assert body["plans"][0]["requires_human_approval"] is True
 
 
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_issue_listing_collects_current_metrics_before_detection() -> None:
+    metrics = self_optimization.SystemMetrics(
+        avg_response_time=3.0,
+        error_rate=0.25,
+        tool_success_rate=0.75,
+        memory_usage_mb=128.0,
+        active_tools_count=1,
+    )
+    issue = self_optimization.DetectedIssue(
+        issue_type=self_optimization.IssueType.HIGH_ERROR_RATE,
+        severity=0.8,
+        description="taxa alta",
+        affected_component="system",
+        evidence={"error_rate": 0.25},
+    )
+    repository = type(
+        "Repository",
+        (),
+        {
+            "get_metrics": AsyncMock(return_value=metrics),
+            "find_issues": Mock(return_value=[issue]),
+        },
+    )()
+    service = optimization_service.OptimizationService(repository)
+
+    result = await service.get_detected_issues("HIGH", "HIGH_ERROR_RATE")
+
+    assert result == [issue]
+    repository.get_metrics.assert_awaited_once()
+    repository.find_issues.assert_called_once()
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_issue_listing_does_not_turn_missing_metrics_into_empty_list() -> None:
+    repository = type(
+        "Repository",
+        (),
+        {
+            "get_metrics": AsyncMock(
+                side_effect=optimization_repository.OptimizationMetricsUnavailableRepositoryError(
+                    "sem amostras"
+                )
+            ),
+            "find_issues": Mock(),
+        },
+    )()
+    service = optimization_service.OptimizationService(repository)
+
+    with pytest.raises(
+        optimization_service.OptimizationMetricsUnavailableError,
+        match="sem amostras",
+    ):
+        await service.get_detected_issues(None, None)
+
+    repository.find_issues.assert_not_called()
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_issue_endpoint_awaits_fresh_detection() -> None:
+    issue = self_optimization.DetectedIssue(
+        issue_type=self_optimization.IssueType.SLOW_RESPONSE,
+        severity=0.5,
+        description="lento",
+        affected_component="tool",
+        evidence={"avg_duration": 3.0},
+    )
+    service = type(
+        "Service",
+        (),
+        {"get_detected_issues": AsyncMock(return_value=[issue])},
+    )()
+
+    response = await optimization_endpoint.get_detected_issues(
+        service=service,
+        severity="MEDIUM",
+        category="SLOW_RESPONSE",
+    )
+
+    assert response[0].issue_type == "slow_response"
+    service.get_detected_issues.assert_awaited_once_with("MEDIUM", "SLOW_RESPONSE")
+
+
 def test_repository_status_reports_operational_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

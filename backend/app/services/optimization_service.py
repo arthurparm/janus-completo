@@ -1,13 +1,12 @@
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from app.core.agents import AgentRole
+from app.core.optimization.self_optimization import DetectedIssue, SystemMetrics
 from app.repositories.optimization_repository import (
-    DetectedIssue,
     OptimizationMetricsUnavailableRepositoryError,
     OptimizationRepository,
     OptimizationRepositoryError,
-    SystemMetrics,
 )
 from app.repositories.prompt_repository import PromptRepository, generate_prompt_version
 from fastapi import Request
@@ -85,11 +84,20 @@ class OptimizationService:
             logger.error("Erro no repositório ao buscar saúde do sistema", exc_info=e)
             raise OptimizationServiceError("Falha ao buscar as métricas de saúde.") from e
 
-    def get_detected_issues(
+    async def get_detected_issues(
         self, severity: str | None, category: str | None
     ) -> list[DetectedIssue]:
         logger.info("Orquestrando busca de problemas detectados via serviço.")
-        issues = self._repo.find_issues()
+        try:
+            await self._repo.get_metrics()
+            issues = self._repo.find_issues()
+        except OptimizationMetricsUnavailableRepositoryError as e:
+            raise OptimizationMetricsUnavailableError(str(e)) from e
+        except OptimizationRepositoryError as e:
+            logger.error("Erro no repositório ao detectar problemas", exc_info=e)
+            raise OptimizationServiceError(
+                "Falha ao detectar problemas do sistema."
+            ) from e
 
         filtered_issues = issues
         if severity:
@@ -266,4 +274,4 @@ class OptimizationService:
 
 # Padrão de Injeção de Dependência: Getter para o serviço
 def get_optimization_service(request: Request) -> OptimizationService:
-    return request.app.state.optimization_service
+    return cast(OptimizationService, request.app.state.optimization_service)

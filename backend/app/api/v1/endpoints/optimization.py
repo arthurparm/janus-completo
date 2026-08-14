@@ -129,7 +129,7 @@ async def get_detected_issues(
     category: str | None = None,
 ) -> list[DetectedIssueResponse]:
     """Delega a detecção e filtragem de problemas para o OptimizationService."""
-    issues = service.get_detected_issues(severity, category)
+    issues = await service.get_detected_issues(severity, category)
     return [
         DetectedIssueResponse(
             issue_type=issue.issue_type.value,
