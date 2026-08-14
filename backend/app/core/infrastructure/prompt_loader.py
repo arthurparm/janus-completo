@@ -1,10 +1,10 @@
-import structlog
 import string
 import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable
 
+import structlog
 from prometheus_client import Counter
 
 from app.repositories.prompt_repository import PromptRepository
@@ -97,6 +97,14 @@ class PromptLoader:
         if missing:
             raise ValueError(f"Variáveis ausentes para placeholders: {missing}")
 
+    def _render_template(
+        self, template: str, variables: dict[str, Any] | None
+    ) -> str:
+        self._validate_placeholders(template, variables)
+        if variables:
+            return template.format(**variables)
+        return template
+
     def invalidate(self, predicate: Any | None = None) -> None:
         if predicate is None:
             self._cache.clear()
@@ -124,7 +132,7 @@ class PromptLoader:
 
         try:
             from app.db import get_db_session
-            
+
             # Usar gerenciador de sessão para injetar sessão no repositório
             async for session in get_db_session():
                 # Injetar sessão temporariamente
@@ -133,7 +141,7 @@ class PromptLoader:
                     if version:
                         # Buscar versão específica (ainda não implementado async no repo, mas placeholder)
                         # prompt = await self._prompt_repo.get_prompt_version_by_id(int(version))
-                        pass 
+                        pass
                     else:
                         # Buscar versão ativa
                         prompt = await self._prompt_repo.get_active_prompt(
@@ -147,7 +155,7 @@ class PromptLoader:
                 finally:
                     self._prompt_repo._async_session = None
                 break # Apenas uma sessão necessária
-                
+
         except Exception as e:
             self._logger.error("log_error", message=f"Erro ao buscar prompt '{name}' do banco: {e}")
 
@@ -196,7 +204,7 @@ class PromptLoader:
                     PROMPT_CACHE_HITS.labels(*key).inc()
                     # move to end (LRU)
                     self._cache.move_to_end(key)
-                    return value
+                    return self._render_template(value, variables)
                 else:
                     # expirado
                     self._cache.pop(key, None)
@@ -239,17 +247,12 @@ class PromptLoader:
                     f"Prompt '{name}' não encontrado em nenhuma fonte (banco, provider externo, arquivo)."
                 )
 
-        self._validate_placeholders(template, variables)
-
-        # Formata o template se variáveis forem fornecidas
-        if variables:
-            template = template.format(**variables)
-
-        # manter cache dentro do tamanho
+        # O cache armazena somente o template bruto. Variáveis podem conter
+        # contexto privado e nunca devem contaminar chamadas subsequentes.
         self._cache[key] = (now, template)
         if len(self._cache) > self.max_size:
             self._cache.popitem(last=False)
-        return template
+        return self._render_template(template, variables)
 
 
 # Instância singleton para uso global

@@ -24,6 +24,28 @@ async def test_prompt_loader_get_uses_file_fallback_when_other_sources_missing(t
 
 
 @pytest.mark.asyncio
+async def test_prompt_loader_cache_does_not_reuse_rendered_variables():
+    loader = prompt_module.PromptLoader(use_database=False)
+    loader._store = {"welcome": "Ola {nome}"}
+
+    first = await loader.get("welcome", variables={"nome": "Alice"})
+    second = await loader.get("welcome", variables={"nome": "Bob"})
+
+    assert first == "Ola Alice"
+    assert second == "Ola Bob"
+
+
+@pytest.mark.asyncio
+async def test_prompt_loader_raw_read_is_not_poisoned_by_formatted_cache_entry():
+    loader = prompt_module.PromptLoader(use_database=False)
+    loader._store = {"welcome": "Ola {nome}"}
+
+    await loader.get("welcome", variables={"nome": "Alice"})
+
+    assert await loader.get("welcome") == "Ola {nome}"
+
+
+@pytest.mark.asyncio
 async def test_get_prompt_returns_none_when_prompt_is_missing(monkeypatch):
     async def fake_get(*args, **kwargs):
         del args, kwargs
