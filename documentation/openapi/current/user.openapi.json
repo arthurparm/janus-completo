@@ -3835,22 +3835,38 @@
       },
       "OAuthStartRequest": {
         "properties": {
-          "scopes": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
+          "scope": {
+            "enum": [
+              "calendar",
+              "mail",
+              "notes"
             ],
-            "title": "Scopes"
+            "title": "Scope",
+            "type": "string"
           }
         },
+        "required": [
+          "scope"
+        ],
         "title": "OAuthStartRequest",
+        "type": "object"
+      },
+      "OAuthStartResponse": {
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorize_url",
+          "state"
+        ],
+        "title": "OAuthStartResponse",
         "type": "object"
       },
       "PendingActionDTO": {
@@ -16092,6 +16108,11 @@
             "required": false,
             "schema": {
               "default": "calendar",
+              "enum": [
+                "calendar",
+                "mail",
+                "notes"
+              ],
               "title": "Scope",
               "type": "string"
             }
@@ -16101,7 +16122,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthStartResponse"
+                }
               }
             },
             "description": "Successful Response"

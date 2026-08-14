@@ -56,7 +56,7 @@ def test_canonical_callback_route_still_exists():
         "/api/v1/productivity/oauth/google/callback",
         json={"code": "abc", "state": "user:1:scope:calendar"},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 503
 
 def test_canonical_refresh_route_still_exists(monkeypatch):
     import app.api.v1.endpoints.productivity as prod_module

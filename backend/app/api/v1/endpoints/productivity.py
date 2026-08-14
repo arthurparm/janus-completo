@@ -16,6 +16,16 @@ from app.services.productivity_consent_service import (
     ProductivityConsentRequiredError,
     require_productivity_consent,
 )
+from app.services.productivity_oauth_state_service import (
+    GOOGLE_PRODUCTIVITY_CONSENTS,
+    GOOGLE_PRODUCTIVITY_SCOPES,
+    GoogleProductivityScope,
+    OAuthConfigurationError,
+    OAuthStateError,
+    issue_google_oauth_state,
+    resolve_google_oauth_config,
+    verify_google_oauth_state,
+)
 
 try:
     from prometheus_client import Counter, Histogram  # type: ignore
@@ -70,7 +80,7 @@ router = APIRouter(tags=["Productivity"], prefix="/productivity")
 
 
 class OAuthStartRequest(BaseModel):
-    scopes: list[str] | None = None
+    scope: GoogleProductivityScope
 
 
 class OAuthStartResponse(BaseModel):
@@ -117,6 +127,37 @@ def _require_consent(repo: ConsentRepository, user_id: str, scope: str) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+
+
+def _google_oauth_config() -> tuple[str, str, str]:
+    try:
+        return resolve_google_oauth_config(settings)
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+
+def _google_authorize_response(*, actor: str, scope: GoogleProductivityScope) -> OAuthStartResponse:
+    client_id, client_secret, redirect_uri = _google_oauth_config()
+    oauth_state = issue_google_oauth_state(
+        signing_secret=client_secret,
+        actor_id=actor,
+        scope=scope,
+    )
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": GOOGLE_PRODUCTIVITY_SCOPES[scope],
+        "access_type": "offline",
+        "state": oauth_state,
+        "include_granted_scopes": "true",
+        "prompt": "consent",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return OAuthStartResponse(authorize_url=url, state=oauth_state)
 
 
 class CalendarEvent(BaseModel):
@@ -253,24 +294,7 @@ async def oauth_google_start(payload: OAuthStartRequest, request: Request):
         _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
     except Exception:
         pass
-    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
-    redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
-    if not client_id or not str(client_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth client not configured"
-        )
-    scope = " ".join(payload.scopes or [])
-    params = {
-        "client_id": str(client_id),
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": scope,
-        "access_type": "offline",
-        "state": f"user:{actor}:scope:custom",
-        "include_granted_scopes": "true",
-    }
-    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
-    return OAuthStartResponse(authorize_url=url, state=str(actor))
+    return _google_authorize_response(actor=actor, scope=payload.scope)
 
 
 @router.get("/calendar/events")
@@ -576,31 +600,11 @@ async def limits_status(request: Request):
 
 
 @router.get("/oauth/google/start")
-async def google_oauth_start(request: Request, scope: str = "calendar"):
+async def google_oauth_start(
+    request: Request, scope: GoogleProductivityScope = "calendar"
+) -> OAuthStartResponse:
     actor = require_authenticated_actor_id(request)
-    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
-    redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
-    if not client_id or not str(client_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth client not configured"
-        )
-    base = "https://accounts.google.com/o/oauth2/v2/auth"
-    scopes_map = {
-        "calendar": "https://www.googleapis.com/auth/calendar.events",
-        "mail": "https://www.googleapis.com/auth/gmail.send",
-        "notes": "https://www.googleapis.com/auth/drive.file",
-    }
-    params = {
-        "client_id": str(client_id),
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "access_type": "offline",
-        "include_granted_scopes": "true",
-        "state": f"user:{actor}:scope:{scope}",
-        "scope": scopes_map.get(scope, scopes_map["calendar"]),
-        "prompt": "consent",
-    }
-    url = f"{base}?" + urlencode(params)
+    response = _google_authorize_response(actor=actor, scope=scope)
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
@@ -613,7 +617,7 @@ async def google_oauth_start(request: Request, scope: str = "calendar"):
         )
     except Exception:
         pass
-    return {"authorize_url": url}
+    return response
 
 
 class GoogleOAuthCallbackRequest(BaseModel):
@@ -625,13 +629,18 @@ class GoogleOAuthCallbackRequest(BaseModel):
 async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Request):
     actor = require_authenticated_actor_id(request)
     # troca de código por token
-    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
-    client_secret = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None) or None
-    redirect_uri = getattr(settings, "GOOGLE_OAUTH_REDIRECT_URI", None) or ""
-    if not client_id or not client_secret or not str(client_id) or not str(client_secret):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth client not configured"
+    client_id, client_secret, redirect_uri = _google_oauth_config()
+    try:
+        verified_state = verify_google_oauth_state(
+            payload.state,
+            signing_secret=client_secret,
+            actor_id=actor,
         )
+    except OAuthStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     import httpx
 
     tokens = None
@@ -647,8 +656,8 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
                 allowed_url,
                 data={
                     "code": payload.code,
-                    "client_id": str(client_id),
-                    "client_secret": str(client_secret),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "redirect_uri": redirect_uri,
                     "grant_type": "authorization_code",
                 },
@@ -658,40 +667,45 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
             tokens = resp.json()
     except httpx.HTTPError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token exchange failed")
+    if not isinstance(tokens, dict):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Invalid token response",
+        )
     access_token = tokens.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Token response missing access_token",
+        )
     refresh_token = tokens.get("refresh_token")
     expires_in = tokens.get("expires_in")
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
 
-    expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in or 0)) if expires_in else None
+    expires_at = (
+        datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=int(expires_in or 0))
+        if expires_in
+        else None
+    )
     # persiste token
     repo_tok = OAuthTokenRepository()
     repo_tok.upsert(
         user_id=actor,
         provider="google",
-        access_token=str(access_token or ""),
+        access_token=access_token,
         refresh_token=str(refresh_token or "") if refresh_token else None,
         expires_at=expires_at,
     )
     # registra consentimento para o escopo indicado no state
-    try:
-        _, _, state_scope = str(payload.state).partition("scope:")
-        scope = state_scope.strip() or ""
-        if scope:
-            cons_repo = ConsentRepository()
-            cons_repo.add_consent(
-                user_id=actor, scope=f"{scope}.read", granted=True, expires_at=None
-            )
-            if scope in ("calendar", "notes"):
-                cons_repo.add_consent(
-                    user_id=actor, scope=f"{scope}.write", granted=True, expires_at=None
-                )
-            if scope == "mail":
-                cons_repo.add_consent(
-                    user_id=actor, scope="mail.send", granted=True, expires_at=None
-                )
-    except Exception:
-        pass
+    scope = verified_state.scope
+    cons_repo = ConsentRepository()
+    for consent_scope in GOOGLE_PRODUCTIVITY_CONSENTS[scope]:
+        cons_repo.add_consent(
+            user_id=actor,
+            scope=consent_scope,
+            granted=True,
+            expires_at=None,
+        )
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
@@ -699,7 +713,7 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
                 "user_id": str(actor),
                 "tool": "google_oauth_callback",
                 "status": "ok",
-                "detail": {"state": payload.state},
+                "detail": {"scope": scope},
             }
         )
     except Exception:
@@ -714,12 +728,7 @@ async def google_oauth_refresh(request: Request):
     tok = repo_tok.get(user_id=actor, provider="google")
     if not tok or not tok.refresh_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No refresh token")
-    client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", None) or None
-    client_secret = getattr(settings, "GOOGLE_OAUTH_CLIENT_SECRET", None) or None
-    if not client_id or not client_secret or not str(client_id) or not str(client_secret):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth client not configured"
-        )
+    client_id, client_secret, _redirect_uri = _google_oauth_config()
     import httpx
 
     try:
@@ -733,8 +742,8 @@ async def google_oauth_refresh(request: Request):
             resp = await client.post(
                 allowed_url,
                 data={
-                    "client_id": str(client_id),
-                    "client_secret": str(client_secret),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "refresh_token": tok.refresh_token,
                     "grant_type": "refresh_token",
                 },
@@ -743,16 +752,24 @@ async def google_oauth_refresh(request: Request):
             resp.raise_for_status()
             data = resp.json()
             access_token = data.get("access_token")
+            if not isinstance(access_token, str) or not access_token:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Token response missing access_token",
+                )
             expires_in = data.get("expires_in")
-            from datetime import datetime, timedelta
+            from datetime import UTC, datetime, timedelta
 
             expires_at = (
-                datetime.utcnow() + timedelta(seconds=int(expires_in or 0)) if expires_in else None
+                datetime.now(UTC).replace(tzinfo=None)
+                + timedelta(seconds=int(expires_in or 0))
+                if expires_in
+                else None
             )
             repo_tok.upsert(
                 user_id=actor,
                 provider="google",
-                access_token=str(access_token or ""),
+                access_token=access_token,
                 refresh_token=tok.refresh_token,
                 expires_at=expires_at,
             )

@@ -288,3 +288,14 @@ egress failures, and provider failures after recording the error. The broker the
 NACKs the task with `requeue=false` and routes it to the configured DLX/DLQ instead of
 acknowledging a silently lost effect. Optional post-success knowledge indexing remains
 non-terminal so it cannot duplicate a calendar or mail effect that already completed.
+
+Google OAuth start endpoints accept only the canonical `calendar`, `mail`, or `notes`
+capability and return the exact state placed in the authorization URL. State is a
+versioned HMAC-SHA256 envelope containing actor, capability, issuance time, and a random
+nonce; callbacks reject tampering, cross-user use, future issuance, and age above ten
+minutes before token exchange. OAuth `SecretStr` values are unwrapped only at the HTTP
+client boundary, never serialized or audited, and callback audit records contain the
+verified capability rather than the state token.
+The callback derives Janus consent from the exact provider capability: Calendar grants
+read/write, Drive-file notes grant read/write, and Gmail send grants only `mail.send`;
+it never manufactures `mail.read` from a send-only Google authorization.
