@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.core.optimization.self_optimization import IssueSeverity, IssueType
 from app.services.optimization_service import (
+    OptimizationAnalysisType,
     OptimizationExecutionUnavailableError,
     OptimizationService,
     get_optimization_service,
@@ -81,7 +82,7 @@ class DetectedIssueResponse(BaseModel):
 
 
 class SystemAnalysisResponse(BaseModel):
-    analysis_type: str
+    analysis_type: OptimizationAnalysisType
     score: float
     issues_count: int
     issues_by_type: dict[str, int]
@@ -190,7 +191,7 @@ async def get_optimization_status(
     summary="Analisa métricas e problemas do sistema",
 )
 async def analyze_system(
-    analysis_type: str = "performance",
+    analysis_type: OptimizationAnalysisType = OptimizationAnalysisType.PERFORMANCE,
     detailed: bool = True,
     service: OptimizationService = Depends(get_optimization_service),
 ) -> SystemAnalysisResponse:

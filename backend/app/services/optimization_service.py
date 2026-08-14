@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Any, cast
 
 import structlog
@@ -34,6 +35,12 @@ class OptimizationExecutionUnavailableError(OptimizationServiceError):
 
 class OptimizationMetricsUnavailableError(OptimizationServiceError):
     """Ainda não existem amostras suficientes para calcular saúde."""
+
+
+class OptimizationAnalysisType(str, Enum):
+    """Tipos de análise que possuem implementação verificável."""
+
+    PERFORMANCE = "performance"
 
 
 # --- Optimization Service ---
@@ -134,11 +141,17 @@ class OptimizationService:
         logger.info("Buscando status do módulo de otimização via serviço.")
         return cast(dict[str, Any], self._repo.get_status())
 
-    async def analyze_system(self, analysis_type: str, detailed: bool) -> dict[str, Any]:
+    async def analyze_system(
+        self, analysis_type: OptimizationAnalysisType, detailed: bool
+    ) -> dict[str, Any]:
         """Gera análise agregada do sistema a partir de métricas e issues."""
+        try:
+            normalized_analysis_type = OptimizationAnalysisType(analysis_type)
+        except ValueError as exc:
+            raise ValueError("analysis_type deve ser 'performance'") from exc
         logger.info(
             "Orquestrando análise do sistema via serviço.",
-            analysis_type=analysis_type,
+            analysis_type=normalized_analysis_type.value,
             detailed=detailed,
         )
         try:
@@ -197,7 +210,7 @@ class OptimizationService:
                 )
 
             analysis: dict[str, Any] = {
-                "analysis_type": analysis_type,
+                "analysis_type": normalized_analysis_type.value,
                 "score": self._repo.get_health_score(metrics),
                 "issues_count": len(issues),
                 "issues_by_type": issues_by_type,

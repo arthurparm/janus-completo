@@ -228,3 +228,7 @@ Optimization issue filters are typed: `severity` accepts `LOW`, `MEDIUM`, or `HI
 and `category` accepts an exact `IssueType` value such as `high_error_rate`. Metrics
 history limits are constrained to `1..100` at both the HTTP and service boundaries;
 invalid query values return `422` instead of being interpreted as empty evidence.
+
+`POST /api/v1/optimization/analyze` currently supports only the verified
+`performance` analysis type. Other labels are rejected with `422`; they are not echoed
+over performance metrics as if a security, cost, or domain-specific analysis had run.

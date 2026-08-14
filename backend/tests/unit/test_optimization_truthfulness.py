@@ -345,6 +345,7 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
         {
             "get_detected_issues": AsyncMock(return_value=[]),
             "get_metrics_history": AsyncMock(return_value=[metric]),
+            "analyze_system": AsyncMock(return_value={}),
         },
     )()
     app = FastAPI()
@@ -368,11 +369,15 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
         valid_history = await client.get(
             "/optimization/metrics/history", params={"limit": 1}
         )
+        artificial_analysis = await client.post(
+            "/optimization/analyze", params={"analysis_type": "security"}
+        )
 
     assert invalid_severity.status_code == 422
     assert fuzzy_category.status_code == 422
     assert invalid_limit.status_code == 422
     assert valid_history.status_code == 200
+    assert artificial_analysis.status_code == 422
     assert valid_history.json() == {
         "count": 1,
         "metrics": [
@@ -390,6 +395,7 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
     }
     service.get_detected_issues.assert_not_awaited()
     service.get_metrics_history.assert_awaited_once_with(1)
+    service.analyze_system.assert_not_awaited()
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -652,12 +658,18 @@ async def test_analysis_preserves_unknown_memory_measurement() -> None:
     )()
     service = optimization_service.OptimizationService(repository)
 
-    result = await service.analyze_system("performance", detailed=False)
+    result = await service.analyze_system(
+        optimization_service.OptimizationAnalysisType.PERFORMANCE,
+        detailed=False,
+    )
 
     assert result["metrics_snapshot"]["memory_usage_mb"] is None
     assert result["trend"]["memory_usage_latest_mb"] is None
     assert result["trend"]["memory_usage_max_mb"] is None
     assert result["series"]["memory_usage_mb"] == []
+
+    with pytest.raises(ValueError, match="deve ser 'performance'"):
+        await service.analyze_system("security", detailed=False)
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
