@@ -78,16 +78,21 @@ async def _run_phase(
 async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
     iteration = shared.get("iteration", 0)
 
+    def _record_phase_failure(phase: Phase, result: dict[str, Any]) -> None:
+        message = f"Fase {phase.value.upper()} falhou: {result.get('error', 'erro desconhecido')}"
+        shared["observations"].append({"has_issue": True, "analysis": message})
+        shared["refinements"].append(
+            {"status": "failed", "refinement": message}
+        )
+
     async def _phase_plan() -> dict[str, Any]:
         prompt = await prompt_loader.get("meta_agent_plan")
         result = await agent_manager.arun_agent(
             question=prompt, request=None, agent_type=AgentType.META_AGENT
         )
-        plan = (
-            result.get("answer")
-            if result and "answer" in result
-            else "Plano padrão: Consultar o Grafo de Conhecimento por lições aprendidas (Reflections) e analisar padrões."
-        )
+        plan = result.get("answer") if result else None
+        if not isinstance(plan, str) or not plan.strip():
+            raise RuntimeError("agente não retornou um plano válido")
         return {"plan": plan}
 
     async def _phase_act() -> dict[str, Any]:
@@ -102,14 +107,15 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
         except Exception as e:
             logger.error("log_error", message=f"META-AGENT (ACT): Falha ao consultar o Grafo de Conhecimento: {e}", exc_info=True
             )
-            return {
-                "analysis": "Falha crítica ao acessar a Memória Semântica (Grafo de Conhecimento)."
-            }
+            raise RuntimeError("falha ao acessar a memória semântica") from e
 
         if not reflections:
-            analysis = "Nenhuma reflexão (lição aprendida) encontrada no Grafo de Conhecimento. O sistema parece estável ou ainda não consolidou novas falhas."
+            analysis = (
+                "Nenhuma reflexão encontrada no Grafo de Conhecimento; "
+                "não há evidência suficiente neste ciclo para avaliar a saúde do sistema."
+            )
             logger.info(analysis)
-            return {"analysis": analysis, "has_issue": False}
+            return {"analysis": analysis, "has_issue": None}
 
         reflections_str = "\n- ".join(reflections)
         prompt = await prompt_loader.get(
@@ -122,12 +128,10 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
             agent_type=AgentType.META_AGENT,
         )
 
-        analysis = (
-            result.get("answer", "Falha ao analisar as reflexões.")
-            if result
-            else "Nenhuma resposta do agente."
-        )
-        return {"analysis": analysis, "has_issue": True}
+        agent_analysis = result.get("answer") if result else None
+        if not isinstance(agent_analysis, str) or not agent_analysis.strip():
+            raise RuntimeError("agente não retornou uma análise válida")
+        return {"analysis": agent_analysis, "has_issue": True}
 
     async def _phase_observe(act_result: dict[str, Any] | None) -> dict[str, Any]:
         if not act_result:
@@ -135,16 +139,21 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
 
         analysis = act_result.get("analysis", "")
         # A decisão de 'has_issue' agora é primariamente determinada pela fase ACT.
-        has_issue = act_result.get("has_issue", False)
+        has_issue = act_result.get("has_issue")
         return {"has_issue": has_issue, "analysis": analysis}
 
     async def _phase_refine(obs: dict[str, Any] | None) -> dict[str, Any]:
         if not obs:
             return {"refinement": "Fase OBSERVE falhou, impossível refinar."}
-        if obs.get("has_issue"):
+        if obs.get("has_issue") is True:
             refinement = f"Hipótese de problema detectada com base na análise do Grafo de Conhecimento. Análise: {obs.get('analysis', '')}. Recomendar investigação humana ou criação de um agente corretivo."
-        else:
+        elif obs.get("has_issue") is False:
             refinement = "Nenhum problema crítico detectado na Memória Semântica. O sistema está operando conforme as lições aprendidas."
+        else:
+            refinement = (
+                "Saúde indeterminada: não há reflexões suficientes para avaliar "
+                "o sistema neste ciclo."
+            )
         return {"refinement": refinement}
 
     res_plan = await _run_phase(Phase.PLAN, _phase_plan)
@@ -156,14 +165,26 @@ async def _execute_meta_cycle(shared: dict[str, Any]) -> bool:
         await memory_db.amemorize(
             Experience(
                 type="meta_agent_checkpoint",
-                content=f"PLAN[{iteration}]: {shared.get('hypothesis')}",
+                content=(
+                    f"PLAN[{iteration}]: {shared.get('hypothesis')}"
+                    if res_plan.get("ok")
+                    else f"PLAN[{iteration}]: FAILED: {res_plan.get('error', 'erro desconhecido')}"
+                ),
                 metadata={"origin": "meta_agent"},
             )
         )
     except Exception as e:
         logger.warning("log_warning", message=f"Falha ao salvar checkpoint PLAN: {e}")
 
+    if not res_plan.get("ok"):
+        _record_phase_failure(Phase.PLAN, res_plan)
+        return True
+
     res_act = await _run_phase(Phase.ACT, _phase_act)
+    if not res_act.get("ok"):
+        _record_phase_failure(Phase.ACT, res_act)
+        return True
+
     res_obs = await _run_phase(Phase.OBSERVE, _phase_observe, res_act.get("result"))
     if res_obs.get("ok"):
         shared["observations"].append(res_obs.get("result"))

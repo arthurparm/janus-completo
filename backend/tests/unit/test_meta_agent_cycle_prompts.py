@@ -64,3 +64,130 @@ async def test_meta_cycle_awaits_plan_and_act_prompts(monkeypatch: pytest.Monkey
     assert agent_run.await_args_list[0].kwargs["question"] == "prompt de plano"
     assert agent_run.await_args_list[1].kwargs["question"] == "prompt de análise"
     assert shared["hypothesis"] == "plano real"
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_meta_cycle_does_not_invent_plan_when_agent_returns_no_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prompt_get = AsyncMock(return_value="prompt de plano")
+    agent_run = AsyncMock(return_value={})
+    memory = type("Memory", (), {"amemorize": AsyncMock()})()
+
+    monkeypatch.setattr(meta_agent_cycle.prompt_loader, "get", prompt_get)
+    monkeypatch.setattr(meta_agent_cycle.agent_manager, "arun_agent", agent_run)
+    monkeypatch.setattr(meta_agent_cycle, "get_memory_db", AsyncMock(return_value=memory))
+
+    shared: dict[str, Any] = {
+        "hypothesis": None,
+        "actions": [],
+        "observations": [],
+        "refinements": [],
+        "iteration": 1,
+    }
+
+    should_continue = await meta_agent_cycle._execute_meta_cycle(shared)
+
+    assert should_continue is True
+    assert shared["hypothesis"] is None
+    assert shared["refinements"] == [
+        {
+            "status": "failed",
+            "refinement": "Fase PLAN falhou: agente não retornou um plano válido",
+        }
+    ]
+    checkpoint = memory.amemorize.await_args.args[0]
+    assert checkpoint.content == (
+        "PLAN[1]: FAILED: agente não retornou um plano válido"
+    )
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_meta_cycle_does_not_report_health_when_graph_access_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    memory = type("Memory", (), {"amemorize": AsyncMock()})()
+    graph = type(
+        "Graph",
+        (),
+        {"get_driver": lambda self: (_ for _ in ()).throw(ConnectionError("offline"))},
+    )()
+
+    monkeypatch.setattr(
+        meta_agent_cycle.prompt_loader,
+        "get",
+        AsyncMock(return_value="prompt de plano"),
+    )
+    monkeypatch.setattr(
+        meta_agent_cycle.agent_manager,
+        "arun_agent",
+        AsyncMock(return_value={"answer": "plano real"}),
+    )
+    monkeypatch.setattr(meta_agent_cycle, "get_memory_db", AsyncMock(return_value=memory))
+    monkeypatch.setattr(meta_agent_cycle, "graph_db", graph)
+
+    shared: dict[str, Any] = {
+        "hypothesis": None,
+        "actions": [],
+        "observations": [],
+        "refinements": [],
+        "iteration": 1,
+    }
+
+    should_continue = await meta_agent_cycle._execute_meta_cycle(shared)
+
+    assert should_continue is True
+    assert shared["refinements"] == [
+        {
+            "status": "failed",
+            "refinement": "Fase ACT falhou: falha ao acessar a memória semântica",
+        }
+    ]
+    assert shared["observations"][0]["has_issue"] is True
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_meta_cycle_treats_absent_reflections_as_indeterminate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    memory = type("Memory", (), {"amemorize": AsyncMock()})()
+    query_result = type("QueryResult", (), {"list": AsyncMock(return_value=[])})()
+    session = type("Session", (), {"run": AsyncMock(return_value=query_result)})()
+
+    monkeypatch.setattr(
+        meta_agent_cycle.prompt_loader,
+        "get",
+        AsyncMock(return_value="prompt de plano"),
+    )
+    monkeypatch.setattr(
+        meta_agent_cycle.agent_manager,
+        "arun_agent",
+        AsyncMock(return_value={"answer": "plano real"}),
+    )
+    monkeypatch.setattr(meta_agent_cycle, "get_memory_db", AsyncMock(return_value=memory))
+    monkeypatch.setattr(
+        meta_agent_cycle,
+        "graph_db",
+        type("Graph", (), {"get_driver": lambda self: _Driver(session)})(),
+    )
+
+    shared: dict[str, Any] = {
+        "hypothesis": None,
+        "actions": [],
+        "observations": [],
+        "refinements": [],
+        "iteration": 1,
+    }
+
+    should_continue = await meta_agent_cycle._execute_meta_cycle(shared)
+
+    assert should_continue is True
+    assert shared["observations"][0]["has_issue"] is None
+    assert shared["refinements"] == [
+        {
+            "refinement": (
+                "Saúde indeterminada: não há reflexões suficientes para avaliar "
+                "o sistema neste ciclo."
+            )
+        }
+    ]
