@@ -22,6 +22,12 @@ from app.services.productivity_oauth_state_registry_service import (
     OAuthStateRegistryUnavailableError,
 )
 from app.services.productivity_oauth_state_service import issue_google_oauth_state
+from app.services.productivity_oauth_token_exchange_service import (
+    GoogleOAuthCodeRejectedError,
+    GoogleOAuthExchangeBlockedError,
+    GoogleOAuthExchangeProviderError,
+    GoogleOAuthExchangeTimeoutError,
+)
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
@@ -215,7 +221,7 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
         lambda **kwargs: connection_writes.append(kwargs),
     )
     monkeypatch.setattr(
-        "app.core.security.egress_policy.enforce_worker_http_egress",
+        "app.services.productivity_oauth_token_exchange_service.enforce_worker_http_egress",
         lambda url, **_kwargs: url,
     )
     state = issue_google_oauth_state(
@@ -240,6 +246,42 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
     assert connection_writes[0]["user_id"] == 1
     assert connection_writes[0]["scope"] == "mail"
     assert connection_writes[0]["access_token"] == "access"
+    consume = productivity.consume_google_oauth_state
+    assert isinstance(consume, AsyncMock)
+    consume.assert_awaited_once_with(state)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    ("error", "expected_status"),
+    [
+        (GoogleOAuthCodeRejectedError("rejected"), 400),
+        (GoogleOAuthExchangeBlockedError("blocked"), 503),
+        (GoogleOAuthExchangeProviderError("provider"), 502),
+        (GoogleOAuthExchangeTimeoutError("timeout"), 504),
+    ],
+)
+def test_callback_distinguishes_user_rejection_from_provider_failure(
+    oauth_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    expected_status: int,
+) -> None:
+    exchange = AsyncMock(side_effect=error)
+    monkeypatch.setattr(productivity, "exchange_google_authorization_code", exchange)
+    monkeypatch.setattr(productivity, "persist_google_oauth_connection", pytest.fail)
+    state = issue_google_oauth_state(
+        signing_secret="real-client-secret",
+        actor_id=1,
+        scope="calendar",
+    )
+
+    response = _client(actor_id=1).post(
+        "/api/v1/productivity/oauth/google/callback",
+        json={"code": "code", "state": state},
+    )
+
+    assert response.status_code == expected_status
+    exchange.assert_awaited_once()
     consume = productivity.consume_google_oauth_state
     assert isinstance(consume, AsyncMock)
     consume.assert_awaited_once_with(state)

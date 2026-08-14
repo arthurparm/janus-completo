@@ -341,3 +341,9 @@ the encrypted token is retained only so a later disconnect request can retry rev
 only. `configured` requires a decryptable stored token plus every consent required by at
 least one Google capability; orphaned token/consent combinations are `inconsistent`.
 `provider_verified=false` is explicit because the status read performs no Google I/O.
+
+The Google callback delegates authorization-code exchange to a typed provider service.
+Provider rejection is HTTP 400, outbound policy unavailability is HTTP 503, provider or
+payload failure is HTTP 502, and timeout is HTTP 504. Only a validated token payload can
+reach the atomic connection persistence service; the one-time state remains consumed on
+every attempted exchange so retry requires a new authorization start.

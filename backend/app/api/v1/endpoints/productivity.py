@@ -53,6 +53,13 @@ from app.services.productivity_oauth_state_service import (
     resolve_google_oauth_config,
     verify_google_oauth_state,
 )
+from app.services.productivity_oauth_token_exchange_service import (
+    GoogleOAuthCodeRejectedError,
+    GoogleOAuthExchangeBlockedError,
+    GoogleOAuthExchangeProviderError,
+    GoogleOAuthExchangeTimeoutError,
+    exchange_google_authorization_code,
+)
 
 try:
     from prometheus_client import Counter, Histogram  # type: ignore
@@ -106,6 +113,13 @@ from app.core.security.request_guard import require_authenticated_actor_id
 router = APIRouter(tags=["Productivity"], prefix="/productivity")
 
 
+def _record_oauth_event(event_type: str, event_status: str) -> None:
+    try:
+        _PROD_OAUTH_EVENTS_TOTAL.labels("google", event_type, event_status).inc()
+    except Exception:
+        pass
+
+
 class OAuthStartRequest(BaseModel):
     scope: GoogleProductivityScope
 
@@ -113,6 +127,10 @@ class OAuthStartRequest(BaseModel):
 class OAuthStartResponse(BaseModel):
     authorize_url: str
     state: str
+
+
+class OAuthOperationResponse(BaseModel):
+    status: Literal["ok"]
 
 
 class GoogleDisconnectResponse(BaseModel):
@@ -126,14 +144,6 @@ class GoogleConnectionStatusResponse(BaseModel):
     local_status: Literal["disconnected", "configured", "inconsistent"]
     capabilities: dict[str, bool]
     provider_verified: bool
-
-
-class OAuthCallbackRequest(BaseModel):
-    code: str
-
-
-class OAuthRefreshRequest(BaseModel):
-    provider: str
 
 
 def get_consent_repo(request: Request) -> ConsentRepository:
@@ -349,7 +359,9 @@ async def calendar_add_event(
 
 
 @router.post("/oauth/google/start")
-async def oauth_google_start(payload: OAuthStartRequest, request: Request):
+async def oauth_google_start(
+    payload: OAuthStartRequest, request: Request
+) -> OAuthStartResponse:
     actor = require_authenticated_actor_id(request)
     return await _google_authorize_response(actor=actor, scope=payload.scope)
 
@@ -715,7 +727,9 @@ class GoogleOAuthCallbackRequest(BaseModel):
 
 
 @router.post("/oauth/google/callback")
-async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Request):
+async def google_oauth_callback(
+    payload: GoogleOAuthCallbackRequest, request: Request
+) -> OAuthOperationResponse:
     actor = require_authenticated_actor_id(request)
     # troca de código por token
     client_id, client_secret, redirect_uri = _google_oauth_config()
@@ -726,6 +740,7 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
             actor_id=actor,
         )
     except OAuthStateError as exc:
+        _record_oauth_event("callback", "invalid_state")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -733,68 +748,65 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
     try:
         await consume_google_oauth_state(payload.state)
     except OAuthStateAlreadyConsumedError as exc:
+        _record_oauth_event("callback", "replayed_state")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
     except OAuthStateRegistryUnavailableError as exc:
+        _record_oauth_event("callback", "state_registry_unavailable")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="OAuth replay protection unavailable",
         ) from exc
-    tokens = None
     try:
-        from app.core.security.egress_policy import enforce_worker_http_egress
-
-        token_url = "https://oauth2.googleapis.com/token"
-        allowed_url = enforce_worker_http_egress(token_url, tool="google_oauth")
-        if not allowed_url:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Egress blocked by policy")
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                allowed_url,
-                data={
-                    "code": payload.code,
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "redirect_uri": redirect_uri,
-                    "grant_type": "authorization_code",
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            resp.raise_for_status()
-            tokens = resp.json()
-    except httpx.HTTPError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token exchange failed")
-    if not isinstance(tokens, dict):
+        tokens = await exchange_google_authorization_code(
+            code=payload.code,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+        )
+    except GoogleOAuthCodeRejectedError as exc:
+        _record_oauth_event("callback", "code_rejected")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except GoogleOAuthExchangeBlockedError as exc:
+        _record_oauth_event("callback", "egress_blocked")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth egress unavailable",
+        ) from exc
+    except GoogleOAuthExchangeTimeoutError as exc:
+        _record_oauth_event("callback", "timeout")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc),
+        ) from exc
+    except GoogleOAuthExchangeProviderError as exc:
+        _record_oauth_event("callback", "provider_error")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Invalid token response",
-        )
-    access_token = tokens.get("access_token")
-    if not isinstance(access_token, str) or not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Token response missing access_token",
-        )
-    refresh_token = tokens.get("refresh_token")
-    expires_in = tokens.get("expires_in")
+            detail=str(exc),
+        ) from exc
     from datetime import UTC, datetime, timedelta
 
     expires_at = (
-        datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=int(expires_in or 0))
-        if expires_in
+        datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=tokens.expires_in)
+        if tokens.expires_in
         else None
     )
     try:
         persist_google_oauth_connection(
             user_id=int(actor),
             scope=verified_state.scope,
-            access_token=access_token,
-            refresh_token=str(refresh_token or "") if refresh_token else None,
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
             expires_at=expires_at,
         )
     except (OAuthTokenProtectionError, OAuthConnectionPersistenceError) as exc:
+        _record_oauth_event("callback", "persistence_error")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="OAuth connection persistence unavailable",
@@ -812,11 +824,12 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
         )
     except Exception:
         pass
-    return {"status": "ok"}
+    _record_oauth_event("callback", "ok")
+    return OAuthOperationResponse(status="ok")
 
 
 @router.post("/oauth/google/refresh")
-async def google_oauth_refresh(request: Request):
+async def google_oauth_refresh(request: Request) -> OAuthOperationResponse:
     actor = require_authenticated_actor_id(request)
     repo_tok = OAuthTokenRepository()
     try:
@@ -857,7 +870,7 @@ async def google_oauth_refresh(request: Request):
         )
     except Exception:
         pass
-    return {"status": "ok"}
+    return OAuthOperationResponse(status="ok")
 
 
 @router.post("/oauth/google/disconnect")

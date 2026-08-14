@@ -4078,6 +4078,20 @@
         "title": "NoteItem",
         "type": "object"
       },
+      "OAuthOperationResponse": {
+        "properties": {
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "OAuthOperationResponse",
+        "type": "object"
+      },
       "OAuthStartRequest": {
         "properties": {
           "scope": {
@@ -16329,7 +16343,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthOperationResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -16403,7 +16419,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthOperationResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -16501,7 +16519,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthStartResponse"
+                }
               }
             },
             "description": "Successful Response"
