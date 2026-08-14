@@ -30,6 +30,12 @@ from app.services.productivity_oauth_connection_service import (
     OAuthConnectionPersistenceError,
     persist_google_oauth_connection,
 )
+from app.services.productivity_oauth_state_registry_service import (
+    OAuthStateAlreadyConsumedError,
+    OAuthStateRegistryUnavailableError,
+    consume_google_oauth_state,
+    register_google_oauth_state,
+)
 from app.services.productivity_oauth_state_service import (
     GOOGLE_PRODUCTIVITY_SCOPES,
     GoogleProductivityScope,
@@ -152,13 +158,30 @@ def _google_oauth_config() -> tuple[str, str, str]:
         ) from exc
 
 
-def _google_authorize_response(*, actor: str, scope: GoogleProductivityScope) -> OAuthStartResponse:
+async def _google_authorize_response(
+    *, actor: str, scope: GoogleProductivityScope
+) -> OAuthStartResponse:
     client_id, client_secret, redirect_uri = _google_oauth_config()
     oauth_state = issue_google_oauth_state(
         signing_secret=client_secret,
         actor_id=actor,
         scope=scope,
     )
+    try:
+        await register_google_oauth_state(oauth_state)
+    except OAuthStateRegistryUnavailableError as exc:
+        try:
+            _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "error").inc()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth replay protection unavailable",
+        ) from exc
+    try:
+        _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "issued").inc()
+    except Exception:
+        pass
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -307,11 +330,7 @@ async def calendar_add_event(
 @router.post("/oauth/google/start")
 async def oauth_google_start(payload: OAuthStartRequest, request: Request):
     actor = require_authenticated_actor_id(request)
-    try:
-        _PROD_OAUTH_EVENTS_TOTAL.labels("google", "start", "queued").inc()
-    except Exception:
-        pass
-    return _google_authorize_response(actor=actor, scope=payload.scope)
+    return await _google_authorize_response(actor=actor, scope=payload.scope)
 
 
 @router.get("/calendar/events")
@@ -653,7 +672,7 @@ async def google_oauth_start(
     request: Request, scope: GoogleProductivityScope = "calendar"
 ) -> OAuthStartResponse:
     actor = require_authenticated_actor_id(request)
-    response = _google_authorize_response(actor=actor, scope=scope)
+    response = await _google_authorize_response(actor=actor, scope=scope)
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(
@@ -690,8 +709,18 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    import httpx
-
+    try:
+        await consume_google_oauth_state(payload.state)
+    except OAuthStateAlreadyConsumedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except OAuthStateRegistryUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth replay protection unavailable",
+        ) from exc
     tokens = None
     try:
         from app.core.security.egress_policy import enforce_worker_http_egress

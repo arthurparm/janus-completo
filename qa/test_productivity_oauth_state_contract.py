@@ -9,6 +9,10 @@ import pytest
 from app.api.v1.endpoints import productivity
 from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.oauth_token_security_service import OAuthTokenProtectionError
+from app.services.productivity_oauth_state_registry_service import (
+    OAuthStateAlreadyConsumedError,
+    OAuthStateRegistryUnavailableError,
+)
 from app.services.productivity_oauth_state_service import issue_google_oauth_state
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -49,6 +53,16 @@ def oauth_config(monkeypatch: pytest.MonkeyPatch) -> None:
         "GOOGLE_OAUTH_REDIRECT_URI",
         "https://janus.example/oauth/google/callback",
     )
+    monkeypatch.setattr(
+        productivity,
+        "register_google_oauth_state",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        productivity,
+        "consume_google_oauth_state",
+        AsyncMock(),
+    )
 
 
 def test_oauth_start_returns_the_signed_state_used_in_authorize_url(
@@ -63,6 +77,9 @@ def test_oauth_start_returns_the_signed_state_used_in_authorize_url(
     assert query["client_id"] == ["real-client-id"]
     assert query["scope"] == ["https://www.googleapis.com/auth/calendar.events"]
     assert "real-client-secret" not in body["authorize_url"]
+    register = productivity.register_google_oauth_state
+    assert isinstance(register, AsyncMock)
+    register.assert_awaited_once_with(body["state"])
 
     invalid_scope = _client().get(
         "/api/v1/productivity/oauth/google/start?scope=administrator"
@@ -103,6 +120,55 @@ def test_callback_rejects_invalid_or_cross_user_state_before_network(
     )
 
     assert response.status_code == 400
+
+
+def test_oauth_start_fails_closed_when_replay_registry_is_unavailable(
+    oauth_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        productivity,
+        "register_google_oauth_state",
+        AsyncMock(side_effect=OAuthStateRegistryUnavailableError("redis unavailable")),
+    )
+
+    response = _client().get("/api/v1/productivity/oauth/google/start?scope=calendar")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "OAuth replay protection unavailable"
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    ("error", "expected_status"),
+    [
+        (OAuthStateAlreadyConsumedError("already consumed"), 400),
+        (OAuthStateRegistryUnavailableError("redis unavailable"), 503),
+    ],
+)
+def test_callback_rejects_replay_or_registry_failure_before_network(
+    oauth_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    expected_status: int,
+) -> None:
+    monkeypatch.setattr(
+        productivity,
+        "consume_google_oauth_state",
+        AsyncMock(side_effect=error),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", pytest.fail)
+    state = issue_google_oauth_state(
+        signing_secret="real-client-secret",
+        actor_id=1,
+        scope="calendar",
+    )
+
+    response = _client(actor_id=1).post(
+        "/api/v1/productivity/oauth/google/callback",
+        json={"code": "code", "state": state},
+    )
+
+    assert response.status_code == expected_status
 
 
 def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
@@ -166,6 +232,9 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
     assert connection_writes[0]["user_id"] == 1
     assert connection_writes[0]["scope"] == "mail"
     assert connection_writes[0]["access_token"] == "access"
+    consume = productivity.consume_google_oauth_state
+    assert isinstance(consume, AsyncMock)
+    consume.assert_awaited_once_with(state)
 
 
 def test_manual_refresh_uses_shared_actor_scoped_service(

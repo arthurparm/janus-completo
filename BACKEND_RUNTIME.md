@@ -296,6 +296,10 @@ nonce; callbacks reject tampering, cross-user use, future issuance, and age abov
 minutes before token exchange. OAuth `SecretStr` values are unwrapped only at the HTTP
 client boundary, never serialized or audited, and callback audit records contain the
 verified capability rather than the state token.
+Each issued state is also registered in Redis for ten minutes under its SHA-256 digest.
+Issuance uses `SET NX EX`; after signature and actor validation, the callback consumes the
+entry with an atomic Lua GET+DEL before contacting Google. Unknown, expired, or repeated
+states return 400, while Redis unavailability fails closed with 503.
 The callback derives Janus consent from the exact provider capability: Calendar grants
 read/write, and the Mail capability requests both Gmail read-only metadata and send before
 granting `mail.read` and `mail.send`. Notes remain an actor-scoped local capability and are
