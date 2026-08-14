@@ -3455,6 +3455,18 @@
   },
   {
     "human_delegable": false,
+    "method": "GET",
+    "operation_id": "google_oauth_status_api_v1_productivity_oauth_google_status_get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/oauth/google/status",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
     "method": "POST",
     "operation_id": "upsert_profile_api_v1_profiles__post",
     "ownership": "actor",

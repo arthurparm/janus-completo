@@ -2895,6 +2895,37 @@
         "title": "FeedbackTypeEnum",
         "type": "string"
       },
+      "GoogleConnectionStatusResponse": {
+        "properties": {
+          "capabilities": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Capabilities",
+            "type": "object"
+          },
+          "local_status": {
+            "enum": [
+              "disconnected",
+              "configured",
+              "inconsistent"
+            ],
+            "title": "Local Status",
+            "type": "string"
+          },
+          "provider_verified": {
+            "title": "Provider Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "local_status",
+          "capabilities",
+          "provider_verified"
+        ],
+        "title": "GoogleConnectionStatusResponse",
+        "type": "object"
+      },
       "GoogleDisconnectResponse": {
         "properties": {
           "provider_revoked": {
@@ -16492,6 +16523,39 @@
           }
         ],
         "summary": "Oauth Google Start",
+        "tags": [
+          "Productivity"
+        ],
+        "x-janus-human-delegable": false,
+        "x-janus-ownership": "actor",
+        "x-janus-principals": [
+          "user"
+        ],
+        "x-janus-scopes": [],
+        "x-janus-security-profile": "user"
+      }
+    },
+    "/api/v1/productivity/oauth/google/status": {
+      "get": {
+        "operationId": "google_oauth_status_api_v1_productivity_oauth_google_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleConnectionStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCUser": []
+          }
+        ],
+        "summary": "Google Oauth Status",
         "tags": [
           "Productivity"
         ],

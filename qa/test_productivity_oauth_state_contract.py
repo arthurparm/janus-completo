@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -9,6 +9,10 @@ import pytest
 from app.api.v1.endpoints import productivity
 from app.core.security.actor_context import ActorContext, AuthMethod
 from app.services.oauth_token_security_service import OAuthTokenProtectionError
+from app.services.productivity_oauth_connection_status_service import (
+    GoogleConnectionStatus,
+    GoogleConnectionStatusUnavailableError,
+)
 from app.services.productivity_oauth_disconnect_service import (
     GoogleDisconnectPersistenceError,
     GoogleDisconnectResult,
@@ -354,3 +358,45 @@ def test_disconnect_reports_local_persistence_failure(
     )
 
     assert response.status_code == 503
+
+
+def test_connection_status_is_actor_scoped_and_truthful(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status_reader = Mock(
+        return_value=GoogleConnectionStatus(
+            local_status="configured",
+            capabilities={"calendar": True, "mail": False},
+            provider_verified=False,
+        )
+    )
+    monkeypatch.setattr(productivity, "get_google_connection_status", status_reader)
+
+    response = _client(actor_id=7).get(
+        "/api/v1/productivity/oauth/google/status"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "local_status": "configured",
+        "capabilities": {"calendar": True, "mail": False},
+        "provider_verified": False,
+    }
+    status_reader.assert_called_once_with(user_id=7)
+
+
+def test_connection_status_reports_storage_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        productivity,
+        "get_google_connection_status",
+        Mock(side_effect=GoogleConnectionStatusUnavailableError("database unavailable")),
+    )
+
+    response = _client(actor_id=7).get(
+        "/api/v1/productivity/oauth/google/status"
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Google connection status unavailable"

@@ -336,3 +336,8 @@ provider's `invalid_token` response as already revoked. Confirmed revocation del
 encrypted local token transactionally. Provider or egress failure returns the typed
 `local_disconnected` state with `retry_required=true`; Janus effects remain blocked while
 the encrypted token is retained only so a later disconnect request can retry revocation.
+
+`GET /api/v1/productivity/oauth/google/status` reports actor-scoped local configuration
+only. `configured` requires a decryptable stored token plus every consent required by at
+least one Google capability; orphaned token/consent combinations are `inconsistent`.
+`provider_verified=false` is explicit because the status read performs no Google I/O.

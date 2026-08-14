@@ -30,6 +30,10 @@ from app.services.productivity_oauth_connection_service import (
     OAuthConnectionPersistenceError,
     persist_google_oauth_connection,
 )
+from app.services.productivity_oauth_connection_status_service import (
+    GoogleConnectionStatusUnavailableError,
+    get_google_connection_status,
+)
 from app.services.productivity_oauth_disconnect_service import (
     GoogleDisconnectPersistenceError,
     disconnect_google_productivity,
@@ -116,6 +120,12 @@ class GoogleDisconnectResponse(BaseModel):
     provider_revoked: bool | None
     retry_required: bool
     warning: str | None = None
+
+
+class GoogleConnectionStatusResponse(BaseModel):
+    local_status: Literal["disconnected", "configured", "inconsistent"]
+    capabilities: dict[str, bool]
+    provider_verified: bool
 
 
 class OAuthCallbackRequest(BaseModel):
@@ -904,4 +914,27 @@ async def google_oauth_disconnect(request: Request) -> GoogleDisconnectResponse:
         provider_revoked=result.provider_revoked,
         retry_required=result.retry_required,
         warning=result.warning,
+    )
+
+
+@router.get("/oauth/google/status")
+async def google_oauth_status(request: Request) -> GoogleConnectionStatusResponse:
+    actor = require_authenticated_actor_id(request)
+    try:
+        connection = get_google_connection_status(user_id=int(actor))
+    except GoogleConnectionStatusUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google connection status unavailable",
+        ) from exc
+    try:
+        _PROD_OAUTH_EVENTS_TOTAL.labels(
+            "google", "status", connection.local_status
+        ).inc()
+    except Exception:
+        pass
+    return GoogleConnectionStatusResponse(
+        local_status=connection.local_status,
+        capabilities=connection.capabilities,
+        provider_verified=connection.provider_verified,
     )
