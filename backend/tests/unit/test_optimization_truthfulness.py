@@ -1,4 +1,5 @@
 import importlib
+import sys
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -172,3 +173,57 @@ async def test_service_exposes_metrics_repository_failure() -> None:
         match="Falha ao buscar as métricas de saúde",
     ):
         await service.get_system_health()
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_missing_memory_probe_is_not_reported_as_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monitor = self_optimization.SystemMonitor()
+    monkeypatch.setattr(
+        self_optimization.action_registry,
+        "get_statistics",
+        Mock(
+            return_value={
+                "tool_usage": {},
+                "total_calls": 0,
+                "successful_calls": 0,
+                "total_tools_registered": 0,
+            }
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "psutil", None)
+
+    metrics = await monitor.collect_metrics()
+
+    assert metrics.memory_usage_mb is None
+    assert monitor._metrics_history[-1].memory_usage_mb is None
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_analysis_preserves_unknown_memory_measurement() -> None:
+    metrics = self_optimization.SystemMetrics(
+        avg_response_time=0.2,
+        error_rate=0.0,
+        tool_success_rate=1.0,
+        memory_usage_mb=None,
+        active_tools_count=1,
+    )
+    repository = type(
+        "Repository",
+        (),
+        {
+            "get_metrics": AsyncMock(return_value=metrics),
+            "get_metrics_history": Mock(return_value=[]),
+            "find_issues": Mock(return_value=[]),
+            "get_health_score": Mock(return_value=1.0),
+        },
+    )()
+    service = optimization_service.OptimizationService(repository)
+
+    result = await service.analyze_system("performance", detailed=False)
+
+    assert result["metrics_snapshot"]["memory_usage_mb"] is None
+    assert result["trend"]["memory_usage_latest_mb"] is None
+    assert result["trend"]["memory_usage_max_mb"] is None
+    assert result["series"]["memory_usage_mb"] == []

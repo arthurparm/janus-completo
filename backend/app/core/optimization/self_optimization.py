@@ -75,7 +75,7 @@ class SystemMetrics:
     avg_response_time: float
     error_rate: float
     tool_success_rate: float
-    memory_usage_mb: float
+    memory_usage_mb: float | None
     active_tools_count: int
     failed_tools: list[str] = field(default_factory=list)
     slow_tools: list[str] = field(default_factory=list)
@@ -170,7 +170,7 @@ class SystemMonitor:
             ]
 
             # Uso de memória do processo (MB)
-            memory_usage_mb = 0.0
+            memory_usage_mb: float | None = None
             try:
                 import os
 
@@ -179,8 +179,10 @@ class SystemMonitor:
                 process = psutil.Process(os.getpid())
                 memory_usage_mb = round(process.memory_info().rss / (1024**2), 2)
             except Exception:
-                # Mantém 0.0 caso psutil não esteja disponível
-                memory_usage_mb = 0.0
+                logger.warning(
+                    "[SelfOptimization] Uso de memória indisponível; "
+                    "a amostra será registrada sem essa medida"
+                )
 
             metrics = SystemMetrics(
                 avg_response_time=avg_response,
@@ -300,9 +302,13 @@ class SystemMonitor:
 
         # 5. Possível vazamento de memória (tendência ascendente)
         if len(self._metrics_history) >= 5 and all(
-            m.memory_usage_mb > 0.0 for m in self._metrics_history[-5:]
+            m.memory_usage_mb is not None for m in self._metrics_history[-5:]
         ):
-            window = [m.memory_usage_mb for m in self._metrics_history[-5:]]
+            window = [
+                m.memory_usage_mb
+                for m in self._metrics_history[-5:]
+                if m.memory_usage_mb is not None
+            ]
             diffs = [window[i + 1] - window[i] for i in range(len(window) - 1)]
             total_increase = window[-1] - window[0]
 
@@ -341,7 +347,7 @@ class SystemMonitor:
             resource_exhausted = True
             description = f"Uso de memória do sistema elevado ({sys_mem_percent:.0f}%)"
             severity = min(1.0, sys_mem_percent / 100.0)
-        elif proc_mem_mb >= 2048.0:  # processo consumindo >= 2GB
+        elif proc_mem_mb is not None and proc_mem_mb >= 2048.0:
             resource_exhausted = True
             description = f"Uso de memória do processo elevado ({proc_mem_mb:.0f}MB)"
             severity = 0.8

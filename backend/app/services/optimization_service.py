@@ -119,7 +119,13 @@ class OptimizationService:
             # Coletar séries de valores
             resp_times = [m.avg_response_time for m in history] or [metrics.avg_response_time]
             error_rates = [m.error_rate for m in history] or [metrics.error_rate]
-            memory_usage = [m.memory_usage_mb for m in history] or [metrics.memory_usage_mb]
+            memory_usage = [
+                value
+                for item in history
+                if (value := item.memory_usage_mb) is not None
+            ]
+            if not memory_usage and metrics.memory_usage_mb is not None:
+                memory_usage = [metrics.memory_usage_mb]
 
             def percentile(values: list[float], p: int) -> float:
                 if not values:
@@ -134,8 +140,12 @@ class OptimizationService:
                 "error_rate_avg": round(sum(error_rates) / len(error_rates), 3)
                 if error_rates
                 else 0.0,
-                "memory_usage_latest_mb": round(memory_usage[-1], 2),
-                "memory_usage_max_mb": round(max(memory_usage), 2) if memory_usage else 0.0,
+                "memory_usage_latest_mb": (
+                    round(memory_usage[-1], 2) if memory_usage else None
+                ),
+                "memory_usage_max_mb": (
+                    round(max(memory_usage), 2) if memory_usage else None
+                ),
             }
 
             issues_by_type: dict[str, int] = {}
