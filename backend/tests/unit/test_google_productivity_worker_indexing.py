@@ -38,9 +38,16 @@ def _configure_worker_dependencies(
     *,
     provider_error: Exception | None = None,
     index_error: Exception | None = None,
-) -> tuple[list[str], AsyncMock, list[dict[str, object]]]:
+    existing_event_id: str | None = None,
+) -> tuple[
+    list[str],
+    AsyncMock,
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
     order: list[str] = []
     audits: list[dict[str, object]] = []
+    requests: list[dict[str, object]] = []
 
     class _ConsentRepository:
         def has_consent(self, _user_id: int, _scope: str) -> bool:
@@ -51,8 +58,14 @@ def _configure_worker_dependencies(
             return SimpleNamespace(access_token="encrypted-at-rest")
 
     class _Response:
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
         def raise_for_status(self) -> None:
             return None
+
+        def json(self) -> object:
+            return self._payload
 
     class _Client:
         async def __aenter__(self) -> _Client:
@@ -61,11 +74,18 @@ def _configure_worker_dependencies(
         async def __aexit__(self, *_args: object) -> None:
             return None
 
-        async def post(self, *_args: object, **_kwargs: object) -> _Response:
+        async def get(self, *_args: object, **kwargs: object) -> _Response:
+            order.append("reconcile")
+            requests.append(kwargs)
+            items = [{"id": existing_event_id}] if existing_event_id else []
+            return _Response({"items": items})
+
+        async def post(self, *_args: object, **kwargs: object) -> _Response:
             order.append("provider")
+            requests.append(kwargs)
             if provider_error:
                 raise provider_error
-            return _Response()
+            return _Response({"id": "created-event"})
 
     async def index_memory_event(**_kwargs: object) -> None:
         order.append("index")
@@ -88,18 +108,18 @@ def _configure_worker_dependencies(
         lambda: SimpleNamespace(index_memory_event=index),
     )
     monkeypatch.setattr(worker, "record_audit_event_direct", audits.append)
-    return order, index, audits
+    return order, index, audits, requests
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
 async def test_calendar_is_indexed_only_after_provider_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    order, index, _audits = _configure_worker_dependencies(monkeypatch)
+    order, index, _audits, requests = _configure_worker_dependencies(monkeypatch)
 
     await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["provider", "index"]
+    assert order == ["reconcile", "provider", "index"]
     index.assert_awaited_once()
     assert index.await_args is not None
     indexed = index.await_args.kwargs
@@ -108,6 +128,17 @@ async def test_calendar_is_indexed_only_after_provider_success(
     )
     assert indexed["payload"]["metadata"]["origin"] == "google"
     assert indexed["payload"]["metadata"]["task_id"] == "calendar-task"
+    assert indexed["payload"]["metadata"]["provider_event_id"] == "created-event"
+    assert requests[0]["params"] == {
+        "privateExtendedProperty": "janusTaskId=calendar-task",
+        "maxResults": 1,
+        "showDeleted": "false",
+    }
+    insert_payload = requests[1]["json"]
+    assert isinstance(insert_payload, dict)
+    assert insert_payload["extendedProperties"] == {
+        "private": {"janusTaskId": "calendar-task"}
+    }
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -116,7 +147,7 @@ async def test_provider_failure_never_creates_calendar_knowledge(
 ) -> None:
     request = httpx.Request("POST", "https://www.googleapis.com/calendar/v3/events")
     error = httpx.ConnectError("provider unavailable", request=request)
-    order, index, audits = _configure_worker_dependencies(
+    order, index, audits, _requests = _configure_worker_dependencies(
         monkeypatch,
         provider_error=error,
     )
@@ -124,7 +155,7 @@ async def test_provider_failure_never_creates_calendar_knowledge(
     with pytest.raises(httpx.ConnectError):
         await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["provider"]
+    assert order == ["reconcile", "provider"]
     index.assert_not_awaited()
     assert any(event.get("status") == "error" for event in audits)
 
@@ -133,16 +164,37 @@ async def test_provider_failure_never_creates_calendar_knowledge(
 async def test_index_failure_is_audited_without_replaying_confirmed_effect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    order, index, audits = _configure_worker_dependencies(
+    order, index, audits, _requests = _configure_worker_dependencies(
         monkeypatch,
         index_error=RuntimeError("knowledge unavailable"),
     )
 
     await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["provider", "index"]
+    assert order == ["reconcile", "provider", "index"]
     index.assert_awaited_once()
     assert any(
         event.get("action") == "index_add_event" and event.get("status") == "error"
         for event in audits
     )
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_redelivery_reconciles_existing_event_without_duplicate_insert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order, index, audits, _requests = _configure_worker_dependencies(
+        monkeypatch,
+        existing_event_id="existing-event",
+    )
+
+    await worker._handle_google_productivity_task(_calendar_task())
+
+    assert order == ["reconcile", "index"]
+    index.assert_awaited_once()
+    assert index.await_args is not None
+    assert (
+        index.await_args.kwargs["payload"]["metadata"]["provider_event_id"]
+        == "existing-event"
+    )
+    assert any(event.get("status") == "reconciled" for event in audits)

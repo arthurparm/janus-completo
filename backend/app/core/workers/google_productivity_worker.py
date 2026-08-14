@@ -225,6 +225,28 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     if not allowed_calendar_url:
                         raise RuntimeError("Egress blocked for google calendar")
                     async with httpx.AsyncClient(timeout=30) as client:
+                        reconciliation = await client.get(
+                            allowed_calendar_url,
+                            params={
+                                "privateExtendedProperty": (
+                                    f"janusTaskId={task.task_id}"
+                                ),
+                                "maxResults": 1,
+                                "showDeleted": "false",
+                            },
+                            headers={"Authorization": f"Bearer {access}"},
+                        )
+                        reconciliation.raise_for_status()
+                        reconciliation_payload = reconciliation.json()
+                        existing_items = (
+                            reconciliation_payload.get("items", [])
+                            if isinstance(reconciliation_payload, dict)
+                            else []
+                        )
+                        if not isinstance(existing_items, list):
+                            raise RuntimeError(
+                                "Invalid Google Calendar reconciliation response"
+                            )
                         req = {
                             "summary": ev.get("title"),
                             "start": {
@@ -235,19 +257,48 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                             },
                             "location": ev.get("location") or None,
                             "description": ev.get("notes") or None,
-                        }
-                        resp = await client.post(
-                            allowed_calendar_url,
-                            json=req,
-                            headers={
-                                "Authorization": f"Bearer {access}",
-                                "Content-Type": "application/json",
+                            "extendedProperties": {
+                                "private": {"janusTaskId": task.task_id}
                             },
+                        }
+                        existing_event = next(
+                            (
+                                item
+                                for item in existing_items
+                                if isinstance(item, dict)
+                                and isinstance(item.get("id"), str)
+                                and item.get("id")
+                            ),
+                            None,
                         )
-                        resp.raise_for_status()
+                        if existing_event is not None:
+                            provider_event_id = str(existing_event["id"])
+                            effect_status = "reconciled"
+                        else:
+                            resp = await client.post(
+                                allowed_calendar_url,
+                                json=req,
+                                headers={
+                                    "Authorization": f"Bearer {access}",
+                                    "Content-Type": "application/json",
+                                },
+                            )
+                            resp.raise_for_status()
+                            created_event = resp.json()
+                            provider_event_id = (
+                                str(created_event.get("id"))
+                                if isinstance(created_event, dict)
+                                and created_event.get("id")
+                                else ""
+                            )
+                            if not provider_event_id:
+                                raise RuntimeError(
+                                    "Google Calendar response missing event id"
+                                )
+                            effect_status = "ok"
                     try:
                         _PROD_WORKER_USER_EVENTS.labels(
-                            str(user_id), "calendar_send", "ok"
+                            str(user_id), "calendar_send", effect_status
                         ).inc()
                         _PROD_WORKER_LATENCY.labels("calendar_send").observe(
                             __import__("time").perf_counter() - _t0
@@ -264,9 +315,13 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                                 "endpoint": "productivity:google_calendar",
                                 "action": "calendar_add_event",
                                 "tool": "google_calendar",
-                                "status": "ok",
+                                "status": effect_status,
                                 "latency_ms": None,
                                 "trace_id": TRACE_ID.get(),
+                                "detail": {
+                                    "provider_event_id": provider_event_id,
+                                    "task_id": task.task_id,
+                                },
                             }
                         )
                     except Exception:
@@ -318,6 +373,7 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                             "origin": "google",
                             "scope": "calendar.write",
                             "task_id": task.task_id,
+                            "provider_event_id": provider_event_id,
                             "user_id": str(user_id),
                             "timestamp": int(ev.get("start_ts") or 0),
                             "ts_ms": int(ev.get("start_ts") or 0),

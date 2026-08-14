@@ -352,3 +352,9 @@ Calendar and Mail requests with `index=true` are indexed only by the productivit
 after the corresponding Google API effect succeeds. The enqueueing REST endpoint never
 writes speculative knowledge. Indexing uses deterministic point identifiers and reports a
 separate worker audit error without rewriting a confirmed Google effect as failed.
+
+Calendar creation also reconciles broker redelivery against a private Google Calendar
+extended property, `janusTaskId=<task_id>`, before inserting. A previously accepted event
+is reported as `reconciled`, indexed with its provider event ID, and is not inserted again.
+This provides provider-backed duplicate suppression for Calendar without claiming the same
+guarantee for Gmail, whose send API has no equivalent transactional idempotency key.
