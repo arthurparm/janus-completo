@@ -12,6 +12,10 @@ from app.repositories.productivity_repository import (
 )
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository, UserRepository
 from app.services.observability_service import ObservabilityService
+from app.services.productivity_consent_service import (
+    ProductivityConsentRequiredError,
+    require_productivity_consent,
+)
 
 try:
     from prometheus_client import Counter, Histogram  # type: ignore
@@ -105,11 +109,14 @@ def _is_unlimited_user(user_id: str | None = None) -> bool:
         return False
 
 
-def _ensure_consent(repo: ConsentRepository, user_id: str, scope: str) -> None:
-    if not repo.has_consent(str(user_id), scope):
+def _require_consent(repo: ConsentRepository, user_id: str, scope: str) -> None:
+    try:
+        require_productivity_consent(repo, user_id=user_id, scope=scope)
+    except ProductivityConsentRequiredError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=f"Consent required: {scope}"
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
 
 class CalendarEvent(BaseModel):
@@ -132,6 +139,7 @@ async def calendar_add_event(
     knowledge = Depends(get_knowledge_facade),
 ):
     actor = require_authenticated_actor_id(request)
+    _require_consent(repo, actor, "calendar.write")
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service
@@ -287,6 +295,7 @@ async def mail_send(
     payload: MailSendRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
 ):
     actor = require_authenticated_actor_id(request)
+    _require_consent(repo, actor, "mail.send")
     _t0 = _t.time()
     try:
         svc: ObservabilityService = request.app.state.observability_service

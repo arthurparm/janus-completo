@@ -272,3 +272,9 @@ serialized per owner lock stripe, corrupt or invalid JSON is reported as `503` w
 overwriting the file, and a failed write cannot be returned as success. The former
 global `notes_default.json` is intentionally neither read nor migrated because its
 records have no trustworthy owner attribution.
+
+Google Calendar writes require active `calendar.write` consent and Gmail sends require
+active `mail.send` consent. The API checks before publishing and the productivity
+worker checks again immediately before reading OAuth tokens or contacting Google, so a
+revocation that occurs while a task is queued prevents the external effect and produces
+an error audit event.

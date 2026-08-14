@@ -13,7 +13,8 @@ from app.core.security.egress_policy import enforce_worker_http_egress
 from app.models.schemas import TaskMessage
 from app.planes.knowledge import get_knowledge_facade
 from app.repositories.observability_repository import record_audit_event_direct
-from app.repositories.user_repository import OAuthTokenRepository
+from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository
+from app.services.productivity_consent_service import require_productivity_consent
 
 try:
     from prometheus_client import Counter, Histogram  # type: ignore
@@ -159,6 +160,11 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
         do_index = bool(payload.get("index"))
         if task.task_type == "google_calendar_add_event" and user_id is not None:
             try:
+                require_productivity_consent(
+                    ConsentRepository(),
+                    user_id=user_id,
+                    scope="calendar.write",
+                )
                 repo = OAuthTokenRepository()
                 tok = repo.get(user_id=int(user_id), provider="google")
                 access = tok.access_token if tok else None
@@ -356,6 +362,11 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     pass
         if task.task_type == "google_mail_send" and user_id is not None:
             try:
+                require_productivity_consent(
+                    ConsentRepository(),
+                    user_id=user_id,
+                    scope="mail.send",
+                )
                 repo = OAuthTokenRepository()
                 tok = repo.get(user_id=int(user_id), provider="google")
                 access = tok.access_token if tok else None
@@ -502,6 +513,20 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
             except Exception as e:
                 try:
                     _PROD_WORKER_ERRORS.labels("mail_send", e.__class__.__name__).inc()
+                except Exception:
+                    pass
+                try:
+                    record_audit_event_direct(
+                        {
+                            "user_id": int(user_id),
+                            "endpoint": "productivity:google_mail",
+                            "action": "mail_send",
+                            "tool": "google_mail",
+                            "status": "error",
+                            "latency_ms": None,
+                            "trace_id": TRACE_ID.get(),
+                        }
+                    )
                 except Exception:
                     pass
                 try:
