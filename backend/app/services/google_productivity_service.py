@@ -62,7 +62,17 @@ async def resolve_google_access_token(
             return str(access)
         raise GoogleProductivityTokenUnavailableError("Google OAuth connection required")
 
+    return await refresh_google_access_token(repo=repo, token=token, user_id=user_id)
+
+
+async def refresh_google_access_token(
+    *, repo: OAuthTokenRepository, token: Any, user_id: int
+) -> str:
+    if not token or not token.refresh_token:
+        raise GoogleProductivityTokenUnavailableError("Google refresh token required")
+
     client_id, client_secret, _redirect_uri = resolve_google_oauth_config(settings)
+    now = datetime.now(UTC).replace(tzinfo=None)
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.post(
             _allowed_url("https://oauth2.googleapis.com/token"),

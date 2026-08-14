@@ -18,6 +18,7 @@ from app.services.google_productivity_service import (
     MailMessageResult,
     list_google_calendar_events,
     list_google_mail_messages,
+    refresh_google_access_token,
 )
 from app.services.observability_service import ObservabilityService
 from app.services.productivity_consent_service import (
@@ -769,56 +770,31 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 async def google_oauth_refresh(request: Request):
     actor = require_authenticated_actor_id(request)
     repo_tok = OAuthTokenRepository()
-    tok = repo_tok.get(user_id=actor, provider="google")
+    tok = repo_tok.get(user_id=int(actor), provider="google")
     if not tok or not tok.refresh_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No refresh token")
-    client_id, client_secret, _redirect_uri = _google_oauth_config()
-    import httpx
-
     try:
-        from app.core.security.egress_policy import enforce_worker_http_egress
-
-        token_url = "https://oauth2.googleapis.com/token"
-        allowed_url = enforce_worker_http_egress(token_url, tool="google_oauth")
-        if not allowed_url:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Egress blocked by policy")
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                allowed_url,
-                data={
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "refresh_token": tok.refresh_token,
-                    "grant_type": "refresh_token",
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            access_token = data.get("access_token")
-            if not isinstance(access_token, str) or not access_token:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Token response missing access_token",
-                )
-            expires_in = data.get("expires_in")
-            from datetime import UTC, datetime, timedelta
-
-            expires_at = (
-                datetime.now(UTC).replace(tzinfo=None)
-                + timedelta(seconds=int(expires_in or 0))
-                if expires_in
-                else None
-            )
-            repo_tok.upsert(
-                user_id=actor,
-                provider="google",
-                access_token=access_token,
-                refresh_token=tok.refresh_token,
-                expires_at=expires_at,
-            )
-    except httpx.HTTPError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Refresh failed")
+        await refresh_google_access_token(
+            repo=repo_tok,
+            token=tok,
+            user_id=int(actor),
+        )
+    except GoogleProductivityTokenUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except OAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    except (httpx.TimeoutException, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Google OAuth refresh timed out",
+        ) from exc
+    except (httpx.HTTPError, GoogleProductivityProviderError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Google OAuth refresh failed",
+        ) from exc
     try:
         svc: ObservabilityService = request.app.state.observability_service
         svc.record_audit_event(

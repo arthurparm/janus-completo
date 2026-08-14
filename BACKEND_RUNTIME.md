@@ -306,3 +306,9 @@ token, egress, or timeout failures into empty success. Calendar responses expose
 event summary. Mail responses fetch only metadata headers and snippets (not message bodies),
 with request bounds of 100 calendar events and 50 messages. Gmail metadata fetches use a
 five-request concurrency bound and a 30-second total deadline.
+
+Automatic refresh in REST reads and workers and the manual OAuth refresh endpoint share
+the same token service, configuration unwrapping, egress policy, provider validation, and
+persistence path. The manual endpoint forces renewal and reports missing refresh token,
+provider failure, configuration failure, and timeout distinctly instead of maintaining a
+second refresh implementation.

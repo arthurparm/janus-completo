@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -164,3 +166,48 @@ def test_callback_uses_unmasked_secret_and_grants_only_verified_scope(
     }
     assert token_writes[0]["access_token"] == "access"
     assert consent_writes == ["mail.read", "mail.send"]
+
+
+def test_manual_refresh_uses_shared_actor_scoped_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token = SimpleNamespace(refresh_token="refresh-token")
+    repository = SimpleNamespace(get=lambda **_kwargs: token)
+    refresh = AsyncMock(return_value="new-access")
+    monkeypatch.setattr(productivity, "OAuthTokenRepository", lambda: repository)
+    monkeypatch.setattr(productivity, "refresh_google_access_token", refresh)
+
+    response = _client(actor_id=7).post(
+        "/api/v1/productivity/oauth/google/refresh"
+    )
+
+    assert response.status_code == 200
+    refresh.assert_awaited_once_with(repo=repository, token=token, user_id=7)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    ("error", "expected_status"),
+    [
+        (httpx.ConnectError("provider"), 502),
+        (httpx.TimeoutException("timeout"), 504),
+    ],
+)
+def test_manual_refresh_maps_shared_service_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    expected_status: int,
+) -> None:
+    token = SimpleNamespace(refresh_token="refresh-token")
+    repository = SimpleNamespace(get=lambda **_kwargs: token)
+    monkeypatch.setattr(productivity, "OAuthTokenRepository", lambda: repository)
+    monkeypatch.setattr(
+        productivity,
+        "refresh_google_access_token",
+        AsyncMock(side_effect=error),
+    )
+
+    response = _client(actor_id=7).post(
+        "/api/v1/productivity/oauth/google/refresh"
+    )
+
+    assert response.status_code == expected_status
