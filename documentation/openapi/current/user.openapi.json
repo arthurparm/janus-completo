@@ -3779,14 +3779,19 @@
       "MailMessage": {
         "properties": {
           "body": {
+            "maxLength": 1000000,
             "title": "Body",
             "type": "string"
           },
           "subject": {
+            "maxLength": 998,
+            "minLength": 1,
             "title": "Subject",
             "type": "string"
           },
           "to": {
+            "maxLength": 320,
+            "minLength": 3,
             "title": "To",
             "type": "string"
           }

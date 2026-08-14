@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -29,13 +30,13 @@ def _calendar_task() -> TaskMessage:
     )
 
 
-def _mail_task() -> TaskMessage:
+def _mail_task(*, index: bool = False, task_id: str = "mail-task") -> TaskMessage:
     return TaskMessage(
-        task_id="mail-task",
+        task_id=task_id,
         task_type="google_mail_send",
         payload={
             "user_id": 7,
-            "index": False,
+            "index": index,
             "message": {
                 "to": "dest@example.com",
                 "subject": "Review",
@@ -56,6 +57,7 @@ def _configure_worker_dependencies(
     provider_error: Exception | None = None,
     index_error: Exception | None = None,
     existing_event_id: str | None = None,
+    existing_message_id: str | None = None,
 ) -> tuple[
     list[str],
     AsyncMock,
@@ -102,9 +104,14 @@ def _configure_worker_dependencies(
         async def __aexit__(self, *_args: object) -> None:
             return None
 
-        async def get(self, *_args: object, **kwargs: object) -> _Response:
+        async def get(self, url: str, **kwargs: object) -> _Response:
             order.append("reconcile")
             requests.append(kwargs)
+            if "gmail" in url:
+                messages = (
+                    [{"id": existing_message_id}] if existing_message_id else []
+                )
+                return _Response({"messages": messages})
             items = [{"id": existing_event_id}] if existing_event_id else []
             return _Response({"items": items})
 
@@ -250,13 +257,84 @@ async def test_redelivery_reconciles_existing_event_without_duplicate_insert(
 async def test_mail_completion_persists_provider_message_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    order, index, _audits, _requests = _configure_worker_dependencies(monkeypatch)
+    order, index, _audits, requests = _configure_worker_dependencies(monkeypatch)
 
     await worker._handle_google_productivity_task(_mail_task())
 
     assert order == [
         "lifecycle_start",
+        "reconcile",
         "provider",
         "lifecycle_succeed:created-event",
     ]
     index.assert_not_awaited()
+    assert requests[0]["params"] == {
+        "q": "in:sent rfc822msgid:<janus.mail-task@janus.invalid>",
+        "maxResults": 1,
+        "includeSpamTrash": "false",
+    }
+    encoded = requests[1]["json"]
+    assert isinstance(encoded, dict)
+    raw = base64.urlsafe_b64decode(str(encoded["raw"])).decode()
+    assert "Message-ID: <janus.mail-task@janus.invalid>" in raw
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_mail_redelivery_reuses_existing_provider_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order, index, audits, _requests = _configure_worker_dependencies(
+        monkeypatch,
+        existing_message_id="existing-message",
+    )
+
+    await worker._handle_google_productivity_task(_mail_task())
+
+    assert order == [
+        "lifecycle_start",
+        "reconcile",
+        "lifecycle_succeed:existing-message",
+    ]
+    index.assert_not_awaited()
+    assert any(event.get("status") == "reconciled" for event in audits)
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_mail_knowledge_uses_task_and_provider_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order, index, _audits, _requests = _configure_worker_dependencies(monkeypatch)
+
+    await worker._handle_google_productivity_task(_mail_task(index=True))
+
+    assert order == [
+        "lifecycle_start",
+        "reconcile",
+        "provider",
+        "index",
+        "lifecycle_succeed:created-event",
+    ]
+    assert index.await_args is not None
+    indexed = index.await_args.kwargs
+    assert indexed["point_id"] == build_deterministic_point_id(
+        "google-mail-message", 7, "mail-task"
+    )
+    assert indexed["payload"]["metadata"]["task_id"] == "mail-task"
+    assert indexed["payload"]["metadata"]["provider_message_id"] == "created-event"
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_mail_header_injection_is_rejected_before_provider_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order, index, audits, _requests = _configure_worker_dependencies(monkeypatch)
+    task = _mail_task()
+    assert task.payload is not None
+    task.payload["message"]["subject"] = "Review\r\nBcc: attacker@example.com"
+
+    with pytest.raises(ValueError, match="linefeed|newline"):
+        await worker._handle_google_productivity_task(task)
+
+    assert order == ["lifecycle_start", "lifecycle_fail"]
+    index.assert_not_awaited()
+    assert any(event.get("status") == "error" for event in audits)

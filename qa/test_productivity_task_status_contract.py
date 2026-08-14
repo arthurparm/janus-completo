@@ -82,3 +82,22 @@ def test_task_status_does_not_leak_other_owners_or_database_errors(
 
     assert response.status_code == expected_status
     assert "offline" not in response.text
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"to": "victim@example.com\r\nBcc: attacker@example.com", "subject": "S", "body": "B"},
+        {"to": "victim@example.com", "subject": "S\r\nBcc: attacker@example.com", "body": "B"},
+        {"to": "not-an-address", "subject": "S", "body": "B"},
+    ],
+)
+def test_mail_request_rejects_invalid_or_injected_headers(
+    message: dict[str, str],
+) -> None:
+    response = _client().post(
+        "/api/v1/productivity/mail/messages/send",
+        json={"message": message},
+    )
+
+    assert response.status_code == 422

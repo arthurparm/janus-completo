@@ -1,10 +1,11 @@
 import asyncio
 from datetime import datetime
+from email.headerregistry import Address
 from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.vector_store import build_deterministic_point_id
 from app.repositories.productivity_repository import (
@@ -389,9 +390,28 @@ async def calendar_list_events(
 
 
 class MailMessage(BaseModel):
-    to: str
-    subject: str
-    body: str
+    to: str = Field(min_length=3, max_length=320)
+    subject: str = Field(min_length=1, max_length=998)
+    body: str = Field(max_length=1_000_000)
+
+    @field_validator("to")
+    @classmethod
+    def validate_recipient(cls, value: str) -> str:
+        recipient = value.strip()
+        if "\r" in recipient or "\n" in recipient:
+            raise ValueError("recipient must not contain line breaks")
+        try:
+            Address(addr_spec=recipient)
+        except ValueError as exc:
+            raise ValueError("recipient must be a valid email address") from exc
+        return recipient
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        if "\r" in value or "\n" in value:
+            raise ValueError("subject must not contain line breaks")
+        return value
 
 
 class MailSendRequest(BaseModel):

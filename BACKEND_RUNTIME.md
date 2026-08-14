@@ -364,5 +364,8 @@ separate worker audit error without rewriting a confirmed Google effect as faile
 Calendar creation also reconciles broker redelivery against a private Google Calendar
 extended property, `janusTaskId=<task_id>`, before inserting. A previously accepted event
 is reported as `reconciled`, indexed with its provider event ID, and is not inserted again.
-This provides provider-backed duplicate suppression for Calendar without claiming the same
-guarantee for Gmail, whose send API has no equivalent transactional idempotency key.
+Gmail sends similarly carry a deterministic RFC 5322 `Message-ID` derived from `task_id`.
+Before sending, redelivery searches the authenticated actor's sent mailbox with
+`rfc822msgid:<...>` and reuses the provider message ID when found. This is best-effort
+duplicate suppression, not a transactional idempotency guarantee: Gmail search indexing
+can lag a send whose response was lost.

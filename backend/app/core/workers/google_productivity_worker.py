@@ -1,8 +1,10 @@
 import asyncio
 import base64
 from datetime import UTC, datetime
+from email.message import EmailMessage
+from email.policy import SMTP
 from typing import Any, cast
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import uuid4
 
 import httpx
 import structlog
@@ -530,35 +532,81 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     to = str(msg.get("to", ""))
                     subject = str(msg.get("subject", ""))
                     body = str(msg.get("body", ""))
-                    raw = f"To: {to}\r\nSubject: {subject}\r\n\r\n{body}".encode()
+                    rfc_message_id = f"<janus.{task.task_id}@janus.invalid>"
+                    email_message = EmailMessage(policy=SMTP)
+                    email_message["To"] = to
+                    email_message["Subject"] = subject
+                    email_message["Message-ID"] = rfc_message_id
+                    email_message.set_content(body)
+                    raw = email_message.as_bytes()
                     b64 = base64.urlsafe_b64encode(raw).decode("ascii")
                     gmail_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+                    gmail_list_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
                     allowed_gmail_url = enforce_worker_http_egress(
                         gmail_url, tool="google_productivity_worker"
                     )
-                    if not allowed_gmail_url:
+                    allowed_gmail_list_url = enforce_worker_http_egress(
+                        gmail_list_url, tool="google_productivity_worker"
+                    )
+                    if not allowed_gmail_url or not allowed_gmail_list_url:
                         raise RuntimeError("Egress blocked for gmail send")
                     async with httpx.AsyncClient(timeout=30) as client:
-                        resp = await client.post(
-                            allowed_gmail_url,
-                            json={"raw": b64},
-                            headers={
-                                "Authorization": f"Bearer {access}",
-                                "Content-Type": "application/json",
+                        reconciliation = await client.get(
+                            allowed_gmail_list_url,
+                            params={
+                                "q": f"in:sent rfc822msgid:{rfc_message_id}",
+                                "maxResults": 1,
+                                "includeSpamTrash": "false",
                             },
+                            headers={"Authorization": f"Bearer {access}"},
                         )
-                        resp.raise_for_status()
-                        sent_message = resp.json()
-                        provider_resource_id = (
-                            str(sent_message.get("id"))
-                            if isinstance(sent_message, dict) and sent_message.get("id")
-                            else None
+                        reconciliation.raise_for_status()
+                        reconciliation_payload = reconciliation.json()
+                        existing_messages = (
+                            reconciliation_payload.get("messages", [])
+                            if isinstance(reconciliation_payload, dict)
+                            else []
                         )
-                        if not provider_resource_id:
-                            raise RuntimeError("Gmail response missing message id")
+                        if not isinstance(existing_messages, list):
+                            raise RuntimeError("Invalid Gmail reconciliation response")
+                        existing_message = next(
+                            (
+                                item
+                                for item in existing_messages
+                                if isinstance(item, dict)
+                                and isinstance(item.get("id"), str)
+                                and item.get("id")
+                            ),
+                            None,
+                        )
+                        if existing_message is not None:
+                            provider_resource_id = str(existing_message["id"])
+                            effect_status = "reconciled"
+                        else:
+                            resp = await client.post(
+                                allowed_gmail_url,
+                                json={"raw": b64},
+                                headers={
+                                    "Authorization": f"Bearer {access}",
+                                    "Content-Type": "application/json",
+                                },
+                            )
+                            resp.raise_for_status()
+                            sent_message = resp.json()
+                            provider_resource_id = (
+                                str(sent_message.get("id"))
+                                if isinstance(sent_message, dict)
+                                and sent_message.get("id")
+                                else None
+                            )
+                            if not provider_resource_id:
+                                raise RuntimeError("Gmail response missing message id")
+                            effect_status = "ok"
                     try:
                         _GOOGLE_MAIL_SENT_TOTAL.inc()
-                        _PROD_WORKER_USER_EVENTS.labels("[REDACTED_PII]", "mail_send", "ok").inc()
+                        _PROD_WORKER_USER_EVENTS.labels(
+                            "[REDACTED_PII]", "mail_send", effect_status
+                        ).inc()
                         _PROD_WORKER_LATENCY.labels("mail_send").observe(
                             __import__("time").perf_counter() - _t0
                         )
@@ -574,9 +622,13 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                             "endpoint": "productivity:google_mail",
                             "action": "mail_send",
                             "tool": "google_mail",
-                            "status": "ok",
+                            "status": effect_status,
                             "latency_ms": None,
                             "trace_id": TRACE_ID.get(),
+                            "detail": {
+                                "provider_message_id": provider_resource_id,
+                                "task_id": task.task_id,
+                            },
                         }
                     )
                 except Exception as e:
@@ -588,19 +640,22 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                     try:
                         _t0 = __import__("time").perf_counter()
                         content = f"To: {msg.get('to', '')!s}\nSubject: {msg.get('subject', '')!s}\n{msg.get('body', '')!s}"
-                        composite_id = (
-                            f"mail:{user_id}:{msg.get('to', '')!s}:{msg.get('subject', '')!s}:{content}"
+                        pid = build_deterministic_point_id(
+                            "google-mail-message",
+                            user_id,
+                            task.task_id,
                         )
-                        pid = str(uuid5(NAMESPACE_URL, composite_id))
                         payload_q = {
                             "content": content,
                             "type": "email_message",
                             "ts_ms": int(__import__("time").time() * 1000),
-                            "composite_id": composite_id,
+                            "composite_id": pid,
                             "metadata": {
                                 "type": "email_message",
                                 "origin": "google",
                                 "scope": "mail.send",
+                                "task_id": task.task_id,
+                                "provider_message_id": provider_resource_id,
                                 "user_id": str(user_id),
                                 "timestamp": int(__import__("time").time() * 1000),
                                 "ts_ms": int(__import__("time").time() * 1000),
