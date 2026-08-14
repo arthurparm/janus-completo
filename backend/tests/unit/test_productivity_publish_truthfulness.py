@@ -14,6 +14,21 @@ from app.core.workers import google_productivity_worker as worker
 from app.services import google_productivity_service
 
 
+class _Lifecycle:
+    instances: list["_Lifecycle"] = []
+
+    def __init__(self) -> None:
+        self.created: list[dict[str, object]] = []
+        self.failed: list[dict[str, object]] = []
+        self.__class__.instances.append(self)
+
+    def create_queued(self, **kwargs: object) -> None:
+        self.created.append(kwargs)
+
+    def fail(self, **kwargs: object) -> None:
+        self.failed.append(kwargs)
+
+
 class _OfflineBroker:
     def __init__(self) -> None:
         self.publish = AsyncMock(return_value=False)
@@ -46,6 +61,7 @@ async def test_productivity_publishers_do_not_report_offline_queue_as_success(
     broker = _OfflineBroker()
     audit = Mock()
     monkeypatch.setattr(worker, "get_broker", AsyncMock(return_value=broker))
+    monkeypatch.setattr(worker, "ProductivityTaskService", _Lifecycle)
     monkeypatch.setattr(worker, "record_audit_event_direct", audit)
 
     with pytest.raises(worker.ProductivityQueueUnavailableError, match="não foi enfileirado"):
@@ -53,6 +69,8 @@ async def test_productivity_publishers_do_not_report_offline_queue_as_success(
 
     broker.publish.assert_awaited_once()
     audit.assert_not_called()
+    assert _Lifecycle.instances[-1].created
+    assert _Lifecycle.instances[-1].failed[0]["error_code"] == "queue_unavailable"
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -63,6 +81,7 @@ async def test_productivity_publisher_records_queue_only_after_delivery(
     broker.publish.return_value = True
     audit = Mock()
     monkeypatch.setattr(worker, "get_broker", AsyncMock(return_value=broker))
+    monkeypatch.setattr(worker, "ProductivityTaskService", _Lifecycle)
     monkeypatch.setattr(worker, "record_audit_event_direct", audit)
 
     task_id = await worker.publish_google_mail_send(
@@ -74,6 +93,8 @@ async def test_productivity_publisher_records_queue_only_after_delivery(
     assert task_id
     broker.publish.assert_awaited_once()
     assert audit.call_args.args[0]["status"] == "queued"
+    assert _Lifecycle.instances[-1].created[0]["operation"] == "google_mail_send"
+    assert _Lifecycle.instances[-1].failed == []
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

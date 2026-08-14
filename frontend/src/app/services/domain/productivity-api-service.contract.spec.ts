@@ -44,4 +44,18 @@ describe('ProductivityApiService (Google OAuth contract)', () => {
       warning: null,
     })
   })
+
+  it('consulta o lifecycle tipado da tarefa sem enviar identidade no payload', () => {
+    service.getTaskStatus('task / 1').subscribe((task) => {
+      expect(task.status).toBe('running')
+    })
+    const req = http.expectOne('/api/v1/productivity/tasks/task%20%2F%201')
+    expect(req.request.method).toBe('GET')
+    expect(req.request.body).toBeNull()
+    req.flush({
+      task_id: 'task / 1',
+      operation: 'google_mail_send',
+      status: 'running',
+    })
+  })
 })

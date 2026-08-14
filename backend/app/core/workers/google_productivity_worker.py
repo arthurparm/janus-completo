@@ -1,7 +1,7 @@
 import asyncio
 import base64
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import httpx
@@ -20,6 +20,10 @@ from app.services.google_productivity_service import (
     resolve_google_access_token,
 )
 from app.services.productivity_consent_service import require_productivity_consent
+from app.services.productivity_task_service import (
+    ProductivityTaskOperation,
+    ProductivityTaskService,
+)
 
 try:
     from prometheus_client import Counter, Histogram  # type: ignore
@@ -96,6 +100,7 @@ async def publish_google_calendar_add_event(
     user_id: int, event: dict[str, Any], index: bool
 ) -> str:
     task_id = uuid4().hex
+    lifecycle = ProductivityTaskService()
     msg = TaskMessage(
         task_id=task_id,
         task_type="google_calendar_add_event",
@@ -103,6 +108,11 @@ async def publish_google_calendar_add_event(
         timestamp=__import__("time").time(),
     )
     try:
+        lifecycle.create_queued(
+            task_id=task_id,
+            owner_user_id=user_id,
+            operation="google_calendar_add_event",
+        )
         cm = _tracer.start_as_current_span("google.calendar.publish") if _OTEL else nullcontext()
         with cm:  # type: ignore
             broker = await get_broker()
@@ -117,10 +127,30 @@ async def publish_google_calendar_add_event(
             _GOOGLE_PROD_EVENTS_PUBLISHED.labels("google_calendar_add_event").inc()
         except Exception:
             pass
-    except ProductivityQueueUnavailableError:
+    except ProductivityQueueUnavailableError as exc:
+        try:
+            lifecycle.fail(
+                task_id=task_id,
+                owner_user_id=user_id,
+                error_code="queue_unavailable",
+            )
+        except Exception as lifecycle_exc:
+            logger.error(
+                "Falha ao persistir indisponibilidade da fila",
+                task_id=task_id,
+                exc_info=lifecycle_exc,
+            )
         logger.warning("Broker offline", task_id=task_id)
-        raise
+        raise exc
     except Exception as exc:
+        try:
+            lifecycle.fail(
+                task_id=task_id,
+                owner_user_id=user_id,
+                error_code="queue_publish_error",
+            )
+        except Exception:
+            pass
         logger.error("Falha ao publicar evento de calendário", task_id=task_id, exc_info=exc)
         raise ProductivityQueueUnavailableError(
             "Falha ao enfileirar evento de calendário."
@@ -144,6 +174,7 @@ async def publish_google_calendar_add_event(
 
 async def publish_google_mail_send(user_id: int, message: dict[str, Any], index: bool) -> str:
     task_id = uuid4().hex
+    lifecycle = ProductivityTaskService()
     msg = TaskMessage(
         task_id=task_id,
         task_type="google_mail_send",
@@ -151,6 +182,11 @@ async def publish_google_mail_send(user_id: int, message: dict[str, Any], index:
         timestamp=__import__("time").time(),
     )
     try:
+        lifecycle.create_queued(
+            task_id=task_id,
+            owner_user_id=user_id,
+            operation="google_mail_send",
+        )
         cm = _tracer.start_as_current_span("google.mail.publish") if _OTEL else nullcontext()
         with cm:  # type: ignore
             broker = await get_broker()
@@ -165,10 +201,30 @@ async def publish_google_mail_send(user_id: int, message: dict[str, Any], index:
             _GOOGLE_PROD_EVENTS_PUBLISHED.labels("google_mail_send").inc()
         except Exception:
             pass
-    except ProductivityQueueUnavailableError:
+    except ProductivityQueueUnavailableError as exc:
+        try:
+            lifecycle.fail(
+                task_id=task_id,
+                owner_user_id=user_id,
+                error_code="queue_unavailable",
+            )
+        except Exception as lifecycle_exc:
+            logger.error(
+                "Falha ao persistir indisponibilidade da fila",
+                task_id=task_id,
+                exc_info=lifecycle_exc,
+            )
         logger.warning("Broker offline", task_id=task_id)
-        raise
+        raise exc
     except Exception as exc:
+        try:
+            lifecycle.fail(
+                task_id=task_id,
+                owner_user_id=user_id,
+                error_code="queue_publish_error",
+            )
+        except Exception:
+            pass
         logger.error("Falha ao publicar e-mail", task_id=task_id, exc_info=exc)
         raise ProductivityQueueUnavailableError("Falha ao enfileirar e-mail.") from exc
     try:
@@ -189,9 +245,27 @@ async def publish_google_mail_send(user_id: int, message: dict[str, Any], index:
 
 
 async def _handle_google_productivity_task(task: TaskMessage) -> None:
+    lifecycle = ProductivityTaskService()
+    lifecycle_started = False
+    user_id: int | None = None
     try:
         payload = task.payload or {}
         user_id = int(payload.get("user_id")) if payload.get("user_id") is not None else None
+        if user_id is None or task.task_type not in {
+            "google_calendar_add_event",
+            "google_mail_send",
+        }:
+            raise ValueError("Invalid Google productivity task")
+        should_execute = lifecycle.start_or_create(
+            task_id=task.task_id,
+            owner_user_id=user_id,
+            operation=cast(ProductivityTaskOperation, task.task_type),
+        )
+        lifecycle_started = True
+        if not should_execute:
+            logger.info("Productivity task already completed", task_id=task.task_id)
+            return
+        provider_resource_id: str | None = None
         ev = payload.get("event") or {}
         msg = payload.get("message") or {}
         do_index = bool(payload.get("index"))
@@ -296,6 +370,7 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                                     "Google Calendar response missing event id"
                                 )
                             effect_status = "ok"
+                    provider_resource_id = provider_event_id
                     try:
                         _PROD_WORKER_USER_EVENTS.labels(
                             str(user_id), "calendar_send", effect_status
@@ -473,6 +548,14 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                             },
                         )
                         resp.raise_for_status()
+                        sent_message = resp.json()
+                        provider_resource_id = (
+                            str(sent_message.get("id"))
+                            if isinstance(sent_message, dict) and sent_message.get("id")
+                            else None
+                        )
+                        if not provider_resource_id:
+                            raise RuntimeError("Gmail response missing message id")
                     try:
                         _GOOGLE_MAIL_SENT_TOTAL.inc()
                         _PROD_WORKER_USER_EVENTS.labels("[REDACTED_PII]", "mail_send", "ok").inc()
@@ -600,11 +683,29 @@ async def _handle_google_productivity_task(task: TaskMessage) -> None:
                 except Exception:
                     pass
                 raise
+        lifecycle.succeed(
+            task_id=task.task_id,
+            owner_user_id=user_id,
+            provider_resource_id=provider_resource_id,
+        )
         try:
             getattr(__import__("builtins"), "app", None)
         except Exception:
             pass
-    except Exception:
+    except Exception as exc:
+        if lifecycle_started and user_id is not None:
+            try:
+                lifecycle.fail(
+                    task_id=task.task_id,
+                    owner_user_id=user_id,
+                    error_code=exc.__class__.__name__,
+                )
+            except Exception as lifecycle_exc:
+                logger.error(
+                    "Falha ao persistir erro da tarefa de produtividade",
+                    task_id=task.task_id,
+                    exc_info=lifecycle_exc,
+                )
         raise
 
 

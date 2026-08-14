@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
-import { ProductivityLimitsStatusResponse, GoogleOAuthStartResponse, GoogleOAuthCallbackResponse, GoogleOAuthDisconnectResponse, GoogleConnectionStatusResponse, CalendarAddRequest, MailSendRequest, QueueAck } from '../../models';
+import { ProductivityLimitsStatusResponse, GoogleOAuthStartResponse, GoogleOAuthCallbackResponse, GoogleOAuthDisconnectResponse, GoogleConnectionStatusResponse, CalendarAddRequest, MailSendRequest, ProductivityTaskStatusResponse, QueueAck } from '../../models';
 
 @Injectable({ providedIn: 'root' })
 export class ProductivityApiService {
@@ -55,6 +55,12 @@ googleOAuthDisconnect(): Observable<GoogleOAuthDisconnectResponse> {
 googleOAuthStatus(): Observable<GoogleConnectionStatusResponse> {
     return this.http.get<GoogleConnectionStatusResponse>(
       this.apiContext.buildUrl(`/api/v1/productivity/oauth/google/status`)
+    )
+  }
+
+getTaskStatus(taskId: string): Observable<ProductivityTaskStatusResponse> {
+    return this.http.get<ProductivityTaskStatusResponse>(
+      this.apiContext.buildUrl(`/api/v1/productivity/tasks/${encodeURIComponent(taskId)}`)
     )
   }
 }

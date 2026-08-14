@@ -3467,6 +3467,18 @@
   },
   {
     "human_delegable": false,
+    "method": "GET",
+    "operation_id": "productivity_task_status_api_v1_productivity_tasks__task_id__get",
+    "ownership": "actor",
+    "path": "/api/v1/productivity/tasks/{task_id}",
+    "principals": [
+      "user"
+    ],
+    "profile": "user",
+    "scopes": []
+  },
+  {
+    "human_delegable": false,
     "method": "POST",
     "operation_id": "upsert_profile_api_v1_profiles__post",
     "ownership": "actor",

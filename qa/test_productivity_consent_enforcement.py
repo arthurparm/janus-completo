@@ -162,8 +162,16 @@ async def test_worker_rechecks_revoked_consent_before_external_effect(
         def has_consent(self, _user_id: int, _scope: str) -> bool:
             return False
 
+    class _Lifecycle:
+        def start_or_create(self, **_kwargs: object) -> bool:
+            return True
+
+        def fail(self, **_kwargs: object) -> None:
+            return None
+
     oauth_repository = Mock(side_effect=AssertionError("OAuth token must not be read"))
     monkeypatch.setattr(worker, "ConsentRepository", _RevokedConsentRepository)
+    monkeypatch.setattr(worker, "ProductivityTaskService", _Lifecycle)
     monkeypatch.setattr(worker, "OAuthTokenRepository", oauth_repository)
     task = TaskMessage(
         task_id="revoked-consent",
@@ -203,7 +211,15 @@ async def test_worker_sends_missing_oauth_token_to_failure_path(
         def get(self, *, user_id: int, provider: str) -> None:
             return None
 
+    class _Lifecycle:
+        def start_or_create(self, **_kwargs: object) -> bool:
+            return True
+
+        def fail(self, **_kwargs: object) -> None:
+            return None
+
     monkeypatch.setattr(worker, "ConsentRepository", _AllowedConsentRepository)
+    monkeypatch.setattr(worker, "ProductivityTaskService", _Lifecycle)
     monkeypatch.setattr(worker, "OAuthTokenRepository", _MissingTokenRepository)
     task = TaskMessage(
         task_id="missing-token",

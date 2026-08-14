@@ -29,6 +29,23 @@ def _calendar_task() -> TaskMessage:
     )
 
 
+def _mail_task() -> TaskMessage:
+    return TaskMessage(
+        task_id="mail-task",
+        task_type="google_mail_send",
+        payload={
+            "user_id": 7,
+            "index": False,
+            "message": {
+                "to": "dest@example.com",
+                "subject": "Review",
+                "body": "Ready",
+            },
+        },
+        timestamp=1.0,
+    )
+
+
 def test_google_datetime_is_explicitly_utc() -> None:
     assert worker._google_utc_datetime(0) == "1970-01-01T00:00:00Z"
 
@@ -48,6 +65,17 @@ def _configure_worker_dependencies(
     order: list[str] = []
     audits: list[dict[str, object]] = []
     requests: list[dict[str, object]] = []
+
+    class _Lifecycle:
+        def start_or_create(self, **_kwargs: object) -> bool:
+            order.append("lifecycle_start")
+            return True
+
+        def succeed(self, **_kwargs: object) -> None:
+            order.append(f"lifecycle_succeed:{_kwargs['provider_resource_id']}")
+
+        def fail(self, **_kwargs: object) -> None:
+            order.append("lifecycle_fail")
 
     class _ConsentRepository:
         def has_consent(self, _user_id: int, _scope: str) -> bool:
@@ -94,6 +122,7 @@ def _configure_worker_dependencies(
 
     index = AsyncMock(side_effect=index_memory_event)
     monkeypatch.setattr(worker, "ConsentRepository", _ConsentRepository)
+    monkeypatch.setattr(worker, "ProductivityTaskService", _Lifecycle)
     monkeypatch.setattr(worker, "OAuthTokenRepository", _TokenRepository)
     monkeypatch.setattr(
         worker,
@@ -119,7 +148,13 @@ async def test_calendar_is_indexed_only_after_provider_success(
 
     await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["reconcile", "provider", "index"]
+    assert order == [
+        "lifecycle_start",
+        "reconcile",
+        "provider",
+        "index",
+        "lifecycle_succeed:created-event",
+    ]
     index.assert_awaited_once()
     assert index.await_args is not None
     indexed = index.await_args.kwargs
@@ -155,7 +190,7 @@ async def test_provider_failure_never_creates_calendar_knowledge(
     with pytest.raises(httpx.ConnectError):
         await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["reconcile", "provider"]
+    assert order == ["lifecycle_start", "reconcile", "provider", "lifecycle_fail"]
     index.assert_not_awaited()
     assert any(event.get("status") == "error" for event in audits)
 
@@ -171,7 +206,13 @@ async def test_index_failure_is_audited_without_replaying_confirmed_effect(
 
     await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["reconcile", "provider", "index"]
+    assert order == [
+        "lifecycle_start",
+        "reconcile",
+        "provider",
+        "index",
+        "lifecycle_succeed:created-event",
+    ]
     index.assert_awaited_once()
     assert any(
         event.get("action") == "index_add_event" and event.get("status") == "error"
@@ -190,7 +231,12 @@ async def test_redelivery_reconciles_existing_event_without_duplicate_insert(
 
     await worker._handle_google_productivity_task(_calendar_task())
 
-    assert order == ["reconcile", "index"]
+    assert order == [
+        "lifecycle_start",
+        "reconcile",
+        "index",
+        "lifecycle_succeed:existing-event",
+    ]
     index.assert_awaited_once()
     assert index.await_args is not None
     assert (
@@ -198,3 +244,19 @@ async def test_redelivery_reconciles_existing_event_without_duplicate_insert(
         == "existing-event"
     )
     assert any(event.get("status") == "reconciled" for event in audits)
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_mail_completion_persists_provider_message_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order, index, _audits, _requests = _configure_worker_dependencies(monkeypatch)
+
+    await worker._handle_google_productivity_task(_mail_task())
+
+    assert order == [
+        "lifecycle_start",
+        "provider",
+        "lifecycle_succeed:created-event",
+    ]
+    index.assert_not_awaited()

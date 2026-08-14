@@ -283,6 +283,14 @@ Broker publication now returns an explicit delivery boolean. Productivity effect
 an offline broker or publish exception as `503` and never emit a `queued` response or
 queued audit record unless RabbitMQ accepted the message.
 
+Calendar and mail writes persist an actor-owned lifecycle record before publication.
+`GET /api/v1/productivity/tasks/{task_id}` exposes the typed `queued`, `running`,
+`succeeded`, or `failed` state only to that actor, including the provider resource ID on
+confirmed completion and a sanitized failure classification. The record deliberately
+stores no calendar or mail payload. A broker publication failure transitions the record
+to `failed`; workers also create lifecycle state for compatible messages already queued
+before this schema was deployed.
+
 The Google productivity consumer re-raises denied consent, missing OAuth credentials,
 egress failures, and provider failures after recording the error. The broker therefore
 NACKs the task with `requeue=false` and routes it to the configured DLX/DLQ instead of

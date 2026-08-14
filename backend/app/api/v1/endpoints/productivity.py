@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any, Literal
 
 import httpx
@@ -59,6 +60,12 @@ from app.services.productivity_oauth_token_exchange_service import (
     GoogleOAuthExchangeProviderError,
     GoogleOAuthExchangeTimeoutError,
     exchange_google_authorization_code,
+)
+from app.services.productivity_task_service import (
+    ProductivityTaskNotFoundError,
+    ProductivityTaskPersistenceError,
+    ProductivityTaskService,
+    ProductivityTaskStatus,
 )
 
 try:
@@ -243,12 +250,30 @@ class CalendarAddRequest(BaseModel):
     event: CalendarEvent
     index: bool | None = False
 
+
+class ProductivityQueueResponse(BaseModel):
+    status: Literal["queued"]
+    task_id: str
+
+
+class ProductivityTaskStatusResponse(BaseModel):
+    task_id: str
+    operation: str
+    status: ProductivityTaskStatus
+    provider_resource_id: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
 @router.post("/calendar/events/add")
 async def calendar_add_event(
     payload: CalendarAddRequest,
     request: Request,
     repo: ConsentRepository = Depends(get_consent_repo),
-):
+) -> ProductivityQueueResponse:
     actor = require_authenticated_actor_id(request)
     _require_consent(repo, actor, "calendar.write")
     _t0 = _t.time()
@@ -289,7 +314,7 @@ async def calendar_add_event(
     with cm:  # type: ignore
         try:
             task_id = await publish_google_calendar_add_event(
-                user_id=actor,
+                user_id=int(actor),
                 event=payload.event.model_dump(),
                 index=bool(payload.index),
             )
@@ -321,7 +346,7 @@ async def calendar_add_event(
         _PROD_REQUEST_LATENCY.labels("calendar_add_event").observe(max(0.0, _t.time() - _t0))
     except Exception:
         pass
-    return {"status": "queued", "task_id": task_id}
+    return ProductivityQueueResponse(status="queued", task_id=task_id)
 
 
 @router.post("/oauth/google/start")
@@ -381,7 +406,7 @@ class MailMessagesResponse(BaseModel):
 @router.post("/mail/messages/send")
 async def mail_send(
     payload: MailSendRequest, request: Request, repo: ConsentRepository = Depends(get_consent_repo)
-):
+) -> ProductivityQueueResponse:
     actor = require_authenticated_actor_id(request)
     _require_consent(repo, actor, "mail.send")
     _t0 = _t.time()
@@ -418,7 +443,7 @@ async def mail_send(
     with cm:  # type: ignore
         try:
             task_id = await publish_google_mail_send(
-                user_id=actor,
+                user_id=int(actor),
                 message=payload.message.model_dump(),
                 index=bool(payload.index),
             )
@@ -448,7 +473,42 @@ async def mail_send(
         _PROD_REQUEST_LATENCY.labels("mail_send").observe(max(0.0, _t.time() - _t0))
     except Exception:
         pass
-    return {"status": "queued", "task_id": task_id}
+    return ProductivityQueueResponse(status="queued", task_id=task_id)
+
+
+@router.get("/tasks/{task_id}")
+def productivity_task_status(
+    task_id: str,
+    request: Request,
+) -> ProductivityTaskStatusResponse:
+    actor = require_authenticated_actor_id(request)
+    try:
+        task = ProductivityTaskService().get_owned(
+            task_id=task_id,
+            owner_user_id=int(actor),
+        )
+    except ProductivityTaskNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Productivity task not found",
+        ) from exc
+    except ProductivityTaskPersistenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Productivity task status unavailable",
+        ) from exc
+    return ProductivityTaskStatusResponse(
+        task_id=task.task_id,
+        operation=task.operation,
+        status=task.status,
+        provider_resource_id=task.provider_resource_id,
+        error_code=task.error_code,
+        error_message=task.error_message,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+    )
 
 
 @router.get("/mail/messages")

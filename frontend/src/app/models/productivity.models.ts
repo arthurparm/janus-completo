@@ -18,4 +18,16 @@ export interface CalendarEvent { title: string; start_ts: number; end_ts: number
 export interface CalendarAddRequest { event: CalendarEvent; index?: boolean }
 export interface MailMessage { to: string; subject: string; body: string }
 export interface MailSendRequest { message: MailMessage; index?: boolean }
+export interface ProductivityTaskStatusResponse {
+  task_id: string
+  operation: 'google_calendar_add_event' | 'google_mail_send'
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  provider_resource_id?: string | null
+  error_code?: string | null
+  error_message?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+}
 export interface UserStatusResponse { user_id: string; conversations: number; messages: number; approx_in_tokens: number; approx_out_tokens: number; vector_points: number }

@@ -35,9 +35,11 @@ class DBMigrationService:
             insp = inspect(s.get_bind())
             uniques = insp.get_unique_constraints(table) or []
             foreign_keys = insp.get_foreign_keys(table) or []
+            get_checks = getattr(insp, "get_check_constraints", None)
+            check_constraints = get_checks(table) if callable(get_checks) else []
             return any(
                 constraint.get("name") == constraint_name
-                for constraint in (*uniques, *foreign_keys)
+                for constraint in (*uniques, *foreign_keys, *(check_constraints or []))
             )
         except Exception:
             return False
@@ -468,6 +470,46 @@ class DBMigrationService:
             blocked=blocked,
         )
 
+    def _prepare_productivity_task_schema(
+        self, s: Session, *, dialect: str, applied: list[str]
+    ) -> None:
+        if not self._table_exists(s, "productivity_tasks"):
+            self._execute_ddl(
+                s,
+                """
+                CREATE TABLE productivity_tasks (
+                    task_id VARCHAR(64) PRIMARY KEY,
+                    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                    operation VARCHAR(64) NOT NULL,
+                    status VARCHAR(24) NOT NULL DEFAULT 'queued',
+                    provider_resource_id VARCHAR(255) NULL,
+                    error_code VARCHAR(128) NULL,
+                    error_message VARCHAR(512) NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    started_at TIMESTAMP NULL,
+                    completed_at TIMESTAMP NULL,
+                    CONSTRAINT ck_productivity_tasks_operation
+                        CHECK (operation IN ('google_calendar_add_event', 'google_mail_send')),
+                    CONSTRAINT ck_productivity_tasks_status
+                        CHECK (status IN ('queued', 'running', 'succeeded', 'failed'))
+                )
+                """,
+                "productivity_tasks.table",
+                applied,
+            )
+        for index_name, columns in (
+            ("idx_productivity_tasks_owner_created", "owner_user_id, created_at"),
+            ("idx_productivity_tasks_status_updated", "status, updated_at"),
+        ):
+            if not self._index_exists(s, "productivity_tasks", index_name):
+                self._execute_ddl(
+                    s,
+                    f"CREATE INDEX {index_name} ON productivity_tasks ({columns})",
+                    f"productivity_tasks.{index_name}",
+                    applied,
+                )
+
     def validate_schema(self) -> dict[str, Any]:
         s = self._get_session()
         try:
@@ -603,6 +645,7 @@ class DBMigrationService:
                         "idx_audit_ledger_optimization_cycle",
                     ),
                 )
+
             add(
                 "pending_actions",
                 "simulation_generated_at",
@@ -697,6 +740,36 @@ class DBMigrationService:
                 "index",
                 self._index_exists(s, "outbox_events", "idx_outbox_status_lease"),
             )
+            add(
+                "productivity_tasks",
+                "productivity_tasks",
+                "table",
+                self._table_exists(s, "productivity_tasks"),
+            )
+            for index_name in (
+                "idx_productivity_tasks_owner_created",
+                "idx_productivity_tasks_status_updated",
+            ):
+                add(
+                    "productivity_tasks",
+                    index_name,
+                    "index",
+                    self._index_exists(s, "productivity_tasks", index_name),
+                )
+            for constraint_name in (
+                "ck_productivity_tasks_operation",
+                "ck_productivity_tasks_status",
+            ):
+                add(
+                    "productivity_tasks",
+                    constraint_name,
+                    "constraint",
+                    self._constraint_exists(
+                        s,
+                        "productivity_tasks",
+                        constraint_name,
+                    ),
+                )
             ok = all(c["exists"] for c in checks)
             return {"status": "ok" if ok else "missing", "checks": checks}
         finally:
@@ -1073,6 +1146,11 @@ class DBMigrationService:
             dialect = self._dialect_name(s)
             consent_table = Consent.__tablename__
             self._prepare_outbox_lease_schema(s, dialect=dialect, applied=applied)
+            self._prepare_productivity_task_schema(
+                s,
+                dialect=dialect,
+                applied=applied,
+            )
             self._prepare_chat_stream_ledger_schema(s, dialect=dialect, applied=applied)
             self._prepare_chat_study_schema(s, dialect=dialect, applied=applied)
             self._prepare_chat_rest_idempotency_schema(

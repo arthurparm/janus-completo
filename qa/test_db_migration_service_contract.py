@@ -41,6 +41,26 @@ def test_constraint_exists_detects_named_foreign_key(monkeypatch):
     )
 
 
+def test_constraint_exists_detects_named_check_constraint(monkeypatch):
+    inspector = SimpleNamespace(
+        get_unique_constraints=lambda _table: [],
+        get_foreign_keys=lambda _table: [],
+        get_check_constraints=lambda _table: [
+            {"name": "ck_productivity_tasks_status"}
+        ],
+    )
+    monkeypatch.setattr(migration_module, "inspect", lambda _bind: inspector)
+
+    service = DBMigrationService()
+    session = _FakeSession("postgresql")
+
+    assert service._constraint_exists(
+        session,
+        "productivity_tasks",
+        "ck_productivity_tasks_status",
+    )
+
+
 def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
     svc = DBMigrationService()
     fake = _FakeSession("postgresql")
@@ -66,6 +86,11 @@ def test_migrate_schema_uses_postgres_sql_and_consent_table(monkeypatch):
     assert any("CREATE TABLE chat_stream_events" in q for q in fake.executed_sql)
     assert any("CREATE TABLE chat_study_runs" in q for q in fake.executed_sql)
     assert any("CREATE TABLE chat_rest_runs" in q for q in fake.executed_sql)
+    assert any("CREATE TABLE productivity_tasks" in q for q in fake.executed_sql)
+    assert any("idx_productivity_tasks_owner_created" in q for q in fake.executed_sql)
+    assert any("idx_productivity_tasks_status_updated" in q for q in fake.executed_sql)
+    assert any("ck_productivity_tasks_operation" in q for q in fake.executed_sql)
+    assert any("ck_productivity_tasks_status" in q for q in fake.executed_sql)
     assert all("audit_events" not in q for q in fake.executed_sql)
 
 
@@ -119,6 +144,22 @@ def test_validate_schema_checks_consent_table_with_model_names(monkeypatch):
         "audit_ledger_events",
         "idx_audit_ledger_optimization_cycle",
     ) in index_calls
+    assert (
+        "productivity_tasks",
+        "idx_productivity_tasks_owner_created",
+    ) in index_calls
+    assert (
+        "productivity_tasks",
+        "idx_productivity_tasks_status_updated",
+    ) in index_calls
+    assert (
+        "productivity_tasks",
+        "ck_productivity_tasks_operation",
+    ) in constraint_calls
+    assert (
+        "productivity_tasks",
+        "ck_productivity_tasks_status",
+    ) in constraint_calls
 
 
 def test_validate_schema_skips_postgres_json_index_on_mysql(

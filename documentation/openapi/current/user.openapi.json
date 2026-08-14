@@ -4282,6 +4282,135 @@
         "title": "PendingActionDTO",
         "type": "object"
       },
+      "ProductivityQueueResponse": {
+        "properties": {
+          "status": {
+            "const": "queued",
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "task_id"
+        ],
+        "title": "ProductivityQueueResponse",
+        "type": "object"
+      },
+      "ProductivityTaskStatusResponse": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "provider_resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Resource Id"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "task_id",
+          "operation",
+          "status"
+        ],
+        "title": "ProductivityTaskStatusResponse",
+        "type": "object"
+      },
       "ProfileResponse": {
         "properties": {
           "id": {
@@ -16071,7 +16200,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProductivityQueueResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -16210,7 +16341,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ProductivityQueueResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -16576,6 +16709,60 @@
           }
         ],
         "summary": "Google Oauth Status",
+        "tags": [
+          "Productivity"
+        ],
+        "x-janus-human-delegable": false,
+        "x-janus-ownership": "actor",
+        "x-janus-principals": [
+          "user"
+        ],
+        "x-janus-scopes": [],
+        "x-janus-security-profile": "user"
+      }
+    },
+    "/api/v1/productivity/tasks/{task_id}": {
+      "get": {
+        "operationId": "productivity_task_status_api_v1_productivity_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductivityTaskStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OIDCUser": []
+          }
+        ],
+        "summary": "Productivity Task Status",
         "tags": [
           "Productivity"
         ],

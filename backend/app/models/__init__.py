@@ -23,6 +23,7 @@ from app.models.feedback_models import FeedbackEntry
 from app.models.knowledge_space_models import KnowledgeSpace
 from app.models.outbox_models import OutboxEvent
 from app.models.pending_action_models import PendingAction
+from app.models.productivity_task_models import ProductivityTask
 from app.models.quarantine_models import QuarantineItem
 from app.models.tool_usage_models import ToolDailyUsage
 from app.models.user_models import (
@@ -57,6 +58,7 @@ __all__ = [
     "AutonomyLoopLease",
     "QuarantineItem",
     "PendingAction",
+    "ProductivityTask",
     "ToolDailyUsage",
     "OutboxEvent",
     "DocumentManifest",

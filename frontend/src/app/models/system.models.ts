@@ -74,7 +74,7 @@ export interface ObservabilitySystemHealth {
   dependencies?: Record<string, { status: string; details?: Record<string, unknown> }>;
 }
 
-export interface QueueAck { status: string; task_id?: string }
+export interface QueueAck { status: 'queued'; task_id: string }
 export interface WorkersStatusResponse {
   tracked: number;
   workers: OrchestratorWorkerTaskStatus[];
