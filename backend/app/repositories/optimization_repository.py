@@ -1,6 +1,7 @@
 from typing import Any, cast
 
 import structlog
+
 from app.core.optimization import self_optimization_cycle
 from app.core.optimization.self_optimization import (
     DetectedIssue,
@@ -45,6 +46,20 @@ class OptimizationRepository:
         except Exception as e:
             logger.error("Erro no repositório ao executar ciclo de otimização", exc_info=e)
             raise OptimizationRepositoryError("Falha ao executar o ciclo de otimização.") from e
+
+    async def run_continuous(self, interval_seconds: float) -> None:
+        """Executa o planejador contínuo até uma solicitação explícita de parada."""
+        try:
+            await self_optimization_cycle.run_continuous(interval_seconds=interval_seconds)
+        except Exception as e:
+            logger.error("Falha no loop contínuo de otimização", exc_info=e)
+            raise OptimizationRepositoryError(
+                "Falha no loop contínuo de otimização."
+            ) from e
+
+    def stop_continuous(self) -> None:
+        """Sinaliza a parada do planejador contínuo em execução."""
+        self_optimization_cycle.stop()
 
     async def get_metrics(self) -> SystemMetrics:
         """Coleta as métricas de saúde atuais do sistema."""

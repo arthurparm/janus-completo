@@ -219,7 +219,11 @@ class TestKernelBootstrap:
         _, _, KernelState = _kernel_module
         kernel.degraded_dependencies = {"graph_db": "test error"}
         kernel._state = KernelState.DEGRADED
+        optimization_service = MagicMock()
+        optimization_service.shutdown = AsyncMock()
+        kernel.optimization_service = optimization_service
 
         await kernel.shutdown()
 
         assert kernel.state == KernelState.DEGRADED
+        optimization_service.shutdown.assert_awaited_once_with()

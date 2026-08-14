@@ -359,6 +359,16 @@ class Kernel:
             except Exception as e:
                 logger.error("log_error", message=f"Error stopping worker {worker}: {e}")
 
+        if self.optimization_service:
+            try:
+                await self.optimization_service.shutdown()
+            except Exception as e:
+                logger.error(
+                    "optimization_service_shutdown_failed",
+                    error=str(e),
+                    exc_info=e,
+                )
+
         # Cancel async tasks
         for task_name in ("_neural_training_task", "_consolidation_consumer_task", "_document_ingestion_consumer_task"):
             task = getattr(self, task_name, None)

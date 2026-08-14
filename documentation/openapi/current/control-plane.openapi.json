@@ -741,6 +741,247 @@
         "title": "ConsolidationTaskRequest",
         "type": "object"
       },
+      "ContinuousOptimizationStartRequest": {
+        "properties": {
+          "interval_seconds": {
+            "default": 300,
+            "maximum": 86400.0,
+            "minimum": 10.0,
+            "title": "Interval Seconds",
+            "type": "number"
+          }
+        },
+        "title": "ContinuousOptimizationStartRequest",
+        "type": "object"
+      },
+      "ContinuousOptimizationStartResponse": {
+        "properties": {
+          "audit_recorded": {
+            "title": "Audit Recorded",
+            "type": "boolean"
+          },
+          "automatic_execution_available": {
+            "title": "Automatic Execution Available",
+            "type": "boolean"
+          },
+          "continuous_control_available": {
+            "title": "Continuous Control Available",
+            "type": "boolean"
+          },
+          "continuous_running": {
+            "title": "Continuous Running",
+            "type": "boolean"
+          },
+          "continuous_task_active": {
+            "title": "Continuous Task Active",
+            "type": "boolean"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started At"
+          },
+          "last_started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started By"
+          },
+          "last_stopped_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Stopped At"
+          },
+          "module": {
+            "const": "self_optimization",
+            "title": "Module",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "starting",
+              "running"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "module",
+          "continuous_running",
+          "continuous_task_active",
+          "continuous_control_available",
+          "automatic_execution_available",
+          "interval_seconds",
+          "last_started_by",
+          "last_started_at",
+          "last_stopped_at",
+          "last_error",
+          "audit_recorded"
+        ],
+        "title": "ContinuousOptimizationStartResponse",
+        "type": "object"
+      },
+      "ContinuousOptimizationStopResponse": {
+        "properties": {
+          "audit_recorded": {
+            "title": "Audit Recorded",
+            "type": "boolean"
+          },
+          "automatic_execution_available": {
+            "title": "Automatic Execution Available",
+            "type": "boolean"
+          },
+          "continuous_control_available": {
+            "title": "Continuous Control Available",
+            "type": "boolean"
+          },
+          "continuous_running": {
+            "title": "Continuous Running",
+            "type": "boolean"
+          },
+          "continuous_task_active": {
+            "title": "Continuous Task Active",
+            "type": "boolean"
+          },
+          "forced": {
+            "title": "Forced",
+            "type": "boolean"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started At"
+          },
+          "last_started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started By"
+          },
+          "last_stopped_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Stopped At"
+          },
+          "module": {
+            "const": "self_optimization",
+            "title": "Module",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "starting",
+              "running"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stopped": {
+            "title": "Stopped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status",
+          "module",
+          "continuous_running",
+          "continuous_task_active",
+          "continuous_control_available",
+          "automatic_execution_available",
+          "interval_seconds",
+          "last_started_by",
+          "last_started_at",
+          "last_stopped_at",
+          "last_error",
+          "stopped",
+          "forced",
+          "audit_recorded"
+        ],
+        "title": "ContinuousOptimizationStopResponse",
+        "type": "object"
+      },
       "CostReportResponse": {
         "properties": {
           "by_action": {
@@ -928,6 +1169,73 @@
           "last_modified"
         ],
         "title": "DatasetVersionResponse",
+        "type": "object"
+      },
+      "DeploymentPrecheckEvidence": {
+        "properties": {
+          "artifact_present": {
+            "title": "Artifact Present",
+            "type": "boolean"
+          },
+          "fairness_metrics_present": {
+            "title": "Fairness Metrics Present",
+            "type": "boolean"
+          },
+          "performance_metrics_present": {
+            "title": "Performance Metrics Present",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "artifact_present",
+          "performance_metrics_present",
+          "fairness_metrics_present"
+        ],
+        "title": "DeploymentPrecheckEvidence",
+        "type": "object"
+      },
+      "DeploymentPrecheckResponse": {
+        "properties": {
+          "bias_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias Score"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/DeploymentPrecheckEvidence"
+          },
+          "precheck_passed": {
+            "title": "Precheck Passed",
+            "type": "boolean"
+          },
+          "safety_warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Warnings"
+          }
+        },
+        "required": [
+          "precheck_passed",
+          "bias_score",
+          "safety_warnings",
+          "evidence"
+        ],
+        "title": "DeploymentPrecheckResponse",
         "type": "object"
       },
       "DetectedIssueResponse": {
@@ -1759,6 +2067,11 @@
             "title": "Priority",
             "type": "integer"
           },
+          "source": {
+            "default": "api",
+            "title": "Source",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -2153,6 +2466,29 @@
         "title": "InvalidateResponseCacheRequest",
         "type": "object"
       },
+      "IssueSeverity": {
+        "description": "Faixas públicas de severidade usadas para filtrar problemas.",
+        "enum": [
+          "LOW",
+          "MEDIUM",
+          "HIGH"
+        ],
+        "title": "IssueSeverity",
+        "type": "string"
+      },
+      "IssueType": {
+        "description": "Tipos de problemas detectáveis.",
+        "enum": [
+          "performance_degradation",
+          "high_error_rate",
+          "memory_leak",
+          "tool_failure",
+          "slow_response",
+          "resource_exhaustion"
+        ],
+        "title": "IssueType",
+        "type": "string"
+      },
       "KnowledgeHealthResponse": {
         "properties": {
           "circuit_breaker_open": {
@@ -2277,6 +2613,28 @@
         "title": "LessonItem",
         "type": "object"
       },
+      "MetricsHistoryResponse": {
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/SystemMetricsResponse"
+            },
+            "title": "Metrics",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "metrics"
+        ],
+        "title": "MetricsHistoryResponse",
+        "type": "object"
+      },
       "ModelInfo": {
         "properties": {
           "accuracy": {
@@ -2369,6 +2727,14 @@
         "title": "NodeTypesResponse",
         "type": "object"
       },
+      "OptimizationAnalysisType": {
+        "description": "Tipos de análise que possuem implementação verificável.",
+        "enum": [
+          "performance"
+        ],
+        "title": "OptimizationAnalysisType",
+        "type": "string"
+      },
       "OptimizationCycleRequest": {
         "properties": {
           "enable_auto_execution": {
@@ -2396,6 +2762,67 @@
       "OptimizationCycleResponse": {
         "properties": {
           "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "improvements_applied": {
+            "title": "Improvements Applied",
+            "type": "integer"
+          },
+          "improvements_planned": {
+            "title": "Improvements Planned",
+            "type": "integer"
+          },
+          "issues_detected": {
+            "title": "Issues Detected",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedImprovementResponse"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "issues_detected",
+          "improvements_planned",
+          "improvements_applied",
+          "elapsed_seconds",
+          "message"
+        ],
+        "title": "OptimizationCycleResponse",
+        "type": "object"
+      },
+      "OptimizationStatusResponse": {
+        "properties": {
+          "automatic_execution_available": {
+            "title": "Automatic Execution Available",
+            "type": "boolean"
+          },
+          "continuous_control_available": {
+            "title": "Continuous Control Available",
+            "type": "boolean"
+          },
+          "continuous_running": {
+            "title": "Continuous Running",
+            "type": "boolean"
+          },
+          "continuous_task_active": {
+            "title": "Continuous Task Active",
+            "type": "boolean"
+          },
+          "interval_seconds": {
             "anyOf": [
               {
                 "type": "number"
@@ -2404,42 +2831,9 @@
                 "type": "null"
               }
             ],
-            "title": "Elapsed Seconds"
+            "title": "Interval Seconds"
           },
-          "improvements_applied": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Improvements Applied"
-          },
-          "improvements_planned": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Improvements Planned"
-          },
-          "issues_detected": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issues Detected"
-          },
-          "message": {
+          "last_error": {
             "anyOf": [
               {
                 "type": "string"
@@ -2448,17 +2842,70 @@
                 "type": "null"
               }
             ],
-            "title": "Message"
+            "title": "Last Error"
           },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
+          "last_started_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started At"
+          },
+          "last_started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Started By"
+          },
+          "last_stopped_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Stopped At"
+          },
+          "module": {
+            "const": "self_optimization",
+            "title": "Module",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "starting",
+              "running"
+            ],
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
-          "success"
+          "status",
+          "module",
+          "continuous_running",
+          "continuous_task_active",
+          "continuous_control_available",
+          "automatic_execution_available",
+          "interval_seconds",
+          "last_started_by",
+          "last_started_at",
+          "last_stopped_at",
+          "last_error"
         ],
-        "title": "OptimizationCycleResponse",
+        "title": "OptimizationStatusResponse",
         "type": "object"
       },
       "OutboxReconcileRequest": {
@@ -2548,6 +2995,73 @@
           "plan"
         ],
         "title": "PlanUpdateRequest",
+        "type": "object"
+      },
+      "PlannedImprovementResponse": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "hypothesis": {
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "implementation_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Implementation Steps",
+            "type": "array"
+          },
+          "improvement_type": {
+            "title": "Improvement Type",
+            "type": "string"
+          },
+          "priority_score": {
+            "title": "Priority Score",
+            "type": "number"
+          },
+          "requires_human_approval": {
+            "title": "Requires Human Approval",
+            "type": "boolean"
+          },
+          "risk_level": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Risk Level",
+            "type": "number"
+          },
+          "success_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Success Criteria",
+            "type": "array"
+          },
+          "target_component": {
+            "title": "Target Component",
+            "type": "string"
+          }
+        },
+        "required": [
+          "improvement_type",
+          "target_component",
+          "description",
+          "hypothesis",
+          "evidence",
+          "success_criteria",
+          "implementation_steps",
+          "risk_level",
+          "priority_score",
+          "requires_human_approval"
+        ],
+        "title": "PlannedImprovementResponse",
         "type": "object"
       },
       "PolicyUpdateRequest": {
@@ -3449,10 +3963,13 @@
       "StageRequest": {
         "properties": {
           "model_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
             "title": "Model Id",
             "type": "string"
           },
           "rollout_percent": {
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Rollout Percent",
             "type": "integer"
           }
@@ -3676,8 +4193,7 @@
       "SystemAnalysisResponse": {
         "properties": {
           "analysis_type": {
-            "title": "Analysis Type",
-            "type": "string"
+            "$ref": "#/components/schemas/OptimizationAnalysisType"
           },
           "details": {
             "anyOf": [
@@ -3794,6 +4310,67 @@
           "slow_tools"
         ],
         "title": "SystemHealthResponse",
+        "type": "object"
+      },
+      "SystemMetricsResponse": {
+        "properties": {
+          "active_tools_count": {
+            "title": "Active Tools Count",
+            "type": "integer"
+          },
+          "avg_response_time": {
+            "title": "Avg Response Time",
+            "type": "number"
+          },
+          "error_rate": {
+            "title": "Error Rate",
+            "type": "number"
+          },
+          "failed_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed Tools",
+            "type": "array"
+          },
+          "memory_usage_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Usage Mb"
+          },
+          "slow_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Slow Tools",
+            "type": "array"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "number"
+          },
+          "tool_success_rate": {
+            "title": "Tool Success Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "avg_response_time",
+          "error_rate",
+          "tool_success_rate",
+          "memory_usage_mb",
+          "active_tools_count",
+          "failed_tools",
+          "slow_tools",
+          "timestamp"
+        ],
+        "title": "SystemMetricsResponse",
         "type": "object"
       },
       "SystemOverviewResponse": {
@@ -4852,6 +5429,42 @@
           }
         ],
         "summary": "Review Quarantine",
+        "tags": [
+          "AutonomyAdmin"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "autonomy:admin"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/autonomy/admin/scheduler/jobs": {
+      "get": {
+        "description": "Expõe o estado dos jobs recorrentes (inclui o auto-estudo periódico).\n\nSem isso, saber \"quando o Janus vai refletir de novo\" exigia ler logs\nbrutos do container — violava o invariante de iniciativa visível.",
+        "operationId": "get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "autonomy:admin"
+            ]
+          }
+        ],
+        "summary": "Get Scheduler Jobs",
         "tags": [
           "AutonomyAdmin"
         ],
@@ -6012,7 +6625,11 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Autonomy Maturity Api V1 Autonomy Maturity Get",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -7281,7 +7898,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentPrecheckResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7351,6 +7970,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "501": {
+            "description": "No inference-runtime activation adapter is configured."
           }
         },
         "security": [
@@ -11751,9 +12373,8 @@
             "name": "analysis_type",
             "required": false,
             "schema": {
-              "default": "performance",
-              "title": "Analysis Type",
-              "type": "string"
+              "$ref": "#/components/schemas/OptimizationAnalysisType",
+              "default": "performance"
             }
           },
           {
@@ -11797,6 +12418,100 @@
           }
         ],
         "summary": "Analisa métricas e problemas do sistema",
+        "tags": [
+          "Optimization"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/optimization/continuous/start": {
+      "post": {
+        "operationId": "start_continuous_optimization_api_v1_optimization_continuous_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuousOptimizationStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuousOptimizationStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:execute"
+            ]
+          }
+        ],
+        "summary": "Inicia o planejamento contínuo de otimizações",
+        "tags": [
+          "Optimization"
+        ],
+        "x-janus-human-delegable": true,
+        "x-janus-ownership": "none",
+        "x-janus-principals": [
+          "service"
+        ],
+        "x-janus-scopes": [
+          "ops:execute"
+        ],
+        "x-janus-security-profile": "control-plane"
+      }
+    },
+    "/api/v1/optimization/continuous/stop": {
+      "post": {
+        "operationId": "stop_continuous_optimization_api_v1_optimization_continuous_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuousOptimizationStopResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OIDCService": [
+              "ops:execute"
+            ]
+          }
+        ],
+        "summary": "Interrompe o planejamento contínuo de otimizações",
         "tags": [
           "Optimization"
         ],
@@ -11861,7 +12576,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/IssueSeverity"
                 },
                 {
                   "type": "null"
@@ -11877,7 +12592,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/IssueType"
                 },
                 {
                   "type": "null"
@@ -11946,6 +12661,8 @@
             "required": false,
             "schema": {
               "default": 20,
+              "maximum": 100,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -11955,7 +12672,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsHistoryResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -12027,6 +12746,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "501": {
+            "description": "A execução automática não possui adaptador auditável."
           }
         },
         "security": [
@@ -12059,7 +12781,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizationStatusResponse"
+                }
               }
             },
             "description": "Successful Response"

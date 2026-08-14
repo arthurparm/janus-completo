@@ -1,13 +1,17 @@
 from dataclasses import asdict
-from typing import Any, cast
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.optimization.self_optimization import IssueSeverity, IssueType
+from app.core.security.actor_context import ActorContext
+from app.core.security.request_guard import require_service_actor_context
 from app.services.optimization_service import (
     OptimizationAnalysisType,
+    OptimizationContinuousAlreadyRunningError,
+    OptimizationContinuousNotRunningError,
     OptimizationExecutionUnavailableError,
     OptimizationService,
     get_optimization_service,
@@ -71,6 +75,34 @@ class SystemMetricsResponse(BaseModel):
 class MetricsHistoryResponse(BaseModel):
     count: int = Field(ge=0)
     metrics: list[SystemMetricsResponse]
+
+
+class ContinuousOptimizationStartRequest(BaseModel):
+    interval_seconds: float = Field(300, ge=10, le=86400)
+
+
+class OptimizationStatusResponse(BaseModel):
+    status: Literal["idle", "starting", "running"]
+    module: Literal["self_optimization"]
+    continuous_running: bool
+    continuous_task_active: bool
+    continuous_control_available: bool
+    automatic_execution_available: bool
+    interval_seconds: float | None
+    last_started_by: str | None
+    last_started_at: float | None
+    last_stopped_at: float | None
+    last_error: str | None
+
+
+class ContinuousOptimizationStartResponse(OptimizationStatusResponse):
+    audit_recorded: bool
+
+
+class ContinuousOptimizationStopResponse(OptimizationStatusResponse):
+    stopped: bool
+    forced: bool
+    audit_recorded: bool
 
 
 class DetectedIssueResponse(BaseModel):
@@ -177,12 +209,52 @@ async def get_metrics_history(
     )
 
 
-@router.get("/status", summary="Status do módulo de auto-otimização")
+@router.post(
+    "/continuous/start",
+    response_model=ContinuousOptimizationStartResponse,
+    summary="Inicia o planejamento contínuo de otimizações",
+)
+async def start_continuous_optimization(
+    request: ContinuousOptimizationStartRequest,
+    actor: ActorContext = Depends(require_service_actor_context),
+    service: OptimizationService = Depends(get_optimization_service),
+) -> ContinuousOptimizationStartResponse:
+    try:
+        result = await service.start_continuous(
+            interval_seconds=request.interval_seconds,
+            actor=actor,
+        )
+    except OptimizationContinuousAlreadyRunningError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ContinuousOptimizationStartResponse(**result)
+
+
+@router.post(
+    "/continuous/stop",
+    response_model=ContinuousOptimizationStopResponse,
+    summary="Interrompe o planejamento contínuo de otimizações",
+)
+async def stop_continuous_optimization(
+    actor: ActorContext = Depends(require_service_actor_context),
+    service: OptimizationService = Depends(get_optimization_service),
+) -> ContinuousOptimizationStopResponse:
+    try:
+        result = await service.stop_continuous(actor=actor)
+    except OptimizationContinuousNotRunningError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ContinuousOptimizationStopResponse(**result)
+
+
+@router.get(
+    "/status",
+    response_model=OptimizationStatusResponse,
+    summary="Status do módulo de auto-otimização",
+)
 async def get_optimization_status(
     service: OptimizationService = Depends(get_optimization_service),
-) -> dict[str, Any]:
+) -> OptimizationStatusResponse:
     """Delega a busca de status do módulo para o OptimizationService."""
-    return cast(dict[str, Any], service.get_status())
+    return OptimizationStatusResponse(**service.get_status())
 
 
 @router.post(

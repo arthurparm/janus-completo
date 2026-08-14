@@ -332,6 +332,8 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
 
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+
     metric = self_optimization.SystemMetrics(
         avg_response_time=0.5,
         error_rate=0.0,
@@ -339,6 +341,20 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
         memory_usage_mb=None,
         active_tools_count=2,
     )
+    control_status = {
+        "status": "running",
+        "module": "self_optimization",
+        "continuous_running": True,
+        "continuous_task_active": True,
+        "continuous_control_available": True,
+        "automatic_execution_available": False,
+        "interval_seconds": 30.0,
+        "last_started_by": "optimizer-control",
+        "last_started_at": 1.0,
+        "last_stopped_at": None,
+        "last_error": None,
+        "audit_recorded": True,
+    }
     service = type(
         "Service",
         (),
@@ -346,13 +362,35 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
             "get_detected_issues": AsyncMock(return_value=[]),
             "get_metrics_history": AsyncMock(return_value=[metric]),
             "analyze_system": AsyncMock(return_value={}),
+            "start_continuous": AsyncMock(return_value=control_status),
+            "stop_continuous": AsyncMock(
+                return_value={
+                    **control_status,
+                    "status": "idle",
+                    "continuous_running": False,
+                    "continuous_task_active": False,
+                    "stopped": True,
+                    "forced": False,
+                }
+            ),
         },
     )()
+    actor = ActorContext.authenticated(
+        actor_id="optimizer-control",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-optimization",
+        scopes=("ops:execute",),
+    )
     app = FastAPI()
     app.include_router(optimization_endpoint.router, prefix="/optimization")
     app.dependency_overrides[optimization_endpoint.get_optimization_service] = (
         lambda: service
     )
+    app.dependency_overrides[
+        optimization_endpoint.require_service_actor_context
+    ] = lambda: actor
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -372,12 +410,20 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
         artificial_analysis = await client.post(
             "/optimization/analyze", params={"analysis_type": "security"}
         )
+        control_started = await client.post(
+            "/optimization/continuous/start", json={"interval_seconds": 30}
+        )
+        control_stopped = await client.post("/optimization/continuous/stop")
 
     assert invalid_severity.status_code == 422
     assert fuzzy_category.status_code == 422
     assert invalid_limit.status_code == 422
     assert valid_history.status_code == 200
     assert artificial_analysis.status_code == 422
+    assert control_started.status_code == 200
+    assert control_started.json()["automatic_execution_available"] is False
+    assert control_stopped.status_code == 200
+    assert control_stopped.json()["stopped"] is True
     assert valid_history.json() == {
         "count": 1,
         "metrics": [
@@ -396,6 +442,11 @@ async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> 
     service.get_detected_issues.assert_not_awaited()
     service.get_metrics_history.assert_awaited_once_with(1)
     service.analyze_system.assert_not_awaited()
+    service.start_continuous.assert_awaited_once_with(
+        interval_seconds=30.0,
+        actor=actor,
+    )
+    service.stop_continuous.assert_awaited_once_with(actor=actor)
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -519,6 +570,215 @@ async def test_continuous_cycle_rejects_invalid_or_duplicate_start() -> None:
     cycle._running = True
     with pytest.raises(RuntimeError, match="já está em execução"):
         await cycle.run_continuous(interval_seconds=1)
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_control_is_authorized_audited_and_interruptible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+
+    class Repository:
+        running = False
+
+        async def run_continuous(self, interval_seconds: float) -> None:
+            assert interval_seconds == 10
+            self.running = True
+            try:
+                await release.wait()
+            finally:
+                self.running = False
+
+        def stop_continuous(self) -> None:
+            release.set()
+
+        def get_status(self) -> dict[str, object]:
+            return {
+                "status": "running" if self.running else "idle",
+                "module": "self_optimization",
+                "continuous_running": self.running,
+            }
+
+    release = asyncio.Event()
+    events: list[dict[str, object]] = []
+
+    def record_event(**event: object) -> bool:
+        events.append(event)
+        return True
+
+    monkeypatch.setattr(
+        optimization_service,
+        "record_audit_event_direct",
+        record_event,
+    )
+    actor = ActorContext.authenticated(
+        actor_id="optimizer-control",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-optimization",
+        scopes=("ops:execute",),
+    )
+    service = optimization_service.OptimizationService(Repository())
+    human = ActorContext.authenticated(
+        actor_id="human-user",
+        actor_type=ActorType.HUMAN,
+        roles=("ADMIN",),
+        auth_method=AuthMethod.OIDC,
+        trace_id="trace-human",
+    )
+    service_without_scope = ActorContext.authenticated(
+        actor_id="optimizer-limited",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-limited",
+    )
+
+    with pytest.raises(HTTPException) as forbidden:
+        await service.start_continuous(interval_seconds=10, actor=human)
+    assert forbidden.value.status_code == 403
+    with pytest.raises(HTTPException) as missing_scope:
+        await service.start_continuous(
+            interval_seconds=10,
+            actor=service_without_scope,
+        )
+    assert missing_scope.value.status_code == 403
+
+    started = await service.start_continuous(interval_seconds=10, actor=actor)
+
+    assert started["status"] == "running"
+    assert started["continuous_task_active"] is True
+    assert started["automatic_execution_available"] is False
+    with pytest.raises(
+        optimization_service.OptimizationContinuousAlreadyRunningError
+    ):
+        await service.start_continuous(interval_seconds=10, actor=actor)
+
+    stopped = await service.stop_continuous(actor=actor)
+
+    assert stopped["status"] == "idle"
+    assert stopped["stopped"] is True
+    assert stopped["forced"] is False
+    assert stopped["continuous_task_active"] is False
+    actions = [str(event["action"]) for event in events]
+    assert "continuous_start_requested" in actions
+    assert "continuous_started" in actions
+    assert "continuous_stop_requested" in actions
+    assert "continuous_stopped" in actions
+    assert all(
+        event.get("user_id") == "optimizer-control"
+        for event in events
+        if event.get("action") != "continuous_task_finished"
+    )
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_shutdown_stops_owned_task_without_external_actor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+
+    release = asyncio.Event()
+
+    class Repository:
+        running = False
+
+        async def run_continuous(self, _interval_seconds: float) -> None:
+            self.running = True
+            try:
+                await release.wait()
+            finally:
+                self.running = False
+
+        def stop_continuous(self) -> None:
+            release.set()
+
+        def get_status(self) -> dict[str, object]:
+            return {
+                "status": "running" if self.running else "idle",
+                "module": "self_optimization",
+                "continuous_running": self.running,
+            }
+
+    events: list[dict[str, object]] = []
+
+    def record_event(**event: object) -> bool:
+        events.append(event)
+        return True
+
+    monkeypatch.setattr(
+        optimization_service,
+        "record_audit_event_direct",
+        record_event,
+    )
+    actor = ActorContext.authenticated(
+        actor_id="optimizer-control",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-optimization",
+        scopes=("ops:execute",),
+    )
+    service = optimization_service.OptimizationService(Repository())
+    await service.start_continuous(interval_seconds=10, actor=actor)
+
+    await service.shutdown()
+
+    assert service.get_status()["status"] == "idle"
+    audit_details = [event.get("details_json") for event in events]
+    assert any(
+        isinstance(details, dict) and details.get("reason") == "kernel_shutdown"
+        for details in audit_details
+    )
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_continuous_start_requires_durable_audit_before_task_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+
+    repository = type(
+        "Repository",
+        (),
+        {
+            "get_status": Mock(
+                return_value={
+                    "status": "idle",
+                    "module": "self_optimization",
+                    "continuous_running": False,
+                }
+            ),
+            "run_continuous": AsyncMock(),
+        },
+    )()
+
+    def reject_audit(**event: object) -> bool:
+        if event.get("required") is True:
+            raise RuntimeError("ledger indisponível")
+        return False
+
+    monkeypatch.setattr(
+        optimization_service,
+        "record_audit_event_direct",
+        reject_audit,
+    )
+    actor = ActorContext.authenticated(
+        actor_id="optimizer-control",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-optimization",
+        scopes=("ops:execute",),
+    )
+    service = optimization_service.OptimizationService(repository)
+
+    with pytest.raises(RuntimeError, match="ledger indisponível"):
+        await service.start_continuous(interval_seconds=10, actor=actor)
+
+    repository.run_continuous.assert_not_awaited()
+    assert service.get_status()["continuous_task_active"] is False
 
 
 def test_repository_status_reports_operational_state(

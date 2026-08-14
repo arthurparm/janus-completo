@@ -114,6 +114,20 @@
   {
     "human_delegable": true,
     "method": "GET",
+    "operation_id": "get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get",
+    "ownership": "none",
+    "path": "/api/v1/autonomy/admin/scheduler/jobs",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "autonomy:admin"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "GET",
     "operation_id": "self_study_neo4j_audit_api_v1_autonomy_admin_self_study_neo4j_audit_get",
     "ownership": "none",
     "path": "/api/v1/autonomy/admin/self-study/neo4j-audit",
@@ -1930,6 +1944,34 @@
     "operation_id": "analyze_system_api_v1_optimization_analyze_post",
     "ownership": "none",
     "path": "/api/v1/optimization/analyze",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "start_continuous_optimization_api_v1_optimization_continuous_start_post",
+    "ownership": "none",
+    "path": "/api/v1/optimization/continuous/start",
+    "principals": [
+      "service"
+    ],
+    "profile": "control-plane",
+    "scopes": [
+      "ops:execute"
+    ]
+  },
+  {
+    "human_delegable": true,
+    "method": "POST",
+    "operation_id": "stop_continuous_optimization_api_v1_optimization_continuous_stop_post",
+    "ownership": "none",
+    "path": "/api/v1/optimization/continuous/stop",
     "principals": [
       "service"
     ],

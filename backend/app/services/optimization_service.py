@@ -1,8 +1,10 @@
+import asyncio
+import time
 from enum import Enum
 from typing import Any, cast
 
 import structlog
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 
 from app.core.agents import AgentRole
 from app.core.optimization.self_optimization import (
@@ -11,6 +13,9 @@ from app.core.optimization.self_optimization import (
     IssueType,
     SystemMetrics,
 )
+from app.core.security.actor_context import ActorContext
+from app.core.security.authorization import authorization_service
+from app.repositories.observability_repository import record_audit_event_direct
 from app.repositories.optimization_repository import (
     OptimizationMetricsUnavailableRepositoryError,
     OptimizationRepository,
@@ -37,6 +42,14 @@ class OptimizationMetricsUnavailableError(OptimizationServiceError):
     """Ainda não existem amostras suficientes para calcular saúde."""
 
 
+class OptimizationContinuousAlreadyRunningError(OptimizationServiceError):
+    """O planejador contínuo já possui uma tarefa ativa."""
+
+
+class OptimizationContinuousNotRunningError(OptimizationServiceError):
+    """Não existe planejador contínuo ativo para interromper."""
+
+
 class OptimizationAnalysisType(str, Enum):
     """Tipos de análise que possuem implementação verificável."""
 
@@ -55,6 +68,12 @@ class OptimizationService:
     def __init__(self, repo: OptimizationRepository):
         self._repo = repo
         self._prompt_repo = PromptRepository()
+        self._continuous_task: asyncio.Task[None] | None = None
+        self._continuous_interval_seconds: float | None = None
+        self._continuous_started_by: str | None = None
+        self._continuous_started_at: float | None = None
+        self._continuous_stopped_at: float | None = None
+        self._continuous_last_error: str | None = None
 
     async def run_optimization_cycle(
         self, enable_auto_execution: bool, max_improvements: int | None
@@ -68,12 +87,9 @@ class OptimizationService:
                 "nenhuma melhoria foi aplicada."
             )
         try:
-            return cast(
-                dict[str, Any],
-                await self._repo.run_cycle(
-                    enable_auto_execution=enable_auto_execution,
-                    max_improvements=max_improvements,
-                ),
+            return await self._repo.run_cycle(
+                enable_auto_execution=enable_auto_execution,
+                max_improvements=max_improvements,
             )
         except OptimizationMetricsUnavailableRepositoryError as e:
             raise OptimizationMetricsUnavailableError(str(e)) from e
@@ -128,18 +144,196 @@ class OptimizationService:
         if category is not None:
             filtered_issues = [i for i in filtered_issues if i.issue_type is category]
 
-        return cast(list[DetectedIssue], filtered_issues)
+        return filtered_issues
 
     async def get_metrics_history(self, limit: int) -> list[SystemMetrics]:
         logger.info("Buscando histórico de métricas via serviço.")
         if not 1 <= limit <= 100:
             raise ValueError("limit deve estar entre 1 e 100")
-        history = cast(list[SystemMetrics], self._repo.get_metrics_history())
+        history = self._repo.get_metrics_history()
         return history[-limit:]
+
+    def _continuous_task_active(self) -> bool:
+        return self._continuous_task is not None and not self._continuous_task.done()
+
+    @staticmethod
+    def _authorize_continuous_control(actor: ActorContext) -> None:
+        resolved = authorization_service.require_service(actor=actor)
+        if not resolved.has_scopes(("ops:execute",)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden",
+            )
+
+    def _on_continuous_task_done(self, task: asyncio.Task[None]) -> None:
+        outcome = "stopped"
+        if task.cancelled():
+            outcome = "cancelled"
+        else:
+            error = task.exception()
+            if error is not None:
+                outcome = "failed"
+                self._continuous_last_error = str(error)
+                logger.error(
+                    "optimization_continuous_task_failed",
+                    error=str(error),
+                    exc_info=error,
+                )
+        self._continuous_stopped_at = time.time()
+        if self._continuous_task is task:
+            self._continuous_task = None
+        record_audit_event_direct(
+            endpoint="optimization_continuous",
+            action="continuous_task_finished",
+            status=outcome,
+            user_id=self._continuous_started_by,
+            details_json={
+                "interval_seconds": self._continuous_interval_seconds,
+                "error": self._continuous_last_error,
+            },
+        )
+
+    async def start_continuous(
+        self, *, interval_seconds: float, actor: ActorContext
+    ) -> dict[str, Any]:
+        """Inicia planejamento periódico opt-in, sem execução automática de melhorias."""
+        self._authorize_continuous_control(actor)
+        if not 10 <= interval_seconds <= 86400:
+            raise ValueError("interval_seconds deve estar entre 10 e 86400")
+        runtime_status = self._repo.get_status()
+        if self._continuous_task_active() or runtime_status.get("continuous_running"):
+            raise OptimizationContinuousAlreadyRunningError(
+                "O planejador contínuo de otimização já está ativo."
+            )
+
+        record_audit_event_direct(
+            endpoint="optimization_continuous",
+            action="continuous_start_requested",
+            status="authorized",
+            user_id=actor.actor_id,
+            trace_id=actor.trace_id,
+            details_json={"interval_seconds": interval_seconds},
+            required=True,
+        )
+        self._continuous_interval_seconds = interval_seconds
+        self._continuous_started_by = actor.actor_id
+        self._continuous_started_at = time.time()
+        self._continuous_stopped_at = None
+        self._continuous_last_error = None
+        task = asyncio.create_task(
+            self._repo.run_continuous(interval_seconds),
+            name="janus-self-optimization-continuous",
+        )
+        self._continuous_task = task
+        task.add_done_callback(self._on_continuous_task_done)
+        await asyncio.sleep(0)
+        if task.done() and self._continuous_last_error is not None:
+            raise OptimizationServiceError(
+                "O planejador contínuo encerrou durante a inicialização."
+            )
+        audit_recorded = record_audit_event_direct(
+            endpoint="optimization_continuous",
+            action="continuous_started",
+            status="started",
+            user_id=actor.actor_id,
+            trace_id=actor.trace_id,
+            details_json={"interval_seconds": interval_seconds},
+        )
+        return {**self.get_status(), "audit_recorded": audit_recorded}
+
+    async def _stop_continuous(
+        self, *, actor: ActorContext | None, reason: str
+    ) -> dict[str, Any]:
+        task = self._continuous_task
+        runtime_status = self._repo.get_status()
+        if (task is None or task.done()) and not runtime_status.get("continuous_running"):
+            raise OptimizationContinuousNotRunningError(
+                "O planejador contínuo de otimização não está ativo."
+            )
+
+        actor_id = actor.actor_id if actor is not None else "janus-kernel"
+        trace_id = actor.trace_id if actor is not None else None
+        record_audit_event_direct(
+            endpoint="optimization_continuous",
+            action="continuous_stop_requested",
+            status="requested",
+            user_id=actor_id,
+            trace_id=trace_id,
+            details_json={"reason": reason},
+        )
+        self._repo.stop_continuous()
+        forced = False
+        if task is not None and not task.done():
+            try:
+                await asyncio.wait_for(task, timeout=5.0)
+            except TimeoutError:
+                forced = True
+            except asyncio.CancelledError:
+                forced = True
+            except Exception as exc:
+                self._continuous_last_error = str(exc)
+                logger.error(
+                    "optimization_continuous_stop_failed",
+                    error=str(exc),
+                    exc_info=exc,
+                )
+        self._continuous_task = None
+        self._continuous_stopped_at = time.time()
+        audit_recorded = record_audit_event_direct(
+            endpoint="optimization_continuous",
+            action="continuous_stopped",
+            status="forced" if forced else "stopped",
+            user_id=actor_id,
+            trace_id=trace_id,
+            details_json={"reason": reason, "forced": forced},
+        )
+        return {
+            **self.get_status(),
+            "stopped": True,
+            "forced": forced,
+            "audit_recorded": audit_recorded,
+        }
+
+    async def stop_continuous(self, *, actor: ActorContext) -> dict[str, Any]:
+        """Interrompe o planejador contínuo solicitado por um service actor."""
+        self._authorize_continuous_control(actor)
+        return await self._stop_continuous(actor=actor, reason="api_request")
+
+    async def shutdown(self) -> None:
+        """Interrompe a tarefa própria durante o encerramento do kernel."""
+        if not self._continuous_task_active():
+            return
+        try:
+            await self._stop_continuous(actor=None, reason="kernel_shutdown")
+        except OptimizationContinuousNotRunningError:
+            return
 
     def get_status(self) -> dict[str, Any]:
         logger.info("Buscando status do módulo de otimização via serviço.")
-        return cast(dict[str, Any], self._repo.get_status())
+        status_payload = self._repo.get_status()
+        task_active = self._continuous_task_active()
+        runtime_running = bool(status_payload.get("continuous_running"))
+        status_payload.update(
+            {
+                "status": (
+                    "running"
+                    if runtime_running
+                    else "starting"
+                    if task_active
+                    else "idle"
+                ),
+                "continuous_running": runtime_running,
+                "continuous_task_active": task_active,
+                "continuous_control_available": True,
+                "automatic_execution_available": False,
+                "interval_seconds": self._continuous_interval_seconds,
+                "last_started_by": self._continuous_started_by,
+                "last_started_at": self._continuous_started_at,
+                "last_stopped_at": self._continuous_stopped_at,
+                "last_error": self._continuous_last_error,
+            }
+        )
+        return status_payload
 
     async def analyze_system(
         self, analysis_type: OptimizationAnalysisType, detailed: bool

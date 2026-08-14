@@ -7934,6 +7934,42 @@
                     "additionalProperties": false,
                     "properties": {
                       "operation_id": {
+                        "const": "get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get",
+                        "type": "string"
+                      },
+                      "path_params": {
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        },
+                        "default": {},
+                        "type": "object"
+                      },
+                      "payload": {
+                        "default": {},
+                        "type": "object"
+                      },
+                      "query_params": {
+                        "additionalProperties": true,
+                        "default": {},
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "operation_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation_id": {
                         "const": "get_services_health_api_v1_system_health_services_get",
                         "type": "string"
                       },
@@ -10922,6 +10958,42 @@
                     "additionalProperties": false,
                     "properties": {
                       "operation_id": {
+                        "const": "start_continuous_optimization_api_v1_optimization_continuous_start_post",
+                        "type": "string"
+                      },
+                      "path_params": {
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        },
+                        "default": {},
+                        "type": "object"
+                      },
+                      "payload": {
+                        "default": {},
+                        "type": "object"
+                      },
+                      "query_params": {
+                        "additionalProperties": true,
+                        "default": {},
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "operation_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation_id": {
                         "const": "start_heartbeat_api_v1_meta_agent_heartbeat_start_post",
                         "type": "string"
                       },
@@ -10995,6 +11067,42 @@
                     "properties": {
                       "operation_id": {
                         "const": "stop_autonomy_api_v1_autonomy_stop_post",
+                        "type": "string"
+                      },
+                      "path_params": {
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        },
+                        "default": {},
+                        "type": "object"
+                      },
+                      "payload": {
+                        "default": {},
+                        "type": "object"
+                      },
+                      "query_params": {
+                        "additionalProperties": true,
+                        "default": {},
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "operation_id"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "operation_id": {
+                        "const": "stop_continuous_optimization_api_v1_optimization_continuous_stop_post",
                         "type": "string"
                       },
                       "path_params": {
@@ -11639,6 +11747,7 @@
           "get_reflexion_config_api_v1_reflexion_config_get",
           "get_response_cache_status_api_v1_llm_response_cache_status_get",
           "get_run_api_v1_autonomy_history_runs__run_id__get",
+          "get_scheduler_jobs_api_v1_autonomy_admin_scheduler_jobs_get",
           "get_services_health_api_v1_system_health_services_get",
           "get_system_health_api_v1_observability_health_system_get",
           "get_system_health_api_v1_optimization_health_get",
@@ -11722,9 +11831,11 @@
           "shutdown_system_api_v1_collaboration_system_shutdown_post",
           "stage_api_v1_deployment_stage_post",
           "start_autonomy_api_v1_autonomy_start_post",
+          "start_continuous_optimization_api_v1_optimization_continuous_start_post",
           "start_heartbeat_api_v1_meta_agent_heartbeat_start_post",
           "start_workers_api_v1_workers_start_all_post",
           "stop_autonomy_api_v1_autonomy_stop_post",
+          "stop_continuous_optimization_api_v1_optimization_continuous_stop_post",
           "stop_heartbeat_api_v1_meta_agent_heartbeat_stop_post",
           "stop_workers_api_v1_workers_stop_all_post",
           "sync_backlog_api_v1_autonomy_admin_backlog_sync_post",

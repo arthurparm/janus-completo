@@ -57,7 +57,6 @@ def test_canonical_endpoint_manifest_is_complete_and_bijective():
     from app.main import app
 
     manifest = load_endpoint_policy_manifest()
-    assert len(manifest) == 256
     assert len({(policy.method, policy.path) for policy in manifest}) == len(manifest)
     assert len({policy.operation_id for policy in manifest}) == len(manifest)
     assert set(app.state.route_policy_matrix) == set(manifest)

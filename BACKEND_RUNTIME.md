@@ -232,3 +232,11 @@ invalid query values return `422` instead of being interpreted as empty evidence
 `POST /api/v1/optimization/analyze` currently supports only the verified
 `performance` analysis type. Other labels are rejected with `422`; they are not echoed
 over performance metrics as if a security, cost, or domain-specific analysis had run.
+
+Continuous optimization is opt-in through the control-plane endpoints
+`POST /api/v1/optimization/continuous/start` and `/continuous/stop`. Both require a
+service actor with `ops:execute`; start accepts intervals from 10 seconds to 24 hours,
+requires a durable audit record before task creation, and only plans improvements—it
+never enables automatic execution. Status exposes the owned task, runtime loop,
+interval, initiator, timestamps, last error, control availability, and the explicit
+absence of an automatic-execution adapter. Kernel shutdown interrupts any owned task.
