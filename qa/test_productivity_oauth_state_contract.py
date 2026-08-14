@@ -8,6 +8,7 @@ import httpx
 import pytest
 from app.api.v1.endpoints import productivity
 from app.core.security.actor_context import ActorContext, AuthMethod
+from app.services.oauth_token_security_service import OAuthTokenProtectionError
 from app.services.productivity_oauth_state_service import issue_google_oauth_state
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -215,3 +216,20 @@ def test_manual_refresh_maps_shared_service_failures(
     )
 
     assert response.status_code == expected_status
+
+
+def test_manual_refresh_fails_closed_when_persisted_token_cannot_be_decrypted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Repository:
+        def get(self, **_kwargs: object) -> None:
+            raise OAuthTokenProtectionError("decryption failed")
+
+    monkeypatch.setattr(productivity, "OAuthTokenRepository", _Repository)
+
+    response = _client(actor_id=7).post(
+        "/api/v1/productivity/oauth/google/refresh"
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "OAuth token protection unavailable"

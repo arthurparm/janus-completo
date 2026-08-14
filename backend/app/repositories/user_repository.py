@@ -1,5 +1,9 @@
 from typing import Any, cast
 
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from app.db import db
 from app.models.user_models import (
     Consent,
@@ -10,9 +14,11 @@ from app.models.user_models import (
     ServicePrincipal,
     User,
 )
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from app.services.oauth_token_security_service import (
+    is_protected_oauth_token,
+    protect_oauth_token,
+    reveal_oauth_token,
+)
 
 
 class IdentityLinkRequiredError(RuntimeError):
@@ -371,6 +377,10 @@ class OAuthTokenRepository:
     ) -> OAuthToken:
         s = self._get_session()
         try:
+            protected_access = protect_oauth_token(access_token)
+            protected_refresh = (
+                protect_oauth_token(refresh_token) if refresh_token is not None else None
+            )
             tok = (
                 s.query(OAuthToken)
                 .filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider)
@@ -380,19 +390,26 @@ class OAuthTokenRepository:
                 tok = OAuthToken(
                     user_id=user_id,
                     provider=provider,
-                    access_token=access_token,
-                    refresh_token=refresh_token,
+                    access_token=protected_access,
+                    refresh_token=protected_refresh,
                     expires_at=expires_at,
                 )
                 s.add(tok)
             else:
-                tok.access_token = access_token
+                tok.access_token = protected_access
                 tok.refresh_token = (
-                    refresh_token if refresh_token is not None else tok.refresh_token
+                    protected_refresh if protected_refresh is not None else tok.refresh_token
                 )
                 tok.expires_at = expires_at
             s.commit()
             s.refresh(tok)
+            s.expunge(tok)
+            tok.access_token = access_token
+            tok.refresh_token = (
+                refresh_token
+                if refresh_token is not None
+                else reveal_oauth_token(tok.refresh_token)
+            )
             return tok
         finally:
             if not self._session:
@@ -401,11 +418,30 @@ class OAuthTokenRepository:
     def get(self, user_id: int, provider: str) -> OAuthToken | None:
         s = self._get_session()
         try:
-            return (
+            tok = (
                 s.query(OAuthToken)
                 .filter(OAuthToken.user_id == user_id, OAuthToken.provider == provider)
                 .first()
             )
+            if tok is None:
+                return None
+            legacy_access = not is_protected_oauth_token(tok.access_token)
+            legacy_refresh = bool(
+                tok.refresh_token and not is_protected_oauth_token(tok.refresh_token)
+            )
+            access_token = reveal_oauth_token(tok.access_token)
+            refresh_token = reveal_oauth_token(tok.refresh_token)
+            if legacy_access or legacy_refresh:
+                tok.access_token = protect_oauth_token(access_token or "")
+                tok.refresh_token = (
+                    protect_oauth_token(refresh_token) if refresh_token else None
+                )
+                s.commit()
+                s.refresh(tok)
+            s.expunge(tok)
+            tok.access_token = access_token or ""
+            tok.refresh_token = refresh_token
+            return tok
         finally:
             if not self._session:
                 s.close()

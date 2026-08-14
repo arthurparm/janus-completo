@@ -20,6 +20,7 @@ from app.services.google_productivity_service import (
     list_google_mail_messages,
     refresh_google_access_token,
 )
+from app.services.oauth_token_security_service import OAuthTokenProtectionError
 from app.services.observability_service import ObservabilityService
 from app.services.productivity_consent_service import (
     ProductivityConsentRequiredError,
@@ -324,7 +325,7 @@ async def calendar_list_events(
         )
     except GoogleProductivityTokenUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except OAuthConfigurationError as exc:
+    except (OAuthConfigurationError, OAuthTokenProtectionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
@@ -444,7 +445,7 @@ async def mail_list(
         )
     except GoogleProductivityTokenUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except OAuthConfigurationError as exc:
+    except (OAuthConfigurationError, OAuthTokenProtectionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
@@ -734,13 +735,19 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
     )
     # persiste token
     repo_tok = OAuthTokenRepository()
-    repo_tok.upsert(
-        user_id=actor,
-        provider="google",
-        access_token=access_token,
-        refresh_token=str(refresh_token or "") if refresh_token else None,
-        expires_at=expires_at,
-    )
+    try:
+        repo_tok.upsert(
+            user_id=actor,
+            provider="google",
+            access_token=access_token,
+            refresh_token=str(refresh_token or "") if refresh_token else None,
+            expires_at=expires_at,
+        )
+    except OAuthTokenProtectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth token protection unavailable",
+        ) from exc
     # registra consentimento para o escopo indicado no state
     scope = verified_state.scope
     cons_repo = ConsentRepository()
@@ -770,7 +777,13 @@ async def google_oauth_callback(payload: GoogleOAuthCallbackRequest, request: Re
 async def google_oauth_refresh(request: Request):
     actor = require_authenticated_actor_id(request)
     repo_tok = OAuthTokenRepository()
-    tok = repo_tok.get(user_id=int(actor), provider="google")
+    try:
+        tok = repo_tok.get(user_id=int(actor), provider="google")
+    except OAuthTokenProtectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth token protection unavailable",
+        ) from exc
     if not tok or not tok.refresh_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No refresh token")
     try:
@@ -781,7 +794,7 @@ async def google_oauth_refresh(request: Request):
         )
     except GoogleProductivityTokenUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except OAuthConfigurationError as exc:
+    except (OAuthConfigurationError, OAuthTokenProtectionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc

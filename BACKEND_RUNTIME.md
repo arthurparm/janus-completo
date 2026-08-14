@@ -313,3 +313,9 @@ the same token service, configuration unwrapping, egress policy, provider valida
 persistence path. The manual endpoint forces renewal and reports missing refresh token,
 provider failure, configuration failure, and timeout distinctly instead of maintaining a
 second refresh implementation.
+
+New or updated OAuth access and refresh tokens are persisted only in a versioned envelope
+backed by the existing Fernet keyring or Vault Transit provider. Writes fail closed when
+encryption is unavailable; reads reject malformed or undecryptable envelopes. Legacy
+plaintext rows are migrated transactionally on their next repository read, then callers
+receive a detached plaintext value that cannot be committed back accidentally.
