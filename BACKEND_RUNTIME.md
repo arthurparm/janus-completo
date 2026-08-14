@@ -262,3 +262,13 @@ The PostgreSQL migration installs the partial expression index
 `idx_audit_ledger_optimization_cycle` for confirmed optimization events. Apply it during
 a maintenance window before treating lookup latency as runtime-validated on a large
 ledger; source-level schema validation does not prove that an active database has it.
+
+## 16. Productivity data ownership
+
+Local productivity notes are stored under an owner-derived SHA-256 directory inside
+the guarded workspace. The authenticated actor is the only source of that owner key;
+request payloads cannot select another user's note collection. Read-modify-write is
+serialized per owner lock stripe, corrupt or invalid JSON is reported as `503` without
+overwriting the file, and a failed write cannot be returned as success. The former
+global `notes_default.json` is intentionally neither read nor migrated because its
+records have no trustworthy owner attribution.

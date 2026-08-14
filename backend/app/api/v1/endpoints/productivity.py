@@ -1,10 +1,15 @@
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from app.core.infrastructure.filesystem_manager import read_file, write_file
+from app.core.infrastructure.filesystem_manager import read_file
 from app.db.vector_store import build_deterministic_point_id
+from app.repositories.productivity_repository import (
+    ProductivityNotesRepository,
+    ProductivityRepositoryError,
+)
 from app.repositories.user_repository import ConsentRepository, OAuthTokenRepository, UserRepository
 from app.services.observability_service import ObservabilityService
 
@@ -79,6 +84,10 @@ class OAuthRefreshRequest(BaseModel):
 
 def get_consent_repo(request: Request) -> ConsentRepository:
     return ConsentRepository()
+
+
+def get_productivity_notes_repo() -> ProductivityNotesRepository:
+    return ProductivityNotesRepository()
 
 def get_knowledge_facade(request: Request):
     return request.app.state.knowledge_facade
@@ -368,6 +377,7 @@ async def notes_add(
     request: Request,
     repo: ConsentRepository = Depends(get_consent_repo),
     knowledge = Depends(get_knowledge_facade),
+    notes_repo: ProductivityNotesRepository = Depends(get_productivity_notes_repo),
 ):
     actor = require_authenticated_actor_id(request)
     _t0 = _t.time()
@@ -398,28 +408,14 @@ async def notes_add(
     cm = _tracer.start_as_current_span("productivity.notes_add") if _OTEL else nullcontext()
     with cm:  # type: ignore
         pass
-    path = "workspace/productivity/notes_default.json"
-    try:
-        raw = read_file(path)
-    except Exception:
-        raw = ""
-    items: list[dict[str, Any]] = []
-    try:
-        if raw and not raw.startswith("Erro:"):
-            import json
-
-            items = json.loads(raw)
-    except Exception:
-        items = []
     note = payload.note.model_dump()
-    items.append(note)
-    import json
-
-    text = json.dumps(items, ensure_ascii=False)
-    from asyncio import get_event_loop
-
-    loop = get_event_loop()
-    await loop.run_in_executor(None, write_file, path, text, False)
+    try:
+        count = await asyncio.to_thread(notes_repo.add_note, actor, note)
+    except ProductivityRepositoryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     try:
         if bool(payload.index):
             content = f"{note.get('title', '')}\n{note.get('content', '')}"
@@ -477,24 +473,24 @@ async def notes_add(
         _PROD_REQUEST_LATENCY.labels("notes_add").observe(max(0.0, _t.time() - _t0))
     except Exception:
         pass
-    return {"status": "ok", "count": len(items)}
+    return {"status": "ok", "count": count}
 
 
 @router.get("/notes")
 async def notes_list(
-    request: Request, repo: ConsentRepository = Depends(get_consent_repo)
+    request: Request,
+    repo: ConsentRepository = Depends(get_consent_repo),
+    notes_repo: ProductivityNotesRepository = Depends(get_productivity_notes_repo),
 ):
-    require_authenticated_actor_id(request)
-    path = "workspace/productivity/notes_default.json"
-    raw = read_file(path)
+    actor = require_authenticated_actor_id(request)
     try:
-        if raw and not raw.startswith("Erro:"):
-            import json
-
-            return {"notes": json.loads(raw)}
-    except Exception:
-        pass
-    return {"notes": []}
+        notes = await asyncio.to_thread(notes_repo.list_notes, actor)
+    except ProductivityRepositoryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    return {"notes": notes}
 
 
 @router.get("/limits/status")
