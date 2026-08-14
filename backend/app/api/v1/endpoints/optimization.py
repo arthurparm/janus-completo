@@ -49,6 +49,7 @@ class OptimizationCycleResponse(BaseModel):
     elapsed_seconds: float
     plans: list[PlannedImprovementResponse] = Field(default_factory=list)
     message: str
+    audit_recorded: Literal[True]
 
 
 class SystemHealthResponse(BaseModel):
@@ -143,6 +144,7 @@ class SystemAnalysisResponse(BaseModel):
 )
 async def run_optimization_cycle(
     request: OptimizationCycleRequest,
+    actor: ActorContext = Depends(require_service_actor_context),
     service: OptimizationService = Depends(get_optimization_service),
 ) -> OptimizationCycleResponse:
     """Delega a execução do ciclo de auto-otimização para o OptimizationService."""
@@ -151,6 +153,7 @@ async def run_optimization_cycle(
         result = await service.run_optimization_cycle(
             enable_auto_execution=request.enable_auto_execution,
             max_improvements=request.max_improvements,
+            actor=actor,
         )
     except OptimizationExecutionUnavailableError as exc:
         raise HTTPException(

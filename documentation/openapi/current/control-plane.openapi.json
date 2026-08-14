@@ -2984,6 +2984,11 @@
       },
       "OptimizationCycleResponse": {
         "properties": {
+          "audit_recorded": {
+            "const": true,
+            "title": "Audit Recorded",
+            "type": "boolean"
+          },
           "elapsed_seconds": {
             "title": "Elapsed Seconds",
             "type": "number"
@@ -3022,7 +3027,8 @@
           "improvements_planned",
           "improvements_applied",
           "elapsed_seconds",
-          "message"
+          "message",
+          "audit_recorded"
         ],
         "title": "OptimizationCycleResponse",
         "type": "object"

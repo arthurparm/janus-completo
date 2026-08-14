@@ -249,3 +249,6 @@ Every successful continuous cycle is redacted and appended to the immutable audi
 ledger with service-actor attribution before the next wait begins. Ledger failure
 terminates the owned task and is reported through `last_error`; status also reports the
 last persisted cycle timestamp, detected issue count, and planned improvement count.
+The one-shot `POST /api/v1/optimization/run-cycle` path applies the same service-actor
+authorization and required ledger gate before returning a successful plan, avoiding a
+REST-only plan that disappears after the response.

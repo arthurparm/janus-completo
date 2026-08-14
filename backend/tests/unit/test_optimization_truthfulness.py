@@ -9,12 +9,25 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastapi import HTTPException
 
+from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
+
 optimization_endpoint = importlib.import_module("app.api.v1.endpoints.optimization")
 optimization_repository = importlib.import_module("app.repositories.optimization_repository")
 optimization_service = importlib.import_module("app.services.optimization_service")
 self_optimization = importlib.import_module(
     "app.core.optimization.self_optimization"
 )
+
+
+def _optimizer_actor(*, scopes: tuple[str, ...] = ("ops:execute",)) -> ActorContext:
+    return ActorContext.authenticated(
+        actor_id="optimizer-control",
+        actor_type=ActorType.SERVICE,
+        roles=("SERVICE",),
+        auth_method=AuthMethod.CLIENT_CREDENTIALS,
+        trace_id="trace-optimization",
+        scopes=scopes,
+    )
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -26,7 +39,7 @@ async def test_service_rejects_unverifiable_auto_execution() -> None:
         optimization_service.OptimizationExecutionUnavailableError,
         match="nenhuma melhoria foi aplicada",
     ):
-        await service.run_optimization_cycle(True, 1)
+        await service.run_optimization_cycle(True, 1, _optimizer_actor())
 
     repository.run_cycle.assert_not_awaited()
 
@@ -48,6 +61,7 @@ async def test_endpoint_exposes_auto_execution_as_not_implemented() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await optimization_endpoint.run_optimization_cycle(
             optimization_endpoint.OptimizationCycleRequest(enable_auto_execution=True),
+            _optimizer_actor(),
             service,
         )
 
@@ -56,21 +70,82 @@ async def test_endpoint_exposes_auto_execution_as_not_implemented() -> None:
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
-async def test_planning_cycle_remains_available() -> None:
+async def test_planning_cycle_remains_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     repository = type(
         "Repository",
         (),
         {"run_cycle": AsyncMock(return_value={"success": True, "issues_detected": 0})},
     )()
     service = optimization_service.OptimizationService(repository)
+    events: list[dict[str, object]] = []
 
-    result = await service.run_optimization_cycle(False, 2)
+    def record_event(**event: object) -> bool:
+        events.append(event)
+        return True
 
-    assert result == {"success": True, "issues_detected": 0}
+    monkeypatch.setattr(
+        optimization_service,
+        "record_audit_event_direct",
+        record_event,
+    )
+
+    result = await service.run_optimization_cycle(False, 2, _optimizer_actor())
+
+    assert result == {
+        "success": True,
+        "issues_detected": 0,
+        "audit_recorded": True,
+    }
     repository.run_cycle.assert_awaited_once_with(
         enable_auto_execution=False,
         max_improvements=2,
     )
+    assert events[0]["action"] == "manual_cycle_completed"
+    details = events[0]["details_json"]
+    assert isinstance(details, dict)
+    assert details["actor_id"] == "optimizer-control"
+    assert details["source"] == "manual_rest"
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_manual_planning_cycle_fails_closed_when_ledger_rejects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = type(
+        "Repository",
+        (),
+        {"run_cycle": AsyncMock(return_value={"success": True, "plans": []})},
+    )()
+    service = optimization_service.OptimizationService(repository)
+    monkeypatch.setattr(
+        optimization_service,
+        "record_audit_event_direct",
+        lambda **_event: False,
+    )
+
+    with pytest.raises(
+        optimization_service.OptimizationServiceError,
+        match="não confirmou",
+    ):
+        await service.run_optimization_cycle(False, 1, _optimizer_actor())
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_manual_planning_cycle_requires_service_scope() -> None:
+    repository = type("Repository", (), {"run_cycle": AsyncMock()})()
+    service = optimization_service.OptimizationService(repository)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.run_optimization_cycle(
+            False,
+            1,
+            _optimizer_actor(scopes=()),
+        )
+
+    assert exc_info.value.status_code == 403
+    repository.run_cycle.assert_not_awaited()
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]
@@ -127,7 +202,10 @@ async def test_core_planning_cycle_never_claims_or_runs_application() -> None:
     assert "70%" not in str(result["plans"])
     cycle.executor.execute_improvement.assert_not_awaited()
 
-    response = optimization_endpoint.OptimizationCycleResponse(**result)
+    response = optimization_endpoint.OptimizationCycleResponse(
+        **result,
+        audit_recorded=True,
+    )
     assert response.plans[0].hypothesis == "cache pode ajudar, ainda sem confirmação"
 
 
@@ -215,6 +293,7 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
                         }
                     ],
                     "message": "Planos gerados para revisão humana; nenhuma melhoria foi aplicada.",
+                    "audit_recorded": True,
                 }
             )
         },
@@ -224,6 +303,9 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
     app.dependency_overrides[
         optimization_endpoint.get_optimization_service
     ] = lambda: service
+    app.dependency_overrides[
+        optimization_endpoint.require_service_actor_context
+    ] = lambda: _optimizer_actor()
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -238,6 +320,7 @@ async def test_planning_endpoint_returns_observable_plan_contract() -> None:
     assert body["improvements_applied"] == 0
     assert body["plans"][0]["evidence"] == {"avg_duration": 3.0}
     assert body["plans"][0]["requires_human_approval"] is True
+    assert body["audit_recorded"] is True
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

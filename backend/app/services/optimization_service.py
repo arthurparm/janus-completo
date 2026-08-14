@@ -80,21 +80,34 @@ class OptimizationService:
         self._continuous_last_improvements_planned: int | None = None
 
     async def run_optimization_cycle(
-        self, enable_auto_execution: bool, max_improvements: int | None
+        self,
+        enable_auto_execution: bool,
+        max_improvements: int | None,
+        actor: ActorContext,
     ) -> dict[str, Any]:
         logger.info(
             "Orquestrando ciclo de auto-otimização via serviço", auto_execute=enable_auto_execution
         )
+        self._authorize_control(actor)
         if enable_auto_execution:
             raise OptimizationExecutionUnavailableError(
                 "Execução automática de melhorias não possui adaptador auditável; "
                 "nenhuma melhoria foi aplicada."
             )
         try:
-            return await self._repo.run_cycle(
+            result = await self._repo.run_cycle(
                 enable_auto_execution=enable_auto_execution,
                 max_improvements=max_improvements,
             )
+            await self._persist_planning_result(
+                result=result,
+                actor_id=actor.actor_id,
+                trace_id=actor.trace_id,
+                endpoint="optimization",
+                action="manual_cycle_completed",
+                source="manual_rest",
+            )
+            return {**result, "audit_recorded": True}
         except OptimizationMetricsUnavailableRepositoryError as e:
             raise OptimizationMetricsUnavailableError(str(e)) from e
         except OptimizationRepositoryError as e:
@@ -161,7 +174,7 @@ class OptimizationService:
         return self._continuous_task is not None and not self._continuous_task.done()
 
     @staticmethod
-    def _authorize_continuous_control(actor: ActorContext) -> None:
+    def _authorize_control(actor: ActorContext) -> None:
         resolved = authorization_service.require_service(actor=actor)
         if not resolved.has_scopes(("ops:execute",)):
             raise HTTPException(
@@ -199,33 +212,60 @@ class OptimizationService:
             },
         )
 
-    async def _persist_continuous_cycle(self, result: dict[str, Any]) -> None:
-        """Persiste cada resultado antes de o loop aguardar o próximo ciclo."""
+    async def _persist_planning_result(
+        self,
+        *,
+        result: dict[str, Any],
+        actor_id: str | None,
+        trace_id: str | None,
+        endpoint: str,
+        action: str,
+        source: str,
+        interval_seconds: float | None = None,
+    ) -> None:
+        """Persiste um resultado de planejamento antes de confirmá-lo ao chamador."""
         try:
             recorded = await asyncio.to_thread(
                 record_audit_event_direct,
-                endpoint="optimization_continuous",
-                action="continuous_cycle_completed",
+                endpoint=endpoint,
+                action=action,
                 status="planned",
-                user_id=self._continuous_started_by,
-                trace_id=self._continuous_trace_id,
+                user_id=actor_id,
+                trace_id=trace_id,
                 details_json={
-                    "actor_id": self._continuous_started_by,
-                    "interval_seconds": self._continuous_interval_seconds,
+                    "actor_id": actor_id,
+                    "source": source,
+                    "interval_seconds": interval_seconds,
                     "cycle": result,
                 },
                 required=True,
             )
         except Exception as exc:
+            raise OptimizationServiceError(
+                "Falha ao persistir o resultado do ciclo de otimização no ledger."
+            ) from exc
+        if not recorded:
+            raise OptimizationServiceError(
+                "O ledger não confirmou a persistência do ciclo de otimização."
+            )
+
+    async def _persist_continuous_cycle(self, result: dict[str, Any]) -> None:
+        """Persiste cada resultado antes de o loop aguardar o próximo ciclo."""
+        try:
+            await self._persist_planning_result(
+                result=result,
+                actor_id=self._continuous_started_by,
+                trace_id=self._continuous_trace_id,
+                endpoint="optimization_continuous",
+                action="continuous_cycle_completed",
+                source="continuous_runtime",
+                interval_seconds=self._continuous_interval_seconds,
+            )
+        except OptimizationServiceError as exc:
             self._continuous_last_error = (
                 "Falha ao persistir o resultado do ciclo contínuo no ledger."
             )
             raise OptimizationServiceError(self._continuous_last_error) from exc
-        if not recorded:
-            self._continuous_last_error = (
-                "O ledger não confirmou a persistência do ciclo contínuo."
-            )
-            raise OptimizationServiceError(self._continuous_last_error)
         self._continuous_last_cycle_at = time.time()
         self._continuous_last_issues_detected = int(result["issues_detected"])
         self._continuous_last_improvements_planned = int(
@@ -236,7 +276,7 @@ class OptimizationService:
         self, *, interval_seconds: float, actor: ActorContext
     ) -> dict[str, Any]:
         """Inicia planejamento periódico opt-in, sem execução automática de melhorias."""
-        self._authorize_continuous_control(actor)
+        self._authorize_control(actor)
         if not 10 <= interval_seconds <= 86400:
             raise ValueError("interval_seconds deve estar entre 10 e 86400")
         runtime_status = self._repo.get_status()
@@ -352,7 +392,7 @@ class OptimizationService:
 
     async def stop_continuous(self, *, actor: ActorContext) -> dict[str, Any]:
         """Interrompe o planejador contínuo solicitado por um service actor."""
-        self._authorize_continuous_control(actor)
+        self._authorize_control(actor)
         return await self._stop_continuous(actor=actor, reason="api_request")
 
     async def shutdown(self) -> None:
