@@ -1,8 +1,6 @@
 from typing import Any
 
 import structlog
-from fastapi import Request
-
 from app.core.agents import AgentRole
 from app.repositories.optimization_repository import (
     DetectedIssue,
@@ -11,6 +9,7 @@ from app.repositories.optimization_repository import (
     SystemMetrics,
 )
 from app.repositories.prompt_repository import PromptRepository
+from fastapi import Request
 
 logger = structlog.get_logger(__name__)
 
@@ -21,6 +20,10 @@ class OptimizationServiceError(Exception):
     """Base exception for optimization service errors."""
 
     pass
+
+
+class OptimizationExecutionUnavailableError(OptimizationServiceError):
+    """A execução automática ainda não possui um adaptador verificável."""
 
 
 # --- Optimization Service ---
@@ -42,6 +45,11 @@ class OptimizationService:
         logger.info(
             "Orquestrando ciclo de auto-otimização via serviço", auto_execute=enable_auto_execution
         )
+        if enable_auto_execution:
+            raise OptimizationExecutionUnavailableError(
+                "Execução automática de melhorias não possui adaptador auditável; "
+                "nenhuma melhoria foi aplicada."
+            )
         try:
             return await self._repo.run_cycle(
                 enable_auto_execution=enable_auto_execution, max_improvements=max_improvements

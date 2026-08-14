@@ -1,32 +1,27 @@
 """
 Sprint 7: Despertar da Proatividade - Ciclo de Auto-Otimização
 
-Sistema de auto-otimização que permite ao Janus tomar iniciativa para se aperfeiçoar
-sem intervenção externa. O agente monitora continuamente seu desempenho, identifica
-gargalos e aplica melhorias autonomamente.
+Sistema de auto-otimização que permite ao Janus monitorar seu desempenho, identificar
+gargalos e planejar melhorias. A execução automática permanece indisponível até existir
+um adaptador com autorização, efeitos auditáveis e verificação pós-condição.
 
 Funcionalidades:
 - Monitoramento contínuo de performance
 - Detecção automática de gargalos e problemas
 - Planejamento de melhorias
-- Execução autônoma de otimizações
-- Aprendizado com resultados de otimizações
+- Planejamento de otimizações para revisão
 """
 
 import asyncio
-import structlog
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+import structlog
 from prometheus_client import Counter, Gauge, Histogram
 
-from app.core.agents.agent_manager import AgentType, agent_manager
-from app.core.infrastructure.prompt_loader import get_formatted_prompt
-from app.core.memory.memory_core import get_memory_db
 from app.core.tools.action_module import action_registry
-from app.models.schemas import Experience
 
 logger = structlog.get_logger(__name__)
 
@@ -38,10 +33,6 @@ _OPTIMIZATION_CYCLES = Counter(
 
 _OPTIMIZATION_LATENCY = Histogram(
     "self_optimization_latency_seconds", "Duração de ciclos de auto-otimização"
-)
-
-_IMPROVEMENTS_APPLIED = Counter(
-    "self_optimization_improvements_total", "Total de melhorias aplicadas", ["improvement_type"]
 )
 
 _SYSTEM_HEALTH_SCORE = Gauge(
@@ -507,86 +498,11 @@ class ImprovementExecutor:
     """
 
     async def execute_improvement(self, improvement: PlannedImprovement) -> AppliedImprovement:
-        """
-        Executa uma melhoria específica.
-
-        Args:
-            improvement: Melhoria a ser aplicada
-
-        Returns:
-            Resultado da execução
-        """
-        logger.info("log_info", message=f"[SelfOptimization] Executando melhoria: {improvement.description}")
-
-        try:
-            # Usa agente para executar os passos
-            formatted_steps = "\n".join(
-                f"{i + 1}. {step}" for i, step in enumerate(improvement.implementation_steps)
-            )
-            prompt = await get_formatted_prompt(
-                "agent_self_optimization",
-                improvement=improvement,
-                formatted_steps=formatted_steps,
-                agent_scratchpad="",
-            )
-
-            result = await agent_manager.arun_agent(
-                question=prompt, request=None, agent_type=AgentType.TOOL_USER
-            )
-
-            # Normaliza resposta do agente
-            ans_text = None
-            err_text = None
-            try:
-                if isinstance(result, dict):
-                    ans_text = result.get("answer") or result.get("content") or result.get("output")
-                    err_text = result.get("error") or result.get("status")
-                elif isinstance(result, str):
-                    ans_text = result
-                else:
-                    ans_text = str(result)
-            except Exception:
-                ans_text = None
-
-            success = (
-                bool(ans_text)
-                and ("error" not in (ans_text or "").lower())
-                and ("erro" not in (ans_text or "").lower())
-            )
-
-            applied = AppliedImprovement(
-                improvement=improvement,
-                success=success,
-                actual_impact=ans_text if success else None,
-                error=err_text or (ans_text if not success else None),
-            )
-
-            # Registra métrica
-            _IMPROVEMENTS_APPLIED.labels(improvement.improvement_type.value).inc()
-
-            # Memoriza resultado
-            try:
-                memory_db = await get_memory_db()
-                await memory_db.amemorize(
-                    Experience(
-                        type="self_optimization",
-                        content=f"Melhoria aplicada: {improvement.description}\nSucesso: {success}\nResultado: {applied.actual_impact or applied.error}",
-                        metadata={
-                            "improvement_type": improvement.improvement_type.value,
-                            "target": improvement.target_component,
-                            "success": success,
-                            "origin": "self_optimization",
-                        },
-                    )
-                )
-            except Exception as e:
-                logger.warning("log_warning", message=f"Falha ao memorizar melhoria: {e}")
-
-            return applied
-
-        except Exception as e:
-            logger.error("log_error", message=f"[SelfOptimization] Erro ao executar melhoria: {e}", exc_info=True)
-            return AppliedImprovement(improvement=improvement, success=False, error=str(e))
+        """Recusa execução até existir um adaptador real e verificável."""
+        del improvement
+        raise NotImplementedError(
+            "Execução automática de melhorias não possui adaptador auditável."
+        )
 
 
 # ==================== CICLO DE AUTO-OTIMIZAÇÃO ====================
@@ -611,9 +527,13 @@ class SelfOptimizationCycle:
         self._running = False
 
     async def run_cycle(
-        self, enable_auto_execution: bool = True, max_improvements: int | None = None
+        self, enable_auto_execution: bool = False, max_improvements: int | None = None
     ) -> dict[str, Any]:
         """Executa um ciclo completo de auto-otimização."""
+        if enable_auto_execution:
+            raise NotImplementedError(
+                "Execução automática de melhorias não possui adaptador auditável."
+            )
         cycle_start = time.perf_counter()
 
         try:
@@ -647,36 +567,20 @@ class SelfOptimizationCycle:
             effective_limit = max_improvements if (max_improvements is not None) else 3
             improvements = improvements[:effective_limit]
 
-            # 4. EXECUTE
-            applied_improvements = []
-            if enable_auto_execution:
-                for improvement in improvements:
-                    applied = await self.executor.execute_improvement(improvement)
-                    applied_improvements.append(applied)
-
-                    if not applied.success:
-                        logger.warning("log_warning", message=f"[SelfOptimization] Melhoria falhou: {applied.error}")
-            else:
-                logger.info(
-                    "[SelfOptimization] Execução automática desabilitada - melhorias apenas planejadas"
-                )
-
-            # 5. LEARN
-            successful = sum(1 for imp in applied_improvements if imp.success)
-            logger.info("log_info", message=f"[SelfOptimization] Melhorias aplicadas: {successful}/{len(applied_improvements)}"
+            logger.info(
+                "[SelfOptimization] Melhorias apenas planejadas; "
+                "nenhuma execução foi realizada"
             )
 
             elapsed = time.perf_counter() - cycle_start
             _OPTIMIZATION_LATENCY.observe(elapsed)
-            _OPTIMIZATION_CYCLES.labels(
-                "success_with_improvements" if enable_auto_execution else "success_planned_no_exec"
-            ).inc()
+            _OPTIMIZATION_CYCLES.labels("success_planned_no_exec").inc()
 
             return {
                 "success": True,
                 "issues_detected": len(issues),
                 "improvements_planned": len(improvements),
-                "improvements_applied": successful,
+                "improvements_applied": 0,
                 "elapsed_seconds": round(elapsed, 2),
             }
 

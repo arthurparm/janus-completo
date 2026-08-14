@@ -1,10 +1,11 @@
 from dataclasses import asdict
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.services.optimization_service import (
+    OptimizationExecutionUnavailableError,
     OptimizationService,
     get_optimization_service,
 )
@@ -66,6 +67,11 @@ class SystemAnalysisResponse(BaseModel):
     "/run-cycle",
     response_model=OptimizationCycleResponse,
     summary="Executa um ciclo de auto-otimização",
+    responses={
+        status.HTTP_501_NOT_IMPLEMENTED: {
+            "description": "A execução automática não possui adaptador auditável."
+        }
+    },
 )
 async def run_optimization_cycle(
     request: OptimizationCycleRequest,
@@ -73,10 +79,16 @@ async def run_optimization_cycle(
 ):
     """Delega a execução do ciclo de auto-otimização para o OptimizationService."""
     # OptimizationServiceError é tratado pelo exception handler central -> 500
-    result = await service.run_optimization_cycle(
-        enable_auto_execution=request.enable_auto_execution,
-        max_improvements=request.max_improvements,
-    )
+    try:
+        result = await service.run_optimization_cycle(
+            enable_auto_execution=request.enable_auto_execution,
+            max_improvements=request.max_improvements,
+        )
+    except OptimizationExecutionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=str(exc),
+        ) from exc
     return OptimizationCycleResponse(**result)
 
 

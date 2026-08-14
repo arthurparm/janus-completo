@@ -1,7 +1,6 @@
 from typing import Any
 
 import structlog
-
 from app.core.optimization import self_optimization_cycle
 from app.core.optimization.self_optimization import DetectedIssue, SystemMetrics
 
@@ -21,7 +20,7 @@ class OptimizationRepository:
     """
 
     async def run_cycle(
-        self, enable_auto_execution: bool = True, max_improvements: int | None = None
+        self, enable_auto_execution: bool = False, max_improvements: int | None = None
     ) -> dict[str, Any]:
         """Executa o ciclo de otimização através da infraestrutura core."""
         logger.debug("Executando ciclo de otimização via repositório.")
@@ -54,7 +53,7 @@ class OptimizationRepository:
     def get_status(self) -> dict[str, Any]:
         """Retorna o status de execução do ciclo contínuo."""
         return {
-            "status": "healthy",
+            "status": "running" if self_optimization_cycle._running else "idle",
             "module": "self_optimization",
             "continuous_running": self_optimization_cycle._running,
         }
