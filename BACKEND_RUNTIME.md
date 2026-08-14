@@ -223,3 +223,8 @@ The optional continuous planner survives transient telemetry and cycle failures,
 between attempts, and exposes an interruptible stop event. Stop requests and task
 cancellation always clear the runtime `running` flag; duplicate starts and non-positive
 intervals are rejected explicitly.
+
+Optimization issue filters are typed: `severity` accepts `LOW`, `MEDIUM`, or `HIGH`,
+and `category` accepts an exact `IssueType` value such as `high_error_rate`. Metrics
+history limits are constrained to `1..100` at both the HTTP and service boundaries;
+invalid query values return `422` instead of being interpreted as empty evidence.

@@ -264,7 +264,10 @@ async def test_issue_listing_collects_current_metrics_before_detection() -> None
     )()
     service = optimization_service.OptimizationService(repository)
 
-    result = await service.get_detected_issues("HIGH", "HIGH_ERROR_RATE")
+    result = await service.get_detected_issues(
+        self_optimization.IssueSeverity.HIGH,
+        self_optimization.IssueType.HIGH_ERROR_RATE,
+    )
 
     assert result == [issue]
     repository.get_metrics.assert_awaited_once()
@@ -313,12 +316,103 @@ async def test_issue_endpoint_awaits_fresh_detection() -> None:
 
     response = await optimization_endpoint.get_detected_issues(
         service=service,
-        severity="MEDIUM",
-        category="SLOW_RESPONSE",
+        severity=self_optimization.IssueSeverity.MEDIUM,
+        category=self_optimization.IssueType.SLOW_RESPONSE,
     )
 
     assert response[0].issue_type == "slow_response"
-    service.get_detected_issues.assert_awaited_once_with("MEDIUM", "SLOW_RESPONSE")
+    service.get_detected_issues.assert_awaited_once_with(
+        self_optimization.IssueSeverity.MEDIUM,
+        self_optimization.IssueType.SLOW_RESPONSE,
+    )
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_issue_filters_and_history_limit_reject_invalid_http_queries() -> None:
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    metric = self_optimization.SystemMetrics(
+        avg_response_time=0.5,
+        error_rate=0.0,
+        tool_success_rate=1.0,
+        memory_usage_mb=None,
+        active_tools_count=2,
+    )
+    service = type(
+        "Service",
+        (),
+        {
+            "get_detected_issues": AsyncMock(return_value=[]),
+            "get_metrics_history": AsyncMock(return_value=[metric]),
+        },
+    )()
+    app = FastAPI()
+    app.include_router(optimization_endpoint.router, prefix="/optimization")
+    app.dependency_overrides[optimization_endpoint.get_optimization_service] = (
+        lambda: service
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        invalid_severity = await client.get(
+            "/optimization/issues", params={"severity": "UNKNOWN"}
+        )
+        fuzzy_category = await client.get(
+            "/optimization/issues", params={"category": "error"}
+        )
+        invalid_limit = await client.get(
+            "/optimization/metrics/history", params={"limit": -1}
+        )
+        valid_history = await client.get(
+            "/optimization/metrics/history", params={"limit": 1}
+        )
+
+    assert invalid_severity.status_code == 422
+    assert fuzzy_category.status_code == 422
+    assert invalid_limit.status_code == 422
+    assert valid_history.status_code == 200
+    assert valid_history.json() == {
+        "count": 1,
+        "metrics": [
+            {
+                "avg_response_time": 0.5,
+                "error_rate": 0.0,
+                "tool_success_rate": 1.0,
+                "memory_usage_mb": None,
+                "active_tools_count": 2,
+                "failed_tools": [],
+                "slow_tools": [],
+                "timestamp": metric.timestamp,
+            }
+        ],
+    }
+    service.get_detected_issues.assert_not_awaited()
+    service.get_metrics_history.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_metrics_history_service_enforces_bounds_and_returns_latest() -> None:
+    history = [
+        self_optimization.SystemMetrics(
+            avg_response_time=float(index),
+            error_rate=0.0,
+            tool_success_rate=1.0,
+            memory_usage_mb=None,
+            active_tools_count=1,
+        )
+        for index in range(3)
+    ]
+    repository = type(
+        "Repository", (), {"get_metrics_history": Mock(return_value=history)}
+    )()
+    service = optimization_service.OptimizationService(repository)
+
+    assert await service.get_metrics_history(2) == history[-2:]
+    for invalid_limit in (0, 101, -1):
+        with pytest.raises(ValueError, match="entre 1 e 100"):
+            await service.get_metrics_history(invalid_limit)
 
 
 @pytest.mark.asyncio  # type: ignore[untyped-decorator]

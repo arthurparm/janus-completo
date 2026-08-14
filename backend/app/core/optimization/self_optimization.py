@@ -47,7 +47,7 @@ _SYSTEM_HEALTH_SCORE = Gauge(
 # ==================== ENUMS ====================
 
 
-class IssueType(Enum):
+class IssueType(str, Enum):
     """Tipos de problemas detectáveis."""
 
     PERFORMANCE_DEGRADATION = "performance_degradation"
@@ -56,6 +56,14 @@ class IssueType(Enum):
     TOOL_FAILURE = "tool_failure"
     SLOW_RESPONSE = "slow_response"
     RESOURCE_EXHAUSTION = "resource_exhaustion"
+
+
+class IssueSeverity(str, Enum):
+    """Faixas públicas de severidade usadas para filtrar problemas."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
 
 
 class ImprovementType(Enum):

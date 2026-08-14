@@ -1,15 +1,21 @@
 from typing import Any, cast
 
 import structlog
+from fastapi import Request
+
 from app.core.agents import AgentRole
-from app.core.optimization.self_optimization import DetectedIssue, SystemMetrics
+from app.core.optimization.self_optimization import (
+    DetectedIssue,
+    IssueSeverity,
+    IssueType,
+    SystemMetrics,
+)
 from app.repositories.optimization_repository import (
     OptimizationMetricsUnavailableRepositoryError,
     OptimizationRepository,
     OptimizationRepositoryError,
 )
 from app.repositories.prompt_repository import PromptRepository, generate_prompt_version
-from fastapi import Request
 
 logger = structlog.get_logger(__name__)
 
@@ -55,8 +61,12 @@ class OptimizationService:
                 "nenhuma melhoria foi aplicada."
             )
         try:
-            return await self._repo.run_cycle(
-                enable_auto_execution=enable_auto_execution, max_improvements=max_improvements
+            return cast(
+                dict[str, Any],
+                await self._repo.run_cycle(
+                    enable_auto_execution=enable_auto_execution,
+                    max_improvements=max_improvements,
+                ),
             )
         except OptimizationMetricsUnavailableRepositoryError as e:
             raise OptimizationMetricsUnavailableError(str(e)) from e
@@ -85,7 +95,7 @@ class OptimizationService:
             raise OptimizationServiceError("Falha ao buscar as métricas de saúde.") from e
 
     async def get_detected_issues(
-        self, severity: str | None, category: str | None
+        self, severity: IssueSeverity | None, category: IssueType | None
     ) -> list[DetectedIssue]:
         logger.info("Orquestrando busca de problemas detectados via serviço.")
         try:
@@ -100,26 +110,29 @@ class OptimizationService:
             ) from e
 
         filtered_issues = issues
-        if severity:
-            severity_thresholds = {"HIGH": 0.7, "MEDIUM": 0.4, "LOW": 0.0}
-            threshold = severity_thresholds.get(severity.upper(), 0.0)
+        if severity is not None:
+            severity_thresholds = {
+                IssueSeverity.HIGH: 0.7,
+                IssueSeverity.MEDIUM: 0.4,
+                IssueSeverity.LOW: 0.0,
+            }
+            threshold = severity_thresholds[severity]
             filtered_issues = [i for i in filtered_issues if i.severity >= threshold]
-        if category:
-            filtered_issues = [
-                i for i in filtered_issues if category.upper() in i.issue_type.value.upper()
-            ]
+        if category is not None:
+            filtered_issues = [i for i in filtered_issues if i.issue_type is category]
 
-        return filtered_issues
+        return cast(list[DetectedIssue], filtered_issues)
 
     async def get_metrics_history(self, limit: int) -> list[SystemMetrics]:
         logger.info("Buscando histórico de métricas via serviço.")
-        limit = min(limit, 100)
-        history = self._repo.get_metrics_history()
+        if not 1 <= limit <= 100:
+            raise ValueError("limit deve estar entre 1 e 100")
+        history = cast(list[SystemMetrics], self._repo.get_metrics_history())
         return history[-limit:]
 
     def get_status(self) -> dict[str, Any]:
         logger.info("Buscando status do módulo de otimização via serviço.")
-        return self._repo.get_status()
+        return cast(dict[str, Any], self._repo.get_status())
 
     async def analyze_system(self, analysis_type: str, detailed: bool) -> dict[str, Any]:
         """Gera análise agregada do sistema a partir de métricas e issues."""

@@ -2,9 +2,10 @@ from dataclasses import asdict
 from typing import Any, cast
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from app.core.optimization.self_optimization import IssueSeverity, IssueType
 from app.services.optimization_service import (
     OptimizationExecutionUnavailableError,
     OptimizationService,
@@ -53,6 +54,22 @@ class SystemHealthResponse(BaseModel):
     active_tools_count: int
     failed_tools: list[str]
     slow_tools: list[str]
+
+
+class SystemMetricsResponse(BaseModel):
+    avg_response_time: float
+    error_rate: float
+    tool_success_rate: float
+    memory_usage_mb: float | None
+    active_tools_count: int
+    failed_tools: list[str]
+    slow_tools: list[str]
+    timestamp: float
+
+
+class MetricsHistoryResponse(BaseModel):
+    count: int = Field(ge=0)
+    metrics: list[SystemMetricsResponse]
 
 
 class DetectedIssueResponse(BaseModel):
@@ -125,8 +142,8 @@ async def get_system_health(
 )
 async def get_detected_issues(
     service: OptimizationService = Depends(get_optimization_service),
-    severity: str | None = None,
-    category: str | None = None,
+    severity: IssueSeverity | None = Query(default=None),
+    category: IssueType | None = Query(default=None),
 ) -> list[DetectedIssueResponse]:
     """Delega a detecção e filtragem de problemas para o OptimizationService."""
     issues = await service.get_detected_issues(severity, category)
@@ -142,13 +159,21 @@ async def get_detected_issues(
     ]
 
 
-@router.get("/metrics/history", summary="Retorna o histórico de métricas de saúde")
+@router.get(
+    "/metrics/history",
+    response_model=MetricsHistoryResponse,
+    summary="Retorna o histórico de métricas de saúde",
+)
 async def get_metrics_history(
-    limit: int = 20, service: OptimizationService = Depends(get_optimization_service)
-) -> dict[str, Any]:
+    limit: int = Query(20, ge=1, le=100),
+    service: OptimizationService = Depends(get_optimization_service),
+) -> MetricsHistoryResponse:
     """Delega a busca do histórico de métricas para o OptimizationService."""
     history = await service.get_metrics_history(limit)
-    return {"count": len(history), "metrics": [asdict(h) for h in history]}
+    return MetricsHistoryResponse(
+        count=len(history),
+        metrics=[SystemMetricsResponse(**asdict(item)) for item in history],
+    )
 
 
 @router.get("/status", summary="Status do módulo de auto-otimização")
