@@ -2,7 +2,11 @@ from typing import Any
 
 import structlog
 from app.core.optimization import self_optimization_cycle
-from app.core.optimization.self_optimization import DetectedIssue, SystemMetrics
+from app.core.optimization.self_optimization import (
+    DetectedIssue,
+    OptimizationMetricsUnavailableError,
+    SystemMetrics,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -11,6 +15,10 @@ class OptimizationRepositoryError(Exception):
     """Base exception for optimization repository errors."""
 
     pass
+
+
+class OptimizationMetricsUnavailableRepositoryError(OptimizationRepositoryError):
+    """A telemetria necessária ainda não possui amostras."""
 
 
 class OptimizationRepository:
@@ -28,6 +36,8 @@ class OptimizationRepository:
             return await self_optimization_cycle.run_cycle(
                 enable_auto_execution=enable_auto_execution, max_improvements=max_improvements
             )
+        except OptimizationMetricsUnavailableError as e:
+            raise OptimizationMetricsUnavailableRepositoryError(str(e)) from e
         except Exception as e:
             logger.error("Erro no repositório ao executar ciclo de otimização", exc_info=e)
             raise OptimizationRepositoryError("Falha ao executar o ciclo de otimização.") from e
@@ -37,6 +47,8 @@ class OptimizationRepository:
         logger.debug("Coletando métricas no repositório de otimização.")
         try:
             return await self_optimization_cycle.monitor.collect_metrics()
+        except OptimizationMetricsUnavailableError as e:
+            raise OptimizationMetricsUnavailableRepositoryError(str(e)) from e
         except Exception as e:
             logger.error("Erro ao coletar métricas de otimização", exc_info=e)
             raise OptimizationRepositoryError(

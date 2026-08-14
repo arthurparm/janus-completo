@@ -23,7 +23,10 @@ from app.services.llm_service import LLMServiceError, LLMTimeoutError
 from app.services.memory_service import MemoryServiceError
 from app.services.meta_agent_service import MetaAgentServiceError, MetaAgentUnavailableError
 from app.services.observability_service import MessageNotFoundError, ObservabilityServiceError
-from app.services.optimization_service import OptimizationServiceError
+from app.services.optimization_service import (
+    OptimizationMetricsUnavailableError,
+    OptimizationServiceError,
+)
 from app.services.task_service import TaskServiceError
 from app.services.tool_service import (
     ProtectedToolError,
@@ -222,6 +225,7 @@ def add_exception_handlers(app: FastAPI) -> None:
         **{exc: http_400_bad_request_handler for exc in BAD_REQUEST_EXCEPTIONS},
         **{exc: http_408_timeout_handler for exc in TIMEOUT_EXCEPTIONS},
         MetaAgentUnavailableError: http_503_service_unavailable_handler,
+        OptimizationMetricsUnavailableError: http_503_service_unavailable_handler,
     }
 
     for exc_type, handler in exception_map.items():

@@ -25,6 +25,10 @@ from app.core.tools.action_module import action_registry
 
 logger = structlog.get_logger(__name__)
 
+
+class OptimizationMetricsUnavailableError(RuntimeError):
+    """Não há telemetria suficiente para calcular métricas de otimização."""
+
 # ==================== MÉTRICAS ====================
 
 _OPTIMIZATION_CYCLES = Counter(
@@ -152,9 +156,13 @@ class SystemMonitor:
                 )
 
             # Taxa de erro
-            total_calls = stats.get("total_calls", 1)
+            total_calls = int(stats.get("total_calls", 0))
             successful = stats.get("successful_calls", 0)
-            error_rate = 1.0 - (successful / total_calls) if total_calls > 0 else 0.0
+            if total_calls <= 0:
+                raise OptimizationMetricsUnavailableError(
+                    "Nenhuma chamada de ferramenta foi observada; saúde indisponível."
+                )
+            error_rate = 1.0 - (successful / total_calls)
 
             # Ferramentas com problemas
             failed_tools = [
@@ -187,7 +195,7 @@ class SystemMonitor:
             metrics = SystemMetrics(
                 avg_response_time=avg_response,
                 error_rate=error_rate,
-                tool_success_rate=(successful / total_calls) if total_calls > 0 else 1.0,
+                tool_success_rate=successful / total_calls,
                 memory_usage_mb=memory_usage_mb,
                 active_tools_count=stats.get("total_tools_registered", 0),
                 failed_tools=failed_tools,
@@ -205,6 +213,8 @@ class SystemMonitor:
 
             return metrics
 
+        except OptimizationMetricsUnavailableError:
+            raise
         except Exception as e:
             logger.error("log_error", message=f"[SelfOptimization] Erro ao coletar métricas: {e}", exc_info=True)
             raise RuntimeError("Falha ao coletar métricas de otimização.") from e

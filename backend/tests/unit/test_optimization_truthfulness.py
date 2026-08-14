@@ -186,8 +186,8 @@ async def test_missing_memory_probe_is_not_reported_as_zero(
         Mock(
             return_value={
                 "tool_usage": {},
-                "total_calls": 0,
-                "successful_calls": 0,
+                "total_calls": 1,
+                "successful_calls": 1,
                 "total_tools_registered": 0,
             }
         ),
@@ -227,3 +227,54 @@ async def test_analysis_preserves_unknown_memory_measurement() -> None:
     assert result["trend"]["memory_usage_latest_mb"] is None
     assert result["trend"]["memory_usage_max_mb"] is None
     assert result["series"]["memory_usage_mb"] == []
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_zero_tool_calls_are_unavailable_instead_of_failed_or_healthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monitor = self_optimization.SystemMonitor()
+    monkeypatch.setattr(
+        self_optimization.action_registry,
+        "get_statistics",
+        Mock(
+            return_value={
+                "tool_usage": {},
+                "total_calls": 0,
+                "successful_calls": 0,
+                "total_tools_registered": 0,
+            }
+        ),
+    )
+
+    with pytest.raises(
+        self_optimization.OptimizationMetricsUnavailableError,
+        match="Nenhuma chamada de ferramenta",
+    ):
+        await monitor.collect_metrics()
+
+    assert monitor._metrics_history == []
+
+
+@pytest.mark.asyncio  # type: ignore[untyped-decorator]
+async def test_metrics_unavailable_maps_to_http_503() -> None:
+    from app.api.exception_handlers import add_exception_handlers
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    app = FastAPI()
+    add_exception_handlers(app)
+
+    @app.get("/metrics")  # type: ignore[untyped-decorator]
+    async def metrics() -> None:
+        raise optimization_service.OptimizationMetricsUnavailableError(
+            "sem amostras"
+        )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/metrics")
+
+    assert response.status_code == 503
+    assert response.json()["error_code"] == "SERVICE_UNAVAILABLE"

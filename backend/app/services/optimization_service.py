@@ -4,6 +4,7 @@ import structlog
 from app.core.agents import AgentRole
 from app.repositories.optimization_repository import (
     DetectedIssue,
+    OptimizationMetricsUnavailableRepositoryError,
     OptimizationRepository,
     OptimizationRepositoryError,
     SystemMetrics,
@@ -24,6 +25,10 @@ class OptimizationServiceError(Exception):
 
 class OptimizationExecutionUnavailableError(OptimizationServiceError):
     """A execução automática ainda não possui um adaptador verificável."""
+
+
+class OptimizationMetricsUnavailableError(OptimizationServiceError):
+    """Ainda não existem amostras suficientes para calcular saúde."""
 
 
 # --- Optimization Service ---
@@ -54,6 +59,8 @@ class OptimizationService:
             return await self._repo.run_cycle(
                 enable_auto_execution=enable_auto_execution, max_improvements=max_improvements
             )
+        except OptimizationMetricsUnavailableRepositoryError as e:
+            raise OptimizationMetricsUnavailableError(str(e)) from e
         except OptimizationRepositoryError as e:
             logger.error("Erro no repositório de otimização ao executar ciclo", exc_info=e)
             raise OptimizationServiceError("Falha ao executar o ciclo de otimização.") from e
@@ -72,6 +79,8 @@ class OptimizationService:
                 "failed_tools": metrics.failed_tools,
                 "slow_tools": metrics.slow_tools,
             }
+        except OptimizationMetricsUnavailableRepositoryError as e:
+            raise OptimizationMetricsUnavailableError(str(e)) from e
         except OptimizationRepositoryError as e:
             logger.error("Erro no repositório ao buscar saúde do sistema", exc_info=e)
             raise OptimizationServiceError("Falha ao buscar as métricas de saúde.") from e
@@ -207,6 +216,8 @@ class OptimizationService:
 
             return analysis
 
+        except OptimizationMetricsUnavailableRepositoryError as e:
+            raise OptimizationMetricsUnavailableError(str(e)) from e
         except OptimizationRepositoryError as e:
             logger.error("Erro no repositório ao analisar sistema", exc_info=e)
             raise OptimizationServiceError("Falha ao analisar o sistema.") from e
