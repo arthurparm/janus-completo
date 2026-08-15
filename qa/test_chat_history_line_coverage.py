@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.getcwd(), "backend"))
 def client():
     import app.api.v1.endpoints.chat.chat_history as mod
     from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import get_chat_service
 
     class DummyChatService:
         def get_history_paginated(self, **kwargs):
@@ -33,7 +34,7 @@ def client():
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/chat")
-    app.state.chat_service = DummyChatService()
+    app.dependency_overrides[get_chat_service] = lambda: DummyChatService()
 
     class Identity:
         user_id = "u1"
@@ -57,6 +58,7 @@ def test_history_no_limit_branch(client):
 
 def test_history_conversion_failure_branch(monkeypatch):
     from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import get_chat_service
 
     class DummyChatService:
         def get_history_paginated(self, **kwargs):
@@ -72,7 +74,7 @@ def test_history_conversion_failure_branch(monkeypatch):
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/chat")
-    app.state.chat_service = DummyChatService()
+    app.dependency_overrides[get_chat_service] = lambda: DummyChatService()
 
     class Identity:
         user_id = "u1"
@@ -89,6 +91,7 @@ def test_history_conversion_failure_branch(monkeypatch):
 def test_history_401_branch(monkeypatch):
     import app.api.v1.endpoints.chat.chat_history as mod
     from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import get_chat_service
     from fastapi.testclient import TestClient
 
     class Identity:
@@ -105,7 +108,7 @@ def test_history_401_branch(monkeypatch):
         def get_history_paginated(self, **kwargs):
             return {"conversation_id": kwargs["conversation_id"], "persona": None, "messages": []}
 
-    app.state.chat_service = DummyChatService()
+    app.dependency_overrides[get_chat_service] = lambda: DummyChatService()
 
     client = TestClient(app)
     resp = client.get("/api/v1/chat/conv-1/history?limit=1")
@@ -115,7 +118,7 @@ def test_history_401_branch(monkeypatch):
 def test_history_404(monkeypatch):
     import app.api.v1.endpoints.chat.chat_history as mod
     from app.api.v1.endpoints.chat.chat_history import router
-    from app.services.chat_service import ConversationNotFoundError
+    from app.services.chat_service import ConversationNotFoundError, get_chat_service
 
     class Dummy:
         def get_history(self, *a, **k):
@@ -123,7 +126,7 @@ def test_history_404(monkeypatch):
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/chat")
-    app.state.chat_service = Dummy()
+    app.dependency_overrides[get_chat_service] = lambda: Dummy()
 
     class Identity:
         user_id = "u1"
@@ -140,7 +143,7 @@ def test_history_404(monkeypatch):
 def test_history_access_denied_403(monkeypatch):
     import app.api.v1.endpoints.chat.chat_history as mod
     from app.api.v1.endpoints.chat.chat_history import router
-    from app.services.chat_service import ChatServiceError
+    from app.services.chat_service import ChatServiceError, get_chat_service
 
     class Dummy:
         def get_history(self, *a, **k):
@@ -148,7 +151,7 @@ def test_history_access_denied_403(monkeypatch):
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1/chat")
-    app.state.chat_service = Dummy()
+    app.dependency_overrides[get_chat_service] = lambda: Dummy()
 
     class Identity:
         user_id = "u1"
@@ -160,3 +163,118 @@ def test_history_access_denied_403(monkeypatch):
     client = TestClient(app)
     resp = client.get("/api/v1/chat/conv-1/history")
     assert resp.status_code == 403
+
+
+def test_history_service_error_other_500(monkeypatch):
+    import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import ChatServiceError, get_chat_service
+
+    class Dummy:
+        def get_history(self, *a, **k):
+            raise ChatServiceError("Database unavailable")
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1/chat")
+    app.dependency_overrides[get_chat_service] = lambda: Dummy()
+
+    class Identity:
+        user_id = "u1"
+
+    mod.resolve_authenticated_user_context = lambda *a, **k: Identity()
+    mod.is_chat_auth_enforced = lambda: False
+    mod.actor_project_id = lambda _req: "p1"
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/chat/conv-1/history")
+    assert resp.status_code == 500
+
+
+def test_history_unexpected_exception_500(monkeypatch):
+    import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import get_chat_service
+
+    class Dummy:
+        def get_history(self, *a, **k):
+            raise RuntimeError("boom")
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1/chat")
+    app.dependency_overrides[get_chat_service] = lambda: Dummy()
+
+    class Identity:
+        user_id = "u1"
+
+    mod.resolve_authenticated_user_context = lambda *a, **k: Identity()
+    mod.is_chat_auth_enforced = lambda: False
+    mod.actor_project_id = lambda _req: "p1"
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/chat/conv-1/history")
+    assert resp.status_code == 500
+
+
+def test_history_no_limit_invalid_message_skipped(monkeypatch):
+    import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import get_chat_service
+
+    class Dummy:
+        def get_history(self, conversation_id, **_kwargs):
+            return {
+                "conversation_id": conversation_id,
+                "persona": None,
+                "messages": [
+                    {"timestamp": 1.0, "role": "user", "text": "ok"},
+                    {"bad": True},
+                ],
+            }
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1/chat")
+    app.dependency_overrides[get_chat_service] = lambda: Dummy()
+
+    class Identity:
+        user_id = "u1"
+
+    mod.resolve_authenticated_user_context = lambda *a, **k: Identity()
+    mod.is_chat_auth_enforced = lambda: False
+    mod.actor_project_id = lambda _req: "p1"
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/chat/conv-1/history")
+    assert resp.status_code == 200
+    assert len(resp.json()["messages"]) == 1
+
+
+def test_history_no_limit_conversion_failure_branch(monkeypatch):
+    import app.api.v1.endpoints.chat.chat_history as mod
+    from app.api.v1.endpoints.chat.chat_history import router
+    from app.services.chat_service import get_chat_service
+
+    class Dummy:
+        def get_history(self, conversation_id, **_kwargs):
+            return {
+                "conversation_id": conversation_id,
+                "persona": None,
+                "messages": [{"timestamp": 1.0, "role": "user", "text": "boom"}],
+            }
+
+    monkeypatch.setattr(mod, "apply_ui_to_message", lambda _m: (_ for _ in ()).throw(ValueError("x")))
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1/chat")
+    app.dependency_overrides[get_chat_service] = lambda: Dummy()
+
+    class Identity:
+        user_id = "u1"
+
+    mod.resolve_authenticated_user_context = lambda *a, **k: Identity()
+    mod.is_chat_auth_enforced = lambda: False
+    mod.actor_project_id = lambda _req: "p1"
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/chat/conv-1/history")
+    assert resp.status_code == 200
+    assert resp.json()["messages"] == []

@@ -131,10 +131,15 @@ function Configure-TailscaleSecurity {
 }
 "@
         
-        # Apply security settings
+        # Apply network-level flags (ACLs themselves are not settable via `tailscale up`)
         tailscale up --reset --accept-routes=false --advertise-routes= --shields-up=false
-        
-        Write-SecureLog "Security policies configured successfully" "SUCCESS"
+
+        # Tailscale ACLs are only editable through the tailnet policy file (admin
+        # console) or the api.tailscale.com ACL API; this script cannot push
+        # $ACLConfig automatically, so surface that instead of claiming success.
+        $ACLPath = Join-Path (Get-Location) "tailscale-acl-policy.json"
+        Set-Content -Path $ACLPath -Value $ACLConfig -Encoding UTF8
+        Write-SecureLog "Network flags applied. ACL policy NOT auto-applied: review and paste $ACLPath into the tailnet policy file at https://login.tailscale.com/admin/acls" "WARNING"
         return $true
     }
     catch {

@@ -57,7 +57,7 @@ def test_cmd_checklist_builds_command(monkeypatch, tmp_path: Path):
     cmd = captured["cmd"]
     assert isinstance(cmd, list)
     assert Path(cmd[0]).name.startswith("python")
-    assert cmd[1].endswith("tooling/exit_checklist.py")
+    assert Path(cmd[1]) == dev.REPO_ROOT / "tooling" / "exit_checklist.py"
     assert "--type" in cmd and "docs" in cmd
     assert "--format" in cmd and "json" in cmd
     assert "--out" in cmd

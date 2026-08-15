@@ -2,11 +2,31 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field, ValidationError
+
+RequirementStatus = Literal[
+    "implemented", "planned", "in_progress", "deprecated", "not_applicable"
+]
+Severity = Literal["P0", "P1", "P2", "P3"]
+EvidenceType = Literal["code", "test", "doc", "ops"]
 
 
-_ALLOWED_STATUSES = {"implemented", "planned", "in_progress", "deprecated", "not_applicable"}
-_ALLOWED_SEVERITIES = {"P0", "P1", "P2", "P3"}
-_ALLOWED_EVIDENCE_TYPES = {"code", "test", "doc", "ops"}
+class EvidenceItem(BaseModel):
+    type: EvidenceType
+    path: str = Field(min_length=1)
+
+
+class Requirement(BaseModel):
+    id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    level: str = ""
+    severity: Severity
+    weight: int = Field(gt=0)
+    status: RequirementStatus
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
 
 
 def _read_json(path: Path) -> dict:
@@ -65,10 +85,18 @@ def _format_md(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _requirement_id(raw: object) -> str:
+    if isinstance(raw, dict):
+        rid = str(raw.get("id") or "").strip()
+        if rid:
+            return rid
+    return "<missing-id>"
+
+
 def _validate_and_score(repo_root: Path, spec_path: Path) -> tuple[dict, list[str], list[str]]:
     payload = _read_json(spec_path)
-    requirements = payload.get("requirements") or []
-    if not isinstance(requirements, list):
+    raw_requirements = payload.get("requirements") or []
+    if not isinstance(raw_requirements, list):
         raise ValueError("requirements must be a list")
 
     missing_evidence: list[str] = []
@@ -81,66 +109,40 @@ def _validate_and_score(repo_root: Path, spec_path: Path) -> tuple[dict, list[st
 
     normalized_items: list[dict] = []
 
-    for req in requirements:
-        if not isinstance(req, dict):
-            structural_errors.append("requirement entry must be an object")
+    for raw_req in raw_requirements:
+        rid = _requirement_id(raw_req)
+        try:
+            req = Requirement.model_validate(raw_req)
+        except ValidationError as exc:
+            for err in exc.errors():
+                loc = ".".join(str(p) for p in err["loc"])
+                structural_errors.append(f"{rid}: {loc}: {err['msg']}" if loc else f"{rid}: {err['msg']}")
             continue
-        rid = str(req.get("id") or "").strip() or "<missing-id>"
-        status = str(req.get("status") or "").strip()
-        severity = str(req.get("severity") or "").strip()
-        weight = int(req.get("weight") or 0)
-        title = str(req.get("title") or "").strip()
 
-        if rid == "<missing-id>":
-            structural_errors.append("requirement missing id")
-        if not title:
-            structural_errors.append(f"{rid}: missing title")
-        if status not in _ALLOWED_STATUSES:
-            structural_errors.append(f"{rid}: invalid status '{status}'")
-        if severity not in _ALLOWED_SEVERITIES:
-            structural_errors.append(f"{rid}: invalid severity '{severity}'")
-        if weight <= 0:
-            structural_errors.append(f"{rid}: weight must be > 0")
-
-        evidence = req.get("evidence") or []
-        if not isinstance(evidence, list):
-            structural_errors.append(f"{rid}: evidence must be a list")
-            evidence = []
-
-        for ev in evidence:
-            if not isinstance(ev, dict):
-                structural_errors.append(f"{rid}: evidence item must be an object")
-                continue
-            etype = str(ev.get("type") or "").strip()
-            if etype not in _ALLOWED_EVIDENCE_TYPES:
-                structural_errors.append(f"{rid}: invalid evidence type '{etype}'")
-            rel_path = str(ev.get("path") or "").strip()
-            if not rel_path:
-                structural_errors.append(f"{rid}: evidence item missing path")
-                continue
-            target = (repo_root / rel_path).resolve()
+        for ev in req.evidence:
+            target = (repo_root / ev.path).resolve()
             if not target.exists():
-                missing_evidence.append(f"{rid}: missing file {rel_path}")
+                missing_evidence.append(f"{req.id}: missing file {ev.path}")
 
-        max_points += weight
-        if status == "implemented":
+        max_points += req.weight
+        if req.status == "implemented":
             implemented += 1
-            achieved_points += weight
-            if not evidence:
-                missing_evidence.append(f"{rid}: implemented requirements must have evidence")
+            achieved_points += req.weight
+            if not req.evidence:
+                missing_evidence.append(f"{req.id}: implemented requirements must have evidence")
         else:
             incomplete += 1
 
         normalized_items.append(
             {
-                "id": rid,
-                "title": title,
-                "level": str(req.get("level") or "").strip(),
-                "severity": severity,
-                "weight": weight,
-                "status": status,
-                "tags": req.get("tags") or [],
-                "evidence": evidence,
+                "id": req.id,
+                "title": req.title,
+                "level": req.level,
+                "severity": req.severity,
+                "weight": req.weight,
+                "status": req.status,
+                "tags": req.tags,
+                "evidence": [item.model_dump() for item in req.evidence],
             }
         )
 
@@ -219,4 +221,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

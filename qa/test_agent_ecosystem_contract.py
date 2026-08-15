@@ -190,22 +190,22 @@ class TestAgentEcosystemContract:
         resp = await async_client.get("/api/v1/meta-agent/report/latest")
         assert resp.status_code == 401
 
-    # --- Reflexion ---
+    # --- Reflexion (control-plane: requer principal de servico com escopo ops:*) ---
     async def test_reflexion_execute(self, async_client):
         resp = await async_client.post("/api/v1/reflexion/execute", json={"task": "test"})
-        assert resp.status_code == 404
+        assert resp.status_code == 401
 
     async def test_reflexion_config(self, async_client):
         resp = await async_client.get("/api/v1/reflexion/config")
-        assert resp.status_code == 404
+        assert resp.status_code == 401
 
     async def test_reflexion_health(self, async_client):
         resp = await async_client.get("/api/v1/reflexion/health")
-        assert resp.status_code == 404
+        assert resp.status_code == 401
 
     async def test_reflexion_reset_cb(self, async_client):
         resp = await async_client.post("/api/v1/reflexion/reset-circuit-breaker")
-        assert resp.status_code == 404
+        assert resp.status_code == 401
 
     # --- Sandbox ---
     async def test_sandbox_capabilities(self, async_client):

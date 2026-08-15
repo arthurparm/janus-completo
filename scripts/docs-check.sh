@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Run the tail of a pipeline in the current shell (not a subshell) so that
+# counters updated inside `... | while read; do ...; done` loops below are
+# visible in the final report instead of being lost when the subshell exits.
+shopt -s lastpipe
 
 # Script para verificação de qualidade da documentação
 # Uso: ./scripts/docs-check.sh
@@ -22,13 +26,13 @@ WARNINGS=0
 # Função para imprimir erro
 error() {
     echo -e "${RED}❌ ERRO: $1${NC}" >&2
-    ((ERRORS++))
+    ERRORS=$((ERRORS + 1))
 }
 
 # Função para imprimir aviso
 warning() {
     echo -e "${YELLOW}⚠️  AVISO: $1${NC}" >&2
-    ((WARNINGS++))
+    WARNINGS=$((WARNINGS + 1))
 }
 
 # Função para imprimir sucesso
@@ -40,12 +44,12 @@ success() {
 echo "📁 Verificando estrutura de documentação..."
 
 REQUIRED_FILES=(
-    "documentation/index.md"
-    "documentation/getting-started/onboarding.md"
-    "documentation/getting-started/troubleshooting.md"
-    "documentation/development/contribution-guide.md"
-    "documentation/architecture/overview.md"
-    "documentation/operations/deployment.md"
+    "README.md"
+    "AGENTS.md"
+    "CODEBASE_MAP.md"
+    "BACKEND_RUNTIME.md"
+    "FRONTEND_ANGULAR.md"
+    "OPS_QA.md"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -63,7 +67,7 @@ cd "$ROOT_DIR"
 # Verificar apenas links simples para evitar erros de regex
 find documentation -name "*.md" -type f | while read -r file; do
     # Procurar por links relativos simples
-    grep -oE '\]\([^http][^)]*\)' "$file" 2>/dev/null | while read -r link_match; do
+    { grep -oE '\]\([^http][^)]*\)' "$file" 2>/dev/null || true; } | while read -r link_match; do
         # Extrair apenas o caminho do link
         link=$(echo "$link_match" | sed 's/.*](\([^)]*\)).*/\1/')
         
@@ -71,13 +75,18 @@ find documentation -name "*.md" -type f | while read -r file; do
         if [[ "$link" =~ ^http ]] || [[ "$link" =~ ^# ]] || [[ -z "$link" ]]; then
             continue
         fi
-        
-        # Resolver caminho relativo
+
+        # Descartar fragmento (#anchor, #L10-L20) antes de checar o arquivo alvo
+        link_path="${link%%#*}"
+        if [[ -z "$link_path" ]]; then
+            continue
+        fi
+
+        # Resolver caminho relativo normalizando ".."/"." de verdade (realpath -m
+        # aceita alvos inexistentes, só normaliza o caminho para checarmos depois)
         link_dir="$(dirname "$file")"
-        target="$link_dir/$link"
-        target="${target//\.\.\//}"
-        target="${target//\.\//}"
-        
+        target="$(realpath -m "$link_dir/$link_path")"
+
         # Verificar se o alvo existe
         if [[ ! -f "$target" ]] && [[ ! -d "$target" ]]; then
             error "Link quebrado em $file: $link"
@@ -117,7 +126,7 @@ echo "💻 Verificando exemplos de código..."
 
 find documentation -name "*.md" -type f | while read -r file; do
     # Contar blocos de código
-    code_blocks=$(grep -c '^```' "$file" 2>/dev/null || echo 0)
+    code_blocks=$(grep -c '^```' "$file" 2>/dev/null || true)
     
     if [[ $code_blocks -lt 2 ]]; then
         warning "Poucos exemplos de código em: $file ($code_blocks blocos)"

@@ -5,6 +5,8 @@ from qa.auth_test_support import (
     actor_from_test_request,
     decode_test_actor_id,
     issue_test_actor_token,
+    issue_test_service_token,
+    service_actor_from_test_request,
 )
 
 
@@ -13,12 +15,21 @@ def _auth_headers(user_id: int | str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _service_auth_headers(client_id: str, scopes: tuple[str, ...] = ()) -> dict[str, str]:
+    token = issue_test_service_token(client_id, scopes)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _actor_from_test_request(request):
+    return actor_from_test_request(request) or service_actor_from_test_request(request)
+
+
 @pytest.fixture
 def async_client(monkeypatch):
     from app.main import app
     monkeypatch.setattr(
         "app.core.security.containment_middleware.get_actor_context",
-        actor_from_test_request,
+        _actor_from_test_request,
     )
     from app.services.chat_service import get_chat_service
     from app.services.memory_service import get_memory_service
@@ -215,7 +226,10 @@ class TestChatHistoryContract:
         # apply it to the override
         app.dependency_overrides[admin_mod.get_chat_service] = lambda: chat_service
 
-        resp = await async_client.get("/api/v1/chat/health")
+        resp = await async_client.get(
+            "/api/v1/chat/health",
+            headers=_service_auth_headers("test-chat-health-service", scopes=("ops:read",)),
+        )
         assert resp.status_code == 200
         assert resp.json()["status"] == "healthy"
 

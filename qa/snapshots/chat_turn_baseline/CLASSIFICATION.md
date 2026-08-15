@@ -10,7 +10,7 @@ The 15 ADR scenarios are captured for REST and SSE. `conversation_access_denied`
 | operational_non_light | Correct | Correct | Preserve the operational answer contract; converge REST agent loop versus SSE direct LLM through the shared planner/executor. |
 | discovery | Correct | Correct | Preserve static text/model; correct final state, persistence and post-response-effect divergence. |
 | docs | Correct | Correct | Correct REST pending-study versus SSE completed-static split and inconsistent citation handling. |
-| capabilities | Correct | Correct | Preserve static text/model; correct final state, persistence and effects. |
+| capabilities | Correct | Correct | Correct the answer/provider/model: since commit `8c5ba761` (2026-08-11) capability questions route through the model/agent loop instead of a static reply, to keep conversation context; correct final state, persistence and effects. |
 | blocked_tool_creation | Preserve | Correct | Preserve REST fail-closed response/security alert; make SSE obey the same policy. |
 | indexed_document | Correct | Correct | Preserve answer, citations, citation status and current two deterministic grounding LLM calls; correct finalization/persistence/effects. |
 | knowledge_space_pending | Correct | Correct | Preserve the pending semantic state; converge text, delivery/failure classification and final state. |

@@ -5,10 +5,19 @@ Fetches OpenAPI spec from running Janus backend and generates structured invento
 """
 
 import json
-import requests
-from typing import Dict, List, Any
+import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List
+
+import requests
+
+# Windows consoles default to a legacy codepage (e.g. cp1252) that can't encode
+# the emoji used in the progress output below; force UTF-8 so this script runs
+# the same way on every platform instead of crashing with UnicodeEncodeError.
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def fetch_openapi_spec(base_url: str = "http://localhost:8000") -> Dict[str, Any]:
@@ -184,10 +193,10 @@ def main():
     print(f"📡 Buscando OpenAPI spec de {base_url}...")
     openapi_spec = fetch_openapi_spec(base_url)
 
-    print(f"🔍 Extraindo endpoints de /api/v1/...")
+    print("🔍 Extraindo endpoints de /api/v1/...")
     endpoints = extract_endpoints(openapi_spec)
 
-    print(f"💾 Salvando inventário...")
+    print("💾 Salvando inventário...")
     stats = save_inventory(endpoints, output_file)
 
     # Print summary

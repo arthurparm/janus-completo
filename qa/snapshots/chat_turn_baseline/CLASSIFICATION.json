@@ -195,29 +195,32 @@
       "rest": {
         "disposition": "correct",
         "preserve_paths": [
-          "output.response",
-          "output.provider",
-          "output.model",
           "terminal.status_code"
         ],
         "correct_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
           "output.agent_state",
           "output.delivery_status",
           "persistence.writes.update_message_payload",
-          "execution.outbox_enqueue_count"
+          "execution.outbox_enqueue_count",
+          "execution.llm_invoke_count"
         ]
       },
       "sse": {
         "disposition": "correct",
         "preserve_paths": [
-          "output.response",
-          "output.provider",
-          "output.model",
           "terminal.event"
         ],
         "correct_paths": [
+          "output.response",
+          "output.provider",
+          "output.model",
           "output.delivery_status",
-          "execution.outbox_enqueue_count"
+          "execution.outbox_enqueue_count",
+          "execution.llm_invoke_count",
+          "observations.event_sequence_by_attempt"
         ]
       }
     },
