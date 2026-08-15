@@ -1,10 +1,42 @@
+"""Validate documentation/compliance/compliance-traceability-matrix.json against its schema.
+
+Uses pydantic (already a first-class backend dependency) instead of hand-rolled
+dict-walking so the shape of a control/evidence entry is declared once and every
+error message comes from the same, consistent validator machinery.
+"""
+
 import json
 import sys
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field, ValidationError, model_validator
+
+ControlStatus = Literal["implemented", "planned", "in_progress", "deprecated"]
+EvidenceType = Literal["code", "test", "doc", "ops"]
 
 
-_ALLOWED_STATUSES = {"implemented", "planned", "in_progress", "deprecated"}
-_ALLOWED_EVIDENCE_TYPES = {"code", "test", "doc", "ops"}
+class EvidenceItem(BaseModel):
+    type: EvidenceType
+    path: str = Field(min_length=1)
+
+
+class ControlEntry(BaseModel):
+    id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    status: ControlStatus
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _implemented_controls_need_evidence(self) -> "ControlEntry":
+        if self.status == "implemented" and not self.evidence:
+            raise ValueError("implemented controls must have evidence")
+        return self
+
+
+class ComplianceMatrix(BaseModel):
+    classification: Literal["internal-only"]
+    controls: list[ControlEntry]
 
 
 def _read_json(path: Path) -> dict:
@@ -13,50 +45,19 @@ def _read_json(path: Path) -> dict:
 
 
 def _validate_matrix(repo_root: Path, matrix_path: Path) -> list[str]:
-    errors: list[str] = []
     payload = _read_json(matrix_path)
-    if str(payload.get("classification") or "").strip() != "internal-only":
-        errors.append("classification must be 'internal-only'")
-    controls = payload.get("controls") or []
-    if not isinstance(controls, list):
-        return ["controls must be a list"]
+    try:
+        matrix = ComplianceMatrix.model_validate(payload)
+    except ValidationError as exc:
+        return [
+            f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in exc.errors()
+        ]
 
-    for control in controls:
-        if not isinstance(control, dict):
-            errors.append("control entry must be an object")
-            continue
-        cid = str(control.get("id") or "").strip() or "<missing-id>"
-        title = str(control.get("title") or "").strip()
-        status = str(control.get("status") or "").strip()
-        if cid == "<missing-id>":
-            errors.append("control missing id")
-        if not title:
-            errors.append(f"{cid}: missing title")
-        if status not in _ALLOWED_STATUSES:
-            errors.append(f"{cid}: invalid status '{status}'")
-
-        evidence = control.get("evidence") or []
-        if not isinstance(evidence, list):
-            errors.append(f"{cid}: evidence must be a list")
-            continue
-        if status == "implemented" and not evidence:
-            errors.append(f"{cid}: implemented controls must have evidence")
-
-        for item in evidence:
-            if not isinstance(item, dict):
-                errors.append(f"{cid}: evidence item must be an object")
-                continue
-            etype = str(item.get("type") or "").strip()
-            if etype not in _ALLOWED_EVIDENCE_TYPES:
-                errors.append(f"{cid}: invalid evidence type '{etype}'")
-            rel_path = str(item.get("path") or "").strip()
-            if not rel_path:
-                errors.append(f"{cid}: evidence item missing path")
-                continue
-            target = (repo_root / rel_path).resolve()
-            if not target.exists():
-                errors.append(f"{cid}: missing file {rel_path}")
-
+    errors: list[str] = []
+    for control in matrix.controls:
+        for item in control.evidence:
+            if not (repo_root / item.path).resolve().exists():
+                errors.append(f"{control.id}: missing file {item.path}")
     return errors
 
 

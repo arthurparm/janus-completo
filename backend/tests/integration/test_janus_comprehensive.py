@@ -103,7 +103,7 @@ class TestMetaAgentRemediation:
 
         with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
              patch("app.core.agents.meta_agent.get_llm") as mock_llm, \
-             patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()), \
+             patch("app.core.agents.specialized_agent.get_llm", new=AsyncMock(return_value=MagicMock())), \
              patch("app.core.agents.meta_agent.analyze_memory_for_failures") as mock_mem, \
              patch("app.core.agents.meta_agent.get_system_health_metrics") as mock_health, \
              patch("app.core.agents.meta_agent.analyze_performance_trends") as mock_perf, \
@@ -134,7 +134,7 @@ class TestMetaAgentRemediation:
 
             # Initialize MAS with SYSADMIN
             mas = MultiAgentSystem()
-            mas.create_agent(AgentRole.SYSADMIN)
+            await mas.create_agent(AgentRole.SYSADMIN)
 
             with patch("app.core.agents.multi_agent_system.get_multi_agent_system", return_value=mas):
                 meta_agent = MetaAgent()
@@ -163,36 +163,37 @@ class TestAgentToolFiltering:
         """Test that SYSADMIN role has access to dangerous tools."""
         from app.core.agents.multi_agent_system import AgentRole, SharedWorkspace, SpecializedAgent
 
-        with patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-            workspace = SharedWorkspace()
-            agent = SpecializedAgent(AgentRole.SYSADMIN, workspace)
+        # SpecializedAgent.__init__ doesn't initialize the LLM/executor lazily
+        # (that happens in _initialize_agent, only called from execute_task/create_agent),
+        # so _get_tools_for_role() doesn't need get_llm mocked.
+        workspace = SharedWorkspace()
+        agent = SpecializedAgent(AgentRole.SYSADMIN, workspace)
 
-            tools = agent._get_tools_for_role()
-            tool_names = [t.name for t in tools]
+        tools = agent._get_tools_for_role()
+        tool_names = [t.name for t in tools]
 
-            # SYSADMIN should have dangerous tools
-            assert "execute_system_command" in tool_names
-            assert "write_system_file" in tool_names
-            assert "read_system_file" in tool_names
+        # SYSADMIN should have dangerous tools
+        assert "execute_system_command" in tool_names
+        assert "write_system_file" in tool_names
+        assert "read_system_file" in tool_names
 
-            print(f"✓ SYSADMIN has {len(tools)} tools including dangerous ones")
+        print(f"✓ SYSADMIN has {len(tools)} tools including dangerous ones")
 
     @pytest.mark.asyncio
     async def test_coder_lacks_dangerous_tools(self):
         """Test that CODER role does not have access to dangerous tools."""
         from app.core.agents.multi_agent_system import AgentRole, SharedWorkspace, SpecializedAgent
 
-        with patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-            workspace = SharedWorkspace()
-            agent = SpecializedAgent(AgentRole.CODER, workspace)
+        workspace = SharedWorkspace()
+        agent = SpecializedAgent(AgentRole.CODER, workspace)
 
-            tools = agent._get_tools_for_role()
-            tool_names = [t.name for t in tools]
+        tools = agent._get_tools_for_role()
+        tool_names = [t.name for t in tools]
 
-            # CODER should NOT have dangerous OS tools
-            assert "execute_system_command" not in tool_names
+        # CODER should NOT have dangerous OS tools
+        assert "execute_system_command" not in tool_names
 
-            print(f"✓ CODER has {len(tools)} tools (no dangerous ones)")
+        print(f"✓ CODER has {len(tools)} tools (no dangerous ones)")
 
 # ============================================================================
 # TEST 4: Memory Core Operations
@@ -437,18 +438,20 @@ class TestAgentManager:
         """Test AgentManager can create and manage agents."""
         from app.core.agents.agent_manager import AgentManager
 
-        with patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-            manager = AgentManager()
+        # AgentManager.__init__ doesn't create/initialize agents (that's create_agent,
+        # called lazily elsewhere), so list_agents()/get_workspace_status() don't need
+        # get_llm mocked.
+        manager = AgentManager()
 
-            # List agents should work
-            agents = manager.list_agents()
-            assert isinstance(agents, dict)
+        # List agents should work
+        agents = manager.list_agents()
+        assert isinstance(agents, dict)
 
-            # Get workspace status
-            status = manager.get_workspace_status()
-            assert isinstance(status, dict)
+        # Get workspace status
+        status = manager.get_workspace_status()
+        assert isinstance(status, dict)
 
-            print(f"✓ AgentManager initialized with {len(agents.get('agents', []))} agents")
+        print(f"✓ AgentManager initialized with {len(agents.get('agents', []))} agents")
 
     @pytest.mark.asyncio
     async def test_agent_type_to_role_mapping(self):
@@ -457,17 +460,16 @@ class TestAgentManager:
         from app.core.agents.multi_agent_system import AgentRole
         from app.core.infrastructure.enums import AgentType
 
-        with patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-            manager = AgentManager()
+        manager = AgentManager()
 
-            # Test mapping
-            role = manager._map_type_to_role(AgentType.ORCHESTRATOR)
-            assert role == AgentRole.PROJECT_MANAGER
+        # Test mapping
+        role = manager._map_type_to_role(AgentType.ORCHESTRATOR)
+        assert role == AgentRole.PROJECT_MANAGER
 
-            role = manager._map_type_to_role(AgentType.META_AGENT)
-            assert role == AgentRole.OPTIMIZER
+        role = manager._map_type_to_role(AgentType.META_AGENT)
+        assert role == AgentRole.OPTIMIZER
 
-            print("✓ AgentType to AgentRole mapping working")
+        print("✓ AgentType to AgentRole mapping working")
 
 # ============================================================================
 # TEST 10: Filesystem Manager (Sandboxed)
@@ -1100,10 +1102,10 @@ class TestMultiAgentSystemDispatch:
         mock_broker = MockBroker()
 
         with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
-             patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
+             patch("app.core.agents.specialized_agent.get_llm", new=AsyncMock(return_value=MagicMock())):
 
             mas = MultiAgentSystem()
-            agent = mas.create_agent(AgentRole.CODER)
+            agent = await mas.create_agent(AgentRole.CODER)
 
             task = Task(description="Test task", assigned_to=agent.agent_id)
             mas.workspace.add_task(task)
@@ -1127,19 +1129,18 @@ class TestSpecializedAgentCreation:
         """Test all AgentRole types can be instantiated."""
         from app.core.agents.multi_agent_system import AgentRole, SharedWorkspace, SpecializedAgent
 
-        with patch("app.core.agents.multi_agent_system.get_llm", return_value=MagicMock()):
-            workspace = SharedWorkspace()
+        workspace = SharedWorkspace()
 
-            roles_tested = 0
-            for role in AgentRole:
-                try:
-                    agent = SpecializedAgent(role, workspace)
-                    assert agent.role == role
-                    roles_tested += 1
-                except Exception as e:
-                    print(f"⚠ Role {role.value}: {e}")
+        roles_tested = 0
+        for role in AgentRole:
+            try:
+                agent = SpecializedAgent(role, workspace)
+                assert agent.role == role
+                roles_tested += 1
+            except Exception as e:
+                print(f"⚠ Role {role.value}: {e}")
 
-            print(f"✓ {roles_tested} agent roles can be created")
+        print(f"✓ {roles_tested} agent roles can be created")
 
 # ============================================================================
 # TEST 35: Memory Types

@@ -11,12 +11,12 @@ from app.core.infrastructure.message_broker import MessageBroker
 
 
 @pytest.mark.asyncio
-async def test_realtime_events_endpoint(base_url):
+async def test_realtime_events_endpoint(base_url, active_conversation, auth_headers):
     """
     Testa end-to-end: RabbitMQ -> backend SSE -> cliente recebe evento.
     Não usa mocks; publica direto na exchange real.
     """
-    conversation_id = "test-conv-realtime"
+    conversation_id = active_conversation
 
     # 1) Conecta no SSE do backend
     async def connect_sse():
@@ -26,7 +26,7 @@ async def test_realtime_events_endpoint(base_url):
         else:
             sse_url = urljoin(api_base + "/api/v1/", f"chat/{conversation_id}/events")
         async with AsyncClient() as ac:
-            async with ac.stream("GET", sse_url) as response:
+            async with ac.stream("GET", sse_url, headers=auth_headers) as response:
                 async for line in response.aiter_lines():
                     if line.startswith("data:"):
                         yield line

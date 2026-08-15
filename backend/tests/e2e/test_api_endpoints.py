@@ -1,10 +1,13 @@
-def test_health_check(api_client, health_url):
-    """Verify that the health check endpoint returns 200 OK."""
-    # Use requests directly for absolute URL
+def test_health_check(health_url, auth_headers):
+    """Verify that the authenticated user health check endpoint returns 200 OK."""
+    # /healthz/user is not under /api/v1, so hit it directly instead of via api_client.
     import requests
-    resp = requests.get(health_url)
+    resp = requests.get(health_url, headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok", "service": "Janus", "version": "0.5.44", "environment": "production", "tailscale": None}
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["profile"] == "user"
+    assert "dependencies" in data
 
 def test_start_conversation(api_client):
     """Verify that a new conversation can be started."""

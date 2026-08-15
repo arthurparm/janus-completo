@@ -14,12 +14,11 @@ from app.db import db
 from app.models.config_models import Prompt
 
 PROMPTS_TO_UPDATE = [
-    "meta_agent",
     "meta_agent_diagnosis",
     "meta_agent_planning",
     "meta_agent_reflection",
-    "meta_agent_act_template",
-    "meta_agent_plan_template",
+    "meta_agent_act",
+    "meta_agent_plan",
 ]
 
 

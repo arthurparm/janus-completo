@@ -9,18 +9,15 @@ from app.db import db
 from app.models.config_models import Prompt
 
 PROMPTS_TO_UPDATE = [
-    "knowledge_extraction",
-    "meta_agent",
-    "meta_agent_act_template",
+    "meta_agent_act",
     "meta_agent_diagnosis",
     "meta_agent_planning",
-    "meta_agent_plan_template",
+    "meta_agent_plan",
     "meta_agent_reflection",
     "reflexion_refine",
     "knowledge_extraction_system",
     "reflexion_evaluate",
     "graph_query_planning",
-    "knowledge_wisdom_extraction",
     "memory_integration",
     "security_red_team_audit",
     "context_compression",
@@ -28,7 +25,6 @@ PROMPTS_TO_UPDATE = [
     "multi_agent_decomposition",
     "reflexion_execution",
     "task_decomposition",
-    "janus_identity_jarvis",
 ]
 
 

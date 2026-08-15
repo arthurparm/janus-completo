@@ -13,7 +13,7 @@ def test_memory_timeline(api_client, active_conversation):
     resp = api_client.post("/chat/message", json={
         "conversation_id": cid,
         "message": msg_content,
-        "role": "user",
+        "role": "orchestrator",
         "priority": "fast_and_cheap"
     })
     assert resp.status_code == 200

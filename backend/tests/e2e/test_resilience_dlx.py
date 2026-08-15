@@ -1,10 +1,12 @@
 
 import asyncio
 import logging
+import time
 
 import aio_pika
 import pytest
 
+from app.config import settings
 from app.core.infrastructure.message_broker import MessageBroker
 from app.models.schemas import TaskMessage
 
@@ -18,81 +20,90 @@ async def test_dlx_poison_pill():
     Verifica se uma 'poison pill' (mensagem que causa erro) é
     movida para a Dead Letter Queue (DLQ) em vez de loop infinito.
     """
-    broker = MessageBroker()
     queue_name = "janus.test.poison"
+    # MessageBroker redeclara a fila (via _declare_queue_safely) tanto no consumer
+    # loop quanto em publish(); sem uma entrada em RABBITMQ_QUEUE_CONFIG, os
+    # argumentos esperados ficam vazios e conflitam com o x-dead-letter-exchange
+    # declarado abaixo, invalidando o canal AMQP no meio da declaracao passive.
+    settings.RABBITMQ_QUEUE_CONFIG[queue_name] = {"x-dead-letter-exchange": "janus.dlx"}
+    broker = MessageBroker()
+    consumer_task = None
+    try:
+        # 1. Connect and Setup
+        await broker.connect()
 
-    # 1. Connect and Setup
-    await broker.connect()
+        # Force queue deletion to start fresh
+        await broker.delete_queue(queue_name)
+        await broker.delete_queue("janus.dlq")
 
-    # Force queue deletion to start fresh
-    await broker.delete_queue(queue_name)
-    await broker.delete_queue("janus.dlq")
+        # 2. Declare Queue with DLX
+        async with broker._connection.channel() as channel:
+            # Declare DLX/DLQ manually to be sure (though broker code does it now)
+            dlx = await channel.declare_exchange("janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True)
+            dlq = await channel.declare_queue("janus.dlq", durable=True)
+            await dlq.bind(dlx, routing_key="#")
 
-    # 2. Declare Queue with DLX
-    async with broker._connection.channel() as channel:
-        # Declare DLX/DLQ manually to be sure (though broker code does it now)
-        dlx = await channel.declare_exchange("janus.dlx", type=aio_pika.ExchangeType.FANOUT, durable=True)
-        dlq = await channel.declare_queue("janus.dlq", durable=True)
-        await dlq.bind(dlx, routing_key="#")
+            # Declare Test Queue pointing to DLX
+            args = {
+                "x-dead-letter-exchange": "janus.dlx"
+            }
+            test_queue = await channel.declare_queue(queue_name, durable=True, arguments=args)
 
-        # Declare Test Queue pointing to DLX
-        args = {
-            "x-dead-letter-exchange": "janus.dlx"
-        }
-        test_queue = await channel.declare_queue(queue_name, durable=True, arguments=args)
+            # Purge to be clean
+            await test_queue.purge()
+            await dlq.purge()
 
-        # Purge to be clean
-        await test_queue.purge()
-        await dlq.purge()
+        print(f"\n[SETUP] Queues ready: {queue_name} -> janus.dlx -> janus.dlq")
 
-    print(f"\n[SETUP] Queues ready: {queue_name} -> janus.dlx -> janus.dlq")
+        # 3. Define a consumer that ALWAYS fails
+        async def poison_consumer(task: TaskMessage):
+            print(f"[CONSUMER] Received task: {task.task_id}")
+            if task.task_id == "poison_pill":
+                raise ValueError("I AM A POISON PILL!")
+            print("[CONSUMER] Processed normal task")
 
-    # 3. Define a consumer that ALWAYS fails
-    async def poison_consumer(task: TaskMessage):
-        print(f"[CONSUMER] Received task: {task.task_id}")
-        if task.task_id == "poison_pill":
-            raise ValueError("I AM A POISON PILL!")
-        print("[CONSUMER] Processed normal task")
+        # 4. Start Consumer
+        consumer_task = broker.start_consumer(queue_name, poison_consumer, prefetch_count=1)
 
-    # 4. Start Consumer
-    consumer_task = broker.start_consumer(queue_name, poison_consumer, prefetch_count=1)
+        # 5. Publish Poison Pill
+        poison_msg = TaskMessage(
+            task_id="poison_pill",
+            task_type="test",
+            payload={"data": "killer"},
+            timestamp=time.time(),
+        )
+        await broker.publish(queue_name, poison_msg.model_dump())
+        print("[PUBLISH] Poison pill sent")
 
-    # 5. Publish Poison Pill
-    poison_msg = TaskMessage(
-        task_id="poison_pill",
-        task_type="test",
-        payload={"data": "killer"}
-    )
-    await broker.publish(queue_name, poison_msg.model_dump())
-    print("[PUBLISH] Poison pill sent")
+        # 6. Wait for processing (allow time for nack -> dlq)
+        await asyncio.sleep(2)
 
-    # 6. Wait for processing (allow time for nack -> dlq)
-    await asyncio.sleep(2)
+        # 7. Access DLQ to verify message presence
+        async with broker._connection.channel() as channel:
+            dlq = await channel.declare_queue("janus.dlq", durable=True)
+            message_count = dlq.declaration_result.message_count
 
-    # 7. Access DLQ to verify message presence
-    async with broker._connection.channel() as channel:
-        dlq = await channel.declare_queue("janus.dlq", durable=True)
-        message_count = dlq.declaration_result.message_count
+            print(f"[ASSERT] DLQ Message Count: {message_count}")
+            assert message_count == 1, "DLQ should contain exactly 1 message (the poison pill)"
 
-        print(f"[ASSERT] DLQ Message Count: {message_count}")
-        assert message_count == 1, "DLQ should contain exactly 1 message (the poison pill)"
+            # Consume to inspect
+            msg = await dlq.get(fail=False)
+            assert msg is not None
+            print(f"[ASSERT] Message in DLQ: {msg.body}")
+            # Verify headers showing why it died
+            headers = msg.headers
+            x_death = headers.get("x-death", [])
+            if x_death:
+                reason = x_death[0].get("reason")
+                print(f"[info] Reason for death: {reason}")
+                assert reason == "rejected", "Reason should be 'rejected' (nack with requeue=False)"
 
-        # Consume to inspect
-        msg = await dlq.get(fail=False)
-        assert msg is not None
-        print(f"[ASSERT] Message in DLQ: {msg.body}")
-        # Verify headers showing why it died
-        headers = msg.headers
-        x_death = headers.get("x-death", [])
-        if x_death:
-            reason = x_death[0].get("reason")
-            print(f"[info] Reason for death: {reason}")
-            assert reason == "rejected", "Reason should be 'rejected' (nack with requeue=False)"
-
-    # Cleanup
-    consumer_task.cancel()
-    await broker.close()
-    print("[SUCCESS] Poison pill correctly moved to DLQ!")
+        print("[SUCCESS] Poison pill correctly moved to DLQ!")
+    finally:
+        if consumer_task is not None:
+            consumer_task.cancel()
+        await broker.close()
+        settings.RABBITMQ_QUEUE_CONFIG.pop(queue_name, None)
 
 if __name__ == "__main__":
     asyncio.run(test_dlx_poison_pill())

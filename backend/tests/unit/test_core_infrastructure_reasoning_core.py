@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,7 +13,7 @@ class _AsyncExecutor:
 
     async def ainvoke(self, payload):
         self.last_payload = payload
-        return {"output": self.output}
+        return {"messages": [SimpleNamespace(content=self.output)]}
 
 
 class _SyncExecutor:
@@ -22,7 +23,7 @@ class _SyncExecutor:
 
     def invoke(self, payload):
         self.last_payload = payload
-        return {"output": self.output}
+        return {"messages": [SimpleNamespace(content=self.output)]}
 
 
 @pytest.mark.asyncio
@@ -36,9 +37,9 @@ async def test_reasoning_session_ensure_agent_is_idempotent(monkeypatch):
 
     async def fake_prompt(prompt_name: str):
         assert prompt_name == "reasoning_session"
-        return "Pergunta: {input}"
+        return "You are a reasoning assistant."
 
-    def fake_create_react_agent(llm, tools, prompt):
+    def fake_create_react_agent(llm, tools=None, system_prompt=None):
         calls["agent_factory"] += 1
         return _AsyncExecutor()
 
@@ -61,7 +62,7 @@ async def test_solve_question_uses_async_executor_path(monkeypatch):
         return object()
 
     async def fake_prompt(prompt_name: str):
-        return "Pergunta: {input}"
+        return "You are a reasoning assistant."
 
     monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: executor)
@@ -70,7 +71,7 @@ async def test_solve_question_uses_async_executor_path(monkeypatch):
     result = await session.solve_question("qual o status")
 
     assert result == "resposta-async"
-    assert executor.last_payload == {"input": "qual o status"}
+    assert executor.last_payload == {"messages": [("user", "qual o status")]}
 
 
 @pytest.mark.asyncio
@@ -81,7 +82,7 @@ async def test_solve_question_falls_back_to_sync_invoke(monkeypatch):
         return object()
 
     async def fake_prompt(prompt_name: str):
-        return "Pergunta: {input}"
+        return "You are a reasoning assistant."
 
     monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: executor)
@@ -90,7 +91,7 @@ async def test_solve_question_falls_back_to_sync_invoke(monkeypatch):
     result = await session.solve_question("rodou sync")
 
     assert result == "resposta-sync"
-    assert executor.last_payload == {"input": "rodou sync"}
+    assert executor.last_payload == {"messages": [("user", "rodou sync")]}
 
 
 @pytest.mark.asyncio
@@ -103,7 +104,7 @@ async def test_solve_question_returns_controlled_error_on_executor_failure(monke
         return object()
 
     async def fake_prompt(prompt_name: str):
-        return "Pergunta: {input}"
+        return "You are a reasoning assistant."
 
     monkeypatch.setattr(reasoning_core, "get_prompt", fake_prompt)
     monkeypatch.setattr(reasoning_core, "create_react_agent", lambda *args, **kwargs: _BrokenExecutor())

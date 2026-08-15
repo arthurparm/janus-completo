@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -115,98 +116,60 @@ async def test_end_to_end_project_flow(tmp_path):
     # 1. Mock Broker & LLM
     mock_broker = MockBroker()
 
-    # We need a mocked LLM that acts differently for PM vs Coder
-
-    coder_response = """
-    Thought: I will write the file.
-    Action: write_file
-    Action Input: {
-        "file_path": "hello.py",
-        "content": "print('Hello')",
-        "overwrite": true
-    }
-    """
-
-    # Mock Tools
+    # Mock create_agent (langchain.agents) so the compiled graph is never actually
+    # built/run; we just want to observe the messages it was invoked with.
+    mock_ainvoke = AsyncMock(return_value={"messages": [SimpleNamespace(content="File created")]})
+    fake_executor = SimpleNamespace(ainvoke=mock_ainvoke)
 
     with patch("app.core.infrastructure.message_broker.get_broker", new=AsyncMock(return_value=mock_broker)), \
          patch("app.core.agents.agent_actor.get_broker", new=AsyncMock(return_value=mock_broker)), \
-         patch("app.core.agents.multi_agent_system.get_llm"), \
+         patch("app.core.agents.specialized_agent.get_llm", new=AsyncMock(return_value=MagicMock())), \
+         patch("app.core.agents.specialized_agent.create_agent", return_value=fake_executor), \
          patch("app.config.settings.WORKSPACE_ROOT", str(workspace_dir)):
 
-         # Setup MAS
-         mas = MultiAgentSystem()
-         coder = mas.create_agent(AgentRole.CODER)
-         # Force ID for predictability
-         coder.agent_id = "coder_1"
-         mas.agents["coder_1"] = coder
+        # Setup MAS
+        mas = MultiAgentSystem()
+        coder = await mas.create_agent(AgentRole.CODER)
+        # Force ID for predictability
+        coder.agent_id = "coder_1"
+        mas.agents["coder_1"] = coder
 
-         # Mock Coder LLM
-         mock_llm_coder = MagicMock()
-         mock_llm_coder.invoke.return_value.content = coder_response
+        # Logic:
+        # 1. We start the Coder's Actor (Listener).
+        # 2. We publish a TaskMessage to 'janus.agent.coder'.
+        # 3. We Verify Coder.executor.ainvoke was called.
 
-         # Mock Router to return specific LLM
-         # We need to distinguish calls.
-         # But simpler: just mock the agent's llm attribute after creation.
+        # Start Coder Actor (manually to ensure it attaches to mock broker)
+        from app.core.agents.agent_actor import AgentActor
+        actor = AgentActor(coder)
+        # Start consumer
+        await actor.start()
 
-         # Mock Router to return specific LLM
-         # We rely on AgentExecutor.ainvoke patch so we don't need to inject LLM
+        # Create a Task
+        task = Task(description="Write hello.py", assigned_to="coder_1")
+        mas.workspace.add_task(task)
 
+        # Dispatch (this calls broker.publish)
+        await mas.dispatch_task(task)
 
-         # Let's patch AgentExecutor.ainvoke
-         with patch("langchain.agents.AgentExecutor.ainvoke", new_callable=AsyncMock) as mock_ainvoke:
+        # Broker should have simulated delivery to callback (actor._process_message)
+        # This is async, give it a tick
+        await asyncio.sleep(0.1)
 
-             # Configure Coder behavior
-             mock_ainvoke.return_value = {
-                 "output": "File created",
-                 "intermediate_steps": []
-             }
+        # Verification
+        # Check if Coder LLM (compiled agent graph) was invoked with the task description
+        assert mock_ainvoke.called
+        args, _ = mock_ainvoke.call_args
+        input_data = args[0]
+        assert "Write hello.py" in str(input_data)
 
-             # Logic:
-             # 1. We start the Coder's Actor (Listener).
-             # 2. We publish a TaskMessage to 'janus.agent.coder'.
-             # 3. We Verify Coder.executor.ainvoke was called.
+        print("SUCCESS: Coder Agent received task and invoked LLM.")
 
-             # Start Coder Actor (manually to ensure it attaches to mock broker)
-             from app.core.agents.agent_actor import AgentActor
-             actor = AgentActor(coder)
-             # Start consumer
-             await actor.start()
-
-             # Create a Task
-             task = Task(description="Write hello.py", assigned_to="coder_1")
-             mas.workspace.add_task(task)
-
-             # Dispatch (this calls broker.publish)
-             await mas.dispatch_task(task)
-
-             # Broker should have simulated delivery to callback (actor._process_message)
-             # This is async, give it a tick
-             await asyncio.sleep(0.1)
-
-             # Verification
-             # Check if Coder LLM (AgentExecutor) was invoked with the task description
-             assert mock_ainvoke.called
-             args, _ = mock_ainvoke.call_args
-             input_data = args[0]
-             assert "Write hello.py" in str(input_data)
-
-             print("SUCCESS: Coder Agent received task and invoked LLM.")
-
-             # Now testing Tool Execution separately (Integration level)
-             # Verify write_file tool works in this environment
-             from app.core.tools.filesystem_tools import write_file
-
-             # Test write_file
-             write_file.invoke({
-                "file_path": "test_env.txt",
-                "content": "Environment Active",
-                "overwrite": True
-             })
-
-             assert (workspace_dir / "test_env.txt").exists()
-             assert (workspace_dir / "test_env.txt").read_text() == "Environment Active"
-             print("SUCCESS: Filesystem Tools are working.")
+        # NOTE: this test used to also exercise a `write_file` tool from
+        # `app.core.tools.filesystem_tools`, which no longer exists (tools were
+        # consolidated into `app.core.tools.safe_tools`/`action_module`). That
+        # coverage gap is pre-existing and unrelated to agent orchestration;
+        # tracked as TD-033 rather than reverse-engineered here.
 
 if __name__ == "__main__":
     asyncio.run(test_end_to_end_project_flow(Path("./tmp_test")))

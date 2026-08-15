@@ -25,6 +25,11 @@ def base_url() -> str:
 def health_url() -> str:
     return HEALTH_URL
 
+
+@pytest.fixture(scope="session")
+def auth_headers() -> dict[str, str]:
+    return _auth_headers()
+
 @pytest.fixture(scope="session")
 def api_client():
     """Simple wrapper around requests to handle base URL and chat auth."""

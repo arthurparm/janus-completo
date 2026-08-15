@@ -23,7 +23,7 @@ async def test_multi_agent_parallel_dispatch(mock_broker):
 
     # 2. Create agent (mocks actor start to avoid background task issues in test)
     with patch("app.core.agents.agent_actor.AgentActor.start", new_callable=AsyncMock):
-        coder = mas.create_agent(AgentRole.CODER)
+        coder = await mas.create_agent(AgentRole.CODER)
 
     # 3. Create task
     task = Task(
