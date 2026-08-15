@@ -118,17 +118,9 @@ The MemoryCore ([memory_core.py](file:///h:/repos/janus-completo/backend/app/cor
 
 **Quota Enforcement**: Per-origin quotas track items and bytes within sliding windows. Default: 200 items/5MB per origin per hour. Self-study origins have higher limits (5000 items/25MB). `SmartEviction` policies protect persistent/strong memories and prefer rolling_window retention. Protected items (retention=persistent, stability_score >= threshold, or strong_memory flag) are exempt from eviction.
 
-## 8. Evolution / Lab
+## 8. Evolution / Lab (removed)
 
-The Evolution module ([core/evolution/](file:///h:/repos/janus-completo/backend/app/core/evolution/)) provides autonomous self-improvement capabilities.
-
-**SelfStudyManager**: Orchestrates the full self-study cycle: (1) Reflection via `ReflectorAgent` analyzing past experiences for failure patterns, (2) Prioritization ranking improvements by impact, (3) Evolution creating/improving tools via `EvolutionManager`, (4) Validation verifying improvements work. The cycle runs during idle time when system health score drops below 0.8. Limited to 3 evolutions per session by default.
-
-**EvolutionManager**: Manages the evolution backlog as a JSON file (`data/evolution_backlog.json`). The `queue_request()` method adds improvement requests. `process_next_pending()` cycles through spec generation (via LLM `TOOL_SPECIFICATION_PROMPT`), tool code generation (via `TOOL_GENERATION_PROMPT`), AST validation, and tool registration in the `action_registry`.
-
-**ReflectorAgent**: Analyzes past experiences from memory looking for failure keywords (error, failed, timeout, exception, tool not found), user dissatisfaction signals (wrong, incorrect, try again), and missing capabilities. Produces a `ReflectionReport` with `health_score` (0-1), detected `FailurePattern` instances, and suggested improvements.
-
-**SafeEvolutionManager + JanusLab**: The complete Dream Mode flow: (1) `LogAwareReflector` reads actual application logs, (2) identifies error patterns, (3) generates improvement code, (4) spawns a JanusLab Docker container with `janus-api:latest` image, restricted environment (`DISABLE_WORKERS=true`, `DISABLE_MEMORY_WRITES=true`, `ENVIRONMENT=lab`), no-network mode, (5) tests the code in the Lab, (6) if passes, applies to Prime, (7) auto-destroys Lab after 600s. Limited to 2 attempts per session.
+Commit `67564805` permanently blocked autonomous code evolution, tool creation, and sandbox access as a security decision. `SelfStudyManager`, `EvolutionManager`, `SafeEvolutionManager`, and the original `ReflectorAgent` no longer exist in [core/evolution/](file:///h:/repos/janus-completo/backend/app/core/evolution/) — self-analysis now lives only in `LogAwareReflector` ([core/memory/log_aware_reflector.py](file:///h:/repos/janus-completo/backend/app/core/memory/log_aware_reflector.py)), which is not wired to any tool-creation pipeline. The only file left under `core/evolution/` is `janus_lab.py` (`JanusLabManager`), kept solely because `backend/tests/unit/test_sg018_secret_defaults_removed.py` regression-tests that it never falls back to an insecure default `NEO4J_PASSWORD`; it is not reachable from any runtime path. See [AUTONOMY_RISK.md](file:///h:/repos/janus-completo/AUTONOMY_RISK.md) Section 1-4 for the full history and rationale.
 
 **Meta-agent availability**: `MetaAgentService` loads the real meta-agent lazily so an optional dependency failure does not prevent unrelated API routes from starting. It never creates a stub or reports fabricated health. The health payload reports `status=unavailable` with reason code `META_AGENT_DEPENDENCY_UNAVAILABLE`; operational calls fail with HTTP 503 and error code `SERVICE_UNAVAILABLE` until the real dependency can be loaded.
 

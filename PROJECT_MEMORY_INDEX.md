@@ -13,7 +13,7 @@ These persistent knowledge files provide AI agents with deep, contextual underst
 | [BACKEND_RUNTIME.md](file:///h:/repos/janus-completo/BACKEND_RUNTIME.md) | Deep backend analysis covering all 10 major subsystems: Kernel lifecycle, Hybrid Brain/LLM Router, Multi-Agent System, RAG/Knowledge, Neo4j graph, Message Broker, Memory, Evolution, Security, Observability, and Tool Executor. |
 | [FRONTEND_ANGULAR.md](file:///h:/repos/janus-completo/FRONTEND_ANGULAR.md) | Deep frontend analysis: Angular 20 standalone architecture, auth system, SSE chat streaming, global state, interceptors, WebRTC, observability dashboard, admin autonomy panel, and build/deploy pipeline. |
 | [OPS_QA.md](file:///h:/repos/janus-completo/OPS_QA.md) | Deep operational analysis: PC1/PC2 split deployment, test structure, QA tooling, offline eval gate, Docker Compose architecture with resource limits, secret validator, URL safety egress policy, and rate limiting. |
-| [AUTONOMY_RISK.md](file:///h:/repos/janus-completo/AUTONOMY_RISK.md) | Deep autonomy and risk analysis: Self-Study loop, EvolutionManager, ReflectorAgent, SafeEvolutionManager with JanusLab, risk assessment matrix per component, and unaddressed security boundaries. |
+| [AUTONOMY_RISK.md](file:///h:/repos/janus-completo/AUTONOMY_RISK.md) | Deep autonomy and risk analysis: operating boundary, why autonomous tool evolution/Lab was permanently removed, risk assessment matrix per component, and unaddressed security boundaries. |
 
 ## How to Use
 
@@ -25,4 +25,4 @@ These persistent knowledge files provide AI agents with deep, contextual underst
 
 ## Last Updated
 
-2026-08-11
+2026-08-14

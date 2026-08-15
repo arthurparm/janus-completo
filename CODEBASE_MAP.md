@@ -9,12 +9,12 @@ h:\repos\janus-completo\
 │   │   ├── main.py            # FastAPI app entry, lifespan events
 │   │   ├── config.py          # Pydantic Settings (978 lines, all env config)
 │   │   ├── api/v1/            # Router + endpoints (chat, auth, knowledge, tools, admin, observability)
-│   │   ├── core/              # Kernel, LLM, agents, memory, tools, security, evolution, workers, monitoring
+│   │   ├── core/              # Kernel, LLM, agents, memory, tools, security, workers, monitoring
 │   │   ├── services/          # Business logic layer (orchestration)
 │   │   ├── repositories/      # Data access layer (SQL, Neo4j, Qdrant, broker)
 │   │   ├── models/            # Pydantic/SQLAlchemy models + schemas
 │   │   ├── db/                # Database engines (graph.py, vector_store.py, db.py)
-│   │   ├── prompts/           # LangChain prompt templates (agent roles, cypher, evolution)
+│   │   ├── prompts/           # LLM system/task prompts (agent roles, RAG, reflexion, autonomy)
 │   │   └── planes/            # Domain planes (inference, knowledge)
 │   ├── tests/                 # Unit, integration, e2e
 │   ├── docker/Dockerfile      # Multi-stage build (final + test target)
@@ -135,7 +135,7 @@ Client (Angular ChatStreamService)
 | Multi-Agent | `core/agents/multi_agent_system.py`, `core/agents/agent_manager.py` | 7 roles, Actor Model, RabbitMQ queues |
 | Knowledge/RAG | `services/knowledge*`, `services/rag_service.py`, `planes/knowledge/*` | Route-based RAG, multi-source fusion |
 | Memory | `services/memory_service.py`, `core/memory/memory_core.py` | Generative Agents model, Qdrant, quotas, encryption |
-| Autonomy | `services/autonomy*`, `core/evolution/*` | Self-study, evolution, lab testing |
+| Autonomy | `services/autonomy*`, `core/autonomy/*` | Goal lifecycle, planning, policy engine (`core/evolution/*` is legacy: autonomous tool evolution was permanently removed, see AUTONOMY_RISK.md) |
 | Tools/Sandbox | `services/tool_executor_service.py`, `core/tools/*` | PolicyEngine, Docker sandbox, command sandbox |
 | Workers/Events | `core/workers/*`, `core/infrastructure/message_broker.py` | 25+ workers, DLX/DLQ, msgpack |
 | Security | `core/security/*` | Secret validation, egress policy, rate limiting, auth |

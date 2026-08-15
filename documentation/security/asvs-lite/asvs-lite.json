@@ -1,0 +1,120 @@
+{
+  "classification": "internal-only",
+  "standard": "ASVS-lite",
+  "version": "2026.05",
+  "min_score_percent": 0.85,
+  "requirements": [
+    {
+      "id": "ASVS-LITE-AC-1",
+      "title": "RBAC: rotas administrativas exigem admin e system actor e bloqueado",
+      "level": "L1",
+      "severity": "P0",
+      "weight": 3,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "backend/app/core/security/request_guard.py" },
+        { "type": "test", "path": "backend/tests/unit/test_security_request_guard_rbac.py" },
+        { "type": "doc", "path": "documentation/security/rbac.md" }
+      ],
+      "tags": ["authz", "rbac"]
+    },
+    {
+      "id": "ASVS-LITE-NET-1",
+      "title": "Egress deny-by-default com mitigação SSRF para tools/workers e auditoria de bloqueios",
+      "level": "L1",
+      "severity": "P0",
+      "weight": 3,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "backend/app/core/security/egress_policy.py" },
+        { "type": "code", "path": "backend/app/core/security/url_safety.py" },
+        { "type": "test", "path": "backend/tests/unit/test_security_egress_policy.py" },
+        { "type": "test", "path": "backend/tests/unit/test_security_worker_egress_policy.py" },
+        { "type": "doc", "path": "documentation/security/egress-policy.md" }
+      ],
+      "tags": ["ssrf", "egress"]
+    },
+    {
+      "id": "ASVS-LITE-AUD-1",
+      "title": "Audit ledger append-only (imutável) com hash-chain e assinatura HMAC",
+      "level": "L1",
+      "severity": "P0",
+      "weight": 3,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "backend/app/repositories/audit_ledger_repository.py" },
+        { "type": "code", "path": "backend/app/services/db_migration_service.py" }
+      ],
+      "tags": ["audit", "ledger"]
+    },
+    {
+      "id": "ASVS-LITE-AUD-2",
+      "title": "Verificação de integridade do audit ledger (hash-chain + assinatura) com alerta automático",
+      "level": "L1",
+      "severity": "P0",
+      "weight": 3,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "backend/app/repositories/audit_ledger_repository.py" },
+        { "type": "code", "path": "backend/app/services/scheduler_service.py" },
+        { "type": "code", "path": "backend/app/api/v1/endpoints/observability.py" }
+      ],
+      "tags": ["audit", "integrity"]
+    },
+    {
+      "id": "ASVS-LITE-KEYS-1",
+      "title": "Secrets: criptografia em repouso com keyring e rotação periódica (sem KMS externo)",
+      "level": "L1",
+      "severity": "P0",
+      "weight": 3,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "backend/app/core/memory/security.py" },
+        { "type": "code", "path": "backend/app/services/secret_key_rotation_service.py" },
+        { "type": "test", "path": "backend/tests/unit/test_memory_keyring_encryption.py" },
+        { "type": "doc", "path": "documentation/security/key-management.md" }
+      ],
+      "tags": ["encryption", "kms"]
+    },
+    {
+      "id": "ASVS-LITE-RATE-1",
+      "title": "Cliente web: tratamento robusto de 401 (refresh com lock) e 429 (Retry-After cooldown)",
+      "level": "L1",
+      "severity": "P1",
+      "weight": 2,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "frontend/src/app/core/interceptors/auth-session.interceptor.ts" },
+        { "type": "test", "path": "frontend/src/app/core/interceptors/auth-session.interceptor.spec.ts" }
+      ],
+      "tags": ["rate_limit", "auth"]
+    },
+    {
+      "id": "ASVS-LITE-TP-1",
+      "title": "Inventário verificável de terceiros com bloqueio automático no CI para provedores não registrados",
+      "level": "L1",
+      "severity": "P0",
+      "weight": 3,
+      "status": "implemented",
+      "evidence": [
+        { "type": "doc", "path": "documentation/compliance/third-parties-register.json" },
+        { "type": "code", "path": "tooling/validate_third_party_registry.py" },
+        { "type": "test", "path": "qa/test_third_party_registry_enforced.py" }
+      ],
+      "tags": ["third_parties", "supply_chain"]
+    },
+    {
+      "id": "ASVS-LITE-IR-1",
+      "title": "Incident response: evidências ancoradas no audit ledger e runbook integrado",
+      "level": "L1",
+      "severity": "P1",
+      "weight": 2,
+      "status": "implemented",
+      "evidence": [
+        { "type": "code", "path": "backend/app/api/v1/endpoints/observability.py" },
+        { "type": "doc", "path": "documentation/operations/incident-response-runbook.md" }
+      ],
+      "tags": ["incident_response", "audit"]
+    }
+  ]
+}
