@@ -238,6 +238,10 @@ services:
     platform: linux/amd64
     ports:
       - "127.0.0.1:20128:20128"
+      # Embedded WS proxy + Live dashboard WebSocket server (dashboard hangs on
+      # "Loading OmniRoute..." without these being reachable from the host).
+      - "127.0.0.1:20131:20131"
+      - "127.0.0.1:20132:20132"
     environment:
       - JWT_SECRET=${OMNIROUTE_JWT_SECRET:?Set OMNIROUTE_JWT_SECRET in .env.pc1}
       - API_KEY_SECRET=${OMNIROUTE_API_KEY_SECRET:?Set OMNIROUTE_API_KEY_SECRET in .env.pc1}
@@ -254,11 +258,12 @@ services:
       - REQUIRE_API_KEY=true
       - BASE_URL=http://localhost:20128
       - NEXT_PUBLIC_BASE_URL=http://localhost:20128
+      - OMNIROUTE_MEMORY_MB=1536
     volumes:
       - janus_omniroute_data:/app/data
     restart: unless-stopped
-    mem_limit: 512m
-    cpus: "1.0"
+    mem_limit: 1536m
+    cpus: "1.5"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:20128/api/monitoring/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
