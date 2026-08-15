@@ -184,14 +184,29 @@ async def authorize(request: Request) -> HTMLResponse:
     return HTMLResponse(
         """<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Janus Local Identity</title><style>
 :root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;
-font:16px system-ui;background:#07111f;color:#e6f7ff}.card{width:min(92vw,460px);padding:2rem;
-border:1px solid #1d5770;border-radius:18px;background:#0c1c2b;box-shadow:0 24px 80px #0008}
-.eyebrow{color:#65d9ff;letter-spacing:.16em;font-size:.75rem}h1{margin:.7rem 0}
-p{color:#a9c3d0;line-height:1.55}.identity{padding:1rem;border-radius:12px;background:#071521;
-margin:1.5rem 0}button{width:100%;padding:1rem;border:0;border-radius:12px;background:#36c7f4;
-color:#041018;font-weight:800;cursor:pointer}small{display:block;margin-top:1rem;color:#7893a1}</style></head>
+font:16px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;background:#0a0a0a;color:#eaf2f8;
+position:relative;overflow:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;
+background:radial-gradient(ellipse 60% 45% at 15% 20%,rgba(69,195,255,.10),transparent 55%),
+radial-gradient(ellipse 55% 40% at 85% 80%,rgba(35,213,161,.08),transparent 55%)}
+.card{position:relative;width:min(92vw,460px);padding:2.25rem;border-radius:24px;
+background:rgba(255,255,255,.05);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+border:1px solid rgba(255,255,255,.1)}
+.eyebrow{color:#45c3ff;letter-spacing:.08em;font-size:.75rem;font-weight:600;text-transform:uppercase}
+h1{margin:.6rem 0;font-size:1.5rem;font-weight:600;letter-spacing:-.02em}
+p{color:#b3c1cc;line-height:1.55}
+.identity{padding:1rem 1.1rem;border-radius:14px;background:rgba(255,255,255,.04);
+border:1px solid rgba(255,255,255,.08);margin:1.5rem 0}
+.identity strong{font-weight:600}.identity span{color:#8ea2b0;font-size:.9rem}
+button{width:100%;padding:.9rem 1rem;border:0;border-radius:9999px;background:#fff;
+color:#0a0a0a;font-weight:600;font-size:.9rem;cursor:pointer;transition:transform .2s ease}
+button:hover{transform:translateY(-1px)}
+small{display:block;margin-top:1rem;color:#8ea2b0;font-size:.75rem}</style></head>
 <body><main class="card"><div class="eyebrow">JANUS // AMBIENTE LOCAL</div>
 <h1>Identidade de desenvolvimento</h1><p>Este provedor existe somente no computador local e usa Authorization Code com PKCE.</p>
 <div class="identity"><strong>Janus Local User</strong><br><span>local-user@janus.invalid</span></div>

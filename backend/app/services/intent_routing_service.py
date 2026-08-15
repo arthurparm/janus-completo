@@ -1,7 +1,8 @@
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import TypedDict
+
+from typing_extensions import TypedDict
 
 from app.config import settings
 from app.core.llm import ModelRole

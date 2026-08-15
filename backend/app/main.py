@@ -129,22 +129,6 @@ async def lifespan(app: FastAPI):
     # 1.0 Initialize LangGraph orchestrator/checkpointer lifecycle
     await init_graph()
 
-    # 1.1 Load Global Prompts (Async)
-    # This ensures that all prompt constants are populated from the DB before the app starts serving requests.
-    from app.core.evolution.prompts import load_evolution_prompts
-    from app.core.infrastructure.advanced_prompts import load_advanced_prompts
-    from app.core.infrastructure.janus_specialized_prompts import load_specialized_prompts
-
-    logger.info("Loading global prompts from database...")
-    try:
-        await load_advanced_prompts()
-        await load_specialized_prompts()
-        await load_evolution_prompts()
-        logger.info("Global prompts loaded successfully.")
-    except Exception as e:
-        logger.error("log_error", message=f"Failed to load global prompts: {e}")
-        # We don't raise here to allow startup with empty prompts (they might be fetched on demand or fallback)
-
     await bootstrap_dependencies(app)
     try:
         from app.services.autonomy_admin_service import AutonomyAdminService

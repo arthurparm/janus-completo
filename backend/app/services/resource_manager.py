@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from app.config import settings
@@ -13,7 +13,7 @@ def can_schedule_training(user_id: str | None) -> bool:
     if budget is None:
         return True
     u = _user_gpu_usage.setdefault(
-        str(user_id), {"used": 0.0, "updated_at": datetime.utcnow().isoformat()}
+        str(user_id), {"used": 0.0, "updated_at": datetime.now(UTC).isoformat()}
     )
     return float(u.get("used", 0.0)) < float(budget)
 
@@ -22,10 +22,10 @@ def record_training_usage(user_id: str | None, cost: float) -> None:
     if not user_id:
         return
     u = _user_gpu_usage.setdefault(
-        str(user_id), {"used": 0.0, "updated_at": datetime.utcnow().isoformat()}
+        str(user_id), {"used": 0.0, "updated_at": datetime.now(UTC).isoformat()}
     )
     u["used"] = float(u.get("used", 0.0)) + float(cost)
-    u["updated_at"] = datetime.utcnow().isoformat()
+    u["updated_at"] = datetime.now(UTC).isoformat()
 
 
 def get_user_gpu_usage(user_id: str) -> dict[str, Any]:

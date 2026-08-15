@@ -1,7 +1,8 @@
 import operator
-from typing import Annotated, Literal, Sequence, TypedDict
+from typing import Annotated, Literal, Sequence
 
 import structlog
+from typing_extensions import TypedDict
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph

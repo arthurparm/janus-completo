@@ -1,9 +1,10 @@
 import structlog
 import json
 import re
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal
 import operator
 
+from typing_extensions import TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.core.llm import ModelPriority, ModelRole

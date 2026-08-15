@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from langchain_core.prompts import PromptTemplate
+from langchain.agents import create_agent
 
 from app.core.llm.router import get_llm
 from app.core.llm.types import ModelPriority, ModelRole
@@ -27,6 +27,11 @@ from app.core.agents.utils import (
 from app.core.infrastructure.prompt_loader import get_prompt
 
 logger = structlog.get_logger(__name__)
+
+# Equivalentes ao antigo AgentExecutor(max_iterations=15, max_execution_time=180):
+# cada iteracao ReAct consome ~2 passos do grafo (modelo + tools).
+_AGENT_RECURSION_LIMIT = 30
+_AGENT_EXECUTION_TIMEOUT_SECONDS = 180
 
 
 class SpecializedAgentError(Exception):
@@ -112,9 +117,9 @@ class SpecializedAgent:
         except Exception as e:
             logger.warning("log_warning", message=f"Falha ao carregar configuração dinâmica para {self.role.value}: {e}")
 
-        # Carregar prompt (do banco ou fallback)
+        # Carregar prompt (do banco ou fallback) — texto puro, usado como system prompt.
+        # Tool calling e o loop de raciocinio sao nativos do grafo (sem parsing de texto ReAct).
         prompt_text = await self._get_prompt_for_role(config)
-        prompt = PromptTemplate.from_template(prompt_text)
 
         # Selecionar LLM (do banco ou fallback)
         llm_role, llm_priority = self._get_llm_config_for_role(config)
@@ -124,32 +129,7 @@ class SpecializedAgent:
         tools = self._get_tools_for_role()
         wrapped_tools = [_create_tool_wrapper(tool) for tool in tools]
 
-        # Tenta importar create_react_agent (novo) ou cria fallback
-        try:
-            from langchain.agents import AgentExecutor, create_react_agent
-
-            agent = create_react_agent(llm, wrapped_tools, prompt)
-            agent_executor = AgentExecutor(
-                agent=agent,
-                tools=wrapped_tools,
-                verbose=True,
-                handle_parsing_errors=True,
-                max_iterations=15,
-                max_execution_time=180,
-            )
-            self.executor = agent_executor
-        except ImportError:
-            # Fallback para versões antigas ou diferentes
-            from langchain.agents import AgentType, initialize_agent
-
-            agent = initialize_agent(
-                wrapped_tools,
-                llm,
-                agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-                verbose=True,
-                # max_execution_time não suportado em initialize_agent diretamente as vezes
-            )
-            self.executor = agent
+        self.executor = create_agent(llm, tools=wrapped_tools, system_prompt=prompt_text)
 
         logger.info("log_info", message=f"Agente '{self.agent_id}' inicializado com sucesso.")
 
@@ -189,25 +169,21 @@ class SpecializedAgent:
                 if self.event_callback:
                     run_callbacks.append(AgentEventCallbackHandler(self.event_callback))
 
-                # Executar a tarefa
+                # Executar a tarefa (grafo LangGraph: estado baseado em mensagens)
                 start_time = asyncio.get_event_loop().time()
 
-                # Langchain invoke suporta callbacks em config
-                if hasattr(self.executor, "ainvoke"):
-                    result = await self.executor.ainvoke(
-                        {"input": task.description}, {"callbacks": run_callbacks}
-                    )
-                else:
-                    # Fallback for older langchain versions or different executor types
-                    result = await asyncio.to_thread(
-                        self.executor.invoke,
-                        {"input": task.description},
-                        {"callbacks": run_callbacks},
-                    )
+                result = await asyncio.wait_for(
+                    self.executor.ainvoke(
+                        {"messages": [("user", task.description)]},
+                        {"callbacks": run_callbacks, "recursion_limit": _AGENT_RECURSION_LIMIT},
+                    ),
+                    timeout=_AGENT_EXECUTION_TIMEOUT_SECONDS,
+                )
                 duration = asyncio.get_event_loop().time() - start_time
 
                 # Limpar output (remover markdown se presente)
-                output = result.get("output", "")
+                messages = result.get("messages", []) if isinstance(result, dict) else []
+                output = messages[-1].content if messages else ""
                 cleaned_output = _clean_json_output(output)
 
                 # Validar que o resultado não está vazio

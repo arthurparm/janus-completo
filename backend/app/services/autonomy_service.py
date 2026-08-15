@@ -14,7 +14,6 @@ from app.core.autonomy.goal_conflict_detector import ConflictReport, goal_confli
 from app.core.autonomy.goal_manager import Goal, GoalManager, GoalStatus
 from app.core.autonomy.planner import build_plan_for_goal
 from app.core.autonomy.policy_engine import PolicyConfig, PolicyEngine
-from app.core.evolution.reflector_agent import HealthScore  # noqa: F401
 from app.core.security.actor_context import ActorContext
 from app.core.security.authorization import authorization_service
 from app.core.tools.action_module import action_registry

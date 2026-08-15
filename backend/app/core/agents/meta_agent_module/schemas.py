@@ -1,7 +1,8 @@
 from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Any, Required, TypedDict, Literal
+from typing import Any, Literal
+from typing_extensions import Required, TypedDict
 from pydantic import BaseModel, Field
 
 

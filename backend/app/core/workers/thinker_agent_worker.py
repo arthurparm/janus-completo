@@ -29,7 +29,6 @@ async def _build_thinking_prompt(state: TaskState) -> str:
         "agent_thinker",
         goal=goal,
         context=context,
-        agent_scratchpad="",
     )
 
 

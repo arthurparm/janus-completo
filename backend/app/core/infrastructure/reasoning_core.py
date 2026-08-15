@@ -3,7 +3,6 @@ import json
 import structlog
 from typing import Any, Awaitable, Callable, Dict, Optional
 
-from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 
 from app.core.infrastructure.prompt_loader import get_prompt
@@ -12,10 +11,10 @@ from app.core.llm.types import ModelPriority, ModelRole
 logger = structlog.get_logger(__name__)
 
 try:
-    from langchain.agents import create_react_agent as create_react_agent
+    from langchain.agents import create_agent as create_react_agent
 except Exception:
     def create_react_agent(*args: Any, **kwargs: Any) -> Any:
-        raise RuntimeError("create_react_agent is not available in this langchain version")
+        raise RuntimeError("create_agent is not available in this langchain version")
 
 
 async def _resolve_memory_db() -> Any:
@@ -72,7 +71,7 @@ class ReasoningSession:
     ):
         self.llm_provider = llm_provider
         self.tools = tools
-        self.prompt: Optional[PromptTemplate] = None
+        self.prompt: Optional[str] = None
         self.agent_executor = None
         self.prompt_name = prompt_name
 
@@ -84,12 +83,14 @@ class ReasoningSession:
         if not prompt_text:
             raise ValueError(f"Prompt '{self.prompt_name}' nao encontrado.")
 
-        self.prompt = PromptTemplate.from_template(prompt_text)
+        # Texto puro, usado como system prompt: tool calling e o loop de
+        # raciocinio sao nativos do grafo (sem parsing de texto ReAct).
+        self.prompt = prompt_text
         llm = await self.llm_provider(
             role=ModelRole.REASONER,
             priority=ModelPriority.HIGH_QUALITY,
         )
-        self.agent_executor = create_react_agent(llm, self.tools, self.prompt)
+        self.agent_executor = create_react_agent(llm, tools=self.tools, system_prompt=self.prompt)
 
     async def _invoke_executor(self, payload: dict[str, Any]) -> Any:
         if self.agent_executor is None:
@@ -104,6 +105,11 @@ class ReasoningSession:
     @staticmethod
     def _normalize_output(result: Any) -> str:
         if isinstance(result, dict):
+            messages = result.get("messages")
+            if messages:
+                content = getattr(messages[-1], "content", None)
+                if content is not None:
+                    return str(content)
             if "output" in result:
                 return str(result["output"])
             return json.dumps(result, ensure_ascii=False, default=str)
@@ -114,7 +120,7 @@ class ReasoningSession:
     async def solve_question(self, question: str) -> str:
         try:
             await self._ensure_agent()
-            result = await self._invoke_executor({"input": question})
+            result = await self._invoke_executor({"messages": [("user", question)]})
             return self._normalize_output(result)
         except Exception as exc:
             logger.error(
