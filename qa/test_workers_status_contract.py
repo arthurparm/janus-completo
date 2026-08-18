@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -10,7 +11,7 @@ sys.path.append(os.path.join(os.getcwd(), "backend"))
 
 from app.api.v1.endpoints.workers import _task_status
 from app.api.v1.endpoints.workers import router as workers_router
-from app.core.workers.orchestrator import DisabledWorkerHandle
+from app.core.workers.orchestrator import DisabledWorkerHandle, build_worker_runtime_records
 from app.main import cancel_tracked_orchestrator_workers
 
 
@@ -28,6 +29,21 @@ class _FakeTask:
 
     def exception(self):
         return self._exc
+
+
+def test_worker_runtime_records_capture_real_registration_time():
+    registered_at = datetime(2026, 8, 18, 12, 30, tzinfo=UTC)
+    task = _FakeTask(done=False, cancelled=False)
+
+    records = build_worker_runtime_records([task], registered_at=registered_at)
+
+    assert records == [
+        {
+            "name": "memory_maintenance",
+            "task": task,
+            "registered_at": registered_at,
+        }
+    ]
 
 
 def test_task_status_disabled_worker():
@@ -54,6 +70,7 @@ def test_workers_status_endpoint_exposes_disabled_and_composite():
         {
             "name": "google_productivity",
             "task": DisabledWorkerHandle(detail="ENABLE_GOOGLE_PRODUCTIVITY_WORKER=false"),
+            "registered_at": datetime(2026, 8, 18, 12, 30, tzinfo=UTC),
         },
         {"name": "composite_worker", "task": (_FakeTask(False, False), _FakeTask(True, False))},
     ]
@@ -67,6 +84,7 @@ def test_workers_status_endpoint_exposes_disabled_and_composite():
     g = next(w for w in data["workers"] if w["name"] == "google_productivity")
     assert g["state"] == "disabled"
     assert g["reason"] == "disabled_by_config"
+    assert g["registered_at"] == "2026-08-18T12:30:00+00:00"
 
     c = next(w for w in data["workers"] if w["name"] == "composite_worker")
     assert c["composite"] is True

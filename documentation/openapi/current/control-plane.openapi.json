@@ -5351,27 +5351,238 @@
             "title": "Id",
             "type": "string"
           },
-          "last_heartbeat": {
-            "format": "date-time",
-            "title": "Last Heartbeat",
-            "type": "string"
+          "registered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Registered At"
           },
           "status": {
             "title": "Status",
             "type": "string"
-          },
-          "tasks_processed": {
-            "title": "Tasks Processed",
-            "type": "integer"
           }
         },
         "required": [
           "id",
-          "status",
-          "last_heartbeat",
-          "tasks_processed"
+          "status"
         ],
         "title": "WorkerStatusResponse",
+        "type": "object"
+      },
+      "WorkerTaskStatusResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "registered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Registered At"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "exception": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exception"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "composite": {
+            "default": false,
+            "title": "Composite",
+            "type": "boolean"
+          },
+          "children": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Children"
+          }
+        },
+        "required": [
+          "name",
+          "running",
+          "done",
+          "cancelled",
+          "state"
+        ],
+        "title": "WorkerTaskStatusResponse",
+        "type": "object"
+      },
+      "WorkersStatusResponse": {
+        "properties": {
+          "tracked": {
+            "title": "Tracked",
+            "type": "integer"
+          },
+          "ignored": {
+            "title": "Ignored",
+            "type": "integer"
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerTaskStatusResponse"
+            },
+            "title": "Workers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracked",
+          "ignored",
+          "workers"
+        ],
+        "title": "WorkersStatusResponse",
+        "type": "object"
+      },
+      "StartWorkersResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerTaskStatusResponse"
+            },
+            "title": "Workers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "count",
+          "workers"
+        ],
+        "title": "StartWorkersResponse",
+        "type": "object"
+      },
+      "StopWorkersResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "ignored": {
+            "title": "Ignored",
+            "type": "integer"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Count"
+          },
+          "stopped_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Stopped Count"
+          }
+        },
+        "required": [
+          "status",
+          "ignored"
+        ],
+        "title": "StopWorkersResponse",
         "type": "object"
       }
     },
@@ -14809,7 +15020,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StartWorkersResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -14844,7 +15057,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WorkersStatusResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -14879,7 +15094,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StopWorkersResponse"
+                }
               }
             },
             "description": "Successful Response"

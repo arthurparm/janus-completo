@@ -50,7 +50,7 @@ from app.core.security.route_policy import (
     configure_profile_routes,
     validate_route_policy,
 )
-from app.core.workers.orchestrator import get_orchestrator_worker_names, start_all_workers
+from app.core.workers.orchestrator import build_worker_runtime_records, start_all_workers
 
 # Determine log path
 # Prefer escrever no volume montado /app/app dentro do container; fallback para cwd/janus.log
@@ -159,11 +159,7 @@ async def lifespan(app: FastAPI):
             current = getattr(app.state, "orchestrator_workers", []) or []
             if not current:
                 workers = await start_all_workers()
-                names = get_orchestrator_worker_names()
-                payload = []
-                for idx, task in enumerate(workers):
-                    name = names[idx] if idx < len(names) else f"worker_{idx}"
-                    payload.append({"name": name, "task": task})
+                payload = build_worker_runtime_records(workers)
                 app.state.orchestrator_workers = payload
                 logger.info("Orchestrator workers started on startup.", count=len(payload))
         except Exception as e:

@@ -48,7 +48,7 @@ wildcard route intentionally returns unknown locations to `/login`.
 - `auth.interceptor.ts`: Attaches JWT Bearer token to all API requests
 - `auth-session.interceptor.ts` (89 lines): Handles 401 responses by attempting token refresh. If refresh succeeds, retries the original request with the new token. If refresh fails, redirects to /login. Also captures 429 rate limits and blocks subsequent requests until cooldown expires.
 - `error-logger.interceptor.ts`: Logs all HTTP errors to the logging service
-- `error-mapping.interceptor.ts`: Maps backend error responses to user-friendly messages. Enables offline mode when the backend is unreachable.
+- `error-mapping.interceptor.ts`: Maps backend errors without hiding operation failures and updates the typed backend-availability state. Transport/gateway failures are `unreachable`; an HTTP 503 response is `degraded`, because it proves that an HTTP peer answered. The global banner never enables demo data and offers a real `/healthz/user` recovery probe.
 
 **Token Storage**: [auth.utils.ts](file:///h:/repos/janus-completo/frontend/src/app/services/auth.utils.ts) provides `getStoredAuthToken()`, `storeAuthToken()`, `clearStoredAuthToken()` and refresh token equivalents. Tokens are stored in both localStorage and sessionStorage with preference based on "remember me".
 
@@ -79,7 +79,7 @@ The [ChatStreamService](file:///h:/repos/janus-completo/frontend/src/app/service
 2. **auth**: Attaches `Authorization: Bearer {token}` header from stored JWT
 3. **auth-session**: Catches 401 responses, attempts refresh via AuthService, retries original request. Catches 429 responses, captures rate limit state in AuthService.
 4. **error-logger**: Records all HTTP errors to AppLoggerService with context (URL, method, status, timing)
-5. **error-mapping**: Maps HTTP error codes to user-friendly messages. On network failure, triggers offline mode notification.
+5. **error-mapping**: Maps HTTP errors, preserves operation-level notifications, and updates `BackendAvailabilityService`. Network/502/504 failures produce an actionable unreachable banner; HTTP 503 produces a degraded banner; successful Janus responses clear stale availability failures.
 
 The auth-session interceptor uses `HttpContextToken` to skip refresh for auth endpoints (login, register, refresh, reset).
 

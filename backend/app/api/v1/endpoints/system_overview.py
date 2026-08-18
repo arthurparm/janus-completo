@@ -44,8 +44,7 @@ class ServiceHealthItem(BaseModel):
 class WorkerStatusResponse(BaseModel):
     id: str
     status: str
-    last_heartbeat: datetime
-    tasks_processed: int
+    registered_at: datetime | None = None
 
 
 class SystemOverviewResponse(BaseModel):
@@ -54,7 +53,7 @@ class SystemOverviewResponse(BaseModel):
     workers_status: list[WorkerStatusResponse]
 
 
-def _build_workers_status(raw_workers: Any, now: datetime) -> list[WorkerStatusResponse]:
+def _build_workers_status(raw_workers: Any) -> list[WorkerStatusResponse]:
     if not isinstance(raw_workers, list):
         logger.warning(
             "system_overview_invalid_workers_collection",
@@ -74,9 +73,9 @@ def _build_workers_status(raw_workers: Any, now: datetime) -> list[WorkerStatusR
 
         name = worker.get("name") or "worker"
         task = worker.get("task")
-        tasks_processed = worker.get("tasks_processed", 0)
-        if not isinstance(tasks_processed, int):
-            tasks_processed = 0
+        registered_at = worker.get("registered_at")
+        if not isinstance(registered_at, datetime):
+            registered_at = None
         try:
             status_payload = _task_status(task)
             if status_payload.get("state") == "disabled":
@@ -100,8 +99,7 @@ def _build_workers_status(raw_workers: Any, now: datetime) -> list[WorkerStatusR
             WorkerStatusResponse(
                 id=str(name),
                 status=status_str,
-                last_heartbeat=now,
-                tasks_processed=tasks_processed,
+                registered_at=registered_at,
             )
         )
 
@@ -152,7 +150,7 @@ async def get_system_overview(
         )
         services_status = [ServiceHealthItem(**item) for item in service_items]
 
-        workers_status = _build_workers_status(current, now)
+        workers_status = _build_workers_status(current)
 
         return SystemOverviewResponse(
             system_status=sys_status,
