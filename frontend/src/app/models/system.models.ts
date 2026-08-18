@@ -26,12 +26,13 @@ export interface ServiceHealthResponse {
 export interface WorkerStatusResponse {
   id: string;
   status: string;
-  last_heartbeat: string | Date; // Backend sends datetime string, but frontend might parse it
-  tasks_processed: number;
+  /** Actual timestamp captured when the orchestrator registered the runtime handle. */
+  registered_at: string | Date | null;
 }
 
 export interface OrchestratorWorkerTaskStatus {
   name: string;
+  registered_at: string | Date | null;
   running: boolean;
   done: boolean;
   cancelled: boolean;
@@ -77,7 +78,22 @@ export interface ObservabilitySystemHealth {
 export interface QueueAck { status: 'queued'; task_id: string }
 export interface WorkersStatusResponse {
   tracked: number;
+  ignored: number;
   workers: OrchestratorWorkerTaskStatus[];
+}
+
+export interface StartWorkersResponse {
+  status: 'started';
+  count: number;
+  workers: OrchestratorWorkerTaskStatus[];
+}
+
+export interface StopWorkersResponse {
+  status: 'ok' | 'stopped';
+  count?: number;
+  stopped_count?: number;
+  ignored: number;
+  message?: string;
 }
 
 // Auto Analysis

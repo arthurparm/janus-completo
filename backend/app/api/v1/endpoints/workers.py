@@ -1,18 +1,54 @@
 import asyncio
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 from app.core.workers.orchestrator import (
     DisabledWorkerHandle,
-    get_orchestrator_worker_names,
+    build_worker_runtime_records,
     start_all_workers,
 )
 
 router = APIRouter(tags=["Workers"])
 logger = structlog.get_logger(__name__)
+
+
+class WorkerTaskStatusResponse(BaseModel):
+    name: str
+    registered_at: datetime | None = None
+    running: bool
+    done: bool
+    cancelled: bool
+    exception: str | None = None
+    state: str
+    reason: str | None = None
+    detail: str | None = None
+    composite: bool = False
+    children: list[dict[str, Any]] | None = None
+
+
+class WorkersStatusResponse(BaseModel):
+    tracked: int
+    ignored: int
+    workers: list[WorkerTaskStatusResponse]
+
+
+class StartWorkersResponse(BaseModel):
+    status: str
+    count: int
+    workers: list[WorkerTaskStatusResponse]
+
+
+class StopWorkersResponse(BaseModel):
+    status: str
+    ignored: int
+    message: str | None = None
+    count: int | None = None
+    stopped_count: int | None = None
 
 
 def _valid_worker_records(raw_workers: Any) -> tuple[list[Mapping[str, Any]], int]:
@@ -102,6 +138,14 @@ def _task_status(task: Any) -> dict[str, Any]:
         }
 
 
+def _worker_status_response(worker: Mapping[str, Any]) -> WorkerTaskStatusResponse:
+    return WorkerTaskStatusResponse(
+        name=str(worker.get("name") or "worker"),
+        registered_at=worker.get("registered_at"),
+        **_task_status(worker.get("task")),
+    )
+
+
 def _is_worker_active(task: Any) -> bool:
     status = _task_status(task)
     return bool(status.get("running")) and status.get("state") != "disabled"
@@ -116,8 +160,12 @@ def _cancel_worker_task(task: Any) -> int:
     return 0
 
 
-@router.post("/start-all", summary="Start all orchestrator-managed workers")
-async def start_workers(request: Request):
+@router.post(
+    "/start-all",
+    response_model=StartWorkersResponse,
+    summary="Start all orchestrator-managed workers",
+)
+async def start_workers(request: Request) -> StartWorkersResponse:
     app = request.app
     # Prevent double-start if any existing worker is still running
     current, _ignored = _valid_worker_records(getattr(app.state, "orchestrator_workers", []) or [])
@@ -125,32 +173,32 @@ async def start_workers(request: Request):
         raise HTTPException(status_code=400, detail="Workers already running. Stop them first.")
 
     workers = await start_all_workers()
-    names = get_orchestrator_worker_names()
-    payload = []
-    for idx, task in enumerate(workers):
-        name = names[idx] if idx < len(names) else f"worker_{idx}"
-        payload.append({"name": name, "task": task})
+    payload = build_worker_runtime_records(workers)
     app.state.orchestrator_workers = payload
 
-    return {
-        "status": "started",
-        "workers": [{"name": w["name"], **_task_status(w["task"])} for w in payload],
-        "count": len(payload),
-    }
+    return StartWorkersResponse(
+        status="started",
+        workers=[_worker_status_response(w) for w in payload],
+        count=len(payload),
+    )
 
 
-@router.post("/stop-all", summary="Stop all orchestrator-managed workers")
-async def stop_workers(request: Request):
+@router.post(
+    "/stop-all",
+    response_model=StopWorkersResponse,
+    summary="Stop all orchestrator-managed workers",
+)
+async def stop_workers(request: Request) -> StopWorkersResponse:
     app = request.app
     current, ignored = _valid_worker_records(getattr(app.state, "orchestrator_workers", []) or [])
     if not current:
         app.state.orchestrator_workers = []
-        return {
-            "status": "ok",
-            "message": "No workers tracked",
-            "count": 0,
-            "ignored": ignored,
-        }
+        return StopWorkersResponse(
+            status="ok",
+            message="No workers tracked",
+            count=0,
+            ignored=ignored,
+        )
 
     stopped = 0
     for w in current:
@@ -159,18 +207,19 @@ async def stop_workers(request: Request):
     # Clear state registry
     app.state.orchestrator_workers = []
 
-    return {"status": "stopped", "stopped_count": stopped, "ignored": ignored}
+    return StopWorkersResponse(status="stopped", stopped_count=stopped, ignored=ignored)
 
 
-@router.get("/status", summary="Get status for orchestrator-managed workers")
-async def workers_status(request: Request):
+@router.get(
+    "/status",
+    response_model=WorkersStatusResponse,
+    summary="Get status for orchestrator-managed workers",
+)
+async def workers_status(request: Request) -> WorkersStatusResponse:
     app = request.app
     current, ignored = _valid_worker_records(getattr(app.state, "orchestrator_workers", []) or [])
-    return {
-        "tracked": len(current),
-        "ignored": ignored,
-        "workers": [
-            {"name": str(w.get("name") or "worker"), **_task_status(w.get("task"))}
-            for w in current
-        ],
-    }
+    return WorkersStatusResponse(
+        tracked=len(current),
+        ignored=ignored,
+        workers=[_worker_status_response(w) for w in current],
+    )

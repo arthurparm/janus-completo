@@ -3,23 +3,42 @@
 
 <!-- Ambient Background Orbs (decorative, hidden from screen readers) -->
 <div class="ambient-orbs" aria-hidden="true">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
 </div>
 
-<!-- Offline Banner with proper ARIA -->
-@if (demoService.isOffline()) {
-<div role="alert" aria-live="assertive"
-    class="fixed bottom-0 left-0 w-full bg-yellow-600/90 text-white text-xs font-bold py-1 z-[9999] shadow-lg backdrop-blur-sm marquee-container border-t border-yellow-400/30">
-    <div class="marquee-content">
-        ⚠ JANUS OFFLINE / MODO DEMONSTRAÇÃO — BACKEND DESCONECTADO — SISTEMA OPERANDO EM ESTADO DE FUNCIONALIDADE
-        REDUZIDA — ALGUNS RECURSOS PODEM ESTAR INDISPONÍVEIS ⚠
+<!-- Availability banner reports observed backend state; it never enables demo data. -->
+@if (backendAvailability.hasIssue()) {
+  <div
+    role="alert"
+    aria-live="assertive"
+    class="fixed bottom-0 left-0 w-full bg-yellow-700 text-white text-sm z-[9999] shadow-lg border-t border-yellow-300"
+  >
+    <div class="flex items-center justify-center gap-3 px-4 py-2">
+      <span>
+        @if (backendAvailability.snapshot().state === 'unreachable') {
+          Backend Janus inacessível. Recursos que dependem do servidor estão indisponíveis.
+        } @else if (backendAvailability.snapshot().state === 'checking') {
+          Verificando a conexão real com o backend Janus…
+        } @else {
+          Backend Janus degradado. A solicitação falhou e nenhuma resposta de demonstração foi
+          usada.
+        }
+      </span>
+      <button
+        type="button"
+        class="rounded border border-white/70 px-3 py-1 font-semibold hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60"
+        [disabled]="backendAvailability.isChecking()"
+        (click)="retryBackend()"
+      >
+        {{ backendAvailability.isChecking() ? 'Verificando…' : 'Tentar novamente' }}
+      </button>
     </div>
-</div>
+  </div>
 }
 
 <!-- Main Application with Semantic Structure -->
 <main id="main-content" role="main">
-    <router-outlet></router-outlet>
+  <router-outlet></router-outlet>
 </main>

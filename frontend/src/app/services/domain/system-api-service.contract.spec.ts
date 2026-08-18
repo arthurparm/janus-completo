@@ -41,5 +41,36 @@ describe('SystemApiService (contract)', () => {
     expect(req.request.body.operation_id).toBe('get_system_overview_api_v1_system_overview_get')
     req.flush({ system_status: { status: 'ok' }, services_status: [], workers_status: [] })
   })
-})
 
+  it('startAllWorkers deve preservar o contrato tipado dos handles registrados', () => {
+    svc.startAllWorkers().subscribe((response) => {
+      expect(response.count).toBe(1)
+      expect(response.workers[0].registered_at).toBe('2026-08-18T12:30:00Z')
+    })
+    const req = http.expectOne('/api/v1/admin-actions')
+    expect(req.request.body.operation_id).toBe('start_workers_api_v1_workers_start_all_post')
+    req.flush({
+      status: 'started',
+      count: 1,
+      workers: [{
+        name: 'memory_maintenance',
+        registered_at: '2026-08-18T12:30:00Z',
+        running: true,
+        done: false,
+        cancelled: false,
+        exception: null,
+        state: 'running',
+      }],
+    })
+  })
+
+  it('stopAllWorkers deve preservar contagens reais do backend', () => {
+    svc.stopAllWorkers().subscribe((response) => {
+      expect(response.stopped_count).toBe(1)
+      expect(response.ignored).toBe(0)
+    })
+    const req = http.expectOne('/api/v1/admin-actions')
+    expect(req.request.body.operation_id).toBe('stop_workers_api_v1_workers_stop_all_post')
+    req.flush({ status: 'stopped', stopped_count: 1, ignored: 0 })
+  })
+})

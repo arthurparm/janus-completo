@@ -5,6 +5,7 @@ Centraliza a inicialização de todos os workers e tarefas em background
 usando imports lazy para evitar ciclos de importação.
 """
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -58,6 +59,30 @@ def get_orchestrator_worker_names() -> list[str]:
     return list(WORKER_NAMES)
 
 
+def build_worker_runtime_records(
+    workers: list[Any],
+    *,
+    registered_at: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Build canonical records from handles returned by the orchestrator.
+
+    ``registered_at`` is real lifecycle evidence captured after startup. It is
+    deliberately not labelled as a heartbeat because a live asyncio task does
+    not prove that the worker is making progress.
+    """
+
+    lifecycle_registered_at = registered_at or datetime.now(UTC)
+    names = get_orchestrator_worker_names()
+    return [
+        {
+            "name": names[index] if index < len(names) else f"worker_{index}",
+            "task": task,
+            "registered_at": lifecycle_registered_at,
+        }
+        for index, task in enumerate(workers)
+    ]
+
+
 @dataclass(frozen=True)
 class DisabledWorkerHandle:
     """Representa um worker intencionalmente desativado por configuração."""
@@ -95,7 +120,7 @@ def _is_worker_enabled_for_profile(worker_name: str, profile: str | None) -> boo
     return worker_name in NODE_PROFILE_WORKERS.get(profile, set())
 
 
-async def start_all_workers():
+async def start_all_workers() -> list[Any]:
     """
     Inicia todos os workers assíncronos do sistema.
     Retorna a lista de tarefas/consumidores iniciados.
@@ -128,11 +153,11 @@ async def start_all_workers():
     )
 
     workers: list[Any] = []
-    async def _start_memory_maintenance():
+    async def _start_memory_maintenance() -> Any:
         await memory_maintenance_worker.start()
         return memory_maintenance_worker.task
 
-    async def _start_google_productivity():
+    async def _start_google_productivity() -> Any:
         from app.core.workers.google_productivity_worker import start_google_productivity_consumer
 
         return await start_google_productivity_consumer()

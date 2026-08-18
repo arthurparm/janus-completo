@@ -2,7 +2,17 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiContextService } from '../api-context.service';
-import { SystemStatus, ServiceHealthResponse, QueueInfoResponse, SystemOverviewResponse, DbValidationResponse, WorkersStatusResponse, AutoAnalysisResponse } from '../../models';
+import {
+  AutoAnalysisResponse,
+  DbValidationResponse,
+  QueueInfoResponse,
+  ServiceHealthResponse,
+  StartWorkersResponse,
+  StopWorkersResponse,
+  SystemOverviewResponse,
+  SystemStatus,
+  WorkersStatusResponse,
+} from '../../models';
 import { AdminActionsApiService } from './admin-actions-api-service';
 
 @Injectable({ providedIn: 'root' })
@@ -39,12 +49,12 @@ getSystemOverview(): Observable<SystemOverviewResponse> {
     return this.adminActions.execute<SystemOverviewResponse>('get_system_overview_api_v1_system_overview_get');
   }
 
-startAllWorkers(): Observable<{ status: string; workers: string[] }> {
-    return this.adminActions.execute<{ status: string; workers: string[] }>('start_workers_api_v1_workers_start_all_post');
+startAllWorkers(): Observable<StartWorkersResponse> {
+    return this.adminActions.execute<StartWorkersResponse>('start_workers_api_v1_workers_start_all_post');
   }
 
-stopAllWorkers(): Observable<{ status: string; workers: string[] }> {
-    return this.adminActions.execute<{ status: string; workers: string[] }>('stop_workers_api_v1_workers_stop_all_post');
+stopAllWorkers(): Observable<StopWorkersResponse> {
+    return this.adminActions.execute<StopWorkersResponse>('stop_workers_api_v1_workers_stop_all_post');
   }
 
 runAutoAnalysis(): Observable<AutoAnalysisResponse> {

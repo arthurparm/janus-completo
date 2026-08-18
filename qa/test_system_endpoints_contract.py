@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from app.core.security.actor_context import ActorContext, ActorType, AuthMethod
 from httpx import ASGITransport, AsyncClient
@@ -404,8 +406,9 @@ class TestSystemEndpointsContract:
         from app.main import app
 
         original_workers = getattr(app.state, "orchestrator_workers", None)
+        registered_at = datetime.now(UTC)
         app.state.orchestrator_workers = [
-            {"name": "worker_1", "task": None, "tasks_processed": 10},
+            {"name": "worker_1", "task": None, "registered_at": registered_at},
             "malformed-worker",
         ]
         try:
@@ -420,10 +423,23 @@ class TestSystemEndpointsContract:
             {
                 "id": "worker_1",
                 "status": "unknown",
-                "last_heartbeat": data["workers_status"][0]["last_heartbeat"],
-                "tasks_processed": 10,
+                "registered_at": registered_at.isoformat(),
             }
         ]
+
+    async def test_get_system_overview_does_not_invent_worker_lifecycle(self, async_client):
+        from app.main import app
+
+        original_workers = getattr(app.state, "orchestrator_workers", None)
+        app.state.orchestrator_workers = [{"name": "worker_1", "task": None}]
+        try:
+            resp = await async_client.get("/api/v1/system/overview")
+        finally:
+            app.state.orchestrator_workers = original_workers
+
+        assert resp.status_code == 200
+        worker = resp.json()["workers_status"][0]
+        assert worker["registered_at"] is None
 
     async def test_get_system_overview_reports_unknown_memory_when_telemetry_fails(
         self, async_client

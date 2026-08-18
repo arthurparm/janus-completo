@@ -41,7 +41,7 @@ class ExperienceMetadata(BaseModel):
     stability_score: float | None = None
     scope: str | None = None
     source_channel: str | None = None
-    
+
     # Generative Memory Fields (Park et al. 2023)
     importance: float | None = Field(default=None, ge=0.0, le=10.0, description="Importance score (0-10)")
     last_accessed_at: int | None = Field(default=None, description="Timestamp ms of last access")
@@ -323,8 +323,7 @@ class ServiceStatusResponse(BaseModel):
 class WorkerStatusResponse(BaseModel):
     id: str
     status: str
-    last_heartbeat: datetime
-    tasks_processed: int
+    registered_at: datetime | None = None
 
 
 class SystemOverviewResponse(BaseModel):
