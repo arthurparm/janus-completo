@@ -10,6 +10,7 @@ Ordem da fase A: JAN-001, JAN-002 e JAN-003 podem avançar juntas depois que JAN
 | [JAN-002](JAN-002.md) | dev-backend | A | O3 O4 | aceita |
 | [JAN-003](JAN-003.md) | dev-front | A | O5 | aberta |
 | [JAN-013](JAN-013.md) | dev-backend | A | O5 | aberta, depois de JAN-002 |
+| [JAN-015](JAN-015.md) | dev-backend | A | O3 O5 | aberta, não segura JAN-003 |
 | [JAN-004](JAN-004.md) | cybersecurity | A | O3 O4 M4 | aberta |
 | [JAN-005](JAN-005.md) | qa | A | O6 | aberta |
 | [JAN-012](JAN-012.md) | arquiteto | A | protocolo de método | aberta |
@@ -29,5 +30,7 @@ Ordem da fase A: JAN-001, JAN-002 e JAN-003 podem avançar juntas depois que JAN
 5. Código novo tem no máximo 500 linhas, não usa `Any`, está na árvore de `docs/regras.md`, e comportamento repetido está em `src/janus/util/`.
 6. Problema ou dúvida achados fora desta issue estão em outra issue, não neste diff.
 7. A alteração do corte está num commit local. A mensagem cita a issue e o efeito.
+
+JAN-015 registra o produtor do texto da pendência. Não segura JAN-003.
 
 Arthur prioriza e aprova efeito irreversível. A equipe não muda essa fila sozinha.
