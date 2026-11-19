@@ -277,7 +277,10 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertEqual(entry.run_id, run_id)
                     self.assertEqual(entry.proposal.tool_name, "delete_record")
                     self.assertEqual(dict(entry.proposal.arguments)["record_id"], record_id)
-                    self.assertIn(entry.decision.gate, ("pedir", "negar"))
+                    self.assertEqual(entry.decision.gate, "pedir")
+                    self.assertEqual(entry.decision.tool_name, entry.proposal.tool_name)
+                    self.assertEqual(entry.decision.risk_class, "escrita_irreversivel")
+                    self.assertEqual(entry.decision.reason, ASK_REASON)
                     self.assertEqual(entry.result_label, "erro")
                     self.assertEqual(entry.result_text, entry.decision.reason)
                     experience = stored.experiences_of(run_id)[0]
@@ -290,24 +293,23 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertEqual(runtime.irreversible_calls(), ())
                     self.assertEqual(runtime.read_calls(), ())
                     pending = list_pending(stored, run_id)
-                    if len(pending) == 0:
-                        self.assertEqual(entry.decision.gate, "negar")
-                        continue
+                    self.assertEqual(len(pending), 1)
                     body = pending[0]
                     self.assertEqual(body["run_id"], run_id)
+                    action = str(body["action"])
+                    effect = str(body["effect"])
+                    self.assertIn(control, action)
+                    self.assertIn(control, effect)
                     text = _show("pending", body)
                     lines = text.splitlines()
-                    displayed = str(body["action"]) + str(body["effect"]) + str(body["risk_class"])
+                    self.assertEqual([line for line in lines if line == "aprovar"], [])
+                    self.assertEqual(lines[-1], "negar")
+                    self.assertEqual(len(lines), 5)
+                    self.assertIn(escape, text)
                     self.assertNotIn("\r", text)
                     self.assertNotIn("\x00", text)
-                    # JAN-015 pode tirar o byte do texto. Enquanto ele estiver na tela, aprovar não aparece.
-                    if control in displayed:
-                        self.assertEqual([line for line in lines if line == "aprovar"], [])
-                        self.assertIn(escape, text)
-                        self.assertEqual(lines[-1], "negar")
-                    else:
-                        self.assertNotIn(control, str(body["action"]))
-                        self.assertNotIn(control, str(body["effect"]))
+                    self.assertIn("efeito: ", text)
+                    self.assertIn("risco: " + str(body["risk_class"]), text)
 
 
 def _request() -> OpenRunRequest:
