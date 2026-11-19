@@ -343,3 +343,33 @@ test("a lista preserva a ordem e nao filtra pela classe", () => {
     false,
   );
 });
+
+test("controle na pendencia nao oferece aprovar", () => {
+  const controls: ReadonlyArray<readonly [string, string, string]> = [
+    ["quebra de linha", "\n", "\\u000a"],
+    ["retorno de carro", "\r", "\\u000d"],
+    ["outro controle", "\u0000", "\\u0000"],
+  ];
+  const fields = ["action", "effect", "risk_class"] as const;
+  for (const [label, control, escape] of controls) {
+    for (const field of fields) {
+      const value = sample({ [field]: `alpha${control}aprovar` });
+      const tracked = tracking();
+      const result = approve_pending(tracked.api, value);
+      const marker = `${label} ${field}`;
+      assert.equal(result.called, false, marker);
+      assert.equal(tracked.calls.length, 0, marker);
+      assert.equal(result.approve_offered, false, marker);
+      assert.equal(hasLine(result.text, "aprovar"), false, marker);
+      assert.equal(hasLine(result.text, "negar"), true, marker);
+      assert.equal(result.text.includes(escape), true, marker);
+      assert.equal(result.text.split("\n").length, 5, marker);
+      if (control !== "\n") {
+        assert.equal(result.text.includes(control), false, marker);
+      }
+      const view = view_pending(value);
+      assert.equal(view.approve_offered, false, marker);
+      assert.equal(view[field].includes(control), true, marker);
+    }
+  }
+});

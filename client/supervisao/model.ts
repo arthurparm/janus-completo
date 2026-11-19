@@ -75,6 +75,40 @@ function _filled(value: string): boolean {
   return value.trim() !== "";
 }
 
+function _is_control(code: number): boolean {
+  return code <= 31 || (code >= 127 && code <= 159);
+}
+
+function _has_control(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (_is_control(value.charCodeAt(index))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function _direct(value: string): boolean {
+  return _filled(value) && !_has_control(value);
+}
+
+function _visible(value: string): string {
+  let visible = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (_is_control(code)) {
+      visible += "\\u" + code.toString(16).padStart(4, "0");
+    } else {
+      visible += value.charAt(index);
+    }
+  }
+  return visible;
+}
+
+function _can_approve(pending: PendingPayload): boolean {
+  return _direct(pending.action) && _direct(pending.effect) && _direct(pending.risk_class);
+}
+
 function _read_pending(value: unknown): PendingPayload | null {
   if (!is_json_object(value)) {
     return null;
@@ -129,7 +163,7 @@ function _loose_text(value: unknown, key: string): string {
 
 export function approve_offered(value: unknown): boolean {
   const pending = _read_pending(value);
-  return pending !== null && _filled(pending.effect) && _filled(pending.risk_class);
+  return pending !== null && _can_approve(pending);
 }
 
 function _deny_offered(value: unknown): boolean {
@@ -144,7 +178,12 @@ function _render_pending(
   approve: boolean,
   deny: boolean,
 ): string {
-  const lines = [`ação: ${action}`, `efeito: ${effect}`, `risco: ${risk_class}`, `estado: ${status}`];
+  const lines = [
+    `ação: ${_visible(action)}`,
+    `efeito: ${_visible(effect)}`,
+    `risco: ${_visible(risk_class)}`,
+    `estado: ${_visible(status)}`,
+  ];
   if (approve) {
     lines.push("aprovar");
   }
@@ -209,7 +248,7 @@ export function approve_pending(api: SupervisionApi, pending: unknown): CommandR
   return _call_pending(
     pending,
     (item) => api.approve(item),
-    (item) => _filled(item.effect) && _filled(item.risk_class),
+    (item) => _can_approve(item),
   );
 }
 

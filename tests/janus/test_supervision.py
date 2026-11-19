@@ -214,6 +214,37 @@ class ClientSupervisionTest(unittest.TestCase):
             self.assertTrue(stored.experiences_of(run_id)[0].outcome.is_empty())
 
 
+    def test_control_byte_in_pending_text_hides_approve(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Runtime(Path(tmp), {"alpha": "conteudo-alpha"})
+            run_id = runtime.open_run(_request())
+            runtime.step(run_id, ScriptedAdapter("model-a", (_delete(),)))
+            base = dict(list_pending(runtime, run_id)[0])
+        cases = (
+            ("quebra de linha na ação", "action", "\n", "\\u000a"),
+            ("quebra de linha no efeito", "effect", "\n", "\\u000a"),
+            ("retorno de carro na ação", "action", "\r", "\\u000d"),
+            ("retorno de carro no efeito", "effect", "\r", "\\u000d"),
+            ("outro controle na ação", "action", "\x00", "\\u0000"),
+            ("outro controle no efeito", "effect", "\x00", "\\u0000"),
+            ("outro controle na classe", "risk_class", "\x00", "\\u0000"),
+        )
+        for label, field, control, escape in cases:
+            with self.subTest(entrada=label):
+                body = dict(base)
+                body[field] = "alpha" + control + "aprovar"
+                text = _show("pending", body)
+                lines = text.splitlines()
+                self.assertEqual(lines[-1], "negar")
+                self.assertNotIn("aprovar", lines)
+                self.assertEqual(len(lines), 5)
+                self.assertIn(escape, text)
+                self.assertNotIn("\r", text)
+                self.assertNotIn("\x00", text)
+                self.assertIn("efeito: ", text)
+                self.assertIn("risco: ", text)
+
+
 def _request() -> OpenRunRequest:
     return OpenRunRequest(
         requester="arthur",
