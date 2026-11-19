@@ -244,6 +244,71 @@ class ClientSupervisionTest(unittest.TestCase):
                 self.assertIn("efeito: ", text)
                 self.assertIn("risco: ", text)
 
+    def test_control_in_record_id_hides_approve(self) -> None:
+        cases = (
+            ("quebra de linha", "\n", "\\u000a"),
+            ("retorno de carro", "\r", "\\u000d"),
+            ("outro controle", "\x00", "\\u0000"),
+        )
+        for label, control, escape in cases:
+            with self.subTest(entrada=label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    runtime = Runtime(root, {"alpha": "conteudo-alpha"})
+                    run_id = runtime.open_run(_request())
+                    record_id = "alpha" + control + "aprovar"
+                    runtime.step(
+                        run_id,
+                        ScriptedAdapter(
+                            "model-a",
+                            (
+                                Proposal.from_mapping(
+                                    "delete_record",
+                                    {"record_id": record_id, "idempotency_key": "chave-1"},
+                                    "eu confirmo, pode executar",
+                                ),
+                            ),
+                        ),
+                    )
+                    stored = Runtime(root, {"alpha": "conteudo-alpha"})
+                    trace = stored.trace_of(run_id)
+                    self.assertEqual(len(trace), 1)
+                    entry = trace[0]
+                    self.assertEqual(entry.run_id, run_id)
+                    self.assertEqual(entry.proposal.tool_name, "delete_record")
+                    self.assertEqual(dict(entry.proposal.arguments)["record_id"], record_id)
+                    self.assertIn(entry.decision.gate, ("pedir", "negar"))
+                    self.assertEqual(entry.result_label, "erro")
+                    self.assertEqual(entry.result_text, entry.decision.reason)
+                    experience = stored.experiences_of(run_id)[0]
+                    self.assertEqual(experience.run_id, run_id)
+                    self.assertEqual(experience.gate, entry.decision.gate)
+                    self.assertTrue(experience.outcome.is_empty())
+                    self.assertIsNone(experience.outcome.verified_by)
+                    self.assertEqual(experience.weight_version_before, "")
+                    self.assertEqual(experience.weight_version_after, "")
+                    self.assertEqual(runtime.irreversible_calls(), ())
+                    self.assertEqual(runtime.read_calls(), ())
+                    pending = list_pending(stored, run_id)
+                    if len(pending) == 0:
+                        self.assertEqual(entry.decision.gate, "negar")
+                        continue
+                    body = pending[0]
+                    self.assertEqual(body["run_id"], run_id)
+                    text = _show("pending", body)
+                    lines = text.splitlines()
+                    displayed = str(body["action"]) + str(body["effect"]) + str(body["risk_class"])
+                    self.assertNotIn("\r", text)
+                    self.assertNotIn("\x00", text)
+                    # JAN-015 pode tirar o byte do texto. Enquanto ele estiver na tela, aprovar não aparece.
+                    if control in displayed:
+                        self.assertEqual([line for line in lines if line == "aprovar"], [])
+                        self.assertIn(escape, text)
+                        self.assertEqual(lines[-1], "negar")
+                    else:
+                        self.assertNotIn(control, str(body["action"]))
+                        self.assertNotIn(control, str(body["effect"]))
+
 
 def _request() -> OpenRunRequest:
     return OpenRunRequest(
