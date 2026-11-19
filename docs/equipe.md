@@ -4,6 +4,10 @@ Seis papéis, um fluxo, artefatos tipados. A especialização existe para separa
 
 Estratégia de base: papéis com entrada e saída definidas, pessoa accountable no fim, e agentes só onde a fronteira de permissão muda. Fontes em [fontes.md](fontes.md).
 
+## Base técnica
+
+Cada papel é especialista no runtime de IA. Cargo genérico de software não basta. O método, o que entra e o que fica de fora estão em [especialistas.md](especialistas.md). O handoff desta página não muda.
+
 ## Papéis
 
 | Papel | Entrada | Saída | Falha se faltar |

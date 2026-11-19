@@ -57,7 +57,7 @@ fn task_prompt(issue_id, role, job, prior) {
     p += job;
     p += " A issue e ";
     p += issue_id;
-    p += ". Use read_file nessa issue, em issues/README.md, docs/regras.md, docs/metodos.md, docs/aprendizado.md e docs/objetivos.md antes de agir. ";
+    p += ". Use read_file nessa issue, em issues/README.md, docs/regras.md, docs/especialistas.md, docs/metodos.md, docs/aprendizado.md e docs/objetivos.md antes de agir. Aplique o metodo do seu papel em docs/especialistas.md. ";
     p += "old/ pode ser lido como pedreira. Nao copie arquivo e nao trate old/ como especificacao. ";
     p += "Arquivo de codigo novo tem no maximo 500 linhas. Proibido any e Any. Comportamento usado em dois arquivos vai para src/janus/util/. ";
     p += "Precisa de estrutura organizada: codigo so entra na arvore de docs/regras.md. Arquivo fora dela e bloqueio. ";
