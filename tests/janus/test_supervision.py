@@ -46,6 +46,16 @@ if (kind === "pending") {
   text = view_pending(payload).text;
 } else if (kind === "run") {
   text = show_run(payload);
+} else if (kind === "pending-view") {
+  const view = view_pending(payload);
+  text = JSON.stringify({
+    action: view.action,
+    approve_offered: view.approve_offered,
+    deny_offered: view.deny_offered,
+    effect: view.effect,
+    risk_class: view.risk_class,
+    text: view.text,
+  });
 } else if (kind === "conversation") {
   text = show_conversation(payload).text;
 } else {
@@ -79,6 +89,36 @@ def _show(kind: str, payload: object) -> str:
     if completed.returncode != 0:
         raise AssertionError(completed.stdout + completed.stderr)
     return completed.stdout
+
+
+def _view_text(view: dict[str, object], key: str) -> str:
+    value = view[key]
+    if not isinstance(value, str):
+        raise AssertionError(key)
+    return value
+
+
+def _view_flag(view: dict[str, object], key: str) -> bool:
+    value = view[key]
+    if not isinstance(value, bool):
+        raise AssertionError(key)
+    return value
+
+
+def _pending_view(payload: object) -> dict[str, object]:
+    loaded = json.loads(_show("pending-view", payload))
+    if not isinstance(loaded, dict):
+        raise AssertionError("vista invalida")
+    view: dict[str, object] = {}
+    for key, item in loaded.items():
+        if not isinstance(key, str):
+            raise AssertionError("vista invalida")
+        view[key] = item
+    for key in ("action", "effect", "risk_class", "text"):
+        _view_text(view, key)
+    for key in ("approve_offered", "deny_offered"):
+        _view_flag(view, key)
+    return view
 
 
 class ClientSupervisionTest(unittest.TestCase):
@@ -298,9 +338,27 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertEqual(body["run_id"], run_id)
                     action = str(body["action"])
                     effect = str(body["effect"])
+                    risk = str(body["risk_class"])
+                    self.assertIn(record_id, action)
+                    self.assertIn(record_id, effect)
                     self.assertIn(control, action)
                     self.assertIn(control, effect)
-                    text = _show("pending", body)
+                    self.assertNotIn(control, risk)
+                    view = _pending_view(body)
+                    shown_action = _view_text(view, "action")
+                    shown_effect = _view_text(view, "effect")
+                    shown_risk = _view_text(view, "risk_class")
+                    self.assertEqual(shown_action, action)
+                    self.assertEqual(shown_effect, effect)
+                    self.assertEqual(shown_risk, risk)
+                    self.assertIn(record_id, shown_action)
+                    self.assertIn(record_id, shown_effect)
+                    self.assertIn(control, shown_action)
+                    self.assertIn(control, shown_effect)
+                    self.assertNotIn(control, shown_risk)
+                    self.assertIs(_view_flag(view, "approve_offered"), False)
+                    self.assertIs(_view_flag(view, "deny_offered"), True)
+                    text = _view_text(view, "text")
                     lines = text.splitlines()
                     self.assertEqual([line for line in lines if line == "aprovar"], [])
                     self.assertEqual(lines[-1], "negar")
@@ -309,7 +367,7 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertNotIn("\r", text)
                     self.assertNotIn("\x00", text)
                     self.assertIn("efeito: ", text)
-                    self.assertIn("risco: " + str(body["risk_class"]), text)
+                    self.assertIn("risco: " + risk, text)
 
 
 def _request() -> OpenRunRequest:
