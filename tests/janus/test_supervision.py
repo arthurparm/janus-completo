@@ -11,6 +11,7 @@ from pathlib import Path
 from janus.adapter import Proposal, ScriptedAdapter
 from janus.api import interrupt_run, list_pending
 from janus.entry import Budget, OpenRunRequest
+from janus.gate import ASK_REASON
 from janus.loop import Runtime
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -145,6 +146,72 @@ class ClientSupervisionTest(unittest.TestCase):
             self.assertIn("estado: " + str(stopped["status"]), shown_run)
             self.assertIn("motivo: " + str(stopped["stop_reason"]), shown_run)
             self.assertEqual(runtime.irreversible_calls(), ())
+
+
+    def test_same_run_shows_pending_from_the_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = Runtime(root, {"alpha": "conteudo-alpha"})
+            run_id = runtime.open_run(_request())
+            runtime.step(run_id, ScriptedAdapter("model-a", (_delete(),)))
+            self.assertEqual(runtime.irreversible_calls(), ())
+            self.assertEqual(runtime.read_calls(), ())
+            stored = Runtime(root, {"alpha": "conteudo-alpha"})
+            trace = stored.trace_of(run_id)
+            self.assertEqual(len(trace), 1)
+            entry = trace[0]
+            self.assertEqual(entry.run_id, run_id)
+            self.assertEqual(entry.proposal.tool_name, "delete_record")
+            self.assertEqual(entry.proposal.expected_value, "eu confirmo, pode executar")
+            self.assertEqual(entry.decision.gate, "pedir")
+            self.assertEqual(entry.decision.tool_name, entry.proposal.tool_name)
+            self.assertEqual(entry.decision.risk_class, "escrita_irreversivel")
+            self.assertEqual(entry.decision.reason, ASK_REASON)
+            self.assertEqual(entry.result_text, entry.decision.reason)
+            self.assertEqual(entry.result_label, "erro")
+            self.assertEqual(entry.weight_version, "")
+            experiences = stored.experiences_of(run_id)
+            self.assertEqual(len(experiences), 1)
+            experience = experiences[0]
+            self.assertEqual(experience.run_id, run_id)
+            self.assertEqual(experience.gate, entry.decision.gate)
+            self.assertTrue(experience.outcome.is_empty())
+            self.assertIsNone(experience.outcome.verified_by)
+            self.assertEqual(experience.weight_version_before, "")
+            self.assertEqual(experience.weight_version_after, "")
+            checkpoint = stored.checkpoint_of(run_id)
+            self.assertEqual(checkpoint.run_id, run_id)
+            self.assertEqual(checkpoint.status, "aberto")
+            self.assertEqual(checkpoint.last_gate, "pedir")
+            pending = list_pending(stored, run_id)
+            self.assertEqual(len(pending), 1)
+            body = pending[0]
+            self.assertEqual(body["run_id"], run_id)
+            self.assertEqual(body["risk_class"], entry.decision.risk_class)
+            self.assertNotEqual(str(body["effect"]).strip(), "")
+            self.assertNotEqual(body["effect"], entry.proposal.expected_value)
+            text = _show("pending", body)
+            self.assertIn("ação: " + str(body["action"]), text)
+            self.assertIn("efeito: " + str(body["effect"]), text)
+            self.assertIn("risco: " + str(body["risk_class"]), text)
+            self.assertIn("\naprovar\n", "\n" + text + "\n")
+            self.assertIn("\nnegar\n", "\n" + text + "\n")
+            self.assertNotIn(str(body["tool_name"]), text)
+            self.assertNotIn(entry.proposal.expected_value, text)
+            shown = _show("conversation", stored.identity_of(run_id).to_json())
+            self.assertEqual(shown.splitlines()[0], "A voz é um modelo (model-a).")
+            stopped = interrupt_run(stored, run_id)
+            self.assertEqual(stopped["run_id"], run_id)
+            self.assertEqual(stopped["status"], "encerrado")
+            self.assertEqual(stopped["stop_reason"], "interrompido")
+            shown_run = _show("run", stopped)
+            self.assertIn("run: " + run_id, shown_run)
+            self.assertIn("estado: " + str(stopped["status"]), shown_run)
+            self.assertIn("motivo: " + str(stopped["stop_reason"]), shown_run)
+            self.assertEqual(stored.checkpoint_of(run_id).status, stopped["status"])
+            self.assertEqual(runtime.irreversible_calls(), ())
+            self.assertEqual(len(stored.trace_of(run_id)), 1)
+            self.assertTrue(stored.experiences_of(run_id)[0].outcome.is_empty())
 
 
 def _request() -> OpenRunRequest:
