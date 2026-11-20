@@ -360,43 +360,72 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertIs(_view_flag(view, "deny_offered"), True)
                     text = _view_text(view, "text")
                     lines = text.split("\n")
-                    recovered_action = lines[0].removeprefix("ação: ").replace(escape, control)
-                    recovered_effect = lines[1].removeprefix("efeito: ").replace(escape, control)
-                    self.assertEqual(recovered_action, shown_action)
-                    self.assertEqual(recovered_effect, shown_effect)
+                    visible_action = lines[0].removeprefix("ação: ")
+                    visible_effect = lines[1].removeprefix("efeito: ")
+                    action_cuts = shown_action.split(control)
+                    effect_cuts = shown_effect.split(control)
+                    self.assertEqual(visible_action.split(escape), action_cuts)
+                    self.assertEqual(visible_effect.split(escape), effect_cuts)
+                    self.assertEqual(len(action_cuts), 2)
+                    self.assertEqual(len(effect_cuts), 2)
                     self.assertEqual(lines[2], "risco: " + shown_risk)
-                    self.assertIn(control, recovered_action)
-                    self.assertIn(control, recovered_effect)
-                    self.assertIn(record_id, recovered_action)
-                    self.assertIn(record_id, recovered_effect)
+                    self.assertIn(escape, visible_action)
+                    self.assertIn(escape, visible_effect)
+                    self.assertNotIn("\r", text)
+                    self.assertNotIn("\x00", text)
+                    self.assertNotIn("\r", visible_action)
+                    self.assertNotIn("\x00", visible_action)
+                    self.assertNotIn("\r", visible_effect)
+                    self.assertNotIn("\x00", visible_effect)
                     button_lines = [line for line in lines if line == "aprovar"]
                     self.assertEqual(button_lines, [])
-                    self.assertTrue(control in recovered_action and control in recovered_effect and button_lines == [])
+                    self.assertTrue(
+                        control in shown_action
+                        and control in shown_effect
+                        and escape in visible_action
+                        and escape in visible_effect
+                        and "\r" not in text
+                        and "\x00" not in text
+                        and button_lines == []
+                    )
                     self.assertEqual(lines[-1], "negar")
                     self.assertEqual(len(lines), 5)
                     stripped = dict(body)
-                    stripped["action"] = action.replace(control, "")
-                    stripped["effect"] = effect.replace(control, "")
+                    stripped["action"] = "".join(action.split(control))
+                    stripped["effect"] = "".join(effect.split(control))
                     bare = _pending_view(stripped)
                     bare_action = _view_text(bare, "action")
                     bare_effect = _view_text(bare, "effect")
-                    bare_lines = _view_text(bare, "text").split("\n")
-                    bare_recovered_action = bare_lines[0].removeprefix("ação: ").replace(escape, control)
-                    bare_recovered_effect = bare_lines[1].removeprefix("efeito: ").replace(escape, control)
+                    bare_text = _view_text(bare, "text")
+                    bare_lines = bare_text.split("\n")
+                    bare_visible_action = bare_lines[0].removeprefix("ação: ")
+                    bare_visible_effect = bare_lines[1].removeprefix("efeito: ")
                     self.assertEqual(bare_action, stripped["action"])
                     self.assertEqual(bare_effect, stripped["effect"])
-                    self.assertEqual(bare_recovered_action, bare_action)
-                    self.assertEqual(bare_recovered_effect, bare_effect)
+                    self.assertEqual(bare_visible_action, bare_action)
+                    self.assertEqual(bare_visible_effect, bare_effect)
+                    self.assertNotIn(escape, bare_text)
                     self.assertNotIn(record_id, bare_action)
                     self.assertNotIn(record_id, bare_effect)
-                    self.assertNotIn(record_id, bare_recovered_action)
-                    self.assertNotIn(record_id, bare_recovered_effect)
+                    self.assertNotIn(record_id, bare_visible_action)
+                    self.assertNotIn(record_id, bare_visible_effect)
                     self.assertNotIn(control, bare_action)
                     self.assertNotIn(control, bare_effect)
-                    self.assertNotIn(control, bare_recovered_action)
-                    self.assertNotIn(control, bare_recovered_effect)
+                    self.assertNotIn(control, bare_visible_action)
+                    self.assertNotIn(control, bare_visible_effect)
+                    self.assertNotIn("\r", bare_text)
+                    self.assertNotIn("\x00", bare_text)
                     self.assertIs(_view_flag(bare, "approve_offered"), True)
                     self.assertIn("aprovar", bare_lines)
+                    self.assertTrue(
+                        control not in bare_action
+                        and control not in bare_effect
+                        and control not in bare_visible_action
+                        and control not in bare_visible_effect
+                        and "\r" not in bare_text
+                        and "\x00" not in bare_text
+                        and _view_flag(bare, "approve_offered") is True
+                    )
 
 
 def _request() -> OpenRunRequest:
