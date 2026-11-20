@@ -307,14 +307,10 @@ loop {
     let cyber_ok = true;
     let cyber_summary = "Cybersecurity nao era o portao deste ciclo.";
     if owner != "cybersecurity" {
-        let cyber_mode = "read-only";
-        let cyber_job = "Verifique a classe de risco da mudanca. Nao abra ferramenta nem permissao. done e true so se nao houver furo aberto no corte.";
-        if owner == "qa" || owner == "revisor" || owner == "arquiteto" {
-            cyber_job = "Leia o diff e a issue. Aponte furo de seguranca no corte. Nao implemente feature.";
-        }
+        let cyber_job = "Grave somente a secao ## Parecer da issue deste ciclo e a frase de ## Parecer de issue anterior que este corte tornou falsa. Nomeie classe de risco, controles com o teste que prova, furo aberto ou fechado, e o que fica fora do corte. Nao liste ASI01-ASI10: isso e criterio da JAN-004. Furo ja registrado em outra issue entra no parecer com o id dela e nao torna done false. done e false se faltar a secao, se a frase nao for a decisao do codigo, ou se houver furo deste criterio sem issue. Nao altere src/, tests/ nem client/. Nao abra ferramenta nem permissao. Se alterar arquivo, o commit local sai antes do fim e contem so esses arquivos.";
         let cyber_result = agent(task_prompt(issue_id, "cybersecurity", cyber_job, prior), #{
             label: "Provar/cybersecurity",
-            capability_mode: cyber_mode,
+            capability_mode: "execute",
             output_schema: work_schema,
         });
         cyber_ok = false;
@@ -339,7 +335,7 @@ loop {
     }
 
     phase("Revisar");
-    let review = agent(task_prompt(issue_id, "revisor", "Ultimo leitor. accept e true so se o criterio da issue, as regras e as provas existem. Bloqueio cita arquivo e criterio. Nao implemente e nao aumente escopo.", prior), #{
+    let review = agent(task_prompt(issue_id, "revisor", "Ultimo leitor. accept e true so se o criterio da issue, as regras e as provas existem. O parecer e a secao ## Parecer da issue. Sem essa secao, accept e false. Frase que nao e o codigo e bloqueio. A lista ASI da JAN-004 nao bloqueia issue anterior. Bloqueio cita arquivo e criterio. Nao implemente e nao aumente escopo.", prior), #{
         label: "Revisar/aceite",
         capability_mode: "read-only",
         output_schema: verdict_schema,

@@ -127,7 +127,13 @@ Procura efeito que o portão não segura. Controle que só existe se o modelo co
 
 O teste do controle é grader de código: a ferramenta não rodou, o `outcome` não nasceu verificado, a allowlist não cresceu, o segredo não está no traço. Teste que só procura uma frase no prompt é verificação errada, modo 3.3.
 
-Não abre ferramenta, credencial, MCP, plugin nem allowlist para destravar fluxo. Achado fora da issue vira issue. Segredo aparece como nome de campo.
+O parecer fica na issue, na seção `## Parecer`. Não fica só na resposta do turno. A seção nomeia a classe de risco, os controles cobertos com o teste que prova cada um, se o furo deste corte está aberto ou fechado, e o que fica fora do corte. A lista ASI01–ASI10 é o critério da JAN-004. O parecer de outra issue não a substitui.
+
+Furo já registrado em outra issue entra no parecer com o id dela. Isso não faz a issue atual falhar. Furo do critério desta issue, sem issue própria, deixa o parecer em aberto e devolve o corte a quem implementa.
+
+Se o diff deste corte torna falsa uma frase de `## Parecer` de issue anterior, cybersecurity reescreve essa frase no mesmo corte. A frase nova descreve a decisão que o código registra agora.
+
+Não abre ferramenta, credencial, MCP, plugin nem allowlist para destravar fluxo. Não altera `src/`, `tests/` nem `client/`. Achado fora da issue vira issue. Segredo aparece como nome de campo. Quando a issue é dela, o parecer entra no corte dela, no mesmo commit.
 
 ## QA
 
@@ -147,7 +153,7 @@ Se o teste exige detalhe que a issue não nomeou, não reescreve a issue para ca
 
 Especialidade: aceite. Último leitor. Não é o segundo implementador e não é um juiz por modelo.
 
-Confere os quatro artefatos: issue, diff, prova de QA, parecer de cybersecurity. Faltou um, não aceita.
+Confere os quatro artefatos: issue, diff, prova de QA e a seção `## Parecer` dessa issue. Faltou um, não aceita. A seção precisa nomear classe, controles com teste, furo aberto ou fechado, e fora do corte, e bater com o código. Sem a seção, o modo é 2.4. Frase que não é a decisão do código, o modo é 2.6. A lista ASI01–ASI10 é o critério da JAN-004. Issue anterior não fica bloqueada porque a JAN-004 ainda está aberta. Corte que tornou falsa uma frase de parecer anterior e não a reescreveu fica bloqueado.
 
 Olha os modos que a equipe produz com facilidade: papel trocado (1.2), diff que não é o critério (1.1), fase futura (2.3), prova escondida (2.4), texto que não é o código (2.6), aceite cedo (3.1), teste que não olha o traço (3.2), teste que passa pelo motivo errado (3.3).
 

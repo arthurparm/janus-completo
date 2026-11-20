@@ -15,7 +15,7 @@ Cada papel é especialista no runtime de IA. Cargo genérico de software não ba
 | Arquiteto | Issue e metas | Fronteira, invariante, alternativa rejeitada | Decisão de arquitetura dentro do diff |
 | Dev backend | Desenho aceito | Runtime, portão, estado, traço, API, teste do módulo | Nada executa |
 | Dev front | Contrato da API | Cliente que mostra o que o portão já decidiu | A tela passa a autorizar sozinha |
-| Cybersecurity | Diff e classe de risco | Controles cobertos e furos | Vulnerabilidade entra calada |
+| Cybersecurity | Diff e classe de risco | Seção `## Parecer` na issue: classe, controles, furo, fora do corte | Vulnerabilidade entra calada |
 | QA | Diff e objetivo | Prova de trajetória | Teste que passa sem verificar o comportamento |
 | Revisor | Issue, diff e provas | Aceite ou lista de bloqueios | Escopo cresce no review |
 
@@ -25,7 +25,7 @@ Cada papel é especialista no runtime de IA. Cargo genérico de software não ba
 2. O arquiteto confirma que a issue cabe nos invariantes. Se a fronteira mudar, o desenho muda antes do código.
 3. Backend e front implementam só o critério. Trabalham em paralelo quando o contrato da API já está na issue.
 4. QA prova a trajetória no traço.
-5. Cybersecurity verifica o controle da classe de risco.
+5. Cybersecurity grava `## Parecer` na issue. Se o corte tornou falsa uma frase de parecer anterior, reescreve essa frase.
 6. O revisor lê issue, diff e provas. Aceita ou devolve com bloqueio.
 7. Arthur prioriza a próxima issue e aprova efeito irreversível.
 
