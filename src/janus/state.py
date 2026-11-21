@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -263,6 +263,34 @@ class RunStore:
         path = self._directory(run_id) / "pending.jsonl"
         return tuple(Pending.from_json(item) for item in _read_lines(path))
 
+    def settle_pending(self, pending: Pending, status: PendingStatus) -> Pending:
+        if status != "aprovada" and status != "negada":
+            raise JanusError("status inválido")
+        current = self.read_pending(pending.run_id)
+        rows: list[Pending] = []
+        updated: Pending | None = None
+        for item in current:
+            if updated is None and _same_request(item, pending):
+                if (
+                    item.action != pending.action
+                    or item.effect != pending.effect
+                    or item.risk_class != pending.risk_class
+                ):
+                    raise JanusError("pendência não confere")
+                if item.status != "aberta":
+                    raise JanusError("pendência não está aberta")
+                updated = replace(item, status=status)
+                rows.append(updated)
+            else:
+                rows.append(item)
+        if updated is None:
+            raise JanusError("pendência ausente")
+        _write_lines(
+            self._directory(pending.run_id) / "pending.jsonl",
+            tuple(item.to_json() for item in rows),
+        )
+        return updated
+
     def _directory(self, run_id: str) -> Path:
         require_id(run_id, "run_id")
         return self._root / "runs" / run_id
@@ -281,6 +309,26 @@ def _append_line(path: Path, payload: dict[str, object]) -> None:
         handle.write(line + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _write_lines(path: Path, rows: tuple[dict[str, object], ...]) -> None:
+    body = "".join(
+        json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n" for row in rows
+    )
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(body)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+
+
+def _same_request(stored: Pending, incoming: Pending) -> bool:
+    return (
+        stored.idempotency_key == incoming.idempotency_key
+        and stored.arguments_hash == incoming.arguments_hash
+        and stored.tool_name == incoming.tool_name
+    )
 
 
 def _read_json(path: Path) -> object:

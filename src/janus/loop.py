@@ -12,7 +12,7 @@ from janus.context import build_context
 from janus.entry import Identity, OpenRunRequest
 from janus.experience import EMPTY_OUTCOME, Experience, ProposalRef, Provenance, Signal
 from janus.gate import STEP_REASON, TERMINAL_REASONS, Decision, decide_read
-from janus.state import Checkpoint, Pending, RunStore
+from janus.state import Checkpoint, Pending, PendingStatus, RunStore
 from janus.tools import tool_cost
 from janus.tools.delete_record import DeleteRecordTool, plain_language
 from janus.tools.read_record import ReadRecordTool, ResultLabel
@@ -152,6 +152,10 @@ class Runtime:
             result_text,
             result_label,
         )
+
+    def settle_pending(self, pending: Pending, status: PendingStatus) -> Pending:
+        # O verbo muda a pendência. Não chama a ferramenta.
+        return self._store.settle_pending(pending, status)
 
     def interrupt(self, run_id: str) -> Checkpoint:
         checkpoint = self._store.load_checkpoint(run_id)
