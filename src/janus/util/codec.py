@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import unicodedata
 from collections.abc import Mapping
 from typing import Literal
 
@@ -25,6 +26,10 @@ def require_token(value: str, label: str) -> None:
 def require_text(value: str, label: str) -> None:
     if value.strip() == "" or len(value) > MAX_TEXT:
         raise JanusError(f"{label} inválido")
+
+
+def has_control(value: str) -> bool:
+    return any(unicodedata.category(char) == "Cc" for char in value)
 
 
 def require_id(value: str, label: str) -> None:

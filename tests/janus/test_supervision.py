@@ -11,7 +11,7 @@ from pathlib import Path
 from janus.adapter import Proposal, ScriptedAdapter
 from janus.api import interrupt_run, list_pending
 from janus.entry import Budget, OpenRunRequest
-from janus.gate import ASK_REASON
+from janus.gate import ASK_REASON, SCHEMA_REASON
 from janus.loop import Runtime
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -286,11 +286,11 @@ class ClientSupervisionTest(unittest.TestCase):
 
     def test_control_in_record_id_hides_approve(self) -> None:
         cases = (
-            ("quebra de linha", "\n", "\\u000a"),
-            ("retorno de carro", "\r", "\\u000d"),
-            ("outro controle", "\x00", "\\u0000"),
+            ("quebra de linha", "\n"),
+            ("retorno de carro", "\r"),
+            ("outro controle", "\x00"),
         )
-        for label, control, escape in cases:
+        for label, control in cases:
             with self.subTest(entrada=label):
                 with tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
@@ -317,10 +317,10 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertEqual(entry.run_id, run_id)
                     self.assertEqual(entry.proposal.tool_name, "delete_record")
                     self.assertEqual(dict(entry.proposal.arguments)["record_id"], record_id)
-                    self.assertEqual(entry.decision.gate, "pedir")
+                    self.assertEqual(entry.decision.gate, "negar")
                     self.assertEqual(entry.decision.tool_name, entry.proposal.tool_name)
                     self.assertEqual(entry.decision.risk_class, "escrita_irreversivel")
-                    self.assertEqual(entry.decision.reason, ASK_REASON)
+                    self.assertEqual(entry.decision.reason, SCHEMA_REASON)
                     self.assertEqual(entry.result_label, "erro")
                     self.assertEqual(entry.result_text, entry.decision.reason)
                     experience = stored.experiences_of(run_id)[0]
@@ -333,99 +333,8 @@ class ClientSupervisionTest(unittest.TestCase):
                     self.assertEqual(runtime.irreversible_calls(), ())
                     self.assertEqual(runtime.read_calls(), ())
                     pending = list_pending(stored, run_id)
-                    self.assertEqual(len(pending), 1)
-                    body = pending[0]
-                    self.assertEqual(body["run_id"], run_id)
-                    action = str(body["action"])
-                    effect = str(body["effect"])
-                    risk = str(body["risk_class"])
-                    self.assertIn(record_id, action)
-                    self.assertIn(record_id, effect)
-                    self.assertIn(control, action)
-                    self.assertIn(control, effect)
-                    self.assertNotIn(control, risk)
-                    view = _pending_view(body)
-                    shown_action = _view_text(view, "action")
-                    shown_effect = _view_text(view, "effect")
-                    shown_risk = _view_text(view, "risk_class")
-                    self.assertEqual(shown_action, action)
-                    self.assertEqual(shown_effect, effect)
-                    self.assertEqual(shown_risk, risk)
-                    self.assertIn(record_id, shown_action)
-                    self.assertIn(record_id, shown_effect)
-                    self.assertIn(control, shown_action)
-                    self.assertIn(control, shown_effect)
-                    self.assertNotIn(control, shown_risk)
-                    self.assertIs(_view_flag(view, "approve_offered"), False)
-                    self.assertIs(_view_flag(view, "deny_offered"), True)
-                    text = _view_text(view, "text")
-                    lines = text.split("\n")
-                    visible_action = lines[0].removeprefix("ação: ")
-                    visible_effect = lines[1].removeprefix("efeito: ")
-                    action_cuts = shown_action.split(control)
-                    effect_cuts = shown_effect.split(control)
-                    self.assertEqual(visible_action.split(escape), action_cuts)
-                    self.assertEqual(visible_effect.split(escape), effect_cuts)
-                    self.assertEqual(len(action_cuts), 2)
-                    self.assertEqual(len(effect_cuts), 2)
-                    self.assertEqual(lines[2], "risco: " + shown_risk)
-                    self.assertIn(escape, visible_action)
-                    self.assertIn(escape, visible_effect)
-                    self.assertNotIn("\r", text)
-                    self.assertNotIn("\x00", text)
-                    self.assertNotIn("\r", visible_action)
-                    self.assertNotIn("\x00", visible_action)
-                    self.assertNotIn("\r", visible_effect)
-                    self.assertNotIn("\x00", visible_effect)
-                    button_lines = [line for line in lines if line == "aprovar"]
-                    self.assertEqual(button_lines, [])
-                    self.assertTrue(
-                        control in shown_action
-                        and control in shown_effect
-                        and escape in visible_action
-                        and escape in visible_effect
-                        and "\r" not in text
-                        and "\x00" not in text
-                        and button_lines == []
-                    )
-                    self.assertEqual(lines[-1], "negar")
-                    self.assertEqual(len(lines), 5)
-                    stripped = dict(body)
-                    stripped["action"] = "".join(action.split(control))
-                    stripped["effect"] = "".join(effect.split(control))
-                    bare = _pending_view(stripped)
-                    bare_action = _view_text(bare, "action")
-                    bare_effect = _view_text(bare, "effect")
-                    bare_text = _view_text(bare, "text")
-                    bare_lines = bare_text.split("\n")
-                    bare_visible_action = bare_lines[0].removeprefix("ação: ")
-                    bare_visible_effect = bare_lines[1].removeprefix("efeito: ")
-                    self.assertEqual(bare_action, stripped["action"])
-                    self.assertEqual(bare_effect, stripped["effect"])
-                    self.assertEqual(bare_visible_action, bare_action)
-                    self.assertEqual(bare_visible_effect, bare_effect)
-                    self.assertNotIn(escape, bare_text)
-                    self.assertNotIn(record_id, bare_action)
-                    self.assertNotIn(record_id, bare_effect)
-                    self.assertNotIn(record_id, bare_visible_action)
-                    self.assertNotIn(record_id, bare_visible_effect)
-                    self.assertNotIn(control, bare_action)
-                    self.assertNotIn(control, bare_effect)
-                    self.assertNotIn(control, bare_visible_action)
-                    self.assertNotIn(control, bare_visible_effect)
-                    self.assertNotIn("\r", bare_text)
-                    self.assertNotIn("\x00", bare_text)
-                    self.assertIs(_view_flag(bare, "approve_offered"), True)
-                    self.assertIn("aprovar", bare_lines)
-                    self.assertTrue(
-                        control not in bare_action
-                        and control not in bare_effect
-                        and control not in bare_visible_action
-                        and control not in bare_visible_effect
-                        and "\r" not in bare_text
-                        and "\x00" not in bare_text
-                        and _view_flag(bare, "approve_offered") is True
-                    )
+                    self.assertEqual(pending, ())
+                    self.assertNotIn(control, entry.decision.reason)
 
 
 def _request() -> OpenRunRequest:

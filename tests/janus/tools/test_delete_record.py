@@ -19,6 +19,18 @@ class DeleteRecordTest(unittest.TestCase):
         self.assertEqual(caught.exception.reason, "escrita irreversível não executa")
         self.assertEqual(tool.calls(), ("chave-1",))
 
+    def test_control_in_record_id_is_not_written(self) -> None:
+        cases = (
+            ("quebra de linha", "\n"),
+            ("retorno de carro", "\r"),
+            ("outro controle", "\x00"),
+        )
+        for label, control in cases:
+            with self.subTest(entrada=label):
+                with self.assertRaises(JanusError) as caught:
+                    plain_language("alpha" + control + "aprovar")
+                self.assertEqual(caught.exception.reason, "record_id inválido")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,7 @@ from janus.util.codec import (
     canonical_json,
     digest,
     exact_keys,
+    has_control,
     require_text,
     require_token,
     required,
@@ -154,7 +155,7 @@ def _arguments_match(names: tuple[str, ...], arguments: tuple[tuple[str, str], .
     if keys != tuple(sorted(names)):
         return False
     for _, value in arguments:
-        if value.strip() == "" or len(value) > MAX_TEXT:
+        if value.strip() == "" or len(value) > MAX_TEXT or has_control(value):
             return False
         if "/" in value or "\\" in value or ".." in value:
             return False
