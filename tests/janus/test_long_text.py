@@ -7,9 +7,8 @@ from pathlib import Path
 
 from janus.adapter import ModelContext, Proposal, ScriptedAdapter
 from janus.entry import Budget, OpenRunRequest
-from janus.loop import Runtime
 from janus.util.codec import JanusError
-from tests.janus.support import ManualClock
+from tests.janus.support import read_proposal, read_runtime
 
 # O efeito da pendência acrescenta 52 caracteres ao record_id, e a ação, 18.
 LONGEST_RECORD_ID = 3948
@@ -20,7 +19,7 @@ FIELDS = ("requester", "permission", "model_id")
 class LongTextTest(unittest.TestCase):
     def test_longest_record_id_that_fits_creates_readable_pending(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = _runtime(Path(tmp))
+            runtime = read_runtime(Path(tmp))
             run_id = runtime.open_run(_request(permission="delete_record"))
             result = runtime.step(run_id, _adapter(_delete("a" * LONGEST_RECORD_ID)))
             self.assertEqual(result.gate, "pedir")
@@ -34,7 +33,7 @@ class LongTextTest(unittest.TestCase):
         for length in (LONGEST_RECORD_ID + 1, 3982, 3983, LIMIT):
             with self.subTest(record_id=length):
                 with tempfile.TemporaryDirectory() as tmp:
-                    runtime = _runtime(Path(tmp))
+                    runtime = read_runtime(Path(tmp))
                     run_id = runtime.open_run(_request(permission="delete_record"))
                     result = runtime.step(run_id, _adapter(_delete("a" * length)))
                     self.assertEqual(result.gate, "negar")
@@ -48,9 +47,9 @@ class LongTextTest(unittest.TestCase):
 
     def test_tool_name_at_the_limit_keeps_every_step_readable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = _runtime(Path(tmp))
+            runtime = read_runtime(Path(tmp))
             run_id = runtime.open_run(_request())
-            runtime.step(run_id, _adapter(_read()))
+            runtime.step(run_id, _adapter(read_proposal()))
             result = runtime.step(run_id, _adapter(Proposal.from_mapping("t" * LIMIT, {}, "")))
             self.assertEqual(result.gate, "negar")
             self.assertEqual(len(runtime.trace_of(run_id)), 2)
@@ -58,9 +57,9 @@ class LongTextTest(unittest.TestCase):
 
     def test_tool_name_over_the_limit_is_refused_before_any_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            runtime = _runtime(Path(tmp))
+            runtime = read_runtime(Path(tmp))
             run_id = runtime.open_run(_request())
-            runtime.step(run_id, _adapter(_read()))
+            runtime.step(run_id, _adapter(read_proposal()))
             before = runtime.checkpoint_of(run_id)
             with self.assertRaises(JanusError) as caught:
                 runtime.step(run_id, _LongToolName())
@@ -75,7 +74,7 @@ class LongTextTest(unittest.TestCase):
             with self.subTest(campo=field):
                 with tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
-                    runtime = _runtime(root)
+                    runtime = read_runtime(root)
                     with self.assertRaises(JanusError) as caught:
                         runtime.open_run(_request(**{field: "x" * (LIMIT + 1)}))
                     self.assertEqual(caught.exception.reason, f"{field} inválido")
@@ -85,9 +84,9 @@ class LongTextTest(unittest.TestCase):
         for field in FIELDS:
             with self.subTest(campo=field):
                 with tempfile.TemporaryDirectory() as tmp:
-                    runtime = _runtime(Path(tmp))
+                    runtime = read_runtime(Path(tmp))
                     run_id = runtime.open_run(_request(**{field: "x" * LIMIT}))
-                    runtime.step(run_id, _adapter(_read()))
+                    runtime.step(run_id, _adapter(read_proposal()))
                     self.assertEqual(runtime.identity_of(run_id).run_id, run_id)
                     self.assertEqual(len(runtime.trace_of(run_id)), 1)
                     self.assertEqual(len(runtime.experiences_of(run_id)), 1)
@@ -98,10 +97,6 @@ class _LongToolName:
 
     def propose(self, context: ModelContext) -> Proposal:
         return Proposal.from_mapping("t" * (LIMIT + 1), {}, "")
-
-
-def _runtime(root: Path) -> Runtime:
-    return Runtime(root, {"alpha": "conteudo-alpha"}, ManualClock())
 
 
 def _request(
@@ -115,10 +110,6 @@ def _request(
 
 def _adapter(proposal: Proposal) -> ScriptedAdapter:
     return ScriptedAdapter("model-a", (proposal,))
-
-
-def _read() -> Proposal:
-    return Proposal.from_mapping("read_record", {"record_id": "alpha"}, "ler")
 
 
 def _delete(record_id: str) -> Proposal:
