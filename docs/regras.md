@@ -51,6 +51,7 @@ issues/               uma issue por arquivo
 src/janus/            runtime, um arquivo por componente
 src/janus/tools/      uma ferramenta por arquivo
 src/janus/util/       só comportamento usado por dois ou mais módulos
+tests/__init__.py     vazio; faz o discover entrar em tests
 tests/janus/          o mesmo caminho relativo de src/janus
 tests/janus/support.py  fixture de teste usada por dois ou mais módulos; não é teste
 client/conversa/      aviso de que a voz é um modelo
