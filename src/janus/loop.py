@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -11,7 +11,7 @@ from janus.adapter import ModelAdapter, Proposal
 from janus.context import build_context
 from janus.entry import Identity, OpenRunRequest
 from janus.experience import EMPTY_OUTCOME, Experience, ProposalRef, Provenance, Signal
-from janus.gate import STEP_REASON, TERMINAL_REASONS, Decision, decide_read
+from janus.gate import STEP_REASON, TERMINAL_REASONS, Decision, decide_read, deny_interrupted
 from janus.state import Checkpoint, Pending, PendingStatus, RunStore
 from janus.tools import tool_cost
 from janus.tools.delete_record import DeleteRecordTool, plain_language
@@ -94,6 +94,9 @@ class Runtime:
             now_ms,
             seen_keys,
         )
+        # Lido depois do propose: a parada pode ter chegado enquanto o modelo respondia.
+        if decision.reason != STEP_REASON and self._store.is_interrupted(run_id):
+            decision = deny_interrupted(decision)
         executed = False
         result_label: ResultLabel = "erro"
         if (
@@ -168,9 +171,9 @@ class Runtime:
         checkpoint = self._store.load_checkpoint(run_id)
         if checkpoint.status == "encerrado":
             return checkpoint
-        closed = replace(checkpoint, status="encerrado", stop_reason="interrompido")
-        self._store.save_checkpoint(closed)
-        return closed
+        # Só marca. Regravar o checkpoint aqui apagaria o gasto de um passo em curso.
+        self._store.mark_interrupted(run_id)
+        return self._store.load_checkpoint(run_id)
 
     def identity_of(self, run_id: str) -> Identity:
         return self._store.load_identity(run_id)

@@ -222,7 +222,17 @@ class RunStore:
         return Identity.from_json(_read_json(self._directory(run_id) / "identity.json"))
 
     def load_checkpoint(self, run_id: str) -> Checkpoint:
-        return Checkpoint.from_json(_read_json(self._directory(run_id) / "checkpoint.json"))
+        checkpoint = Checkpoint.from_json(_read_json(self._directory(run_id) / "checkpoint.json"))
+        if self.is_interrupted(run_id):
+            return replace(checkpoint, status="encerrado", stop_reason="interrompido")
+        return checkpoint
+
+    def mark_interrupted(self, run_id: str) -> None:
+        # Arquivo à parte, que o passo não escreve: nenhuma gravação posterior reabre o run.
+        (self._directory(run_id) / "interrupted").touch()
+
+    def is_interrupted(self, run_id: str) -> bool:
+        return (self._directory(run_id) / "interrupted").is_file()
 
     def save_checkpoint(self, checkpoint: Checkpoint) -> None:
         _write_json(self._directory(checkpoint.run_id) / "checkpoint.json", checkpoint.to_json())

@@ -93,6 +93,17 @@ Conteúdo externo gravado como fato ou como peso é envenenamento entre sessões
 8. Quando existe verificador, o critério preenche `outcome` ou deixa vazio. `update` aceita ou recusa.
 9. O loop para por resposta final, negação terminal, pendência, orçamento, prazo ou kill switch.
 
+### Interrupção durante um passo
+
+Interromper grava a marca `interrupted` no diretório do run. O passo não escreve essa marca, e a leitura do checkpoint com ela devolve `encerrado`, motivo `interrompido`. Por isso o passo em curso, no mesmo processo ou em outro sobre a mesma raiz, não reabre o run.
+
+O passo consulta a marca depois do `propose` e antes de qualquer efeito:
+
+- Marca presente: a decisão é `negar`, motivo `run interrompido`, com a classe de risco que a proposta tinha. Nenhuma ferramenta é chamada e nenhuma pendência nasce. O passo grava traço e `Experience` e conta um passo, sem custo. Passo já esgotado mantém o motivo do orçamento e não conta.
+- Marca posterior à consulta: o passo termina o que decidiu, inclusive a leitura permitida ou a pendência. O run fica `encerrado` e o passo seguinte não roda.
+
+A chamada de modelo em andamento não é cancelada.
+
 ## Cliente
 
 O cliente lista pendências e envia aprovar, negar ou interromper. A escolha de framework espera a issue do front. A restrição já vale: a tela não calcula risco e não chama ferramenta.

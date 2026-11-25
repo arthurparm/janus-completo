@@ -33,6 +33,7 @@ WRITE_PERMISSION_REASON = "permissão não cobre a escrita"
 SCHEMA_REASON = "argumentos fora do schema"
 ASK_REASON = "escrita irreversível exige confirmação humana"
 IDEMPOTENCY_REASON = "chave de idempotência já usada"
+INTERRUPTED_REASON = "run interrompido"
 TERMINAL_REASONS = frozenset({STEP_REASON, COST_REASON, DEADLINE_REASON})
 
 
@@ -106,6 +107,11 @@ def decide_read(
     if spent_cost + spec.cost > budget.max_cost:
         return _deny(tool_name, arguments, spec.risk_class, COST_REASON)
     return Decision("permitir", tool_name, arguments, spec.risk_class, ALLOW_REASON)
+
+
+def deny_interrupted(decision: Decision) -> Decision:
+    # A parada vale mais que a decisão calculada. A classe fica para o traço.
+    return _deny(decision.tool_name, decision.arguments, decision.risk_class, INTERRUPTED_REASON)
 
 
 def _decide_irreversible(
