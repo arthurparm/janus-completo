@@ -10,8 +10,8 @@ from typing import Literal
 MAX_TEXT = 4000
 _TOKEN_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-:@")
 _HEX = set("0123456789abcdef")
-# Controle, surrogate e separador de linha ou parágrafo.
-_HIDDEN_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
+# Controle, formato, surrogate e separador de linha ou parágrafo.
+_HIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
 
 class JanusError(Exception):

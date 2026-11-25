@@ -373,3 +373,29 @@ test("controle na pendencia nao oferece aprovar", () => {
     }
   }
 });
+
+// JAN-020
+test("caractere escondido na pendencia nao oferece aprovar", () => {
+  const hidden: ReadonlyArray<readonly [string, string, string]> = [
+    ["inversao de direcao", "\u{202e}", "\\u202e"],
+    ["isolamento de direcao", "\u{2067}", "\\u2067"],
+    ["largura zero", "\u{200b}", "\\u200b"],
+    ["separador de linha", "\u{2028}", "\\u2028"],
+    ["separador de paragrafo", "\u{2029}", "\\u2029"],
+    ["fora do plano basico", "\u{e0001}", "\\ue0001"],
+  ];
+  const fields = ["action", "effect", "risk_class"] as const;
+  for (const [label, char, escape] of hidden) {
+    for (const field of fields) {
+      const tracked = tracking();
+      const result = approve_pending(tracked.api, sample({ [field]: `alpha${char}aprovar` }));
+      const marker = `${label} ${field}`;
+      assert.equal(result.called, false, marker);
+      assert.equal(tracked.calls.length, 0, marker);
+      assert.equal(result.approve_offered, false, marker);
+      assert.equal(hasLine(result.text, "negar"), true, marker);
+      assert.equal(result.text.includes(escape), true, marker);
+      assert.equal(result.text.includes(char), false, marker);
+    }
+  }
+});

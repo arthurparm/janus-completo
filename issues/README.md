@@ -19,7 +19,7 @@ Ordem da fase A: JAN-001, JAN-002 e JAN-003 podem avançar juntas depois que JAN
 | [JAN-017](JAN-017.md) | qa | A | suíte verde | aberta |
 | [JAN-018](JAN-018.md) | dev-backend | A | O1 O4 O6 O7 | aberta, corrigida, aguarda revisor |
 | [JAN-019](JAN-019.md) | dev-backend | A | regra 1 | aberta, corrigida, aguarda revisor |
-| [JAN-020](JAN-020.md) | cybersecurity | A | O5 | aberta |
+| [JAN-020](JAN-020.md) | cybersecurity | A | O5 | aberta, corrigida, aguarda revisor |
 | [JAN-021](JAN-021.md) | arquiteto | A | O5 | aberta |
 | [JAN-022](JAN-022.md) | arquiteto | A | O5 | aberta |
 | [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueada: JAN-015 JAN-018 JAN-019 |

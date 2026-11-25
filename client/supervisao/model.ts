@@ -75,31 +75,20 @@ function _filled(value: string): boolean {
   return value.trim() !== "";
 }
 
-function _is_control(code: number): boolean {
-  return code <= 31 || (code >= 127 && code <= 159);
-}
-
-function _has_control(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    if (_is_control(value.charCodeAt(index))) {
-      return true;
-    }
-  }
-  return false;
-}
+// Controle, formato, surrogate e separador de linha ou parágrafo.
+const HIDDEN_CHAR = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
 
 function _direct(value: string): boolean {
-  return _filled(value) && !_has_control(value);
+  return _filled(value) && !HIDDEN_CHAR.test(value);
 }
 
 function _visible(value: string): string {
   let visible = "";
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index);
-    if (_is_control(code)) {
-      visible += "\\u" + code.toString(16).padStart(4, "0");
+  for (const char of value) {
+    if (HIDDEN_CHAR.test(char)) {
+      visible += "\\u" + (char.codePointAt(0) ?? 0).toString(16).padStart(4, "0");
     } else {
-      visible += value.charAt(index);
+      visible += char;
     }
   }
   return visible;
