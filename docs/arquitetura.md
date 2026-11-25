@@ -95,12 +95,19 @@ Conteúdo externo gravado como fato ou como peso é envenenamento entre sessões
 
 ### Interrupção durante um passo
 
-Interromper grava a marca `interrupted` no diretório do run. O passo não escreve essa marca, e a leitura do checkpoint com ela devolve `encerrado`, motivo `interrompido`. Por isso o passo em curso, no mesmo processo ou em outro sobre a mesma raiz, não reabre o run.
+Interromper um run lido como `aberto` grava a marca `interrupted`, um arquivo vazio, no diretório do run. `interrupt` não regrava o checkpoint. Num run já lido como `encerrado`, devolve o que leu, sem gravar marca e sem trocar o motivo. A exceção é a leitura que colide, na seção seguinte. Run ausente levanta `run ausente`.
 
-O passo consulta a marca depois do `propose` e antes de qualquer efeito:
+Com a marca presente, a leitura do checkpoint devolve `encerrado`, motivo `interrompido`, qualquer que seja o estado e o motivo gravados no arquivo. O passo não grava nem apaga a marca, e nenhum código do runtime a remove. Por isso o passo em curso, no mesmo processo ou em outro sobre a mesma raiz, não reabre o run. Um passo que começa depois da marca levanta `run encerrado` antes de consultar o adaptador.
 
-- Marca presente: a decisão é `negar`, motivo `run interrompido`, com a classe de risco que a proposta tinha. Nenhuma ferramenta é chamada e nenhuma pendência nasce. O passo grava traço e `Experience` e conta um passo, sem custo. Passo já esgotado mantém o motivo do orçamento e não conta.
-- Marca posterior à consulta: o passo termina o que decidiu, inclusive a leitura permitida ou a pendência. O run fica `encerrado` e o passo seguinte não roda.
+O passo consulta a marca uma vez, depois do `propose` e da decisão do portão e antes da reserva descrita na seção seguinte. Passo já esgotado não consulta.
+
+- Marca vista na consulta: a decisão calculada vira `negar`, motivo `run interrompido`. Ferramenta, argumentos e classe de risco são os da decisão calculada. A classe vem vazia quando essa decisão era `prazo esgotado` ou `ferramenta fora da allowlist`, e é a da ferramenta na allowlist nos demais casos. A interrupção substitui qualquer outro motivo, inclusive prazo e custo esgotados. Nenhuma ferramenta é chamada e nenhuma pendência nasce. O passo conta um passo, sem custo, e grava traço e `Experience`.
+- Passo já esgotado: a decisão mantém `orçamento de passos esgotado`, com classe vazia, não conta e grava traço e `Experience`. Havendo marca, o checkpoint é lido como `interrompido`, e o motivo do orçamento fica no traço.
+- Marca posterior à consulta, inclusive a que chega enquanto a reserva é gravada ou repetida: o passo termina o que decidiu, a leitura permitida ou a pendência. `interrupt` pode já ter devolvido `encerrado` quando a ferramenta é chamada. O run é lido como `encerrado` e o passo seguinte não roda. A pendência que nasce assim está na JAN-027.
+
+Gravar traço e `Experience` depende de as gravações passarem. Colisão e falha estão na seção seguinte.
+
+Entre a consulta e o efeito não há trava. A fase A aceita essa janela porque só a leitura executa. Antes de existir efeito que não seja leitura, a janela é reaberta: um `interrupt` que já voltou não pode ser seguido desse efeito.
 
 A chamada de modelo em andamento não é cancelada.
 
