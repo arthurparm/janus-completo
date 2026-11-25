@@ -24,7 +24,7 @@ REQUIRED = (
     "src/janus/util/codec.py",
     "src/janus/util/pairs.py",
     "tests/janus/test_gate.py",
-    "tests/janus/test_jan001_read_cycle.py",
+    "tests/janus/test_read_cycle.py",
     "client/conversa/model.ts",
     "client/supervisao/model.ts",
 )
