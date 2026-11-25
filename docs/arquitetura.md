@@ -104,6 +104,19 @@ O passo consulta a marca depois do `propose` e antes de qualquer efeito:
 
 A chamada de modelo em andamento não é cancelada.
 
+### Colisão de acesso a um arquivo do run
+
+No Windows, ler um arquivo do run enquanto ele é substituído, ou substituí-lo enquanto há um leitor, levanta `PermissionError`. O leitor pode ser outro processo, a supervisão ou a própria interrupção. O estado repete a leitura ou a substituição até 20 vezes, com 5 ms entre elas. Persistindo, levanta `JanusError`, motivo `arquivo do run em uso`, e remove o arquivo temporário da substituição.
+
+`interrupt` não depende de ler o checkpoint. Se a primeira leitura colide, ele grava a marca mesmo assim. Num run já encerrado, esse caso faz o motivo ser lido como `interrompido`. Se a leitura de confirmação, depois da marca, colide, a chamada levanta o erro com a parada já valendo, e repetir é seguro. Run sem diretório continua `run ausente` e não ganha marca.
+
+O passo grava o checkpoint duas vezes:
+
+1. Depois de decidir e antes de qualquer efeito, a reserva: `step_index`, gasto e estado do run, sem o último resultado. Se a reserva colide, nenhuma ferramenta roda, não há traço, `Experience` nem pendência, e o passo não conta. O adaptador já foi consultado.
+2. Depois do traço, da `Experience` e da pendência, o último resultado. Se essa gravação ou a leitura da pendência colide, o passo levanta o erro e a reserva fica: o gasto conta e o passo seguinte usa o `step_index` seguinte, sem o resultado no contexto. Colisão na leitura da pendência deixa o `pedir` no traço sem pendência gravada.
+
+Dois passos simultâneos no mesmo run não são tratados aqui.
+
 ## Cliente
 
 O cliente lista pendências e envia aprovar, negar ou interromper. A escolha de framework espera a issue do front. A restrição já vale: a tela não calcula risco e não chama ferramenta.

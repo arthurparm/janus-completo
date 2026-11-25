@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -12,7 +12,7 @@ from janus.context import build_context
 from janus.entry import Identity, OpenRunRequest
 from janus.experience import EMPTY_OUTCOME, Experience, ProposalRef, Provenance, Signal
 from janus.gate import STEP_REASON, TERMINAL_REASONS, Decision, decide_read, deny_interrupted
-from janus.state import Checkpoint, Pending, PendingStatus, RunStore
+from janus.state import Checkpoint, Pending, PendingStatus, RunFileBusy, RunStore
 from janus.tools import tool_cost
 from janus.tools.delete_record import DeleteRecordTool, plain_language
 from janus.tools.read_record import ReadRecordTool
@@ -97,34 +97,44 @@ class Runtime:
         # Lido depois do propose: a parada pode ter chegado enquanto o modelo respondia.
         if decision.reason != STEP_REASON and self._store.is_interrupted(run_id):
             decision = deny_interrupted(decision)
-        executed = False
-        result_label: ResultLabel = "erro"
-        if (
+        executes = (
             decision.gate == "permitir"
             and decision.tool_name == "read_record"
             and decision.risk_class == "leitura"
-        ):
-            output = self._tool.execute(dict(decision.arguments))
-            result_text = output.text
-            result_label = output.label
-            executed = True
-        elif decision.gate == "permitir":
-            result_text = "somente leitura executa"
-            result_label = "erro"
-        else:
-            result_text = decision.reason
-        if decision.gate == "pedir":
-            self._remember_pending(identity, decision, now_ms)
+        )
         if decision.reason == STEP_REASON:
             spent_steps = checkpoint.spent_steps
             spent_cost = checkpoint.spent_cost
         else:
             spent_steps = checkpoint.spent_steps + 1
-            spent_cost = checkpoint.spent_cost + (tool_cost(decision.tool_name) if executed else 0)
+            spent_cost = checkpoint.spent_cost + (tool_cost(decision.tool_name) if executes else 0)
         status = "encerrado" if decision.reason in TERMINAL_REASONS else "aberto"
         stop_reason = decision.reason if status == "encerrado" else ""
         created_at = format_timestamp(now_ms)
         step_index = checkpoint.step_index + 1
+        reserved = Checkpoint(
+            run_id,
+            step_index,
+            spent_steps,
+            spent_cost,
+            checkpoint.started_at_ms,
+            status,
+            stop_reason,
+            "",
+            "",
+            "",
+        )
+        # O gasto entra antes do efeito. Se esta gravação colidir, nada roda e nada é registrado.
+        self._store.save_checkpoint(reserved)
+        result_label: ResultLabel = "erro"
+        if executes:
+            output = self._tool.execute(dict(decision.arguments))
+            result_text = output.text
+            result_label = output.label
+        elif decision.gate == "permitir":
+            result_text = "somente leitura executa"
+        else:
+            result_text = decision.reason
         self._store.append_trace(
             TraceEntry(
                 run_id,
@@ -138,18 +148,15 @@ class Runtime:
             )
         )
         self._store.append_experience(_experience(run_id, proposal, decision.gate, created_at))
+        # Depois do traço: a pendência relê o arquivo dela, e essa leitura pode colidir.
+        if decision.gate == "pedir":
+            self._remember_pending(identity, decision, now_ms)
         self._store.save_checkpoint(
-            Checkpoint(
-                run_id,
-                step_index,
-                spent_steps,
-                spent_cost,
-                checkpoint.started_at_ms,
-                status,
-                stop_reason,
-                decision.gate,
-                result_label,
-                result_text,
+            replace(
+                reserved,
+                last_gate=decision.gate,
+                last_result_label=result_label,
+                last_result_text=result_text,
             )
         )
         return StepResult(
@@ -168,9 +175,14 @@ class Runtime:
         return self._store.settle_pending(pending, status)
 
     def interrupt(self, run_id: str) -> Checkpoint:
-        checkpoint = self._store.load_checkpoint(run_id)
-        if checkpoint.status == "encerrado":
-            return checkpoint
+        try:
+            checkpoint = self._store.load_checkpoint(run_id)
+        except RunFileBusy:
+            # A parada não depende de ler o checkpoint.
+            pass
+        else:
+            if checkpoint.status == "encerrado":
+                return checkpoint
         # Só marca. Regravar o checkpoint aqui apagaria o gasto de um passo em curso.
         self._store.mark_interrupted(run_id)
         return self._store.load_checkpoint(run_id)

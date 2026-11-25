@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypeVar
 
 from janus.entry import Identity
 from janus.experience import Experience, as_hash
@@ -29,6 +31,15 @@ from janus.util.codec import (
 RunStatus = Literal["aberto", "encerrado"]
 PendingStatus = Literal["aberta", "aprovada", "negada", "expirada"]
 _PENDING_STATUS = ("aberta", "aprovada", "negada", "expirada")
+# No Windows, ler e substituir o mesmo arquivo ao mesmo tempo levanta PermissionError.
+_BUSY_ATTEMPTS = 20
+_BUSY_WAIT_SECONDS = 0.005
+_Value = TypeVar("_Value")
+
+
+class RunFileBusy(JanusError):
+    def __init__(self) -> None:
+        super().__init__("arquivo do run em uso")
 
 
 def _as_stored_label(value: object) -> str:
@@ -229,7 +240,10 @@ class RunStore:
 
     def mark_interrupted(self, run_id: str) -> None:
         # Arquivo à parte, que o passo não escreve: nenhuma gravação posterior reabre o run.
-        (self._directory(run_id) / "interrupted").touch()
+        directory = self._directory(run_id)
+        if not directory.is_dir():
+            raise JanusError("run ausente")
+        (directory / "interrupted").touch()
 
     def is_interrupted(self, run_id: str) -> bool:
         return (self._directory(run_id) / "interrupted").is_file()
@@ -309,7 +323,7 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(temporary, path)
+    _replace(temporary, path)
 
 
 def _append_line(path: Path, payload: dict[str, object]) -> None:
@@ -329,7 +343,7 @@ def _write_lines(path: Path, rows: tuple[dict[str, object], ...]) -> None:
         handle.write(body)
         handle.flush()
         os.fsync(handle.fileno())
-    os.replace(temporary, path)
+    _replace(temporary, path)
 
 
 def _same_request(stored: Pending, incoming: Pending) -> bool:
@@ -340,18 +354,41 @@ def _same_request(stored: Pending, incoming: Pending) -> bool:
     )
 
 
-def _read_json(path: Path) -> object:
+def _when_free(action: Callable[[], _Value]) -> _Value:
+    for _ in range(_BUSY_ATTEMPTS - 1):
+        try:
+            return action()
+        except PermissionError:
+            time.sleep(_BUSY_WAIT_SECONDS)
+    try:
+        return action()
+    except PermissionError as error:
+        raise RunFileBusy() from error
+
+
+def _replace(temporary: Path, path: Path) -> None:
+    try:
+        _when_free(lambda: os.replace(temporary, path))
+    except RunFileBusy:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _read_text(path: Path) -> str:
     if not path.is_file():
         raise JanusError("run ausente")
-    return parse_json(path.read_text(encoding="utf-8"))
+    return _when_free(lambda: path.read_text(encoding="utf-8"))
+
+
+def _read_json(path: Path) -> object:
+    return parse_json(_read_text(path))
 
 
 def _read_lines(path: Path) -> tuple[object, ...]:
-    if not path.is_file():
-        raise JanusError("run ausente")
+    text = _read_text(path)
     rows: list[object] = []
     # Só a quebra de linha separa registros. U+2028, U+2029 e U+0085 ficam dentro do JSON.
-    for line in path.read_text(encoding="utf-8").split("\n"):
+    for line in text.split("\n"):
         if line.strip() == "":
             continue
         rows.append(parse_json(line))

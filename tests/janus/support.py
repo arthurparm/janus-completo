@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from janus.adapter import Proposal
+from janus.loop import Runtime
+
 
 class ManualClock:
     def __init__(self, current: int = 0) -> None:
@@ -7,3 +12,11 @@ class ManualClock:
 
     def now_ms(self) -> int:
         return self.current
+
+
+def read_runtime(root: Path) -> Runtime:
+    return Runtime(root, {"alpha": "conteudo-alpha"}, ManualClock())
+
+
+def read_proposal() -> Proposal:
+    return Proposal.from_mapping("read_record", {"record_id": "alpha"}, "ler")
