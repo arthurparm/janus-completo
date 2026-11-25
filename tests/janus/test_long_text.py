@@ -28,6 +28,7 @@ class LongTextTest(unittest.TestCase):
             self.assertEqual(len(pending[0].effect), LIMIT)
             self.assertEqual(len(runtime.trace_of(run_id)), 1)
             self.assertEqual(len(runtime.experiences_of(run_id)), 1)
+            self.assertEqual(runtime.checkpoint_of(run_id).spent_steps, 1)
 
     def test_record_id_over_the_pending_limit_is_denied_and_recorded(self) -> None:
         for length in (LONGEST_RECORD_ID + 1, 3982, 3983, LIMIT):
