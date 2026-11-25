@@ -11,6 +11,7 @@ from pathlib import Path
 from janus.adapter import ModelContext, Proposal
 from janus.api import interrupt_run
 from janus.entry import Budget, OpenRunRequest
+from janus.gate import STEP_REASON
 from janus.loop import Runtime, StepResult
 from janus.trace import TraceEntry
 from janus.util.codec import JanusError
@@ -94,11 +95,53 @@ class InterruptDuringStepTest(unittest.TestCase):
             self.assertEqual(checkpoint.stop_reason, "interrompido")
             self.assertEqual(checkpoint.spent_steps, 1)
 
+    def test_mark_after_consultation_keeps_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            step = _late_interrupted_step(Path(tmp), "delete_record")
+            self.assertEqual(step.returned["status"], "encerrado")
+            self.assertEqual(step.result.gate, "pedir")
+            pending = step.runtime.pending_of(step.run_id)
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0].status, "aberta")
+            self.assertEqual(step.runtime.irreversible_calls(), ())
+            self.assertEqual(step.runtime.checkpoint_of(step.run_id).status, "encerrado")
+
+    def test_mark_after_consultation_records_trace_with_empty_experience(self) -> None:
+        for permission, gate in (("read_record", "permitir"), ("delete_record", "pedir")):
+            with self.subTest(permissao=permission):
+                with tempfile.TemporaryDirectory() as tmp:
+                    step = _late_interrupted_step(Path(tmp), permission)
+                    trace = step.runtime.trace_of(step.run_id)
+                    experiences = step.runtime.experiences_of(step.run_id)
+                    checkpoint = step.runtime.checkpoint_of(step.run_id)
+                    self.assertEqual(step.returned["status"], "encerrado")
+                    self.assertEqual(len(trace), 1)
+                    self.assertEqual(trace[0].decision.gate, gate)
+                    self.assertEqual(len(experiences), 1)
+                    self.assertEqual(experiences[0].gate, gate)
+                    self.assertTrue(experiences[0].outcome.is_empty())
+                    self.assertEqual(checkpoint.stop_reason, "interrompido")
+                    self.assertEqual(checkpoint.spent_steps, 1)
+
+    def test_interrupt_on_exhausted_step_keeps_budget_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = _runtime(Path(tmp))
+            run_id = runtime.open_run(_request("read_record", max_steps=0))
+            adapter = _Adapter(_proposal("read_record"), lambda: interrupt_run(_runtime(Path(tmp)), run_id))
+            result = runtime.step(run_id, adapter)
+            self.assertEqual(result.reason, STEP_REASON)
+            self.assertEqual(runtime.trace_of(run_id)[0].decision.reason, STEP_REASON)
+            self.assertEqual(len(runtime.experiences_of(run_id)), 1)
+            self.assertEqual(runtime.read_calls(), ())
+            checkpoint = runtime.checkpoint_of(run_id)
+            self.assertEqual(checkpoint.status, "encerrado")
+            self.assertEqual(checkpoint.spent_steps, 0)
+
 
 class _Adapter:
     model_id = "model-a"
 
-    def __init__(self, proposal: Proposal, during: Callable[[], None] | None = None) -> None:
+    def __init__(self, proposal: Proposal, during: Callable[[], object] | None = None) -> None:
         self._proposal = proposal
         self._during = during
         self.calls = 0
@@ -144,12 +187,37 @@ def _interrupted_step(root: Path, permission: str, other_runtime: bool) -> _Step
     return _Step(runtime, run_id, returned[0], result)
 
 
+def _late_interrupted_step(root: Path, permission: str) -> _Step:
+    """A marca chega logo depois da consulta que o passo faz após o propose."""
+    runtime = _runtime(root)
+    run_id = runtime.open_run(_request(permission))
+    interrupter = _runtime(root)
+    store = runtime._store
+    consult = store.is_interrupted
+    armed: list[None] = []
+    returned: list[dict[str, object]] = []
+
+    def consult_then_interrupt(target: str) -> bool:
+        seen = consult(target)
+        if armed:
+            armed.clear()
+            returned.append(interrupt_run(interrupter, target))
+        return seen
+
+    store.is_interrupted = consult_then_interrupt
+    result = runtime.step(run_id, _Adapter(_proposal(permission), lambda: armed.append(None)))
+    if len(returned) != 1:
+        raise AssertionError("a marca não chegou depois da consulta")
+    return _Step(runtime, run_id, returned[0], result)
+
+
 def _runtime(root: Path) -> Runtime:
     return Runtime(root, {"alpha": "conteudo-alpha"}, ManualClock())
 
 
-def _request(permission: str) -> OpenRunRequest:
-    return OpenRunRequest("arthur", permission, Budget(3, 1000, 3), True, "model-a", "ler o registro alpha")
+def _request(permission: str, *, max_steps: int = 3) -> OpenRunRequest:
+    budget = Budget(max_steps, 1000, 3)
+    return OpenRunRequest("arthur", permission, budget, True, "model-a", "ler o registro alpha")
 
 
 def _proposal(permission: str) -> Proposal:
