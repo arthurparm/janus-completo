@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from janus.adapter import Proposal
+from janus.entry import Budget, OpenRunRequest
 from janus.loop import Runtime
 
 
@@ -20,3 +21,8 @@ def read_runtime(root: Path) -> Runtime:
 
 def read_proposal() -> Proposal:
     return Proposal.from_mapping("read_record", {"record_id": "alpha"}, "ler")
+
+
+def run_request(permission: str = "read_record", *, max_steps: int = 3) -> OpenRunRequest:
+    budget = Budget(max_steps, 1000, 3)
+    return OpenRunRequest("arthur", permission, budget, True, "model-a", "ler o registro alpha")
