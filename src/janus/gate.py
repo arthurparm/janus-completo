@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from janus.entry import Budget
 from janus.tools import ALLOWLIST
+from janus.tools.delete_record import plain_language
 from janus.tools.read_record import ToolSpec
 from janus.util.codec import (
     MAX_TEXT,
@@ -34,6 +35,7 @@ SCHEMA_REASON = "argumentos fora do schema"
 ASK_REASON = "escrita irreversível exige confirmação humana"
 IDEMPOTENCY_REASON = "chave de idempotência já usada"
 INTERRUPTED_REASON = "run interrompido"
+PENDING_TEXT_REASON = "texto da pendência acima do limite"
 TERMINAL_REASONS = frozenset({STEP_REASON, COST_REASON, DEADLINE_REASON})
 
 
@@ -128,6 +130,8 @@ def _decide_irreversible(
     key = _idempotency_key(arguments)
     if key is None:
         return _deny(tool_name, arguments, spec.risk_class, SCHEMA_REASON)
+    if any(len(text) > MAX_TEXT for text in plain_language(dict(arguments)["record_id"])):
+        return _deny(tool_name, arguments, spec.risk_class, PENDING_TEXT_REASON)
     current = digest(canonical_json(dict(arguments)))
     for seen_key, seen_hash in seen_keys:
         if seen_key == key and seen_hash != current:

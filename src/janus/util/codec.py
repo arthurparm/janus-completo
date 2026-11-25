@@ -21,7 +21,8 @@ class JanusError(Exception):
 
 
 def require_token(value: str, label: str) -> None:
-    if value == "" or any(char not in _TOKEN_CHARS for char in value):
+    # O mesmo limite de as_str: o que se grava tem de poder ser relido.
+    if value == "" or len(value) > MAX_TEXT or any(char not in _TOKEN_CHARS for char in value):
         raise JanusError(f"{label} inválido")
 
 
