@@ -113,9 +113,11 @@ A chamada de modelo em andamento não é cancelada.
 
 ### Colisão de acesso a um arquivo do run
 
-No Windows, ler um arquivo do run enquanto ele é substituído, ou substituí-lo enquanto há um leitor, levanta `PermissionError`. O leitor pode ser outro processo, a supervisão ou a própria interrupção. O estado repete a leitura de um arquivo do run e a substituição de um arquivo do run: até 20 tentativas, com 5 ms entre elas. Persistindo o `PermissionError`, levanta `JanusError`, motivo `arquivo do run em uso`, qualquer que seja a causa dele, e a substituição remove o seu arquivo temporário. Não se repetem o acréscimo de linha no traço, na `Experience` e na pendência, a escrita do temporário e a gravação da marca.
+No Windows, ler um arquivo do run enquanto ele é substituído, ou substituí-lo enquanto há um leitor, levanta `PermissionError`. O leitor pode ser outro processo, a supervisão ou a própria interrupção. O estado repete a leitura de um arquivo do run e a substituição de um arquivo do run: até 20 tentativas, com 5 ms entre elas. Persistindo o `PermissionError`, levanta `JanusError`, motivo `arquivo do run em uso`, qualquer que seja a causa dele, e a substituição que colide remove o seu arquivo temporário. Não se repetem o acréscimo de linha no traço, na `Experience` e na pendência, a escrita do temporário do checkpoint e a gravação da marca.
 
-`interrupt` grava a marca mesmo quando a leitura do checkpoint colide. Isso vale para a colisão. Outra falha de leitura, como arquivo corrompido, sai antes da marca e está na JAN-028. Num run já encerrado, a colisão faz o motivo ser lido como `interrompido`: a marca vence o motivo, e o anterior continua no arquivo do checkpoint e na decisão que o traço guardou. Se a leitura de confirmação, depois da marca, colide, a chamada levanta o erro com a parada já valendo, e repetir é seguro. Run sem diretório, ou sem checkpoint, é `run ausente` e não ganha marca.
+Aprovar e negar regravam `pending.jsonl` inteiro, e ali não se repete a substituição sozinha: cada uma das até 20 voltas relê o arquivo, confere de novo a pendência, escreve o temporário e tenta substituir uma vez. A releitura tem a repetição própria. Assim a repetição não grava linhas lidas antes de uma colisão. Um `PermissionError` na escrita desse temporário também repete a volta.
+
+`interrupt` grava a marca mesmo quando a leitura do checkpoint colide. Isso vale para a colisão. Outra falha de leitura, como arquivo corrompido, sai antes da marca e está na JAN-035. Num run já encerrado, a colisão faz o motivo ser lido como `interrompido`: a marca vence o motivo, e o anterior continua no arquivo do checkpoint e na decisão que o traço guardou. Se a leitura de confirmação, depois da marca, colide, a chamada levanta o erro com a parada já valendo, e repetir é seguro. Run sem diretório, ou sem checkpoint, é `run ausente` e não ganha marca.
 
 #### Ordem do passo
 
@@ -132,13 +134,13 @@ O passo existe a partir da reserva. Se a reserva colide, não há ferramenta, tr
 
 Passo com reserva deve traço e `Experience`. O gasto entra antes do efeito e não é devolvido, e o `step_index` não é reusado.
 
-- Colisão no passo 5: o passo levanta o erro, com traço e `Experience` gravados. O `pedir` fica no traço sem pendência, e a chave de idempotência dele não é lembrada. Nada executa. Uma proposta igual em passo posterior grava a pendência, se ainda houver orçamento.
+- Colisão no passo 5: o passo levanta o erro, com traço e `Experience` gravados. O `pedir` fica no traço sem pendência, e a chave de idempotência dele não é lembrada. Nada executa. Uma proposta igual em passo posterior grava a pendência, se ainda houver orçamento. O mesmo vale quando o acréscimo colide com um verbo que está substituindo o arquivo, mas aí o erro é o `PermissionError` cru.
 - Colisão no passo 6: o passo levanta o erro, com traço, `Experience` e a pendência, se houver, gravados. Quem chamou não recebe o resultado, mesmo que a leitura tenha rodado.
 - Nos dois casos o checkpoint fica o da reserva. O passo seguinte usa o `step_index` seguinte e nenhum bloco de dado entra no contexto.
 
 A garantia de traço e `Experience` vale para leitor que deixa acrescentar, como o `open` do Python. Um leitor que nega o compartilhamento de escrita, uma falha de disco ou uma exceção da ferramenta podem deixar passo com reserva, gasto e até leitura feita sem traço, ou com traço sem `Experience`. Isso quebra o invariante de um traço e uma `Experience` por passo. O desenho não o aceita e ainda não o trata: está na JAN-028.
 
-Dois passos simultâneos no mesmo run estão na JAN-031. Aprovar ou negar enquanto um passo grava pendência está na JAN-034.
+Dois passos simultâneos no mesmo run estão na JAN-031. Entre a releitura de um verbo e a substituição que não colide não há trava: a pendência acrescentada ali, ou a decisão de outro verbo, pode se perder. Isso está na JAN-034.
 
 ## Cliente
 
