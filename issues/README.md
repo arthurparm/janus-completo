@@ -24,7 +24,7 @@ A coluna Jira aponta o item criado em 2026-11-25 a partir do commit `5265f59e`. 
 | [JAN-020](JAN-020.md) | cybersecurity | A | O5 | aceita | [JAN-20](https://arthurparaisomar.atlassian.net/browse/JAN-20) |
 | [JAN-021](JAN-021.md) | arquiteto | A | O5 | aberta | [JAN-21](https://arthurparaisomar.atlassian.net/browse/JAN-21) |
 | [JAN-022](JAN-022.md) | arquiteto | A | O5 | aberta | [JAN-22](https://arthurparaisomar.atlassian.net/browse/JAN-22) |
-| [JAN-023](JAN-023.md) | dev-backend | A | O5 | aceita | [JAN-23](https://arthurparaisomar.atlassian.net/browse/JAN-23) |
+| [JAN-023](JAN-023.md) | dev-backend | A | O5 | aberta, aguarda revisor do B13 | [JAN-23](https://arthurparaisomar.atlassian.net/browse/JAN-23) |
 | [JAN-024](JAN-024.md) | dev-backend | A | O1 O3 O6 O7 | aceita | [JAN-24](https://arthurparaisomar.atlassian.net/browse/JAN-24) |
 | [JAN-025](JAN-025.md) | arquiteto | A | O1 O7 | aberta | [JAN-25](https://arthurparaisomar.atlassian.net/browse/JAN-25) |
 | [JAN-026](JAN-026.md) | cybersecurity | A | O5 | aberta | [JAN-26](https://arthurparaisomar.atlassian.net/browse/JAN-26) |
@@ -33,11 +33,14 @@ A coluna Jira aponta o item criado em 2026-11-25 a partir do commit `5265f59e`. 
 | [JAN-029](JAN-029.md) | cybersecurity | A | O5 | aberta | [JAN-29](https://arthurparaisomar.atlassian.net/browse/JAN-29) |
 | [JAN-030](JAN-030.md) | qa | A | O6 | aberta | [JAN-30](https://arthurparaisomar.atlassian.net/browse/JAN-30) |
 | [JAN-031](JAN-031.md) | dev-backend | A | O1 O6 O7 | aberta | [JAN-31](https://arthurparaisomar.atlassian.net/browse/JAN-31) |
-| [JAN-032](JAN-032.md) | arquiteto | A | O1 | aberta | [JAN-32](https://arthurparaisomar.atlassian.net/browse/JAN-32) |
-| [JAN-033](JAN-033.md) | dev-backend | A | O1 O5 O6 O7 | aceita | [JAN-33](https://arthurparaisomar.atlassian.net/browse/JAN-33) |
+| [JAN-032](JAN-032.md) | arquiteto | A | O1 | aberta, segura JAN-006 | [JAN-32](https://arthurparaisomar.atlassian.net/browse/JAN-32) |
+| [JAN-033](JAN-033.md) | dev-backend | A | O1 O5 O6 O7 | aberta, aguarda revisor do B13 | [JAN-33](https://arthurparaisomar.atlassian.net/browse/JAN-33) |
 | [JAN-034](JAN-034.md) | arquiteto | A | O3 O5 | aberta, segura JAN-006 | — |
 | [JAN-035](JAN-035.md) | dev-backend | A | O5 | aberta, segura JAN-006 | — |
-| [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueada em JAN-028, JAN-034 e JAN-035 | [JAN-6](https://arthurparaisomar.atlassian.net/browse/JAN-6) |
+| [JAN-036](JAN-036.md) | arquiteto | A | O6 | aberta | — |
+| [JAN-037](JAN-037.md) | arquiteto | A | regra 8 | aberta | — |
+| [JAN-038](JAN-038.md) | arquiteto | A | regras 1 e 8 | aberta, aguarda decisão sobre JAN-006 | — |
+| [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueada em B13 a B17 | [JAN-6](https://arthurparaisomar.atlassian.net/browse/JAN-6) |
 | [JAN-007](JAN-007.md) | dev-backend | B | O8–O11 | aberta, depois de JAN-006 | [JAN-7](https://arthurparaisomar.atlassian.net/browse/JAN-7) |
 | [JAN-008](JAN-008.md) | dev-backend | C | O12–O16 | aberta, depois de JAN-007 | [JAN-8](https://arthurparaisomar.atlassian.net/browse/JAN-8) |
 | [JAN-009](JAN-009.md) | dev-backend | D | O17–O19 | aberta, depois de JAN-008 | [JAN-9](https://arthurparaisomar.atlassian.net/browse/JAN-9) |

@@ -13,7 +13,7 @@ from janus.api import approve_pending, interrupt_run
 from janus.gate import STEP_REASON
 from janus.loop import Runtime
 from janus.util.codec import JanusError
-from tests.janus.support import read_proposal, read_runtime, run_request
+from tests.janus.support import alpha_request, delete_proposal, read_proposal, read_runtime
 
 BUSY = "arquivo do run em uso"
 # O Windows devolve PermissionError quando leitura e substituição colidem. A falha é plantada
@@ -27,7 +27,7 @@ class FileCollisionTest(unittest.TestCase):
     def test_interrupt_with_busy_checkpoint_read_writes_the_mark(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request())
+            run_id = runtime.open_run(alpha_request())
             with _busy_read("checkpoint.json"):
                 with self.assertRaises(JanusError) as caught:
                     interrupt_run(runtime, run_id)
@@ -41,7 +41,7 @@ class FileCollisionTest(unittest.TestCase):
     def test_interrupt_with_one_busy_read_returns_closed_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request())
+            run_id = runtime.open_run(alpha_request())
             with _busy_read("checkpoint.json", times=1):
                 returned = interrupt_run(runtime, run_id)
             self.assertEqual(returned["status"], "encerrado")
@@ -58,7 +58,7 @@ class FileCollisionTest(unittest.TestCase):
     def test_reader_open_during_step_keeps_budget_and_step_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request(max_steps=1))
+            run_id = runtime.open_run(alpha_request(max_steps=1))
             checkpoint_path = Path(tmp) / "runs" / run_id / "checkpoint.json"
             for _ in range(3):
                 _step_with_open_reader(runtime, run_id, checkpoint_path)
@@ -70,7 +70,7 @@ class FileCollisionTest(unittest.TestCase):
     def test_busy_replace_before_the_tool_refuses_without_effect(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request())
+            run_id = runtime.open_run(alpha_request())
             before = runtime.checkpoint_of(run_id)
             with _busy_replace("checkpoint.json"):
                 with self.assertRaises(JanusError) as caught:
@@ -85,7 +85,7 @@ class FileCollisionTest(unittest.TestCase):
     def test_busy_replace_after_the_tool_keeps_spend_and_step_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request(max_steps=1))
+            run_id = runtime.open_run(alpha_request(max_steps=1))
             with _busy_replace("checkpoint.json", after=1):
                 with self.assertRaises(JanusError) as caught:
                     runtime.step(run_id, _Adapter())
@@ -100,7 +100,7 @@ class FileCollisionTest(unittest.TestCase):
     def test_one_busy_replace_lets_the_step_finish(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request())
+            run_id = runtime.open_run(alpha_request())
             with _busy_replace("checkpoint.json", times=1):
                 result = runtime.step(run_id, _Adapter())
             self.assertEqual(result.gate, "permitir")
@@ -110,8 +110,8 @@ class FileCollisionTest(unittest.TestCase):
     def test_busy_pending_after_the_decision_keeps_trace_and_experience(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request("delete_record"))
-            adapter = _Adapter(_delete("chave-1"))
+            run_id = runtime.open_run(alpha_request(permission="delete_record"))
+            adapter = _Adapter(delete_proposal("chave-1"))
             # A primeira leitura é a da decisão. A seguinte é a que grava a pendência.
             with _busy_read("pending.jsonl", after=1):
                 with self.assertRaises(JanusError) as caught:
@@ -125,15 +125,15 @@ class FileCollisionTest(unittest.TestCase):
     def test_busy_pending_replace_keeps_pending_written_meanwhile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request("delete_record"))
-            runtime.step(run_id, _Adapter(_delete("chave-1")))
+            run_id = runtime.open_run(alpha_request(permission="delete_record"))
+            runtime.step(run_id, _Adapter(delete_proposal("chave-1")))
             first = runtime.pending_of(run_id)[0]
             armed: list[None] = [None]
 
             def replace(source: Path, target: Path) -> None:
                 if target.name == "pending.jsonl" and armed:
                     armed.clear()
-                    runtime.step(run_id, _Adapter(_delete("chave-2")))
+                    runtime.step(run_id, _Adapter(delete_proposal("chave-2")))
                     raise PermissionError(13, "arquivo em uso")
                 _ORIGINAL_REPLACE(source, target)
 
@@ -202,10 +202,6 @@ def _busy_replace(name: str, *, after: int = 0, times: int | None = None) -> moc
         _ORIGINAL_REPLACE(source, target)
 
     return mock.patch("janus.state.os.replace", side_effect=replace)
-
-
-def _delete(key: str) -> Proposal:
-    return Proposal.from_mapping("delete_record", {"record_id": "alpha", "idempotency_key": key}, "")
 
 
 if __name__ == "__main__":

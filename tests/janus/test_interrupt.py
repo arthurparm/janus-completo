@@ -14,7 +14,7 @@ from janus.gate import STEP_REASON
 from janus.loop import Runtime, StepResult
 from janus.trace import TraceEntry
 from janus.util.codec import JanusError
-from tests.janus.support import read_proposal, read_runtime, run_request
+from tests.janus.support import alpha_request, delete_proposal, read_proposal, read_runtime
 
 REASON = "run interrompido"
 JOIN_LIMIT_SECONDS = 10.0
@@ -77,7 +77,7 @@ class InterruptDuringStepTest(unittest.TestCase):
     def test_interrupt_after_the_decision_keeps_run_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request())
+            run_id = runtime.open_run(alpha_request("read_record"))
             store = runtime._store
             append = store.append_trace
 
@@ -125,7 +125,7 @@ class InterruptDuringStepTest(unittest.TestCase):
     def test_interrupt_on_exhausted_step_keeps_budget_reason(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
-            run_id = runtime.open_run(run_request(max_steps=0))
+            run_id = runtime.open_run(alpha_request("read_record", max_steps=0))
             adapter = _Adapter(_proposal("read_record"), lambda: interrupt_run(read_runtime(Path(tmp)), run_id))
             result = runtime.step(run_id, adapter)
             self.assertEqual(result.reason, STEP_REASON)
@@ -171,7 +171,7 @@ def _cases() -> tuple[tuple[str, str, bool], ...]:
 
 def _interrupted_step(root: Path, permission: str, other_runtime: bool) -> _Step:
     runtime = read_runtime(root)
-    run_id = runtime.open_run(run_request(permission))
+    run_id = runtime.open_run(alpha_request(permission))
     interrupter = read_runtime(root) if other_runtime else runtime
     returned: list[dict[str, object]] = []
 
@@ -189,7 +189,7 @@ def _interrupted_step(root: Path, permission: str, other_runtime: bool) -> _Step
 def _late_interrupted_step(root: Path, permission: str) -> _Step:
     """A marca chega logo depois da consulta que o passo faz após o propose."""
     runtime = read_runtime(root)
-    run_id = runtime.open_run(run_request(permission))
+    run_id = runtime.open_run(alpha_request(permission))
     interrupter = read_runtime(root)
     store = runtime._store
     consult = store.is_interrupted
@@ -213,9 +213,7 @@ def _late_interrupted_step(root: Path, permission: str) -> _Step:
 def _proposal(permission: str) -> Proposal:
     if permission == "read_record":
         return read_proposal()
-    return Proposal.from_mapping(
-        "delete_record", {"record_id": "alpha", "idempotency_key": "chave-1"}, ""
-    )
+    return delete_proposal("chave-1")
 
 
 if __name__ == "__main__":
