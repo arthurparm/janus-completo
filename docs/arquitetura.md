@@ -87,9 +87,9 @@ Conteúdo externo gravado como fato ou como peso é envenenamento entre sessões
 2. O construtor monta o contexto e marca conteúdo externo como dado.
 3. O adaptador devolve proposta: resposta final ou chamada.
 4. O portão permite, nega com erro legível pelo modelo, ou suspende em pendência.
-5. Ferramenta permitida executa com credencial da própria ferramenta.
+5. O estado grava a reserva de `step_index` e gasto. Só então a ferramenta permitida executa com credencial da própria ferramenta.
 6. O resultado volta como dado não confiável.
-7. O estado grava checkpoint. O traço grava o passo. `Experience` grava o mesmo passo com `outcome` vazio.
+7. O traço grava o passo. `Experience` grava o mesmo passo com `outcome` vazio. A pendência, quando houver, é gravada, e o estado grava o checkpoint com o último resultado.
 8. Quando existe verificador, o critério preenche `outcome` ou deixa vazio. `update` aceita ou recusa.
 9. O loop para por resposta final, negação terminal, pendência, orçamento, prazo ou kill switch.
 
@@ -113,16 +113,32 @@ A chamada de modelo em andamento não é cancelada.
 
 ### Colisão de acesso a um arquivo do run
 
-No Windows, ler um arquivo do run enquanto ele é substituído, ou substituí-lo enquanto há um leitor, levanta `PermissionError`. O leitor pode ser outro processo, a supervisão ou a própria interrupção. O estado repete a leitura ou a substituição até 20 vezes, com 5 ms entre elas. Persistindo, levanta `JanusError`, motivo `arquivo do run em uso`, e remove o arquivo temporário da substituição.
+No Windows, ler um arquivo do run enquanto ele é substituído, ou substituí-lo enquanto há um leitor, levanta `PermissionError`. O leitor pode ser outro processo, a supervisão ou a própria interrupção. O estado repete a leitura de um arquivo do run e a substituição de um arquivo do run: até 20 tentativas, com 5 ms entre elas. Persistindo o `PermissionError`, levanta `JanusError`, motivo `arquivo do run em uso`, qualquer que seja a causa dele, e a substituição remove o seu arquivo temporário. Não se repetem o acréscimo de linha no traço, na `Experience` e na pendência, a escrita do temporário e a gravação da marca.
 
-`interrupt` não depende de ler o checkpoint. Se a primeira leitura colide, ele grava a marca mesmo assim. Num run já encerrado, esse caso faz o motivo ser lido como `interrompido`. Se a leitura de confirmação, depois da marca, colide, a chamada levanta o erro com a parada já valendo, e repetir é seguro. Run sem diretório continua `run ausente` e não ganha marca.
+`interrupt` grava a marca mesmo quando a leitura do checkpoint colide. Isso vale para a colisão. Outra falha de leitura, como arquivo corrompido, sai antes da marca e está na JAN-028. Num run já encerrado, a colisão faz o motivo ser lido como `interrompido`: a marca vence o motivo, e o anterior continua no arquivo do checkpoint e na decisão que o traço guardou. Se a leitura de confirmação, depois da marca, colide, a chamada levanta o erro com a parada já valendo, e repetir é seguro. Run sem diretório, ou sem checkpoint, é `run ausente` e não ganha marca.
 
-O passo grava o checkpoint duas vezes:
+#### Ordem do passo
 
-1. Depois de decidir e antes de qualquer efeito, a reserva: `step_index`, gasto e estado do run, sem o último resultado. Se a reserva colide, nenhuma ferramenta roda, não há traço, `Experience` nem pendência, e o passo não conta. O adaptador já foi consultado.
-2. Depois do traço, da `Experience` e da pendência, o último resultado. Se essa gravação ou a leitura da pendência colide, o passo levanta o erro e a reserva fica: o gasto conta e o passo seguinte usa o `step_index` seguinte, sem o resultado no contexto. Colisão na leitura da pendência deixa o `pedir` no traço sem pendência gravada.
+1. Lê identidade e checkpoint, consulta o adaptador, lê as pendências, decide e consulta a marca. Colisão nessas leituras levanta o erro sem nada gravado e sem gasto. A das pendências vem depois do adaptador.
+2. Reserva: grava no checkpoint `step_index`, passos, custo, estado e motivo de parada, com o último resultado vazio.
+3. Chama a ferramenta, quando a decisão é `permitir` leitura.
+4. Grava o traço e depois a `Experience`.
+5. Grava a pendência, quando a decisão é `pedir`. Antes de acrescentar, relê o arquivo.
+6. Regrava o checkpoint com o último resultado.
 
-Dois passos simultâneos no mesmo run não são tratados aqui.
+#### O que conta como passo
+
+O passo existe a partir da reserva. Se a reserva colide, não há ferramenta, traço, `Experience`, pendência nem gasto, e o `step_index` fica livre. Isso vale também para o passo que viu a marca: o run continua encerrado e a negação não é registrada. O adaptador já foi consultado e `max_steps` não limita essas consultas: repetir é decisão de quem chama `step`. O runtime não repete o passo sozinho.
+
+Passo com reserva deve traço e `Experience`. O gasto entra antes do efeito e não é devolvido, e o `step_index` não é reusado.
+
+- Colisão no passo 5: o passo levanta o erro, com traço e `Experience` gravados. O `pedir` fica no traço sem pendência, e a chave de idempotência dele não é lembrada. Nada executa. Uma proposta igual em passo posterior grava a pendência, se ainda houver orçamento.
+- Colisão no passo 6: o passo levanta o erro, com traço, `Experience` e a pendência, se houver, gravados. Quem chamou não recebe o resultado, mesmo que a leitura tenha rodado.
+- Nos dois casos o checkpoint fica o da reserva. O passo seguinte usa o `step_index` seguinte e nenhum bloco de dado entra no contexto.
+
+A garantia de traço e `Experience` vale para leitor que deixa acrescentar, como o `open` do Python. Um leitor que nega o compartilhamento de escrita, uma falha de disco ou uma exceção da ferramenta podem deixar passo com reserva, gasto e até leitura feita sem traço, ou com traço sem `Experience`. Isso quebra o invariante de um traço e uma `Experience` por passo. O desenho não o aceita e ainda não o trata: está na JAN-028.
+
+Dois passos simultâneos no mesmo run estão na JAN-031. Aprovar ou negar enquanto um passo grava pendência está na JAN-034.
 
 ## Cliente
 
