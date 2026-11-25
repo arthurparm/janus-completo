@@ -34,9 +34,12 @@ class Proposal:
         if self.kind != "tool_call":
             raise JanusError("proposta fora do formato neutro")
         require_token(self.tool_name, "tool_name")
-        if len(self.expected_value) > MAX_TEXT:
+        expected_value = _escape_surrogates(self.expected_value)
+        if len(expected_value) > MAX_TEXT:
             raise JanusError("expected_value longo")
-        object.__setattr__(self, "arguments", normalize_pairs(self.arguments))
+        arguments = tuple((key, _escape_surrogates(value)) for key, value in self.arguments)
+        object.__setattr__(self, "expected_value", expected_value)
+        object.__setattr__(self, "arguments", normalize_pairs(arguments))
 
     def mapping(self) -> dict[str, str]:
         return dict(self.arguments)
@@ -66,6 +69,11 @@ class Proposal:
             as_string_map(required(raw, "arguments"), "arguments"),
             as_str(required(raw, "expected_value"), "expected_value", allow_empty=True),
         )
+
+
+def _escape_surrogates(value: str) -> str:
+    # Surrogate solto não cabe em UTF-8. O traço guarda o escape, e a barra falha o schema do portão.
+    return value.encode("utf-8", "backslashreplace").decode("utf-8")
 
 
 class ModelAdapter(Protocol):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from janus.tools.read_record import ToolSpec
-from janus.util.codec import JanusError, has_control
+from janus.util.codec import JanusError, has_hidden_char
 
 
 DELETE_RECORD = ToolSpec(
@@ -16,7 +16,7 @@ DELETE_RECORD = ToolSpec(
 
 
 def plain_language(record_id: str) -> tuple[str, str]:
-    if has_control(record_id):
+    if has_hidden_char(record_id):
         raise JanusError("record_id inválido")
     action = f"Apagar o registro {record_id}"
     effect = f"O registro {record_id} deixa de existir e não há como desfazer."

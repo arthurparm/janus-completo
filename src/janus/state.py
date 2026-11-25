@@ -340,7 +340,8 @@ def _read_lines(path: Path) -> tuple[object, ...]:
     if not path.is_file():
         raise JanusError("run ausente")
     rows: list[object] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    # Só a quebra de linha separa registros. U+2028, U+2029 e U+0085 ficam dentro do JSON.
+    for line in path.read_text(encoding="utf-8").split("\n"):
         if line.strip() == "":
             continue
         rows.append(parse_json(line))

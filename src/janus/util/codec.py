@@ -10,6 +10,8 @@ from typing import Literal
 MAX_TEXT = 4000
 _TOKEN_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-:@")
 _HEX = set("0123456789abcdef")
+# Controle, surrogate e separador de linha ou parágrafo.
+_HIDDEN_CATEGORIES = frozenset({"Cc", "Cs", "Zl", "Zp"})
 
 
 class JanusError(Exception):
@@ -24,12 +26,16 @@ def require_token(value: str, label: str) -> None:
 
 
 def require_text(value: str, label: str) -> None:
-    if value.strip() == "" or len(value) > MAX_TEXT:
+    if value.strip() == "" or len(value) > MAX_TEXT or has_surrogate(value):
         raise JanusError(f"{label} inválido")
 
 
-def has_control(value: str) -> bool:
-    return any(unicodedata.category(char) == "Cc" for char in value)
+def has_hidden_char(value: str) -> bool:
+    return any(unicodedata.category(char) in _HIDDEN_CATEGORIES for char in value)
+
+
+def has_surrogate(value: str) -> bool:
+    return any(unicodedata.category(char) == "Cs" for char in value)
 
 
 def require_id(value: str, label: str) -> None:

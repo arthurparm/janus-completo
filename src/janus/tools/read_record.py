@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from janus.util.codec import MAX_TEXT, JanusError, ResultLabel, require_token
+from janus.util.codec import MAX_TEXT, JanusError, ResultLabel, has_surrogate, require_token
 
 
 @dataclass(frozen=True)
@@ -52,4 +52,6 @@ class ReadRecordTool:
             return ToolOutput("registro ausente", "erro")
         if len(found) > MAX_TEXT:
             return ToolOutput("resultado acima do limite", "erro")
+        if has_surrogate(found):
+            return ToolOutput("resultado com texto inválido", "erro")
         return ToolOutput(found, "dado")
