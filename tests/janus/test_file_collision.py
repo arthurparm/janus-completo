@@ -22,6 +22,7 @@ _ORIGINAL_READ = Path.read_text
 _ORIGINAL_REPLACE = os.replace
 
 
+@mock.patch("janus.state.time.sleep", new=lambda _: None)
 class FileCollisionTest(unittest.TestCase):
     def test_interrupt_with_busy_checkpoint_read_writes_the_mark(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
