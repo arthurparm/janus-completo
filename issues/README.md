@@ -10,7 +10,7 @@ Ordem da fase A: JAN-001, JAN-002 e JAN-003 podem avançar juntas depois que JAN
 | [JAN-002](JAN-002.md) | dev-backend | A | O3 O4 | aceita |
 | [JAN-003](JAN-003.md) | dev-front | A | O5 | aceita |
 | [JAN-013](JAN-013.md) | dev-backend | A | O5 | aceita |
-| [JAN-015](JAN-015.md) | dev-backend | A | O3 O5 | aberta, não segura JAN-003 |
+| [JAN-015](JAN-015.md) | dev-backend | A | O3 O5 | aberta, corrigida, aguarda revisor |
 | [JAN-004](JAN-004.md) | cybersecurity | A | O3 O4 M4 | aceita |
 | [JAN-005](JAN-005.md) | qa | A | O6 | aceita |
 | [JAN-012](JAN-012.md) | arquiteto | A | protocolo de método | aberta |
