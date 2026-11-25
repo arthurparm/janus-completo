@@ -4,26 +4,17 @@ from dataclasses import dataclass
 
 from janus.adapter import Proposal
 from janus.gate import Decision
-from janus.tools.read_record import ResultLabel
 from janus.util.codec import (
-    JanusError,
+    ResultLabel,
     as_count,
     as_id,
     as_object,
+    as_result_label,
     as_str,
     as_timestamp,
     exact_keys,
     required,
 )
-
-
-def _as_result_label(value: object) -> ResultLabel:
-    text = as_str(value, "label", allow_empty=False)
-    if text == "dado":
-        return "dado"
-    if text == "erro":
-        return "erro"
-    raise JanusError("label inválido")
 
 
 @dataclass(frozen=True)
@@ -64,7 +55,7 @@ class TraceEntry:
             proposal=Proposal.from_json(required(raw, "proposal")),
             decision=Decision.from_json(required(raw, "decision")),
             result_text=as_str(required(result, "text"), "text", allow_empty=True),
-            result_label=_as_result_label(required(result, "label")),
+            result_label=as_result_label(required(result, "label"), "label"),
             weight_version=as_str(required(raw, "weight_version"), "weight_version", allow_empty=True),
             created_at=as_timestamp(required(raw, "created_at"), "created_at"),
         )

@@ -15,6 +15,7 @@ from janus.util.codec import (
     as_gate,
     as_id,
     as_object,
+    as_result_label,
     as_str,
     as_timestamp,
     exact_keys,
@@ -34,9 +35,7 @@ def _as_stored_label(value: object) -> str:
     text = as_str(value, "last_result_label", allow_empty=True)
     if text == "":
         return ""
-    if text == "dado" or text == "erro":
-        return text
-    raise JanusError("last_result_label inválido")
+    return as_result_label(text, "last_result_label")
 
 
 def _as_stored_gate(value: object) -> str:

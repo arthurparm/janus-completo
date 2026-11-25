@@ -15,9 +15,16 @@ from janus.gate import STEP_REASON, TERMINAL_REASONS, Decision, decide_read
 from janus.state import Checkpoint, Pending, PendingStatus, RunStore
 from janus.tools import tool_cost
 from janus.tools.delete_record import DeleteRecordTool, plain_language
-from janus.tools.read_record import ReadRecordTool, ResultLabel
+from janus.tools.read_record import ReadRecordTool
 from janus.trace import TraceEntry
-from janus.util.codec import GateName, JanusError, canonical_json, digest, format_timestamp
+from janus.util.codec import (
+    GateName,
+    JanusError,
+    ResultLabel,
+    canonical_json,
+    digest,
+    format_timestamp,
+)
 
 
 class Clock(Protocol):

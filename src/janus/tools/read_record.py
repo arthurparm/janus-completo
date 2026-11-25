@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
 
-from janus.util.codec import MAX_TEXT, JanusError, require_token
-
-ResultLabel = Literal["dado", "erro"]
+from janus.util.codec import MAX_TEXT, JanusError, ResultLabel, require_token
 
 
 @dataclass(frozen=True)

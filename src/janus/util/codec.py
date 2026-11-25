@@ -126,6 +126,7 @@ def as_string_map(value: object, label: str) -> tuple[tuple[str, str], ...]:
 
 
 GateName = Literal["permitir", "negar", "pedir"]
+ResultLabel = Literal["dado", "erro"]
 
 
 def as_id(value: object, label: str) -> str:
@@ -149,4 +150,13 @@ def as_gate(value: object, label: str) -> GateName:
         return "negar"
     if text == "pedir":
         return "pedir"
+    raise JanusError(f"{label} inválido")
+
+
+def as_result_label(value: object, label: str) -> ResultLabel:
+    text = as_str(value, label, allow_empty=False)
+    if text == "dado":
+        return "dado"
+    if text == "erro":
+        return "erro"
     raise JanusError(f"{label} inválido")
