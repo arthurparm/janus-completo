@@ -16,13 +16,13 @@ Ordem da fase A: JAN-001, JAN-002 e JAN-003 podem avançar juntas depois que JAN
 | [JAN-012](JAN-012.md) | arquiteto | A | protocolo de método | aberta |
 | [JAN-014](JAN-014.md) | arquiteto | A | suíte coletável | aberta, corrigida, aguarda revisor |
 | [JAN-016](JAN-016.md) | arquiteto | A | parecer na issue | aberta |
-| [JAN-017](JAN-017.md) | qa | A | suíte verde | aberta |
+| [JAN-017](JAN-017.md) | qa | A | suíte verde | aberta, corrigida, aguarda revisor |
 | [JAN-018](JAN-018.md) | dev-backend | A | O1 O4 O6 O7 | aberta, corrigida, aguarda revisor |
 | [JAN-019](JAN-019.md) | dev-backend | A | regra 1 | aberta, corrigida, aguarda revisor |
 | [JAN-020](JAN-020.md) | cybersecurity | A | O5 | aberta, corrigida, aguarda revisor |
 | [JAN-021](JAN-021.md) | arquiteto | A | O5 | aberta |
 | [JAN-022](JAN-022.md) | arquiteto | A | O5 | aberta |
-| [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueada: JAN-015 JAN-018 JAN-019 |
+| [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueios corrigidos, aguarda revisor |
 | [JAN-007](JAN-007.md) | dev-backend | B | O8–O11 | aberta, depois de JAN-006 |
 | [JAN-008](JAN-008.md) | dev-backend | C | O12–O16 | aberta, depois de JAN-007 |
 | [JAN-009](JAN-009.md) | dev-backend | D | O17–O19 | aberta, depois de JAN-008 |
