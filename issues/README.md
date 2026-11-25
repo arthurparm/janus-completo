@@ -16,7 +16,7 @@ A coluna Jira aponta o item criado em 2026-11-25 a partir do commit `5265f59e`. 
 | [JAN-004](JAN-004.md) | cybersecurity | A | O3 O4 M4 | aceita | [JAN-4](https://arthurparaisomar.atlassian.net/browse/JAN-4) |
 | [JAN-005](JAN-005.md) | qa | A | O6 | aceita | [JAN-5](https://arthurparaisomar.atlassian.net/browse/JAN-5) |
 | [JAN-012](JAN-012.md) | arquiteto | A | protocolo de método | aberta | [JAN-12](https://arthurparaisomar.atlassian.net/browse/JAN-12) |
-| [JAN-014](JAN-014.md) | arquiteto | A | suíte coletável | aberta, bloqueada até o review do Arthur | [JAN-14](https://arthurparaisomar.atlassian.net/browse/JAN-14) |
+| [JAN-014](JAN-014.md) | arquiteto | A | suíte coletável | aceita | [JAN-14](https://arthurparaisomar.atlassian.net/browse/JAN-14) |
 | [JAN-016](JAN-016.md) | arquiteto | A | parecer na issue | aberta | [JAN-16](https://arthurparaisomar.atlassian.net/browse/JAN-16) |
 | [JAN-017](JAN-017.md) | qa | A | suíte verde | aceita | [JAN-17](https://arthurparaisomar.atlassian.net/browse/JAN-17) |
 | [JAN-018](JAN-018.md) | dev-backend | A | O1 O4 O6 O7 | aceita | [JAN-18](https://arthurparaisomar.atlassian.net/browse/JAN-18) |
@@ -24,18 +24,20 @@ A coluna Jira aponta o item criado em 2026-11-25 a partir do commit `5265f59e`. 
 | [JAN-020](JAN-020.md) | cybersecurity | A | O5 | aceita | [JAN-20](https://arthurparaisomar.atlassian.net/browse/JAN-20) |
 | [JAN-021](JAN-021.md) | arquiteto | A | O5 | aberta | [JAN-21](https://arthurparaisomar.atlassian.net/browse/JAN-21) |
 | [JAN-022](JAN-022.md) | arquiteto | A | O5 | aberta | [JAN-22](https://arthurparaisomar.atlassian.net/browse/JAN-22) |
-| [JAN-023](JAN-023.md) | dev-backend | A | O5 | aberta, bloqueada, segura JAN-006 | [JAN-23](https://arthurparaisomar.atlassian.net/browse/JAN-23) |
-| [JAN-024](JAN-024.md) | dev-backend | A | O1 O3 O6 O7 | aberta, bloqueada, segura JAN-006 | [JAN-24](https://arthurparaisomar.atlassian.net/browse/JAN-24) |
+| [JAN-023](JAN-023.md) | dev-backend | A | O5 | aceita | [JAN-23](https://arthurparaisomar.atlassian.net/browse/JAN-23) |
+| [JAN-024](JAN-024.md) | dev-backend | A | O1 O3 O6 O7 | aceita | [JAN-24](https://arthurparaisomar.atlassian.net/browse/JAN-24) |
 | [JAN-025](JAN-025.md) | arquiteto | A | O1 O7 | aberta | [JAN-25](https://arthurparaisomar.atlassian.net/browse/JAN-25) |
 | [JAN-026](JAN-026.md) | cybersecurity | A | O5 | aberta | [JAN-26](https://arthurparaisomar.atlassian.net/browse/JAN-26) |
 | [JAN-027](JAN-027.md) | arquiteto | A | O5 | aberta | [JAN-27](https://arthurparaisomar.atlassian.net/browse/JAN-27) |
-| [JAN-028](JAN-028.md) | dev-backend | A | O1 O6 O7 | aberta | [JAN-28](https://arthurparaisomar.atlassian.net/browse/JAN-28) |
+| [JAN-028](JAN-028.md) | dev-backend | A | O1 O6 O7 | aberta, segura JAN-006 | [JAN-28](https://arthurparaisomar.atlassian.net/browse/JAN-28) |
 | [JAN-029](JAN-029.md) | cybersecurity | A | O5 | aberta | [JAN-29](https://arthurparaisomar.atlassian.net/browse/JAN-29) |
 | [JAN-030](JAN-030.md) | qa | A | O6 | aberta | [JAN-30](https://arthurparaisomar.atlassian.net/browse/JAN-30) |
 | [JAN-031](JAN-031.md) | dev-backend | A | O1 O6 O7 | aberta | [JAN-31](https://arthurparaisomar.atlassian.net/browse/JAN-31) |
 | [JAN-032](JAN-032.md) | arquiteto | A | O1 | aberta | [JAN-32](https://arthurparaisomar.atlassian.net/browse/JAN-32) |
-| [JAN-033](JAN-033.md) | dev-backend | A | O1 O5 O6 O7 | aberta, segura JAN-006 | [JAN-33](https://arthurparaisomar.atlassian.net/browse/JAN-33) |
-| [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueada em JAN-023, JAN-024 e JAN-033 | [JAN-6](https://arthurparaisomar.atlassian.net/browse/JAN-6) |
+| [JAN-033](JAN-033.md) | dev-backend | A | O1 O5 O6 O7 | aceita | [JAN-33](https://arthurparaisomar.atlassian.net/browse/JAN-33) |
+| [JAN-034](JAN-034.md) | arquiteto | A | O3 O5 | aberta, segura JAN-006 | — |
+| [JAN-035](JAN-035.md) | dev-backend | A | O5 | aberta, segura JAN-006 | — |
+| [JAN-006](JAN-006.md) | revisor | A | O1–O7 | aberta, bloqueada em JAN-028, JAN-034 e JAN-035 | [JAN-6](https://arthurparaisomar.atlassian.net/browse/JAN-6) |
 | [JAN-007](JAN-007.md) | dev-backend | B | O8–O11 | aberta, depois de JAN-006 | [JAN-7](https://arthurparaisomar.atlassian.net/browse/JAN-7) |
 | [JAN-008](JAN-008.md) | dev-backend | C | O12–O16 | aberta, depois de JAN-007 | [JAN-8](https://arthurparaisomar.atlassian.net/browse/JAN-8) |
 | [JAN-009](JAN-009.md) | dev-backend | D | O17–O19 | aberta, depois de JAN-008 | [JAN-9](https://arthurparaisomar.atlassian.net/browse/JAN-9) |
