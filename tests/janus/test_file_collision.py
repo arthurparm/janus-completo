@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from janus.adapter import ModelContext, Proposal
-from janus.api import interrupt_run
+from janus.api import approve_pending, interrupt_run
 from janus.entry import Budget, OpenRunRequest
 from janus.gate import STEP_REASON
 from janus.loop import Runtime
@@ -111,11 +111,7 @@ class FileCollisionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = read_runtime(Path(tmp))
             run_id = runtime.open_run(_request(permission="delete_record"))
-            adapter = _Adapter(
-                Proposal.from_mapping(
-                    "delete_record", {"record_id": "alpha", "idempotency_key": "chave-1"}, ""
-                )
-            )
+            adapter = _Adapter(_delete("chave-1"))
             # A primeira leitura é a da decisão. A seguinte é a que grava a pendência.
             with _busy_read("pending.jsonl", after=1):
                 with self.assertRaises(JanusError) as caught:
@@ -125,6 +121,26 @@ class FileCollisionTest(unittest.TestCase):
             self.assertEqual(len(runtime.experiences_of(run_id)), 1)
             self.assertEqual(runtime.checkpoint_of(run_id).spent_steps, 1)
             self.assertEqual(runtime.irreversible_calls(), ())
+
+    def test_busy_pending_replace_keeps_pending_written_meanwhile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = read_runtime(Path(tmp))
+            run_id = runtime.open_run(_request(permission="delete_record"))
+            runtime.step(run_id, _Adapter(_delete("chave-1")))
+            first = runtime.pending_of(run_id)[0]
+            armed: list[None] = [None]
+
+            def replace(source: Path, target: Path) -> None:
+                if target.name == "pending.jsonl" and armed:
+                    armed.clear()
+                    runtime.step(run_id, _Adapter(_delete("chave-2")))
+                    raise PermissionError(13, "arquivo em uso")
+                _ORIGINAL_REPLACE(source, target)
+
+            with mock.patch("janus.state.os.replace", side_effect=replace):
+                approve_pending(runtime, first.to_json())
+            statuses = [(item.idempotency_key, item.status) for item in runtime.pending_of(run_id)]
+            self.assertEqual(statuses, [("chave-1", "aprovada"), ("chave-2", "aberta")])
 
 
 class _Adapter:
@@ -186,6 +202,10 @@ def _busy_replace(name: str, *, after: int = 0, times: int | None = None) -> moc
         _ORIGINAL_REPLACE(source, target)
 
     return mock.patch("janus.state.os.replace", side_effect=replace)
+
+
+def _delete(key: str) -> Proposal:
+    return Proposal.from_mapping("delete_record", {"record_id": "alpha", "idempotency_key": key}, "")
 
 
 def _request(*, permission: str = "read_record", max_steps: int = 3) -> OpenRunRequest:

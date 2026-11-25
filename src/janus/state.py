@@ -289,6 +289,10 @@ class RunStore:
     def settle_pending(self, pending: Pending, status: PendingStatus) -> Pending:
         if status != "aprovada" and status != "negada":
             raise JanusError("status inválido")
+        # A repetição refaz a leitura: um passo pode ter acrescentado pendência no intervalo.
+        return _when_free(lambda: self._settle_once(pending, status))
+
+    def _settle_once(self, pending: Pending, status: PendingStatus) -> Pending:
         current = self.read_pending(pending.run_id)
         rows: list[Pending] = []
         updated: Pending | None = None
@@ -343,7 +347,12 @@ def _write_lines(path: Path, rows: tuple[dict[str, object], ...]) -> None:
         handle.write(body)
         handle.flush()
         os.fsync(handle.fileno())
-    _replace(temporary, path)
+    # Uma tentativa só: repetir aqui gravaria linhas lidas antes. Quem chama relê.
+    try:
+        os.replace(temporary, path)
+    except PermissionError:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def _same_request(stored: Pending, incoming: Pending) -> bool:
